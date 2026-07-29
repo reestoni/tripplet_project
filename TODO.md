@@ -49,7 +49,12 @@ Basierend auf einer Architektur-/Qualitätsdurchsicht der Codebasis. Priorisieru
   - **`db/usage_log.py`**: `log_usage_event(event_type, event_name, detail="")` – best-effort, schlägt nie sichtbar fehl (try/except, no-op falls Tabelle auf dem aktuellen DB-Modus fehlt).
   - **Screen-Opens**: ein einziger zentraler Hook über `self.stack.currentChanged` in `main.py` (`_log_screen_open`) statt Instrumentierung jeder einzelnen `_go_XXX()`-Methode – erfasst automatisch jeden Navigationswechsel.
   - **Login**: ein Aufruf in `screen_login.py._attempt_login()` nach erfolgreichem Login.
-  - **Kuratierte "große" Feature-Events** (gezielt instrumentiert, nicht jeder Klick): PDF-Export (`screen_report.py.exportPdf`), Advisor/Athena-Analyse (`advisor_tab.py._run_advisor`), Fill-Range-Bulk-Edit (`machine_tab.py`, alle 4 Varianten: Housing/Jet/Dropdown/Text), YarnScope-DTY-Trial-Auswahl (`dty_yarnscope_tab.py._ys_on_trial_selected`). Weitere Features lassen sich mit einer Zeile `log_usage_event("feature", "name")` ergänzen.
+  - **Kuratierte "große" Feature-Events** (gezielt instrumentiert, nicht jeder Klick) – EventName / auslösende Aktion / Fundstelle:
+    - `pdf_export` – PDF-Export im Report-Screen wird gestartet – `screen_report.py._ReportBridge.exportPdf`
+    - `advisor_athena` – Athena/Advisor-Erstanalyse im ShowExperimentScreen wird gestartet ("Run") – `advisor_tab.py._run_advisor`
+    - `fill_range_bulk_edit` (Detail: `housing`/`jet`/`dropdown`/`text`) – Fill-Range-Dialog im Machine- oder R&D-Tab wird bestätigt (Bulk-Edit über mehrere Trials) – `machine_tab.py.fill_machine_row_from_title_impl` (4 Stellen)
+    - `yarnscope_dty` – ein Trial wird im YarnScope-DTY-Tab in der Liste angeklickt – `dty_yarnscope_tab.py._ys_on_trial_selected`
+    - Stand 2026-07-29: noch keines dieser vier in echter Nutzung gefeuert (nur `login`/`screen_open` bisher, siehe dev_local). Weitere Features lassen sich mit einer Zeile `log_usage_event("feature", "name")` ergänzen.
   - **`UsageStatsScreen`**: Dashboard-Tab mit zwei matplotlib-Charts (Nutzungs-Ranking Screens+Features kombiniert, Login-Verlauf letzte 30 Tage) plus drei Detail-Tabellen (Logins, Screens, Features, je mit "zuletzt benutzt"). Erreichbar über die Superuser-Karte auf dem Home-Screen ("Usage Stats"-Button), Zugriff nur mit `AccessLevel >= 4` (`app_meta.is_superuser_level()`).
   - Verifiziert per Testsuite (299/299), headless-Import, vollständigem `MainWindow()`-Aufbau inkl. Navigations-/Berechtigungstest, Ende-zu-Ende-Test auf `dev_local` und **auf Prod** (Schreiben → Lesen → Aufräumen, mit expliziter MODE-Prüfung vor jedem DB-Zugriff). `tblUsageLog` ist auf Prod aktuell leer und bereit für echte Nutzung.
 
