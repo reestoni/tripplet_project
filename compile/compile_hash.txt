@@ -1,0 +1,31 @@
+cd C:\python\TrippleT_project
+
+py -3.12 -m venv .venv
+
+.\.venv\Scripts\activate
+
+python -m pip install -r requirements.txt
+
+python -m PyInstaller TrippleT.spec --clean --noconfirm
+
+
+
+
+
+
+
+cd C:\python\TrippleT_project
+
+rmdir /s /q build
+
+rmdir /s /q dist
+
+py -3.12 -m venv .venv
+
+.\.venv\Scripts\activate
+
+python -m pip install -U pip
+
+python -m pip install -r requirements.txt
+
+python -m PyInstaller TrippleT.spec --clean --noconfirm

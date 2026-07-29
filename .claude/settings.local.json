@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -c \"\\(Get-Content ui/screen_show_experiment.py\\).Count\")",
+      "Bash(awk -F: '$2>0')",
+      "Bash(sort -t: -k2 -n -r)",
+      "Bash(awk -F: '{s+=$2} END {print s}')",
+      "Bash(awk 'NR>=2459' C:/python/TrippleT_project/ui/screen_show_experiment.py)",
+      "Bash(python -c ' *)",
+      "Bash(awk 'NR==2459,NR==11394' /c/python/TrippleT_project/ui/screen_show_experiment.py)",
+      "Bash(timeout 60 python -m pytest tests/ -q)",
+      "Bash(timeout 90 python -m pytest tests/ -q)",
+      "Bash(xargs -I{} sh -c 'echo \"--- {} ---\"; cat \"{}\"')",
+      "Bash(python *)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}

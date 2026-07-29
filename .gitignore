@@ -1,0 +1,21 @@
+# Secrets - niemals committen
+db_secrets.json
+db_secrets.enc
+secrets.enc
+ai_secrets.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Virtualenv
+.venv/
+
+# Build-Artefakte
+build/
+dist/
+
+# IDE
+.idea/
+.vscode/

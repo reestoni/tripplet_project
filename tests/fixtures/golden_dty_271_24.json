@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "file": "271_24_130426_1255.tdms",
+    "n_points": 400226,
+    "dx_mm": 0.25,
+    "min_seg_pts": 5,
+    "signal_mean": 1489.4525,
+    "signal_std": 25.1772
+  },
+  "golden": {
+    "threshold": 1488.41334,
+    "knots_per_m": 95.376112,
+    "knots_per_m_det": 95.376112,
+    "knots_per_m_raw": 105.870183,
+    "knot_n": 9543,
+    "knot_mean": 5.056272,
+    "knot_sd": 2.154997,
+    "knot_cv": 42.620275,
+    "open_mean": 5.429103,
+    "open_cv": 30.122437,
+    "abc_A": 745,
+    "abc_B": 8367,
+    "abc_C": 431,
+    "skew_kl": 3.252586,
+    "skew_ol": 0.116408,
+    "rapport_cv_global": 22.71907,
+    "rapport_cv_local": 17.422726,
+    "kl_ac1": 0.142222,
+    "kl_tail_ratio": 1.684211,
+    "h_low": 1485.46859,
+    "h_high": 1491.358089
+  }
+}

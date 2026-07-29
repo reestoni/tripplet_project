@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "file": "419.pdf",
+    "device": "STATIMAT DS",
+    "customer": "2026-73-013.01",
+    "material": "PES 110f36"
+  },
+  "golden": {
+    "header_customer": "2026-73-013.01",
+    "header_material": "PES 110f36",
+    "header_device": "STATIMAT DS",
+    "n_records": 1,
+    "spool_no": 22,
+    "feinheit_x": 104.5,
+    "dehnung_x": 19.27,
+    "dehnung_cv": 4.65,
+    "festigkeit_x": 3.9,
+    "festigkeit_cv": 2.5
+  }
+}

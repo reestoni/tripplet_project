@@ -1,0 +1,313 @@
+from __future__ import annotations
+# ui/notifications.py
+"""Zentrale Notification-Logik für TrippleT.
+
+Wird aufgerufen wenn eine TrialSeries auf 'Archived' gesetzt wird.
+Erstellt Notifications für:
+  1. Alle ProcessOwner des Prozesses der Maschine dieser Series
+  2. Den Ersteller des verknüpften ExperimentRequests (falls vorhanden)
+
+Duplikate (jemand ist ProcessOwner UND Request-Ersteller) → nur eine Notification.
+
+DB-Tabellen (müssen existieren):
+  tblNotification   (ID, RecipientUserID, TrialSeriesID, CreatedAt, ReadAt)
+  tblProcessOwner   (ID, ProzessID, UserID)
+  tblMaschine       (ID, ..., ProzessID)
+  tblTrialSeries    (ID, ..., MachineID)
+"""
+
+from typing import List, Optional, Any
+from db.connection import fetch_all, execute as _execute, table_exists, get_columns_map as _columns_map
+
+
+def _tables_ready() -> bool:
+    """Gibt True zurück wenn die Kern-Notification-Tabelle existiert.
+    tblProcessOwner wird nur fuer create_archived_notifications() gebraucht
+    (dort separat via _get_process_owners abgefragt, mit eigenem Fallback) -
+    Lesen/Zaehlen/Anzeigen von Notifications soll davon nicht abhaengen."""
+    return table_exists("tblnotification")
+
+
+def _get_process_owners(series_id: int) -> List[int]:
+    """Gibt alle UserIDs der ProcessOwner des Prozesses dieser Series zurück.
+
+    Kette: tblTrialSeries.MachineID
+           → tblMaschine.ProzessID
+           → tblProcessOwner.UserID
+    """
+    try:
+        rows = fetch_all(
+            """
+            SELECT po.UserID
+            FROM tblTrialSeries ts
+            JOIN tblMaschine m ON m.ID = ts.MachineID
+            JOIN tblProcessOwner po ON po.ProzessID = m.ProzessID
+            WHERE ts.ID = ?
+            """,
+            [series_id],
+        )
+        return [int(r["UserID"]) for r in rows if r.get("UserID")]
+    except Exception:
+        return []
+
+
+def _get_experiment_request_creator(series_id: int) -> Optional[int]:
+    """Gibt die UserID des ExperimentRequest-Erstellers zurück (falls vorhanden)."""
+    try:
+        rows = fetch_all(
+            """
+            SELECT er.CreatedBy
+            FROM tblTrialSeries ts
+            JOIN tblExperimente e ON e.ID = ts.ExperimentID
+            JOIN tblExperimentRequests er ON er.ID = e.ExperimentRequestID
+            WHERE ts.ID = ?
+            LIMIT 1
+            """,
+            [series_id],
+        )
+        if rows and rows[0].get("CreatedBy"):
+            return int(rows[0]["CreatedBy"])
+    except Exception:
+        pass
+    return None
+
+
+def create_archived_notifications(
+    series_id: int,
+    sender_user_id: Optional[int] = None,
+) -> int:
+    """Erstellt Notifications für alle Empfänger wenn eine Series archiviert wird.
+
+    Returns:
+        Anzahl erstellter Notifications.
+    """
+    if not _tables_ready():
+        return 0
+
+    # Empfänger sammeln (dedupliziert)
+    recipients: List[int] = []
+
+    for uid in _get_process_owners(series_id):
+        if uid not in recipients:
+            recipients.append(uid)
+
+    creator = _get_experiment_request_creator(series_id)
+    if creator and creator not in recipients:
+        recipients.append(creator)
+
+    if not recipients:
+        return 0
+
+    n = 0
+    for uid in recipients:
+        try:
+            _execute(
+                """
+                INSERT INTO tblNotification
+                    (RecipientUserID, TrialSeriesID, CreatedAt, ReadAt)
+                VALUES (?, ?, NOW(), NULL)
+                """,
+                [uid, series_id],
+            )
+            n += 1
+        except Exception as e:
+            import traceback
+            print(f"[Notification] INSERT fehlgeschlagen für uid={uid}, series={series_id}: {e}")
+            traceback.print_exc()
+
+    return n
+
+
+def get_superuser_ids() -> List[int]:
+    """Gibt die UserIDs aller Superuser (AccessLevel >= 4) zurück.
+
+    tbluser.AccessRights ist ein FK auf tblAccessRight.ID - die eigentliche
+    Stufe steht in tblAccessRight.AccessLevel, NICHT direkt in tbluser
+    (siehe db.connection.get_user_access_level fuer dasselbe Muster)."""
+    try:
+        rows = fetch_all(
+            "SELECT u.ID FROM tbluser u "
+            "INNER JOIN tblAccessRight ar ON u.AccessRights = ar.ID "
+            "WHERE ar.AccessLevel >= 4"
+        )
+        return [int(r["ID"]) for r in rows if r.get("ID")]
+    except Exception:
+        return []
+
+
+def create_yarn_stock_notifications(warnings: List[dict]) -> int:
+    """Erstellt fuer jeden Superuser eine Notification pro Garn/Batch mit
+    Status 'Low' oder 'Empty' - aber nur, wenn dafuer noch keine ungelesene
+    Notification mit derselben Message existiert (verhindert Spam bei jedem
+    Reload des Yarn-Stock-Screens).
+
+    `warnings`: Liste von Dicts mit 'YarnID', 'YarnName', 'Charge', 'Status'.
+    YarnID/Charge werden zusaetzlich strukturiert gespeichert (PayloadYarnID/
+    PayloadCharge), damit ein Klick auf die Notification spaeter direkt zur
+    richtigen Zeile in Yarn Stock springen kann, ohne die Message-Zeile
+    fehleranfaellig zurueckparsen zu muessen.
+    """
+    if not table_exists("tblnotification") or not warnings:
+        return 0
+    recipients = get_superuser_ids()
+    if not recipients:
+        return 0
+
+    has_payload_cols = "payloadyarnid" in _columns_map("tblnotification")
+
+    n = 0
+    for w in warnings:
+        charge = w.get("Charge") or "–"
+        message = f"{w['Status']} stock: {w['YarnName']} (Batch {charge})"
+        yarn_id = w.get("YarnID")
+        for uid in recipients:
+            try:
+                existing = fetch_all(
+                    "SELECT ID FROM tblNotification WHERE RecipientUserID = ? "
+                    "AND NotificationType = 'yarn_stock' AND Message = ? AND ReadAt IS NULL",
+                    [uid, message],
+                )
+                if existing:
+                    continue  # bereits eine ungelesene Warnung fuer genau dieses Garn/Batch
+                if has_payload_cols:
+                    _execute(
+                        "INSERT INTO tblNotification "
+                        "(RecipientUserID, TrialSeriesID, CreatedAt, ReadAt, Message, "
+                        "NotificationType, PayloadYarnID, PayloadCharge) "
+                        "VALUES (?, NULL, NOW(), NULL, ?, 'yarn_stock', ?, ?)",
+                        [uid, message, yarn_id, w.get("Charge")],
+                    )
+                else:
+                    _execute(
+                        "INSERT INTO tblNotification "
+                        "(RecipientUserID, TrialSeriesID, CreatedAt, ReadAt, Message, NotificationType) "
+                        "VALUES (?, NULL, NOW(), NULL, ?, 'yarn_stock')",
+                        [uid, message],
+                    )
+                n += 1
+            except Exception as e:
+                print(f"[Notification] Yarn-Stock-Insert fehlgeschlagen fuer uid={uid}: {e}")
+    return n
+
+
+def get_unread_count(user_id: int) -> int:
+    """Gibt die Anzahl ungelesener Notifications für einen User zurück."""
+    if not _tables_ready():
+        return 0
+    try:
+        rows = fetch_all(
+            "SELECT COUNT(*) AS cnt FROM tblNotification "
+            "WHERE RecipientUserID = ? AND ReadAt IS NULL",
+            [user_id],
+        )
+        return int(rows[0]["cnt"]) if rows else 0
+    except Exception:
+        return 0
+
+
+
+def get_total_count(user_id: int) -> int:
+    """Gibt die Gesamtanzahl aller Notifications für einen User zurück (gelesen + ungelesen)."""
+    if not _tables_ready():
+        return 0
+    try:
+        rows = fetch_all(
+            "SELECT COUNT(*) AS cnt FROM tblNotification WHERE RecipientUserID = ?",
+            [user_id],
+        )
+        return int(rows[0]["cnt"]) if rows else 0
+    except Exception:
+        return 0
+
+
+def get_series_nav_info(series_id: int) -> Optional[dict]:
+    """Gibt exp_pk, series_pk und experiment_id für eine TrialSeries zurück.
+
+    Returns:
+        dict mit Schlüsseln exp_pk, series_pk, experiment_id oder None.
+    """
+    try:
+        rows = fetch_all(
+            """
+            SELECT
+                ts.ID          AS series_pk,
+                e.ID           AS exp_pk,
+                e.ExperimentID AS experiment_id
+            FROM tblTrialSeries ts
+            LEFT JOIN tblExperimente e ON e.ID = ts.ExperimentID
+            WHERE ts.ID = ?
+            LIMIT 1
+            """,
+            [series_id],
+        )
+        if rows:
+            return {
+                "series_pk": int(rows[0].get("series_pk") or 0),
+                "exp_pk": int(rows[0].get("exp_pk") or 0),
+                "experiment_id": str(rows[0].get("experiment_id") or ""),
+            }
+    except Exception:
+        pass
+    return None
+
+
+def get_notifications(user_id: int, limit: int = 50) -> List[dict]:
+    """Lädt alle Notifications für einen User (ungelesen zuerst).
+
+    Joined mit tblTrialSeries und tblExperimente für Anzeige-Infos.
+    """
+    if not _tables_ready():
+        return []
+    payload_cols = (
+        "n.PayloadYarnID, n.PayloadCharge,"
+        if "payloadyarnid" in _columns_map("tblnotification")
+        else "NULL AS PayloadYarnID, NULL AS PayloadCharge,"
+    )
+    try:
+        return fetch_all(
+            f"""
+            SELECT
+                n.ID,
+                n.TrialSeriesID,
+                n.CreatedAt,
+                n.ReadAt,
+                n.Message,
+                n.NotificationType,
+                {payload_cols}
+                ts.SeriesName,
+                e.ExperimentID AS ExperimentIDTxt
+            FROM tblNotification n
+            LEFT JOIN tblTrialSeries ts ON ts.ID = n.TrialSeriesID
+            LEFT JOIN tblExperimente e ON e.ID = ts.ExperimentID
+            WHERE n.RecipientUserID = ?
+            ORDER BY n.ReadAt IS NULL DESC, n.CreatedAt DESC
+            LIMIT ?
+            """,
+            [user_id, limit],
+        )
+    except Exception:
+        return []
+
+
+def mark_as_read(notification_id: int) -> None:
+    """Markiert eine einzelne Notification als gelesen."""
+    try:
+        _execute(
+            "UPDATE tblNotification SET ReadAt = NOW() "
+            "WHERE ID = ? AND ReadAt IS NULL",
+            [notification_id],
+        )
+    except Exception:
+        pass
+
+
+def mark_all_as_read(user_id: int) -> None:
+    """Markiert alle Notifications eines Users als gelesen."""
+    try:
+        _execute(
+            "UPDATE tblNotification SET ReadAt = NOW() "
+            "WHERE RecipientUserID = ? AND ReadAt IS NULL",
+            [user_id],
+        )
+    except Exception:
+        pass

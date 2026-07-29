@@ -1,0 +1,3 @@
+cd C:\python\TrippleT_project
+
+pytest tests/ -v
