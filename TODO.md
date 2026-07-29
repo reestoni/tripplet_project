@@ -7,7 +7,7 @@ Basierend auf einer Architektur-/Qualitätsdurchsicht der Codebasis. Priorisieru
 - [x] `MODE`-Umschaltung in `db/connection.py` – erledigt: Quellcode-Start (PyCharm/`python main.py`) fragt jetzt per Dialog (`main.py`, vor den `ui`-Imports) nach `prod`/`dev`/`dev_local` und setzt `TRIPPLET_MODE`; die gebaute .exe (`sys.frozen`) läuft immer hart auf `prod`, unabhängig von jeder Umgebungsvariable.
 
 ## Architektur / Wartbarkeit
-- [ ] `ShowExperimentScreen` (`ui/screen_show_experiment.py`) aufteilen – eine Klasse mit 120+ Methoden auf ~8.900 Zeilen. Kandidaten zum Auslagern: `_build_machine_tab` (967 Zeilen), `_f` (952 Zeilen), PDF-Import-Methoden (`_statimat_import`, `_itemat_import`).
+- [~] `ShowExperimentScreen` (`ui/screen_show_experiment.py`) aufteilen – eine Klasse mit 120+ Methoden auf ~8.900 Zeilen. **In Arbeit**: `_statimat_import`/`_itemat_import` (~625 Zeilen) nach `ui/screen_show_experiment_pdf_import.py` ausgelagert (Commit `4b3ae1a`, reiner Code-Move, 299/299 Tests weiterhin grün). Verbleibend: `_build_machine_tab` (967 Zeilen), `_f` (952 Zeilen), weitere Tab-Build-Methoden.
 - [ ] `screen_report.py`: ~5.200 Zeilen Modul-Level-Funktionen (Datenabfrage + PDF-Layout-Bausteine) in eigene Module trennen, z. B. `report_queries.py` / `report_pdf_layout.py`.
 - [ ] Duplizierte Spalten-Normalisierungs-Helfer (`_canon`, `_resolve_field`, `_norm`) – aktuell in ~10 Screen-Dateien plus `db/connection.py` fast identisch reimplementiert – in ein gemeinsames Utility-Modul konsolidieren.
 - [ ] Gemeinsame `BaseScreen`-Klasse einführen, um wiederkehrende Boilerplate zu reduzieren (aktuell erben alle ~30 Screens direkt von `QWidget`, geteilt wird nur `HeaderBar`/`FooterBar`).
