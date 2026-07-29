@@ -8,6 +8,9 @@ mitgeschrieben wird.
 
 Nur fuer Superuser sichtbar (AccessLevel >= 4) - zeigt Aktivitaet pro
 Nutzer, keine anonymisierten Daten.
+
+Tab "Dashboard": zwei matplotlib-Charts (Nutzungs-Ranking, Login-Verlauf).
+Weitere Tabs: rohe Tabellen zum Nachschlagen im Detail.
 """
 from typing import List, Dict
 
@@ -17,8 +20,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableView, QTabWidget, QSizePolicy, QAbstractItemView, QMessageBox,
 )
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
-from ui.theme import accent_tint, accent_gridline
+from ui.theme import accent_tint, accent_gridline, get_accent
 from ui.widgets.footer import FooterBar
 from ui.widgets.header import HeaderBar
 from db.connection import fetch_all, table_exists
@@ -87,11 +92,68 @@ def _make_table(headers: List[str]) -> QTableView:
     return table
 
 
+class UsageRankingChart(FigureCanvas):
+    """Horizontaler Balkenchart: Screens + Features gemeinsam nach Nutzung sortiert."""
+
+    def __init__(self, parent=None):
+        self.fig = Figure(figsize=(6, 4), tight_layout=True)
+        super().__init__(self.fig)
+        if parent is not None:
+            self.setParent(parent)
+        self.ax = self.fig.add_subplot(111)
+
+    def update_data(self, rows: List[Dict]):
+        self.ax.clear()
+        if not rows:
+            self.ax.text(0.5, 0.5, "Noch keine Daten", ha="center", va="center", transform=self.ax.transAxes)
+            self.draw()
+            return
+
+        rows = list(reversed(rows))  # groesster Balken oben
+        labels = [r["Name"] if r["EventType"] == "screen_open" else f"★ {r['Name']}" for r in rows]
+        counts = [r["Cnt"] for r in rows]
+        colors = [get_accent() if r["EventType"] == "screen_open" else "#E0A030" for r in rows]
+
+        self.ax.barh(labels, counts, color=colors)
+        self.ax.set_xlabel("Aufrufe")
+        self.ax.set_title("Meistgenutzte Screens & Features (★ = kuratiertes Feature)")
+        self.ax.tick_params(axis="y", labelsize=8)
+        self.draw()
+
+
+class LoginTimelineChart(FigureCanvas):
+    """Balkenchart: Logins pro Tag (letzte 30 Tage)."""
+
+    def __init__(self, parent=None):
+        self.fig = Figure(figsize=(6, 3), tight_layout=True)
+        super().__init__(self.fig)
+        if parent is not None:
+            self.setParent(parent)
+        self.ax = self.fig.add_subplot(111)
+
+    def update_data(self, rows: List[Dict]):
+        self.ax.clear()
+        if not rows:
+            self.ax.text(0.5, 0.5, "Noch keine Daten", ha="center", va="center", transform=self.ax.transAxes)
+            self.draw()
+            return
+
+        days = [str(r["Day"]) for r in rows]
+        counts = [r["Cnt"] for r in rows]
+        self.ax.bar(days, counts, color=get_accent())
+        self.ax.set_ylabel("Logins")
+        self.ax.set_title("Logins pro Tag (letzte 30 Tage)")
+        self.ax.tick_params(axis="x", labelrotation=60, labelsize=7)
+        self.draw()
+
+
 class UsageStatsScreen(QWidget):
     def __init__(self, on_back_home=None):
         super().__init__()
         self.on_back_home = on_back_home
 
+        self.chart_ranking = UsageRankingChart()
+        self.chart_logins = LoginTimelineChart()
         self.tbl_logins = _make_table(["Username", "Logins", "LastLogin"])
         self.tbl_screens = _make_table(["Screen", "Opens", "Users", "LastUsed"])
         self.tbl_features = _make_table(["Feature", "Detail", "Uses", "Users", "LastUsed"])
@@ -117,7 +179,13 @@ class UsageStatsScreen(QWidget):
         toolbar_frame = QWidget()
         toolbar_frame.setLayout(toolbar)
 
+        dashboard = QWidget()
+        dash_layout = QVBoxLayout(dashboard)
+        dash_layout.addWidget(self.chart_ranking, 2)
+        dash_layout.addWidget(self.chart_logins, 1)
+
         tabs = QTabWidget()
+        tabs.addTab(dashboard, "Dashboard")
         tabs.addTab(self.tbl_logins, "Logins")
         tabs.addTab(self.tbl_screens, "Screens")
         tabs.addTab(self.tbl_features, "Features")
@@ -150,9 +218,23 @@ class UsageStatsScreen(QWidget):
                 "FROM tblUsageLog WHERE EventType = 'feature' "
                 "GROUP BY EventName, Detail ORDER BY Uses DESC"
             )
+            ranking = fetch_all(
+                "SELECT EventName AS Name, EventType, COUNT(*) AS Cnt "
+                "FROM tblUsageLog WHERE EventType IN ('screen_open', 'feature') "
+                "GROUP BY EventName, EventType ORDER BY Cnt DESC LIMIT 15"
+            )
+            login_timeline = fetch_all(
+                "SELECT DATE(EventTime) AS Day, COUNT(*) AS Cnt "
+                "FROM tblUsageLog WHERE EventType = 'login' "
+                "AND EventTime >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) "
+                "GROUP BY DATE(EventTime) ORDER BY Day ASC"
+            )
         except Exception as e:
             QMessageBox.critical(self, "Fehler", f"Konnte Nutzungsstatistiken nicht laden:\n{e}")
             return
+
+        self.chart_ranking.update_data(ranking)
+        self.chart_logins.update_data(login_timeline)
 
         self.tbl_logins.setModel(ReadOnlyTableModel(logins, ["Username", "Logins", "LastLogin"]))
         self.tbl_screens.setModel(ReadOnlyTableModel(screens, ["Screen", "Opens", "Users", "LastUsed"]))
