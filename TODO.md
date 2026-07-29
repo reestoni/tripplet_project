@@ -47,9 +47,9 @@ Basierend auf einer Architektur-/Qualitätsdurchsicht der Codebasis. Priorisieru
 - [ ] Import-Guards in `main.py:48-104` (try/except um Screen-Importe, z. B. `ReportScreen`, `CanvasScreen`) mindestens loggen statt nur `print()`, damit ein stiller Feature-Ausfall auffällt.
 
 ## Aufräumen (niedrige Priorität)
-- [ ] `pyodbc` aus `requirements.txt` entfernen, falls nach der Access→MySQL-Migration nicht mehr benötigt (parallel zu `mysql-connector-python` gelistet).
-- [ ] Versionen in `requirements.txt` pinnen für reproduzierbare Builds (aktuell komplett ungepinnt).
-- [ ] `ui/screen_new.py`: Platzhalter-Klasse heißt noch `ManageYarnScreen` statt eines neutralen Namens – Verwechslungsgefahr beim Copy-Paste für neue Screens.
+- [x] `pyodbc` aus `requirements.txt` entfernt – nach der Access→MySQL-Migration kein einziger Import/Verweis mehr im Projektcode (geprüft per Grep).
+- [x] Versionen in `requirements.txt` gepinnt (alle 24 Pakete auf die aktuell installierten, nachweislich funktionierenden Versionen) – vorher komplett ungepinnt, Risiko für PyInstaller-Build-Reproduzierbarkeit. Per `pip install --dry-run` verifiziert: löst ohne Konflikte auf.
+- [x] `ui/screen_new.py` gelöscht – reines Copy-Paste-Template (Platzhalter-Klasse `ManageYarnScreen`), nirgends im Projekt importiert/verwendet, daher keine Funktionalität betroffen.
 
 ## Feature-Idee (vom User, 2026-07-29)
 - [ ] Neue Labormaschine (z.B. neues Prüfgerät) erfordert aktuell Code-Änderungen: neuer Tab in `ShowExperimentScreen` (`_build_XXX_tab`), neue DB-Tabelle, i.d.R. neuer PDF-Import-Parser. Idee: generischeres Setup, z.B. ein kleines Admin-Tool, mit dem eine neue Maschine ohne Code-Änderung angelegt werden kann.
