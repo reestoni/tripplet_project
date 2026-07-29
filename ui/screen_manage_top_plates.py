@@ -31,21 +31,7 @@ from PySide6.QtWidgets import QApplication
 from ui.widgets.footer import FooterBar
 from ui.widgets.header import HeaderBar
 from ui.pathutil import resource_path
-
-
-# ----------------- helpers -----------------
-def _canon(s: str) -> str:
-    """Canonicalize header/keys: strip brackets/spaces, lowercase, drop leading/trailing 'id' etc."""
-    if s is None:
-        return ""
-    x = str(s).strip().strip("`[]").replace(" ", "").lower()
-    if x.startswith("fk_"):
-        x = x[3:]
-    if x.startswith("id"):
-        x = x[2:]
-    if x.endswith("id"):
-        x = x[:-2]
-    return x
+from ui.text_normalize import canon_with_id_strip as _canon
 
 
 def _to_int_like(val):

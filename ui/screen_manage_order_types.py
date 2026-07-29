@@ -10,13 +10,8 @@ from PySide6.QtWidgets import (
 
 from ui.widgets.footer import FooterBar
 from ui.widgets.header import HeaderBar
+from ui.text_normalize import canon_simple as _canon
 from db.connection import fetch_all, execute
-
-
-
-
-def _canon(s: str) -> str:
-    return str(s).strip().strip('`[]').replace(' ', '').lower() if s is not None else ''
 
 
 class GenericEditableModel(QAbstractTableModel):

@@ -30,12 +30,8 @@ from PySide6.QtWidgets import (
 
 from ui.widgets.footer import FooterBar
 from ui.widgets.header import HeaderBar
+from ui.text_normalize import canon_simple as _canon
 from db.connection import fetch_all, execute
-
-
-def _canon(s: str) -> str:
-    """Normalisiert einen Spaltennamen für tolerante Vergleiche (lowercase, Klammern weg)."""
-    return str(s).strip().strip('`[]').replace(' ', '').lower() if s is not None else ''
 
 
 def _load_master_key() -> Optional[bytes]:

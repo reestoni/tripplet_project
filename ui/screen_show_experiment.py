@@ -37,6 +37,7 @@ Datenbankbezug:
 from ui.theme import accent_tint, accent_gridline, get_accent
 from PySide6.QtGui import QPixmap, QColor, QIcon
 from ui.pathutil import resource_path
+from ui.text_normalize import norm, resolve_field
 from ui.widgets.statimat_pdf_parser import parse_statimat_pdf
 from ui.widgets.itemat_pdf_parser import parse_itemat_pdf, DB_TENSIONS as ITEMAT_DB_TENSIONS
 from ui.widgets.header import HeaderBar
@@ -1012,36 +1013,6 @@ def get_columns_info(table: str) -> List[Dict[str, Any]]:
     for lc, real in cmap.items():
         out.append({"lower": lc, "real": real, "data_type": None, "type_name": None})
     return out
-
-
-def norm(s: str) -> str:
-    """Normalisiert einen Spaltennamen (strip + lowercase, Sonderzeichen entfernen)."""
-    return (
-        (s or "")
-        .lower()
-        .replace(" ", "")
-        .replace("_", "")
-        .replace("(", "")
-        .replace(")", "")
-        .replace("°", "")
-        .replace("/", "")
-        .replace("-", "")
-        .strip()
-    )
-
-
-def resolve_field(cands: List[str], cols_map: Dict[str, str]) -> Optional[str]:
-    """Gibt den ersten Kandidaten zurück der in cols_map vorhanden ist."""
-    for cand in cands:
-        lc = cand.lower()
-        if lc in cols_map:
-            return cols_map[lc]
-    inv = {norm(k): v for k, v in cols_map.items()}
-    for cand in cands:
-        nk = norm(cand)
-        if nk in inv:
-            return inv[nk]
-    return None
 
 
 def canon_rule(ff: Optional[str]) -> Optional[str]:

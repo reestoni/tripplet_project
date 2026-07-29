@@ -14,6 +14,7 @@ from PySide6.QtGui import QPixmap
 
 from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.text_normalize import canon_simple as _canon
 
 
 # ── File storage ─────────────────────────────────────────────────────────────
@@ -41,12 +42,6 @@ _FILE_ICONS = {
 def _file_icon(filename: str) -> str:
     ext = os.path.splitext(filename)[1].lower()
     return _FILE_ICONS.get(ext, "📎")
-
-
-def _canon(s: str) -> str:
-    if s is None:
-        return ""
-    return str(s).strip().strip("[]`").replace(" ", "").lower()
 
 
 class NewTopPlateScreen(QWidget):

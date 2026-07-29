@@ -11,11 +11,8 @@ from PySide6.QtWidgets import (
 
 from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.text_normalize import norm as _norm, canon_simple as _canon
 from db.connection import fetch_all, execute, new_global_id, get_columns_map
-
-
-def _canon(s: str) -> str:
-    return str(s).strip().strip('`[]').replace(' ', '').lower() if s is not None else ''
 
 
 def _canon_noparen(s: str) -> str:
@@ -58,15 +55,6 @@ def load_material_map() -> Tuple[Dict[int, str], Dict[str, int]]:
         id2name[i] = n
         name2id[str(n)] = i
     return id2name, name2id
-
-
-def _norm(s: str) -> str:
-    return (
-        (s or "")
-        .lower().replace(" ", "").replace("_", "")
-        .replace("(", "").replace(")", "").replace("°", "")
-        .replace("/", "").replace("-", "").strip()
-    )
 
 
 def _resolve_field(cands: List[str], cols_map: Dict[str, str]) -> Optional[str]:

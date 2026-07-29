@@ -24,7 +24,11 @@ Basierend auf einer Architektur-/Qualitätsdurchsicht der Codebasis. Priorisieru
   - Beide reiner Code-Move, alle 16 verschobenen Definitionen per AST-Source-Segment-Vergleich (alt vs. neu) byte-identisch verifiziert, zusätzlich Testlauf + headless-Import grün.
 
   `screen_report.py` dadurch von ursprünglich 7.456 auf 1.830 Zeilen geschrumpft (davon `_ReportBridge`, das QWebChannel-Backend, allein 1.544 Zeilen – blieb unangetastet, da eng an Qt/JS-Bridge-State gekoppelt und ein eigenes, risikoreicheres Vorhaben wäre).
-- [ ] Duplizierte Spalten-Normalisierungs-Helfer (`_canon`, `_resolve_field`, `_norm`) – aktuell in ~10 Screen-Dateien plus `db/connection.py` fast identisch reimplementiert – in ein gemeinsames Utility-Modul konsolidieren.
+- [x] Duplizierte Spalten-Normalisierungs-Helfer konsolidiert → `ui/text_normalize.py` (`norm`, `resolve_field`, `canon_simple`, `canon_with_id_strip`). Vorher 10 fast-identische `_canon`-Implementierungen und 3 identische `_norm`/`norm`-Implementierungen über verschiedene `ui/screen_*.py`-Dateien verstreut. Jede Variante wurde per AST-Body-Vergleich (Docstring/Name ignoriert) gegen alle Fundstellen auf tatsächliche Verhaltensgleichheit geprüft, bevor sie konsolidiert wurde:
+  - `canon_simple` (7 Dateien: material, order_types, product_groups, user, yarn, new_jet, new_top_plate) und `canon_with_id_strip` (2 Dateien: jets, top_plates) – beide Cluster jeweils intern identisch.
+  - `norm`/`resolve_field` (screen_show_experiment.py, screen_create_experiment.py; `_norm` zusätzlich in screen_manage_yarn.py) – identisch bis auf welchen internen Helfernamen sie aufrufen.
+  - Bewusst NICHT angefasst, weil tatsächlich abweichendes Verhalten: `main.py._canon` (kein None-Guard, aber einzige Fundstelle, keine Duplikation), `db/connection.py._resolve_field`/`_canon_col` (eigene Normalisierung, strippt zusätzlich Unterstriche/Klammern), `screen_yarn_stock.py._resolve_field` (simplere Normalisierung ohne Sonderzeichen-Handling), `screen_manage_yarn.py._resolve_field` (None-Guard auf `cand`, den die anderen nicht haben).
+  - Verifiziert per Testlauf (294/294 grün), headless-Import aller 12 geänderten Module und Funktions-Stichprobe (canon_simple/canon_with_id_strip/norm/resolve_field mit None/Sonderzeichen-Eingaben).
 - [ ] Gemeinsame `BaseScreen`-Klasse einführen, um wiederkehrende Boilerplate zu reduzieren (aktuell erben alle ~30 Screens direkt von `QWidget`, geteilt wird nur `HeaderBar`/`FooterBar`).
 
 ## Fehlerbehandlung / Diagnose

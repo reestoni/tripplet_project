@@ -59,6 +59,7 @@ from ui.widgets.footer import FooterBar
 from ui.widgets.header import HeaderBar
 from ui.widgets.spool_picker import SpoolPickerDialog, spool_label
 from ui.pathutil import resource_path
+from ui.text_normalize import norm as _norm, resolve_field
 
 import app_meta
 import re
@@ -123,30 +124,6 @@ def get_columns_info(table: str) -> List[Dict[str, Any]]:
     for lc, real in cmap.items():
         out.append({"lower": lc, "real": real, "data_type": None, "type_name": None})
     return out
-
-
-def _norm(s: str) -> str:
-    """Normalisiert einen Spaltennamen (strip + lowercase)."""
-    return (
-        (s or "")
-        .lower().replace(" ", "").replace("_", "")
-        .replace("(", "").replace(")", "").replace("°", "")
-        .replace("/", "").replace("-", "").strip()
-    )
-
-
-def resolve_field(cands: List[str], cols_map: Dict[str, str]) -> Optional[str]:
-    """Gibt den ersten Kandidaten zurück der in cols_map vorhanden ist."""
-    for cand in cands:
-        lc = cand.lower()
-        if lc in cols_map:
-            return cols_map[lc]
-    inv = {_norm(k): v for k, v in cols_map.items()}
-    for cand in cands:
-        nk = _norm(cand)
-        if nk in inv:
-            return inv[nk]
-    return None
 
 
 # -->-->-->-->-->-->-->-->-->- UI Helpers -->-->-->-->-->-->-->-->-->-
