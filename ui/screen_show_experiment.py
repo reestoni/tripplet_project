@@ -1324,50 +1324,56 @@ class PivotEditModel(QAbstractTableModel):
         # ── normal data rows ──────────────────────────────────────────────
         dr = r - self._n_hdr  # index into _row_titles / _matrix
 
-        # Elongation CV highlight: Wert >= 10 -> rot + fett + heller Rohhintergrund
-        _is_elong_cv_alert = False
-        # Tenacity CV highlight: Wert >= 10 -> rot + fett + heller Rohhintergrund (analog Elongation CV)
-        _is_ten_cv_alert = False
-        if c > 0 and 0 <= dr < len(self._row_titles):
-            _title = self._row_titles[dr]
-            if "Elongation CV" in _title:
-                _raw = self._matrix[dr][c - 1]
-                try:
-                    _fval = float(str(_raw).replace(",", ".")) if _raw not in (None, "") else None
-                    if _fval is not None and _fval >= 10.0:
-                        _is_elong_cv_alert = True
-                except Exception:
-                    pass
-            if "Tenacity CV" in _title:
-                _raw = self._matrix[dr][c - 1]
-                try:
-                    _fval = float(str(_raw).replace(",", ".")) if _raw not in (None, "") else None
-                    if _fval is not None and _fval >= 10.0:
-                        _is_ten_cv_alert = True
-                except Exception:
-                    pass
+        # Alert-Berechnung (Elongation/Tenacity-CV-Grenzwert, Zellen-Alerts) wird
+        # nur für die Rollen gebraucht, die sie tatsächlich auswerten
+        # (Background/Foreground/Font). Für alle anderen Rollen (v.a.
+        # DisplayRole/TextAlignmentRole, die bei resizeColumnsToContents()
+        # o.ä. sehr oft aufgerufen werden) lohnt sich das Parsing nicht.
+        if role in (Qt.BackgroundRole, Qt.ForegroundRole, Qt.FontRole):
+            # Elongation CV highlight: Wert >= 10 -> rot + fett + heller Rohhintergrund
+            _is_elong_cv_alert = False
+            # Tenacity CV highlight: Wert >= 10 -> rot + fett + heller Rohhintergrund (analog Elongation CV)
+            _is_ten_cv_alert = False
+            if c > 0 and 0 <= dr < len(self._row_titles):
+                _title = self._row_titles[dr]
+                if "Elongation CV" in _title:
+                    _raw = self._matrix[dr][c - 1]
+                    try:
+                        _fval = float(str(_raw).replace(",", ".")) if _raw not in (None, "") else None
+                        if _fval is not None and _fval >= 10.0:
+                            _is_elong_cv_alert = True
+                    except Exception:
+                        pass
+                if "Tenacity CV" in _title:
+                    _raw = self._matrix[dr][c - 1]
+                    try:
+                        _fval = float(str(_raw).replace(",", ".")) if _raw not in (None, "") else None
+                        if _fval is not None and _fval >= 10.0:
+                            _is_ten_cv_alert = True
+                    except Exception:
+                        pass
 
-        # cell-level alert (Titer out-of-tolerance, Tenacity orange, etc.)
-        _cell_alert = self._cell_alerts.get((dr, c - 1)) if c > 0 else None
+            # cell-level alert (Titer out-of-tolerance, Tenacity orange, etc.)
+            _cell_alert = self._cell_alerts.get((dr, c - 1)) if c > 0 else None
 
-        if role == Qt.BackgroundRole:
-            if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert == "red":
-                return QColor("#FFD0D0")  # helles Rot
-            if _cell_alert == "orange":
-                return QColor("#FFE5B4")  # helles Orange
-            return self._ALT_EVEN if (dr % 2 == 0) else self._ALT_ODD
-        if role == Qt.ForegroundRole:
-            if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert == "red":
-                return QColor("#CC0000")  # kräftiges Rot
-            if _cell_alert == "orange":
-                return QColor("#B85C00")  # dunkel Orange
-            return self._FG_BLACK
-        if role == Qt.FontRole:
-            if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert in ("red", "orange"):
-                f = QFont()
-                f.setBold(True)
-                return f
-            return None
+            if role == Qt.BackgroundRole:
+                if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert == "red":
+                    return QColor("#FFD0D0")  # helles Rot
+                if _cell_alert == "orange":
+                    return QColor("#FFE5B4")  # helles Orange
+                return self._ALT_EVEN if (dr % 2 == 0) else self._ALT_ODD
+            if role == Qt.ForegroundRole:
+                if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert == "red":
+                    return QColor("#CC0000")  # kräftiges Rot
+                if _cell_alert == "orange":
+                    return QColor("#B85C00")  # dunkel Orange
+                return self._FG_BLACK
+            if role == Qt.FontRole:
+                if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert in ("red", "orange"):
+                    f = QFont()
+                    f.setBold(True)
+                    return f
+                return None
         if role in (Qt.DisplayRole, Qt.EditRole):
             if c == 0:
                 return self._row_titles[dr]
@@ -4734,7 +4740,7 @@ class ShowExperimentScreen(QWidget):
 
             right_view.setColumnHidden(model_col, hidden)
 
-        self.tbl_machine.resizeColumnsToContents()
+        self.tbl_machine.resizeColumnsToContents(fixed_data_column_width=90)
 
         # Checkboxen im Kompakt-Modus deaktivieren
 
@@ -5401,7 +5407,7 @@ class ShowExperimentScreen(QWidget):
         self.tbl_titer.setModel(self.model_titer)
         self.model_titer.insert_readonly_rows_at_top(self._get_jet_info_rows())
         self._register_save_model("model_titer")
-        self.tbl_titer.resizeColumnsToContents()
+        self.tbl_titer.resizeColumnsToContents(fixed_data_column_width=90)
 
         # ── Soll-Titer aus Trial 1 berechnen (einmalig für die ganze Series) ──
         self._titer_out_of_tolerance: set = set()  # c_idx der auffälligen Trials
@@ -5740,7 +5746,7 @@ class ShowExperimentScreen(QWidget):
                     self.model_jet_air.set_cell(r_idx, c_idx, None, None)
         self.tbl_jet_air.setModel(self.model_jet_air)
         self._register_save_model("model_jet_air")
-        self.tbl_jet_air.resizeColumnsToContents()
+        self.tbl_jet_air.resizeColumnsToContents(fixed_data_column_width=90)
 
         # ── Atmospheric Pressure ────────────────────────────────────────
         self.model_jet_air_atm = PivotEditModel(
@@ -5757,7 +5763,7 @@ class ShowExperimentScreen(QWidget):
                     self.model_jet_air_atm.set_cell(r_idx, c_idx, None, None)
         self.tbl_jet_air_atm.setModel(self.model_jet_air_atm)
         self._register_save_model("model_jet_air_atm")
-        self.tbl_jet_air_atm.resizeColumnsToContents()
+        self.tbl_jet_air_atm.resizeColumnsToContents(fixed_data_column_width=90)
 
         # ── Air Temperature ─────────────────────────────────────────────
         self.model_jet_air_temp = PivotEditModel(
@@ -5774,7 +5780,7 @@ class ShowExperimentScreen(QWidget):
                     self.model_jet_air_temp.set_cell(r_idx, c_idx, None, None)
         self.tbl_jet_air_temp.setModel(self.model_jet_air_temp)
         self._register_save_model("model_jet_air_temp")
-        self.tbl_jet_air_temp.resizeColumnsToContents()
+        self.tbl_jet_air_temp.resizeColumnsToContents(fixed_data_column_width=90)
 
     # ---------- Statimat M (nur sichtbar wenn Daten) ----------
 
@@ -5894,7 +5900,7 @@ class ShowExperimentScreen(QWidget):
         self.tbl_stat.setModel(self.model_stat)
         self.model_stat.insert_readonly_rows_at_top(self._get_jet_info_rows())
         self._register_save_model("model_stat")
-        self.tbl_stat.resizeColumnsToContents()
+        self.tbl_stat.resizeColumnsToContents(fixed_data_column_width=90)
 
     # ---------- Statimat DS (nur sichtbar wenn Daten) ----------
 
@@ -6014,7 +6020,7 @@ class ShowExperimentScreen(QWidget):
         self.tbl_stat_ds.setModel(self.model_stat_ds)
         self.model_stat_ds.insert_readonly_rows_at_top(self._get_jet_info_rows())
         self._register_save_model("model_stat_ds")
-        self.tbl_stat_ds.resizeColumnsToContents()
+        self.tbl_stat_ds.resizeColumnsToContents(fixed_data_column_width=90)
 
         # Orange-Alerts für Tenacity falls Titer-Abweichungen bereits bekannt
         self._apply_titer_alert_to_stat_ds()
@@ -6161,7 +6167,7 @@ class ShowExperimentScreen(QWidget):
             self.tbl_ekb.setModel(self.model_ekb)
             self.model_ekb.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_ekb")
-            self.tbl_ekb.resizeColumnsToContents()
+            self.tbl_ekb.resizeColumnsToContents(fixed_data_column_width=110)
 
     # ---------- Hot Air Shrinkage (sichtbar nur bei Daten) ----------
 
@@ -6269,7 +6275,7 @@ class ShowExperimentScreen(QWidget):
             self.tbl_hot_air_shrinkage.setModel(self.model_hot_air_shrinkage)
             self.model_hot_air_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_hot_air_shrinkage")
-            self.tbl_hot_air_shrinkage.resizeColumnsToContents()
+            self.tbl_hot_air_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
 
     # ---------- Hot Water Shrinkage (sichtbar nur bei Daten) ----------
 
@@ -6382,7 +6388,7 @@ class ShowExperimentScreen(QWidget):
                 self.model_hot_water_shrinkage)
             self.model_hot_water_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_hot_water_shrinkage")
-            self.tbl_hot_water_shrinkage.resizeColumnsToContents()
+            self.tbl_hot_water_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
 
     # ---------- ATY Shrinkage (sichtbar nur bei Daten) ----------
 
@@ -6489,7 +6495,7 @@ class ShowExperimentScreen(QWidget):
             self.tbl_aty_shrinkage.setModel(self.model_aty_shrinkage)
             self.model_aty_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_aty_shrinkage")
-            self.tbl_aty_shrinkage.resizeColumnsToContents()
+            self.tbl_aty_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
 
     # ---------- Waterbath (fixe Spaltennamen) ----------
 
@@ -6581,7 +6587,7 @@ class ShowExperimentScreen(QWidget):
         self.tbl_water.setModel(self.model_water)
         self.model_water.insert_readonly_rows_at_top(self._get_jet_info_rows())
         self._register_save_model("model_water")
-        self.tbl_water.resizeColumnsToContents()
+        self.tbl_water.resizeColumnsToContents(fixed_data_column_width=90)
 
     # ---------- Itemat Lab (sichtbar nur bei Daten) ----------
 
@@ -6718,7 +6724,7 @@ class ShowExperimentScreen(QWidget):
         self.tbl_itemat.setModel(self.model_itemat)
         self.model_itemat.insert_readonly_rows_at_top(self._get_jet_info_rows())
         self._register_save_model("model_itemat")
-        self.tbl_itemat.resizeColumnsToContents()
+        self.tbl_itemat.resizeColumnsToContents(fixed_data_column_width=110)
 
     def _to_float(self, s: Any) -> Optional[float]:
         if s is None:
@@ -6952,7 +6958,7 @@ class ShowExperimentScreen(QWidget):
         self.tbl_itemat_plus.setModel(self.model_itemat_plus)
         self.model_itemat_plus.insert_readonly_rows_at_top(self._get_jet_info_rows())
         self._register_save_model("model_itemat_plus")
-        self.tbl_itemat_plus.resizeColumnsToContents()
+        self.tbl_itemat_plus.resizeColumnsToContents(fixed_data_column_width=120)
 
     def _recompute_itemat_plus(self) -> int:
         """
@@ -7282,7 +7288,7 @@ class ShowExperimentScreen(QWidget):
             self.tbl_dtyomat.setModel(self.model_dtyomat)
             self.model_dtyomat.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_dtyomat")
-            self.tbl_dtyomat.resizeColumnsToContents()
+            self.tbl_dtyomat.resizeColumnsToContents(fixed_data_column_width=120)
 
     # ---------- ATYoMat (sichtbar nur bei vorhandenen Daten) ----------
 
@@ -7430,7 +7436,7 @@ class ShowExperimentScreen(QWidget):
             self.tbl_atyomat.setModel(self.model_atyomat)
             self.model_atyomat.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_atyomat")
-            self.tbl_atyomat.resizeColumnsToContents()
+            self.tbl_atyomat.resizeColumnsToContents(fixed_data_column_width=120)
 
     # ---------- Rapid 600 (sichtbar nur bei vorhandenen Daten) ----------
 
@@ -7560,7 +7566,7 @@ class ShowExperimentScreen(QWidget):
             self.tbl_rapid600.setModel(self.model_rapid600)
             self.model_rapid600.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_rapid600")
-            self.tbl_rapid600.resizeColumnsToContents()
+            self.tbl_rapid600.resizeColumnsToContents(fixed_data_column_width=120)
 
 
 # ===========================================================================

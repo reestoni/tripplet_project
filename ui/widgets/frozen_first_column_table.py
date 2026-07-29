@@ -181,10 +181,27 @@ class FrozenFirstColumnTable(QWidget):
         for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):
             v.setStyleSheet(style)
 
-    def resizeColumnsToContents(self):  # noqa: N802
+    def resizeColumnsToContents(self, fixed_data_column_width: Optional[int] = None):  # noqa: N802
+        """Spaltenbreiten anpassen.
+
+        `fixed_data_column_width`: wenn gesetzt, werden die Datenspalten
+        (1..N) auf diese feste Breite gesetzt statt inhaltsbasiert berechnet.
+        Qt's `resizeColumnsToContents()` ruft dafür `.data()` für JEDE Zelle
+        jeder Spalte auf (O(rows x cols)) - bei Pivot-Tabellen mit
+        trial-abhängig vielen Spalten (z.B. ShowExperimentScreen, hunderte
+        Trials = hunderte Spalten) dominiert das die Ladezeit. Spalte 0
+        (Parameter-Titel) bleibt immer inhaltsbasiert (nur eine Spalte,
+        O(rows), unkritisch).
+        """
         self.top_left.resizeColumnToContents(0)
         self.bottom_left.resizeColumnToContents(0)
-        self.bottom_right.resizeColumnsToContents()
+        if fixed_data_column_width is not None:
+            model = self.bottom_right.model()
+            n_cols = model.columnCount() if model else 0
+            for c in range(1, n_cols):
+                self.bottom_right.setColumnWidth(c, fixed_data_column_width)
+        else:
+            self.bottom_right.resizeColumnsToContents()
         self._sync_all_column_widths_from(self.bottom_right)
         self._update_left_width()
 

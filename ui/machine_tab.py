@@ -822,7 +822,7 @@ def build_machine_tab_impl(self) -> None:
         )
 
     self.tbl_machine.setModel(self.model_machine)
-    self.tbl_machine.resizeColumnsToContents()
+    self.tbl_machine.resizeColumnsToContents(fixed_data_column_width=90)
 
     # Qt-Column-Header ausblenden – Ply/V-Labels stehen bereits in den Modell-Header-Zeilen
     self.tbl_machine.left.horizontalHeader().setVisible(False)
@@ -1300,7 +1300,7 @@ def build_rd_machine_tab_impl(
                 )
 
     self.tbl_rd_machine.setModel(self.model_rd_machine)
-    self.tbl_rd_machine.resizeColumnsToContents()
+    self.tbl_rd_machine.resizeColumnsToContents(fixed_data_column_width=90)
     self.tbl_rd_machine.left.horizontalHeader().setVisible(False)
     self.tbl_rd_machine.right.horizontalHeader().setVisible(False)
 
