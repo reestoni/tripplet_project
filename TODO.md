@@ -43,6 +43,17 @@ Basierend auf einer Architektur-/Qualitätsdurchsicht der Codebasis. Priorisieru
   - Verifiziert per Testlauf (294/294 grün), headless-Import aller 12 geänderten Module und Funktions-Stichprobe (canon_simple/canon_with_id_strip/norm/resolve_field mit None/Sonderzeichen-Eingaben).
 - [ ] Gemeinsame `BaseScreen`-Klasse einführen, um wiederkehrende Boilerplate zu reduzieren (aktuell erben alle ~30 Screens direkt von `QWidget`, geteilt wird nur `HeaderBar`/`FooterBar`).
 
+## Feature: Nutzungsstatistiken für Admins (vom User, 2026-07-29)
+- [x] **Admin-Stats-Screen gebaut** (`ui/screen_usage_stats.py`, nur `dev_local`, Prod bewusst noch NICHT angefasst): Zweck – Feature-Nutzung sichtbar machen ("welche Features werden benutzt, welche verstauben"), nicht Klick-für-Klick-Tracking.
+  - **`tblUsageLog`** (ID, UserID, Username, EventType, EventName, Detail, EventTime) in `dev_local` angelegt.
+  - **`db/usage_log.py`**: `log_usage_event(event_type, event_name, detail="")` – best-effort, schlägt nie sichtbar fehl (try/except, no-op falls Tabelle auf dem aktuellen DB-Modus fehlt).
+  - **Screen-Opens**: ein einziger zentraler Hook über `self.stack.currentChanged` in `main.py` (`_log_screen_open`) statt Instrumentierung jeder einzelnen `_go_XXX()`-Methode – erfasst automatisch jeden Navigationswechsel.
+  - **Login**: ein Aufruf in `screen_login.py._attempt_login()` nach erfolgreichem Login.
+  - **Kuratierte "große" Feature-Events** (gezielt instrumentiert, nicht jeder Klick): PDF-Export (`screen_report.py.exportPdf`), Advisor/Athena-Analyse (`advisor_tab.py._run_advisor`), Fill-Range-Bulk-Edit (`machine_tab.py`, alle 4 Varianten: Housing/Jet/Dropdown/Text), YarnScope-DTY-Trial-Auswahl (`dty_yarnscope_tab.py._ys_on_trial_selected`). Weitere Features lassen sich mit einer Zeile `log_usage_event("feature", "name")` ergänzen.
+  - **`UsageStatsScreen`**: drei Tabellen (Logins pro User, Screen-Opens mit Nutzerzahl + zuletzt benutzt, Feature-Events mit Nutzerzahl + zuletzt benutzt) – die "zuletzt benutzt"-Spalte beantwortet direkt "wird das noch gebraucht?". Erreichbar über die Superuser-Karte auf dem Home-Screen ("Usage Stats"-Button), Zugriff nur mit `AccessLevel >= 4` (`app_meta.is_superuser_level()`), sowohl beim Navigieren als auch implizit durch die Sichtbarkeit des Buttons.
+  - Verifiziert per Testsuite (299/299), headless-Import, vollständigem `MainWindow()`-Aufbau inkl. Navigations-/Berechtigungstest (Nicht-Superuser wird beim Versuch blockiert), und Ende-zu-Ende-Test auf `dev_local` (Events schreiben → `UsageStatsScreen` öffnen → korrekte Aggregation sehen → aufräumen).
+  - **Offen**: `tblUsageLog` existiert nur in `dev_local`. Schema-Änderung auf Prod ist ein bewusst separater, expliziter nächster Schritt (siehe Session-Notiz) – nicht automatisch mit reingenommen, da das eine schwer rückgängig zu machende Änderung am geteilten Produktivsystem ist.
+
 ## Fehlerbehandlung / Diagnose
 - [ ] `logging`-Modul einführen (aktuell in `ui/`, `db/`, `main.py` nirgends verwendet) statt `print()` und stiller `except Exception: pass`-Blöcke (1.368 breite except-Blöcke repo-weit) – damit Fehler in Produktion überhaupt nachvollziehbar sind.
 - [ ] Import-Guards in `main.py:48-104` (try/except um Screen-Importe, z. B. `ReportScreen`, `CanvasScreen`) mindestens loggen statt nur `print()`, damit ein stiller Feature-Ausfall auffällt.

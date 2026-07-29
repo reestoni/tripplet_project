@@ -225,6 +225,9 @@ def _run_advisor(self):
         )
         return
 
+    from db.usage_log import log_usage_event
+    log_usage_event("feature", "advisor_athena")
+
     self._btn_advisor_run.setEnabled(False)
     self._btn_advisor_run.setText("🦉 Athena thinking…")
     self._btn_advisor_send.setEnabled(False)

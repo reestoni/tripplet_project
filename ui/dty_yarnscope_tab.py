@@ -421,6 +421,8 @@ def _ys_on_trial_selected(self, row: int):
     item = self._ys_trial_list.item(row)
     if not item:
         return
+    from db.usage_log import log_usage_event
+    log_usage_event("feature", "yarnscope_dty")
     data = item.data(Qt.UserRole)
     tdms = data.get("tdms");
     tid = data.get("trial_id");

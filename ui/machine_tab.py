@@ -1526,6 +1526,8 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
         )
         if dlgh.exec() != QDialog.Accepted:
             return
+        from db.usage_log import log_usage_event
+        log_usage_event("feature", "fill_range_bulk_edit", "housing")
         start_trial, end_trial, housing_id = dlgh.get_values()
         value_to_set = housing_id
 
@@ -1547,6 +1549,8 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
         )
         if dlgj.exec() != QDialog.Accepted:
             return
+        from db.usage_log import log_usage_event
+        log_usage_event("feature", "fill_range_bulk_edit", "jet")
         start_trial, end_trial, jet_id = dlgj.get_values()
         value_to_set = jet_id
 
@@ -1587,6 +1591,8 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
         )
         if dlgd.exec() != QDialog.Accepted:
             return
+        from db.usage_log import log_usage_event
+        log_usage_event("feature", "fill_range_bulk_edit", "dropdown")
         start_trial, end_trial, value_to_set, selected_plies_dd = dlgd.get_values()
 
         # Apply: über col_specs iterieren, mit optionalem Ply-Filter
@@ -1693,6 +1699,8 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
         )
         if dlg.exec() != QDialog.Accepted:
             return
+        from db.usage_log import log_usage_event
+        log_usage_event("feature", "fill_range_bulk_edit", "text")
         start_trial, end_trial, text, selected_plies = dlg.get_values()
         value_to_set = text
 

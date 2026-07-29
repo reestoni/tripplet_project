@@ -55,6 +55,7 @@ from ui.screen_manage_user import ManageUserScreen
 from ui.screen_manage_order_types import ManageOrderTypeScreen
 from ui.screen_manage_product_groups import ManageProductGroupsScreen
 from ui.screen_manage_material import ManageMaterialScreen
+from ui.screen_usage_stats import UsageStatsScreen
 from ui.screen_my_requests import MyRequestsScreen
 from ui.screen_new_jet import NewJetScreen
 from ui.screen_new_top_plate import NewTopPlateScreen
@@ -388,6 +389,7 @@ class MainWindow(QMainWindow):
         self.manage_product_groups = ManageProductGroupsScreen(
             on_back_home=self._go_home)
         self.manage_material = ManageMaterialScreen(on_back_home=self._go_home)
+        self.usage_stats = UsageStatsScreen(on_back_home=self._go_home)
 
         # Backlog-Screen
         self.backlog = BacklogScreen(
@@ -432,6 +434,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.manage_order_type)
         self.stack.addWidget(self.manage_product_groups)
         self.stack.addWidget(self.manage_material)
+        self.stack.addWidget(self.usage_stats)
         self.stack.addWidget(self.new_jet)
         self.stack.addWidget(self.new_top_plate)
         self.stack.addWidget(self.backlog)
@@ -449,6 +452,13 @@ class MainWindow(QMainWindow):
         self._search_dlg: Optional[QuickSearchDialog] = None
 
         self._create_screen_ref: Optional[CreateExperimentScreen] = None
+
+        # Nutzungs-Tracking: jeder Screen-Wechsel im Stack wird geloggt
+        # (best-effort, siehe db/usage_log.py). Ein einziger zentraler Hook
+        # ueber Qt's currentChanged-Signal statt Instrumentierung jeder
+        # einzelnen _go_XXX()-Methode.
+        self.stack.currentChanged.connect(self._log_screen_open)
+
         self.stack.setCurrentWidget(self.login)
 
     # --- Data functions for Manage Jets --------------------------------------
@@ -966,6 +976,7 @@ class MainWindow(QMainWindow):
             on_requirement_hub=self._go_requirement_hub,
             on_nozzle_calculator=self._go_nozzle_calculator,
             on_air_supply=self._go_air_supply,
+            on_usage_stats=self._go_usage_stats,
         )
         self.stack.addWidget(self.home)
         self.stack.setCurrentWidget(self.home)
@@ -1023,6 +1034,16 @@ class MainWindow(QMainWindow):
             pass
         try:
             app_meta.open_quick_search = self._open_quick_search
+        except Exception:
+            pass
+
+    def _log_screen_open(self, index: int) -> None:
+        """Loggt jeden Screen-Wechsel im Stack fuer den Admin-Stats-Screen (best-effort)."""
+        try:
+            from db.usage_log import log_usage_event
+            widget = self.stack.widget(index)
+            if widget is not None:
+                log_usage_event("screen_open", type(widget).__name__)
         except Exception:
             pass
 
@@ -1794,6 +1815,13 @@ class MainWindow(QMainWindow):
     def _go_manage_order_type(self):
         self.setWindowTitle("TrippleT – Manage Order Type")
         self.stack.setCurrentWidget(self.manage_order_type)
+
+    def _go_usage_stats(self):
+        if not app_meta.is_superuser_level():
+            return
+        self.setWindowTitle("TrippleT – Usage Stats")
+        self.usage_stats.reload_data()
+        self.stack.setCurrentWidget(self.usage_stats)
 
     def _go_manage_product_groups(self):
         self.setWindowTitle("TrippleT – Manage Product Groups")

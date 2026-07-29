@@ -74,6 +74,7 @@ class HomeScreen(QWidget):
                  on_requirement_hub=None,
                  on_nozzle_calculator=None,
                  on_air_supply=None,
+                 on_usage_stats=None,
                  # Nur noch Logout-Callback (Button "Log Out" im Header)
                  on_logout=None):
         super().__init__()
@@ -93,6 +94,7 @@ class HomeScreen(QWidget):
         self.on_requirement_hub = on_requirement_hub
         self.on_nozzle_calculator = on_nozzle_calculator
         self.on_air_supply = on_air_supply
+        self.on_usage_stats = on_usage_stats
 
         try:
             self.access_level = int(access_level or 0)
@@ -1016,7 +1018,12 @@ class HomeScreen(QWidget):
         btn_manage_user.setMinimumHeight(34)
         row1.addWidget(btn_manage_user)
 
-        # Spacer rechts, damit die Box "analog" aussieht, auch wenn nur ein Button drin ist
+        btn_usage_stats = self._make_green_btn("Usage Stats", self.on_usage_stats)
+        btn_usage_stats.setFixedWidth(180)
+        btn_usage_stats.setMinimumHeight(34)
+        row1.addWidget(btn_usage_stats)
+
+        # Spacer rechts, damit die Box "analog" aussieht, auch wenn nur zwei Buttons drin sind
         row1.addSpacerItem(QSpacerItem(
             20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 

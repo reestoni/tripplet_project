@@ -251,6 +251,10 @@ class LoginScreen(QWidget):
                     "accent_colour": accent_colour,
                 }
 
+            # --- Nutzungs-Tracking (best-effort, siehe db/usage_log.py) ---
+            from db.usage_log import log_usage_event
+            log_usage_event("login", "login")
+
             # --- Draft-ExperimentRequests des Benutzers beim Login bereinigen ---
             # Verhindert, dass angefangene aber nie abgeschlossene Requests in der DB
             # verbleiben (Status = "Draft"). Fehler dürfen den Login nicht blockieren.

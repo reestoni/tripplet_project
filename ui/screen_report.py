@@ -677,6 +677,8 @@ class _ReportBridge(QObject):
         pure-Python reportlab implementation — no browser, no fitz dependency,
         native page numbers, crisp vector layout.
         """
+        from db.usage_log import log_usage_event
+        log_usage_event("feature", "pdf_export")
         try:
             import json as _json
             import base64, datetime, re, io, os
