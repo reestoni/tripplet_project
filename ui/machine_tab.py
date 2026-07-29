@@ -1478,22 +1478,22 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
         return
 
     # Titel der Zeile ermitteln
-    title_index = self.model_machine.index(row, 0)
-    title = str(self.model_machine.data(title_index, Qt.DisplayRole) or "")
+    title_index = _model.index(row, 0)
+    title = str(_model.data(title_index, Qt.DisplayRole) or "")
 
     # Defaultwert: erstes nicht-leeres, editierbares Feld in dieser Zeile
     default_text = ""
-    for col in range(1, self.model_machine.columnCount()):
-        idx = self.model_machine.index(row, col)
-        if not (self.model_machine.flags(idx) & Qt.ItemIsEditable):
+    for col in range(1, _model.columnCount()):
+        idx = _model.index(row, col)
+        if not (_model.flags(idx) & Qt.ItemIsEditable):
             continue
-        val = self.model_machine.data(idx, Qt.DisplayRole)
+        val = _model.data(idx, Qt.DisplayRole)
         if val not in (None, ""):
             default_text = str(val)
             break
 
     # Real trial count (not column count which includes Ply expansions)
-    _col_specs_tmp = getattr(self, "_machine_col_specs", None) or []
+    _col_specs_tmp = _col_specs or []
     if _col_specs_tmp:
         _unique_tids = []
         for _cs in _col_specs_tmp:
@@ -1501,7 +1501,7 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
                 _unique_tids.append(_cs.get("trial_id"))
         n_trials = max(1, len(_unique_tids))
     else:
-        n_trials = max(1, self.model_machine.columnCount() - 1)
+        n_trials = max(1, _model.columnCount() - 1)
     if n_trials <= 0:
         return
 
@@ -1512,8 +1512,8 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
         # Housing-Zeile: Dropdown
         default_housing_id = None
         try:
-            for col in range(1, self.model_machine.columnCount()):
-                internal = self.model_machine.get_cell_value(row - n_hdr, col - 1)
+            for col in range(1, _model.columnCount()):
+                internal = _model.get_cell_value(row - n_hdr, col - 1)
                 if internal not in (None, "", " "):
                     default_housing_id = internal
                     break
@@ -1533,8 +1533,8 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
         # Jet-Zeile: Dropdown
         default_jet_id = None
         try:
-            for col in range(1, self.model_machine.columnCount()):
-                internal = self.model_machine.get_cell_value(row - n_hdr, col - 1)
+            for col in range(1, _model.columnCount()):
+                internal = _model.get_cell_value(row - n_hdr, col - 1)
                 if internal not in (None, "", " "):
                     default_jet_id = internal
                     break
@@ -1550,14 +1550,14 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
         start_trial, end_trial, jet_id = dlgj.get_values()
         value_to_set = jet_id
 
-    elif (row - n_hdr) in getattr(self.model_machine, "_dropdown_rows", {}):
+    elif (row - n_hdr) in getattr(_model, "_dropdown_rows", {}):
         # Generische Lookup-Zeile (z.B. DiscType): Dropdown
         data_row = row - n_hdr
-        lk_map = self.model_machine._dropdown_rows[data_row]
+        lk_map = _model._dropdown_rows[data_row]
         default_id = None
         try:
-            for col in range(1, self.model_machine.columnCount()):
-                internal = self.model_machine.get_cell_value(data_row, col - 1)
+            for col in range(1, _model.columnCount()):
+                internal = _model.get_cell_value(data_row, col - 1)
                 if internal not in (None, "", " "):
                     default_id = internal
                     break
@@ -1565,7 +1565,7 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
             default_id = None
 
         # Determine ply_labels for this dropdown row (same logic as text rows)
-        col_specs_dd = getattr(self, "_machine_col_specs", None) or []
+        col_specs_dd = _col_specs or []
         _seen_plies_dd: list = []
         _seen_set_dd: set = set()
         for cs in col_specs_dd:
@@ -1590,7 +1590,7 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
         start_trial, end_trial, value_to_set, selected_plies_dd = dlgd.get_values()
 
         # Apply: über col_specs iterieren, mit optionalem Ply-Filter
-        col_specs = getattr(self, "_machine_col_specs", None) or []
+        col_specs = _col_specs or []
         unique_trial_ids = []
         for cs in col_specs:
             if cs.get("trial_id") not in unique_trial_ids:
@@ -1606,21 +1606,21 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
                     if ply not in selected_plies_dd:
                         continue
                 model_col = c_idx + 1  # col 0 = title
-                idx = self.model_machine.index(row, model_col)
-                if self.model_machine.flags(idx) & Qt.ItemIsEditable:
-                    self.model_machine.setData(idx, value_to_set, Qt.EditRole)
+                idx = _model.index(row, model_col)
+                if _model.flags(idx) & Qt.ItemIsEditable:
+                    _model.setData(idx, value_to_set, Qt.EditRole)
         else:
             for col in range(start_trial, end_trial + 1):
-                idx = self.model_machine.index(row, col)
-                if self.model_machine.flags(idx) & Qt.ItemIsEditable:
-                    self.model_machine.setData(idx, value_to_set, Qt.EditRole)
+                idx = _model.index(row, col)
+                if _model.flags(idx) & Qt.ItemIsEditable:
+                    _model.setData(idx, value_to_set, Qt.EditRole)
         return
 
     else:
         # Determine whether this is a tblTrialSettings row (Ply-specific)
         # or a tblTrial row (trial-wide) so we can show/hide Ply checkboxes.
-        col_specs = getattr(self, "_machine_col_specs", None) or []
-        n_hdr = getattr(self.model_machine, "_n_hdr", 0)
+        col_specs = _col_specs or []
+        n_hdr = getattr(_model, "_n_hdr", 0)
         if is_rd:
             titles_fixed_count = getattr(self, "_rd_machine_titles_fixed_count", 4)
         else:
@@ -1662,15 +1662,15 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
             has_multi_ply = len(col_specs) > len(trial_ids_seen)
             if has_multi_ply:
                 # Check the model_machine row_titles for this row
-                row_title_idx = self.model_machine.index(row, 0)
-                rt = str(self.model_machine.data(row_title_idx, Qt.DisplayRole) or "")
+                row_title_idx = _model.index(row, 0)
+                rt = str(_model.data(row_title_idx, Qt.DisplayRole) or "")
                 # Heuristic: if any col_spec has sr != None for this row,
                 # the field is in tblTrialSettings.
                 # We detect this via MachinePivotModel's binding list.
                 # Simplest robust approach: check whether the binding of col 1 (first data col)
                 # references tblTrialSettings.
                 try:
-                    b = self.model_machine.get_binding(data_row_idx, 0)
+                    b = _model.get_binding(data_row_idx, 0)
                     if b is not None and str(getattr(b, "table", "") or "").lower() == "tbltrialsettings":
                         is_ply_row = True
                 except Exception:
@@ -1709,21 +1709,21 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
                     if ply not in selected_plies:
                         continue
                 model_col = c_idx + 1  # column 0 = title
-                idx = self.model_machine.index(row, model_col)
-                if not (self.model_machine.flags(idx) & Qt.ItemIsEditable):
+                idx = _model.index(row, model_col)
+                if not (_model.flags(idx) & Qt.ItemIsEditable):
                     continue
-                self.model_machine.setData(idx, value_to_set, Qt.EditRole)
+                _model.setData(idx, value_to_set, Qt.EditRole)
         else:
             for col in range(start_trial, end_trial + 1):
-                idx = self.model_machine.index(row, col)
-                if not (self.model_machine.flags(idx) & Qt.ItemIsEditable):
+                idx = _model.index(row, col)
+                if not (_model.flags(idx) & Qt.ItemIsEditable):
                     continue
-                self.model_machine.setData(idx, value_to_set, Qt.EditRole)
+                _model.setData(idx, value_to_set, Qt.EditRole)
         return  # early return — apply already done above
 
     # Apply for Housing / Jet (trial-wide, no Ply distinction needed)
     # These rows are always spanned across plies → only one col per trial group.
-    if col_specs := getattr(self, "_machine_col_specs", None):
+    if col_specs := _col_specs:
         unique_trial_ids2 = []
         for cs in col_specs:
             if cs.get("trial_id") not in unique_trial_ids2:
@@ -1735,14 +1735,14 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
             if not (start_trial <= ti <= end_trial):
                 continue
             model_col = c_idx + 1
-            idx = self.model_machine.index(row, model_col)
-            if not (self.model_machine.flags(idx) & Qt.ItemIsEditable):
+            idx = _model.index(row, model_col)
+            if not (_model.flags(idx) & Qt.ItemIsEditable):
                 continue
-            self.model_machine.setData(idx, value_to_set, Qt.EditRole)
+            _model.setData(idx, value_to_set, Qt.EditRole)
     else:
         for col in range(start_trial, end_trial + 1):
-            idx = self.model_machine.index(row, col)
-            if not (self.model_machine.flags(idx) & Qt.ItemIsEditable):
+            idx = _model.index(row, col)
+            if not (_model.flags(idx) & Qt.ItemIsEditable):
                 continue
-            self.model_machine.setData(idx, value_to_set, Qt.EditRole)
+            _model.setData(idx, value_to_set, Qt.EditRole)
 
