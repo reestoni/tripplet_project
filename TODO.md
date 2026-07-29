@@ -27,5 +27,11 @@ Basierend auf einer Architektur-/Qualitätsdurchsicht der Codebasis. Priorisieru
 - [ ] Versionen in `requirements.txt` pinnen für reproduzierbare Builds (aktuell komplett ungepinnt).
 - [ ] `ui/screen_new.py`: Platzhalter-Klasse heißt noch `ManageYarnScreen` statt eines neutralen Namens – Verwechslungsgefahr beim Copy-Paste für neue Screens.
 
+## Feature-Idee (vom User, 2026-07-29)
+- [ ] Neue Labormaschine (z.B. neues Prüfgerät) erfordert aktuell Code-Änderungen: neuer Tab in `ShowExperimentScreen` (`_build_XXX_tab`), neue DB-Tabelle, i.d.R. neuer PDF-Import-Parser. Idee: generischeres Setup, z.B. ein kleines Admin-Tool, mit dem eine neue Maschine ohne Code-Änderung angelegt werden kann.
+  - Einschätzung: Der Tab-Teil (Tabelle/Pivot-Ansicht auf einer DB-Tabelle mit editierbaren Spalten) lässt sich vermutlich gut generisch/konfigurationsgetrieben lösen – die bestehenden Tabs folgen alle demselben Muster (Tabelle + Spalten-Mapping + Pivot-Editor). Ein Admin-Screen, der "Maschine anlegen: Zieltabelle X, Spalten Y, Labels Z" erlaubt, könnte einen guten Teil von `_build_XXX_tab` ersetzen.
+  - Der PDF-Import-Teil ist vermutlich NICHT generisch lösbar: jedes Gerät/jeder Hersteller hat ein anderes Report-Layout (siehe `statimat_pdf_parser.py` vs. `itemat_pdf_parser.py` – strukturell komplett unterschiedlich). Ein neuer Parser pro Maschine bleibt wahrscheinlich Handarbeit, egal wie generisch der Rest wird.
+  - Empfehlung: zweigeteilt angehen – Tab/DB-Anbindung generisch+admin-konfigurierbar, PDF-Parsing weiterhin als expliziter Code-Baustein pro Maschine (aber mit klarer Schnittstelle, damit er sich einfach andocken lässt).
+
 ## Bekannt, bewusst zurückgestellt
 - DB-Secrets-Setup (Klartext-Fallback `db_secrets.json`, gebündelter Fernet-Key) – laut vorheriger Entscheidung unverändert lassen, kein Handlungsbedarf hier.
