@@ -4,6 +4,7 @@ import pathlib
 import re
 import shutil
 import sys
+import threading
 import uuid
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -209,21 +210,59 @@ def new_global_id() -> str:
     return str(uuid.uuid4())
 
 
+_POOL = None
+_POOL_LOCK = threading.Lock()
+_POOL_SIZE = 5
+# Verhindert lange (OS-Default-)Haenger bei unerreichbarem Host - vorher war
+# gar kein Timeout gesetzt, ein Netz-Hänger führte zu ~20s+ Warten ohne
+# jede Rückmeldung (siehe TestLoginScreenSicherheit-Timing).
+_CONNECT_TIMEOUT_SECONDS = 10
+
+
+def _get_pool():
+    """Lazy erzeugter Connection-Pool (ein Prozess = eine feste DB-Config, siehe MODE oben)."""
+    global _POOL
+    if _POOL is None:
+        with _POOL_LOCK:
+            if _POOL is None:
+                from mysql.connector import pooling
+                _POOL = pooling.MySQLConnectionPool(
+                    pool_name="tripplet_pool",
+                    pool_size=_POOL_SIZE,
+                    host=_DB_CFG["host"],
+                    port=_DB_CFG["port"],
+                    user=_DB_CFG["user"],
+                    password=_DB_CFG["password"],
+                    database=current_db_name(),
+                    autocommit=True,
+                    connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+                )
+    return _POOL
+
+
 def get_connection():
-    """Erzeugt eine MySQL-Connection.
+    """Holt eine MySQL-Connection aus einem Pool (statt bei jedem Aufruf neu zu verbinden).
+
+    Vorher wurde für JEDEN einzelnen DB-Zugriff eine frische TCP-Verbindung
+    aufgebaut und am Ende wieder geschlossen - Screens mit vielen
+    Einzelqueries (z.B. ShowExperimentScreen) haben so dutzende
+    Verbindungsaufbauten pro Laden verursacht. Der Pool hält bis zu
+    _POOL_SIZE Verbindungen offen und reicht sie wieder; _ConnWrapper.close()
+    gibt die Verbindung nur an den Pool zurück (kein echtes Schliessen) -
+    für Aufrufer ändert sich nichts, `with get_connection() as cn:` bleibt
+    das erwartete Nutzungsmuster.
+
+    ping(reconnect=True) prüft/repariert eine evtl. inzwischen tot gegangene
+    (z.B. durch Firewall-Idle-Timeout gekappte) Pool-Verbindung, bevor sie
+    zurückgegeben wird.
 
     Hinweis: Damit sich bestehender Code wie bisher verhält, ist autocommit=True.
     """
-    import mysql.connector
-
-    cn = mysql.connector.connect(
-        host=_DB_CFG["host"],
-        port=_DB_CFG["port"],
-        user=_DB_CFG["user"],
-        password=_DB_CFG["password"],
-        database=current_db_name(),
-        autocommit=True,
-    )
+    cn = _get_pool().get_connection()
+    try:
+        cn.ping(reconnect=True, attempts=1, delay=0)
+    except Exception:
+        pass
     return _ConnWrapper(cn)
 
 
