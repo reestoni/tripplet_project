@@ -40,7 +40,7 @@ from db.connection import (
 )
 import app_meta  # enthält current_user
 from ui.widgets.footer import FooterBar
-from ui.widgets.header import HeaderBar
+from ui.widgets import sidebar_nav
 from ui.pathutil import resource_path
 from ui.screen_create_experiment import table_exists, get_columns_map, resolve_field
 from ui.screen_show_experiment import _ExperimentRequestReadOnlyDialog
@@ -50,6 +50,32 @@ _ER_ICON_PIXMAP = None  # cached QPixmap
 _ATTACH_ICON_PIXMAP = None  # cached QPixmap
 
 _NOTES_ICON_PIXMAP = None  # cached QPixmap
+
+_REPORT_ICON_PIXMAP = None  # cached QPixmap
+
+
+def _get_report_icon_pixmap() -> "QPixmap | None":
+    """Lädt das Report-Icon (dasselbe wie der Smart-Chart-Button in Show
+    Experiment) als QPixmap (lazy, gecacht)."""
+    global _REPORT_ICON_PIXMAP
+    if _REPORT_ICON_PIXMAP is not None:
+        return _REPORT_ICON_PIXMAP
+    from pathlib import Path
+    candidates = [
+        resource_path('assets/images/analytics.png'),
+        resource_path('analytics.png'),
+    ]
+    for p in candidates:
+        try:
+            if p and Path(p).exists():
+                pm = QPixmap(str(p))
+                if not pm.isNull():
+                    _REPORT_ICON_PIXMAP = pm.scaled(18, 18, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    return _REPORT_ICON_PIXMAP
+        except Exception:
+            continue
+    _REPORT_ICON_PIXMAP = None
+    return None
 
 
 def _get_notes_icon_pixmap() -> QPixmap | None:
@@ -157,12 +183,85 @@ class _ClickableLabel(QLabel):
 
 class AllExperimentsScreen(QWidget):
     def __init__(self, on_back_home, on_open_experiment, on_copy_trialseries=None, can_review: bool = False,
-                 on_open_in_new_window=None):
+                 on_open_in_new_window=None,
+                 # Report-Symbol ("RE"-Spalte, 2026-08-27, Nutzerwunsch) -
+                 # öffnet den Smart-Chart-Report-Screen direkt (mit Auswahl-
+                 # Dialog bei mehreren Reports zur selben TrialSeries), siehe
+                 # _open_report_icon_for_series()/ui/widgets/report_picker.py.
+                 on_open_report=None,
+                 # Sidebar-Navigation (siehe ui/widgets/sidebar_nav.py, geteilt mit
+                 # HomeScreen/BacklogScreen) - dieselben Callbacks wie bei
+                 # BacklogScreen, siehe dort für die Begründung des Musters
+                 # (Access-Level erst zur Laufzeit über app_meta bekannt, Sidebar
+                 # daher lazy in showEvent() aufgebaut statt hier).
+                 on_open_backlog=None, on_create_experiment=None, on_create_experiment_legacy=None,
+                 on_add_series=None, on_add_lab_machines=None, on_open_experiment_request=None,
+                 on_create_experiment_request=None, on_open_my_requests=None,
+                 on_preview_requests=None, on_preview_open_requests=None,
+                 on_image_compare=None, on_canvas=None, on_nozzle_calculator=None, on_air_supply=None,
+                 on_requirement_hub=None, on_smartchart=None, on_yarn_stock=None, on_label_generator=None,
+                 on_tdms_inspector=None,
+                 on_add_jet=None, on_add_top_plate=None, on_add_yarn=None,
+                 on_manage_order_type=None, on_manage_product_groups=None, on_manage_material=None,
+                 on_add_user=None, on_usage_stats=None, on_statistics=None, on_offline_sync=None,
+                 on_lab_assistant=None,
+                 # Log-Out-Callback für die Sidebar-Account-Gruppe (Ersatz für
+                 # den früheren Header-Log-Out-Button, der nur auf Home
+                 # existierte - siehe screen_home.py::_build_ui()-Docstring).
+                 on_logout=None,
+                 # Ctrl+Klick "in neuem Tab öffnen" (siehe ui/widgets/tab_container.py)
+                 open_in_new_tab=None,
+                 # Rechtsklick "Open in New Window" (2026-08-27, Nutzerwunsch:
+                 # Ctrl-Logik bleibt unangetastet und öffnet weiterhin einen
+                 # Tab - dieser separate Menüpunkt öffnet stattdessen ein
+                 # echtes, eigenständiges OS-Fenster, siehe
+                 # main.py::open_experiment_in_new_window()).
+                 on_open_in_new_os_window=None):
         super().__init__()
         self.on_back_home = on_back_home
         self.on_open_experiment = on_open_experiment
         self.on_copy_trialseries = on_copy_trialseries
         self.on_open_in_new_window = on_open_in_new_window
+        self.on_open_in_new_os_window = on_open_in_new_os_window
+        self.on_open_report = on_open_report
+        self._series_report_map: dict = {}
+
+        self._sidebar_nav_callbacks = dict(
+            on_open_backlog=on_open_backlog,
+            on_create_experiment=on_create_experiment,
+            on_create_experiment_legacy=on_create_experiment_legacy,
+            on_add_series=on_add_series,
+            on_add_lab_machines=on_add_lab_machines,
+            on_open_experiment_request=on_open_experiment_request,
+            on_create_experiment_request=on_create_experiment_request,
+            on_open_my_requests=on_open_my_requests,
+            on_preview_requests=on_preview_requests,
+            on_preview_open_requests=on_preview_open_requests,
+            on_image_compare=on_image_compare,
+            on_canvas=on_canvas,
+            on_nozzle_calculator=on_nozzle_calculator,
+            on_air_supply=on_air_supply,
+            on_requirement_hub=on_requirement_hub,
+            on_smartchart=on_smartchart,
+            on_yarn_stock=on_yarn_stock,
+            on_label_generator=on_label_generator,
+            on_tdms_inspector=on_tdms_inspector,
+            on_add_jet=on_add_jet,
+            on_add_top_plate=on_add_top_plate,
+            on_add_yarn=on_add_yarn,
+            on_manage_order_type=on_manage_order_type,
+            on_manage_product_groups=on_manage_product_groups,
+            on_manage_material=on_manage_material,
+            on_add_user=on_add_user,
+            on_usage_stats=on_usage_stats,
+            on_statistics=on_statistics,
+            on_offline_sync=on_offline_sync,
+            on_lab_assistant=on_lab_assistant,
+            on_logout=on_logout,
+            open_in_new_tab=open_in_new_tab,
+        )
+        self._sidebar_built_for_level = None
+        self._offline_gated_buttons: list = []
 
         # Maschinenfilter-Map
         self._filter_map = {
@@ -214,14 +313,21 @@ class AllExperimentsScreen(QWidget):
         self._load_data()
 
     def _build_ui(self):
-        """Erstellt Header, Filter-Toolbar, Tabelle und Footer."""
+        """Erstellt Sidebar-Navigation, Filter-Toolbar, Tabelle und Footer.
+
+        Keine TopBar (HeaderBar) mehr (2026-08-26, siehe screen_home.py::
+        _build_ui()-Docstring) - Glocke/Suche/Accent-Farbe/Log Out sitzen
+        jetzt in der Sidebar-Account-Gruppe.
+        """
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="All Experiments", show_home=True)
-        header.connect_home(self.on_back_home)
-        root.addWidget(header)
+        # Sidebar-Navigation (siehe ui/widgets/sidebar.py + sidebar_nav.py,
+        # geteilt mit allen anderen Screens) - Inhalt bleibt hier leer, wird
+        # lazy beim ersten showEvent() befüllt (access_level ist zum
+        # Zeitpunkt dieses Konstruktoraufrufs noch nicht bekannt).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         center = QFrame()
         clay = QVBoxLayout(center)
@@ -301,10 +407,10 @@ class AllExperimentsScreen(QWidget):
         # ---------------------------------------------------------------------------------------
 
         # Tabelle
-        self.table = QTableWidget(0, 9, parent=self)
+        self.table = QTableWidget(0, 10, parent=self)
         self.table.setObjectName("ExpTable")
         self.table.setHorizontalHeaderLabels(
-            ["Experiment ID", "Trial Series Name", "Machine", "Creation Date", "Owner", "Status", "AM", "ER", "NT"]
+            ["Experiment ID", "Trial Series Name", "Machine", "Creation Date", "Owner", "Status", "AM", "ER", "NT", "RE"]
         )
         self.table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows)
@@ -341,8 +447,28 @@ class AllExperimentsScreen(QWidget):
         cardlay.addWidget(table_wrap)
         clay.addWidget(card, 0, Qt.AlignHCenter | Qt.AlignTop)
 
-        root.addWidget(center, 1)
+        content_layout.addWidget(center, 1)
         root.addWidget(FooterBar())
+
+    def showEvent(self, event):
+        """Baut/aktualisiert die Sidebar-Navigation bei jedem Anzeigen (siehe
+        _refresh_sidebar(), gleiches Muster wie BacklogScreen)."""
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat (siehe BacklogScreen._refresh_sidebar()
+        für die ausführliche Begründung des Musters). Aktualisiert sonst nur
+        die Badges. Rumpf in ui/widgets/sidebar_nav.py::refresh_lazy_sidebar()
+        ausgelagert (2026-08-27, App-weiter Sidebar-Rollout);
+        `hide_self_link="all_experiments"` unterdrückt den eigenen
+        "All Experiments"-Sprungziel-Eintrag."""
+        sidebar_nav.refresh_lazy_sidebar(
+            self, self._effective_access_level(), hide_self_link="all_experiments")
 
     def _load_data(self, maschine_id: int | None = None):
         """Lädt alle Experiment-/Seriendaten aus der DB und befüllt die Tabelle.
@@ -359,6 +485,18 @@ class AllExperimentsScreen(QWidget):
             self.table.setItem(0, 1, QTableWidgetItem(""))
             self.table.setItem(0, 2, QTableWidgetItem(str(e)))
             return
+
+        # Bulk-Lookup: welche TrialSeries haben gespeicherte Smart-Chart-
+        # Reports (RE-Icon-Spalte, 2026-08-27) - eine Abfrage statt einer
+        # pro Zeile, gleiches Muster wie Backlogs _retest_flags_map.
+        try:
+            _report_rows = fetch_all(
+                "SELECT SeriesPK, COUNT(*) AS n FROM tblSmartChartReport "
+                "WHERE IsTemplate=0 AND SeriesPK IS NOT NULL GROUP BY SeriesPK"
+            )
+            self._series_report_map = {int(r["SeriesPK"]): int(r["n"]) for r in _report_rows}
+        except Exception:
+            self._series_report_map = {}
 
         # Textfilter anwenden
         sf = (self._series_filter or "").strip().lower()
@@ -488,6 +626,8 @@ class AllExperimentsScreen(QWidget):
                     return 0 if v in (None, '', 0, '0') else 1
                 elif col == 8:  # NT
                     return 1 if rec.get('has_notes') else 0
+                elif col == 9:  # RE
+                    return 1 if self._series_report_map.get(rec.get("series_id_pk")) else 0
             except Exception:
                 return 0
             return 0
@@ -545,6 +685,9 @@ class AllExperimentsScreen(QWidget):
             # Notes icon
             self._set_notes_cell(r, 8, bool(rec.get('has_notes')))
 
+            # Report icon (RE) - 2026-08-27
+            self._set_report_cell(r, 9, rec.get("series_id_pk"))
+
             # Payload für spätere Navigation
             self._row_payload.append(
                 (rec["exp_id_pk"], rec["series_id_pk"], rec["experiment_id"])
@@ -561,6 +704,7 @@ class AllExperimentsScreen(QWidget):
         self.table.setColumnWidth(6, 50)  # AM
         self.table.setColumnWidth(7, 60)  # ER
         self.table.setColumnWidth(8, 50)  # NT
+        self.table.setColumnWidth(9, 50)  # RE
 
         # Sortindikator im Header aktualisieren
         header_view = self.table.horizontalHeader()
@@ -597,6 +741,28 @@ class AllExperimentsScreen(QWidget):
         except Exception:
             pass
         self.on_open_in_new_window(exp_pk, series_pk, experiment_id)
+
+    def _open_in_new_os_window(self, row):
+        """Öffnet die TrialSeries in Zeile row in einem echten, eigenständigen
+        OS-Fenster (Rechtsklick-Kontextmenü "Open in New Window", 2026-08-27,
+        Nutzerwunsch) - im Gegensatz zu _open_in_new_window() (Ctrl+Doppelklick,
+        öffnet einen Tab), die auf ausdrücklichen Wunsch unangetastet bleibt."""
+        if not callable(getattr(self, "on_open_in_new_os_window", None)):
+            return
+        if row is None or row < 0:
+            row = self.table.currentRow()
+        if row < 0 or row >= len(getattr(self, "_row_payload", []) or []):
+            return
+        exp_pk, series_pk, experiment_id = self._row_payload[row]
+        try:
+            exp_pk = int(exp_pk)
+        except Exception:
+            pass
+        try:
+            series_pk = int(series_pk)
+        except Exception:
+            pass
+        self.on_open_in_new_os_window(exp_pk, series_pk, experiment_id)
 
     def _open_selected(self, row, col):
         """Öffnet das in Zeile row ausgewählte Experiment."""
@@ -1059,6 +1225,42 @@ class AllExperimentsScreen(QWidget):
         lbl.setPixmap(pm)
         self.table.setCellWidget(row, col, lbl)
 
+    def _set_report_cell(self, row: int, col: int, series_pk) -> None:
+        """Setzt das RE-Icon (Report) in einer Tabellenzelle - nur sichtbar,
+        wenn für diese TrialSeries mind. ein gespeicherter Smart-Chart-Report
+        existiert (siehe self._series_report_map, gefüllt in _load_data())."""
+        try:
+            has_report = bool(self._series_report_map.get(int(series_pk))) if series_pk else False
+        except Exception:
+            has_report = False
+        if not has_report:
+            self.table.setItem(row, col, QTableWidgetItem(""))
+            return
+        pm = _get_report_icon_pixmap()
+        if pm is None or pm.isNull():
+            self.table.setItem(row, col, QTableWidgetItem("RE"))
+            return
+
+        def _open():
+            self._open_report_icon_for_series(series_pk)
+
+        lbl = _ClickableLabel(on_click=_open)
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setToolTip("Open saved Smart Chart report")
+        lbl.setPixmap(pm)
+        self.table.setCellWidget(row, col, lbl)
+
+    def _open_report_icon_for_series(self, series_pk) -> None:
+        """Klick auf das RE-Icon: bei genau einem gespeicherten Report direkt
+        öffnen, bei mehreren einen kleinen Auswahl-Dialog zeigen (siehe
+        ui/widgets/report_picker.py)."""
+        if not series_pk or not callable(self.on_open_report):
+            return
+        from ui.widgets.report_picker import choose_report_for_series
+        report_id = choose_report_for_series(self, series_pk)
+        if report_id is not None:
+            self.on_open_report(series_pk, report_id)
+
     def _load_status_lookup(self):
         """Lädt den Status-Lookup aus tblBacklogStatus für die Comboboxen."""
         sql = """
@@ -1280,11 +1482,11 @@ class AllExperimentsScreen(QWidget):
 
         execute(sql, params)
 
-        # Notifications erstellen wenn Status → Archived (ID 5)
-        if new_status == 5 and old_status != 5:
+        # Notifications erstellen wenn Status → Done (ID 3)
+        if new_status == 3 and old_status != 3:
             try:
-                from ui.notifications import create_archived_notifications
-                create_archived_notifications(
+                from ui.notifications import create_done_notifications
+                create_done_notifications(
                     series_id=series_id,
                     sender_user_id=user_id,
                 )
@@ -1367,8 +1569,10 @@ class AllExperimentsScreen(QWidget):
         can_reassign = lvl >= 4
 
         menu = QMenu(self)
-        act_open_new = menu.addAction("↗  Open in New Window")
+        act_open_new = menu.addAction("↗  Open in New Tab")
         act_open_new.setEnabled(callable(getattr(self, "on_open_in_new_window", None)))
+        act_open_new_window = menu.addAction("🗗  Open in New Window")
+        act_open_new_window.setEnabled(callable(getattr(self, "on_open_in_new_os_window", None)))
         menu.addSeparator()
         act_rename = menu.addAction("Rename Trial Series…")
         act_rename.setEnabled(bool(can_rename))
@@ -1386,6 +1590,8 @@ class AllExperimentsScreen(QWidget):
 
         if chosen == act_open_new:
             self._open_in_new_window(row)
+        elif chosen == act_open_new_window:
+            self._open_in_new_os_window(row)
         elif chosen == act_rename:
             if not can_rename:
                 QMessageBox.warning(
@@ -1584,7 +1790,11 @@ class AllExperimentsScreen(QWidget):
 
         # ── Alle verfügbaren Garne laden ──────────────────────────────────
         try:
-            all_yarns = fetch_all("SELECT ID, Name FROM tblYarn ORDER BY Name", [])
+            # Halbfabrikat-"Schatten"-Garne (Multimaschinen-Ply-Verknüpfung)
+            # sollen hier nicht als Reassign-Ziel auftauchen.
+            src_col = resolve_field(['SourceTrialID'], get_columns_map('tblYarn'))
+            where = f" WHERE [{src_col}] IS NULL" if src_col else ""
+            all_yarns = fetch_all(f"SELECT ID, Name FROM tblYarn{where} ORDER BY Name", [])
         except Exception:
             all_yarns = []
 

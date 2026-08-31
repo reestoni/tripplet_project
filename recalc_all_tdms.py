@@ -33,7 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from db.connection import fetch_all, execute  # noqa: E402
-from ui.yarnscope.dty_tdms_reader import read_first_numeric_channel, read_step_mm_from_tdms  # noqa: E402
+from ui.yarnscope.dty_tdms_reader import read_dty_signal, read_step_mm_from_tdms  # noqa: E402
 from ui.yarnscope.dty_analysis import analyze_series, full_extract_vals  # noqa: E402
 
 DEFAULT_MIN_SEG_PTS = 3
@@ -209,7 +209,7 @@ def main():
             continue
 
         try:
-            y = read_first_numeric_channel(str(f))
+            y = read_dty_signal(str(f))
             dx_mm = read_step_mm_from_tdms(str(f))
             if y is None or len(y) == 0:
                 print(f"{prefix} Kein Signal im File - übersprungen.", flush=True)

@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QTabWidget,
+    QScrollArea,
+    QFrame,
 )
 
 from ui.yarnscope.garngraf_canvas import GarnCanvas
@@ -172,6 +174,10 @@ def _build_yarnscope_tab(self):
 def _remove_yarnscope_tab_if_exists(self):
     if self.tab_yarnscope is None:
         return
+    timer = getattr(self, "_ys_auto_timer", None)
+    if timer is not None:
+        timer.stop()
+    self._ys_auto_timer = None
     idx = self.tabs.indexOf(self.tab_yarnscope)
     if idx != -1:
         self.tabs.removeTab(idx)
@@ -182,7 +188,7 @@ def _remove_yarnscope_tab_if_exists(self):
 
 def _create_yarnscope_tab_if_needed(self):
     from PySide6.QtWidgets import QSplitter, QListWidget, QListWidgetItem, QDoubleSpinBox
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import Qt, QTimer
     if self.tab_yarnscope is not None:
         return
 
@@ -213,6 +219,17 @@ def _create_yarnscope_tab_if_needed(self):
         lambda row: _ys_on_trial_selected(self, row))
     lv.addWidget(self._ys_trial_list, 1)
     splitter.addWidget(left)
+
+    # Auto-refresh: re-scans the (often network-share) TDMS folder while this
+    # tab is visible AND at least one trial is still missing a file - stops
+    # itself once every trial has one (see _ys_update_auto_refresh_state()),
+    # so it never polls indefinitely for a series that is already complete.
+    self._ys_auto_timer = QTimer()
+    self._ys_auto_timer.setInterval(20000)
+    self._ys_auto_timer.timeout.connect(lambda: _ys_populate_trial_list(self))
+    if not getattr(self, "_ys_tab_watch_connected", False):
+        self.tabs.currentChanged.connect(lambda idx: _ys_update_auto_refresh_state(self))
+        self._ys_tab_watch_connected = True
 
     # ── Rechts: Analyse ───────────────────────────────────────
     right = QWidget()
@@ -378,7 +395,23 @@ def _create_yarnscope_tab_if_needed(self):
     splitter.setStretchFactor(0, 0);
     splitter.setStretchFactor(1, 1)
     splitter.setSizes([200, 900])
-    root.addWidget(splitter, 1)
+
+    # Auf kleinen/niedrig aufgelösten Laptop-Bildschirmen quetschen sich
+    # Trial-Liste, Sub-Tabs (Charts) und Bedienelemente sonst ineinander
+    # (Nutzerfeedback 2026-08-27, "sehen schlecht aus... wenn die Auflösung
+    # noch sehr niedrig eingestellt ist") - eine QScrollArea um den ganzen
+    # Tab-Inhalt sorgt dafür, dass unterhalb dieser Mindestgrösse gescrollt
+    # statt gequetscht wird (gleiches Muster wie beim ATY-"Compare"-Sub-Tab,
+    # siehe aty_yarnscope_tab.py). Die Mindestgrösse muss auf dem Splitter
+    # selbst sitzen (nicht auf der QScrollArea) - sonst hätte die
+    # QScrollArea nichts, das ihre Sichtfläche tatsächlich überschreiten
+    # könnte, und würde nie Scrollbalken zeigen.
+    splitter.setMinimumSize(950, 650)
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.NoFrame)
+    scroll.setWidget(splitter)
+    root.addWidget(scroll, 1)
     self.tabs.addTab(self.tab_yarnscope, "YarnScope")
 
 
@@ -390,13 +423,26 @@ def _ys_populate_trial_list(self):
     from ui.screen_show_experiment import fetch_all
     if self._ys_trial_list is None:
         return
+    # Aktuelle Auswahl (Trial-ID statt Zeilenindex) merken, damit ein
+    # automatischer Refresh (siehe _ys_update_auto_refresh_state()) die
+    # laufende Analyse/Auswahl des Nutzers nicht zuruecksetzt.
+    prev_row = self._ys_trial_list.currentRow()
+    prev_tid = None
+    if prev_row >= 0:
+        prev_item = self._ys_trial_list.item(prev_row)
+        if prev_item:
+            prev_tid = (prev_item.data(Qt.UserRole) or {}).get("trial_id")
     self._ys_trial_list.blockSignals(True)
     self._ys_trial_list.clear()
     sid = self._series_pk
-    for t in self._trials:
+    all_have_tdms = True
+    restore_row = -1
+    for i, t in enumerate(self._trials):
         tid = t.get("ID")
         vno = t.get("Versuchsnummer") or t.get("versuchsnummer") or 0
         tdms = _ys_find_tdms(sid, int(vno)) if sid else None
+        if not tdms:
+            all_have_tdms = False
         icon = "📄" if tdms else "—"
         db_ok = False
         try:
@@ -411,7 +457,38 @@ def _ys_populate_trial_list(self):
         if not tdms:
             item.setForeground(QColor("#555"))
         self._ys_trial_list.addItem(item)
+        if tid is not None and tid == prev_tid:
+            restore_row = i
+    if restore_row >= 0:
+        self._ys_trial_list.setCurrentRow(restore_row)
     self._ys_trial_list.blockSignals(False)
+    # Stoppt den Auto-Refresh-Timer, sobald fuer jeden Trial ein TDMS-File
+    # gefunden wurde - siehe _ys_update_auto_refresh_state().
+    self._ys_all_tdms_present = all_have_tdms
+    _ys_update_auto_refresh_state(self)
+
+
+def _ys_update_auto_refresh_state(self):
+    """Startet/stoppt den YarnScope-Auto-Refresh-Timer.
+
+    Laeuft nur, waehrend der YarnScope-Tab tatsaechlich der aktive Tab ist
+    (kein Hintergrund-Pollen ausserhalb des Reiters) UND mindestens ein
+    Trial noch ohne TDMS-File dasteht (kein Pollen mehr, sobald alles da
+    ist). Wird sowohl nach jedem _ys_populate_trial_list()-Lauf als auch bei
+    jedem Tab-Wechsel aufgerufen (siehe _create_yarnscope_tab_if_needed()).
+    """
+    timer = getattr(self, "_ys_auto_timer", None)
+    if timer is None:
+        return
+    should_run = (
+        self.tab_yarnscope is not None
+        and self.tabs.currentWidget() is self.tab_yarnscope
+        and not getattr(self, "_ys_all_tdms_present", False)
+    )
+    if should_run and not timer.isActive():
+        timer.start()
+    elif not should_run and timer.isActive():
+        timer.stop()
 
 
 def _ys_on_trial_selected(self, row: int):
@@ -497,8 +574,8 @@ def _ys_on_analyze(self):
                 import numpy as np
                 from ui.yarnscope.dty_analysis import analyze_series
                 from ui.yarnscope.dty_tdms_reader import (
-                    read_first_numeric_channel, read_step_mm_from_tdms)
-                y = read_first_numeric_channel(str(self._p))
+                    read_dty_signal, read_step_mm_from_tdms)
+                y = read_dty_signal(str(self._p))
                 dx_mm = read_step_mm_from_tdms(str(self._p)) or 0.25
                 if y is None or len(y) == 0:
                     self._s.done.emit({}, "Kein Signal im TDMS-File.")
@@ -595,6 +672,7 @@ def _ys_replot(self):
 
 
 def _ys_update_metrics(self, vals: dict):
+    from PySide6.QtCore import Qt
     def _f(key, dec=1, unit=""):
         v = vals.get(key)
         return f"{v:.{dec}f}{unit}" if v is not None else "—"
@@ -832,10 +910,12 @@ def _ys_open_batch(self):
         # Screen lazy-init auf dem MainWindow
         mw = self.window()
         if not hasattr(mw, "tdms_batch") or mw.tdms_batch is None:
+            _sb_kwargs = mw._sidebar_nav_kwargs() if hasattr(mw, "_sidebar_nav_kwargs") else None
             mw.tdms_batch = TDMSBatchScreen(
                 on_back_home=lambda: mw.stack.setCurrentWidget(self),
                 locked_series_id=sid,
                 locked_series_name=sname,
+                sidebar_callbacks=_sb_kwargs,
             )
             mw.stack.addWidget(mw.tdms_batch)
         else:

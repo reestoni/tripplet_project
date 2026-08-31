@@ -106,6 +106,7 @@ class HeaderBar(QFrame):
         show_back:   Back-Button unterhalb des Home-Buttons anzeigen (Standard: False).
         on_logout:   Callable für den Log-Out-Button; wenn None, wird kein Button gezeigt.
         logout_text: Beschriftung des Log-Out-Buttons (Standard: ``"Log Out"``).
+        show_search: Such-Button (Lupe) anzeigen (Standard: True).
     """
 
     homeClicked = Signal()
@@ -120,6 +121,7 @@ class HeaderBar(QFrame):
         show_back: bool = False,
         on_logout: Optional[Callable[[], None]] = None,
         logout_text: str = "Log Out",
+        show_search: bool = True,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent, objectName="TopBar")
@@ -207,6 +209,7 @@ class HeaderBar(QFrame):
         self._btn_search.setToolTip("Quick Search  (Ctrl+F)")
         self._btn_search.setFixedSize(36, 36)
         self._btn_search.clicked.connect(self._on_search_clicked)
+        self._btn_search.setVisible(show_search)
 
         # ---- Layout: [Home+Back] [Titel] [Stretch] [TrippleT] [Stretch] [(LogOut)] [Suche] [Heberlein] ----
         lay = QHBoxLayout(self)

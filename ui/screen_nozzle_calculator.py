@@ -9,7 +9,9 @@ Layout: Inputs links (General / Competitor / Heberlein), Results rechts.
   - Währung wählbar: CHF, EUR, USD, CNY, GBP (beeinflusst alle Geldbeträge + KPI-Labels)
   - QComboBox mit eigenem Stylesheet (kein System-Dropdown-Look)
 
-Formel: Q [Nm³/h] = _CD * C * D² * P_abs,  P_abs = bar_g + 1
+Formel: Q [Nm³/h] = k * C * P_abs,  P_abs = bar_g + 1
+         k = DB-Wert tblJets.Luftverbrauch, falls die Düse aus der DB stammt und
+             der Wert gesetzt (> 0) ist; sonst Näherung k = _CD * D²
          _CD = 0.562 / 1.1² ≈ 0.4645  (Referenz: 1.1mm → 0.562 Nm³/h @ 0 bar gauge)
 PSI → bar: bar = psi / 14.5038
 """
@@ -25,8 +27,8 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
 )
 
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 from ui.theme import get_accent, DARK, LIGHT_BG, CARD_BG, TEXT
 
 
@@ -230,9 +232,28 @@ def _bar_g_from_input(value: float, unit: str) -> float:
     return value  # already bar
 
 
-def _air_flow_nm3h(diameter_mm: float, num_holes: int, pressure_bar_g: float) -> float:
-    p_abs = max(pressure_bar_g, 0.0) + 1.01325
-    return _CD * num_holes * (diameter_mm ** 2) * p_abs
+def _flow_coeff_per_hole(diameter_mm: float, luftverbrauch: Optional[float] = None) -> float:
+    """Nm³/h Luftverbrauch pro Bohrung bei P_abs=1 bar_a.
+
+    Nimmt den echten DB-Wert (tblJets.Luftverbrauch), falls vorhanden und > 0
+    (deckt gemessene Abweichungen von der reinen D²-Näherung ab, v.a. bei
+    grossen Bohrungen). Fehlt der Wert (NULL/0) oder ist die Düse gar nicht
+    in der DB (z.B. Wettbewerber-Düse), wird wie bisher über _CD * D² genähert.
+    """
+    try:
+        lv = float(luftverbrauch) if luftverbrauch is not None else 0.0
+    except (TypeError, ValueError):
+        lv = 0.0
+    if lv > 0:
+        return lv
+    return _CD * (diameter_mm ** 2)
+
+
+def _air_flow_nm3h(diameter_mm: float, num_holes: int, pressure_bar_g: float,
+                    luftverbrauch: Optional[float] = None) -> float:
+    p_abs = max(pressure_bar_g, 0.0) + 1.0
+    coeff = _flow_coeff_per_hole(diameter_mm, luftverbrauch)
+    return coeff * num_holes * p_abs
 
 
 # ---------------------------------------------------------------------------
@@ -1622,10 +1643,13 @@ class NozzleCalculatorScreen(QWidget):
         on_back_home: Optional[Callable[[], None]] = None,
         jets_loader: Optional[Callable[[], List[Dict]]] = None,
         parent: Optional[QWidget] = None,
+        sidebar_callbacks: Optional[dict] = None,
     ):
         super().__init__(parent)
         self._on_back_home = on_back_home
         self._jets_loader  = jets_loader
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
         self._jet_rows: List[Dict] = []
         self._all_jets: List[Dict] = []
         self._calc_mode: str = "single"
@@ -1646,9 +1670,9 @@ class NozzleCalculatorScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="Jet ROI Calculator", show_home=True)
-        header.connect_home(self._go_home)
-        root.addWidget(header, 0)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # ── Mode toggle bar ───────────────────────────────────────────
         toggle_bar = QWidget()
@@ -1665,7 +1689,7 @@ class NozzleCalculatorScreen(QWidget):
         tbl.addStretch()
         self._btn_single_mode.clicked.connect(lambda: self._set_calc_mode("single"))
         self._btn_multi_mode.clicked.connect(lambda: self._set_calc_mode("multi"))
-        root.addWidget(toggle_bar, 0)
+        content_layout.addWidget(toggle_bar, 0)
 
         # ── Stacked content ───────────────────────────────────────────
         from PySide6.QtWidgets import QStackedWidget
@@ -1736,7 +1760,7 @@ class NozzleCalculatorScreen(QWidget):
         self._mode_stack.addWidget(single_scroll)   # index 0
         self._mode_stack.addWidget(multi_scroll)    # index 1
 
-        root.addWidget(self._mode_stack, 1)
+        content_layout.addWidget(self._mode_stack, 1)
         root.addWidget(FooterBar(), 0)
 
         # Init toggle style
@@ -2315,12 +2339,14 @@ class NozzleCalculatorScreen(QWidget):
             data      = self._cb_jet.currentData()
             heb_diam  = float(data.get("_diam") or 0.0)
             heb_holes = int(self._le_heb_holes_prod.text())
+            heb_lv    = data.get("Luftverbrauch")
         else:
             heb_diam  = float(self._le_heb_diam_man.text().replace(",", "."))
             heb_holes = int(self._le_heb_holes_man.text())
+            heb_lv    = None  # manuelle Eingabe: keine DB-Düse -> Näherung
 
         comp_qh = _air_flow_nm3h(comp_diam, comp_holes, comp_pressure)
-        heb_qh  = _air_flow_nm3h(heb_diam,  heb_holes,  heb_pressure)
+        heb_qh  = _air_flow_nm3h(heb_diam,  heb_holes,  heb_pressure, heb_lv)
 
         comp_qday = comp_qh * 24
         heb_qday  = heb_qh  * 24
@@ -2341,10 +2367,12 @@ class NozzleCalculatorScreen(QWidget):
         saving_pct = (comp_qyr - heb_qyr) / comp_qyr * 100 if comp_qyr > 0 else 0.0
 
         # Break-even: at what heb pressure does flow equal comp flow?
-        comp_abs = comp_pressure + 1.01325
-        heb_CD2  = heb_holes  * (heb_diam  ** 2)
-        comp_CD2 = comp_holes * (comp_diam ** 2)
-        be_bar = (comp_CD2 * comp_abs / heb_CD2 - 1.01325) if heb_CD2 > 0 else float("inf")
+        comp_abs   = comp_pressure + 1.0
+        heb_coeff  = _flow_coeff_per_hole(heb_diam,  heb_lv)
+        comp_coeff = _flow_coeff_per_hole(comp_diam, None)
+        heb_CD2  = heb_holes  * heb_coeff
+        comp_CD2 = comp_holes * comp_coeff
+        be_bar = (comp_CD2 * comp_abs / heb_CD2 - 1.0) if heb_CD2 > 0 else float("inf")
         # Show break-even in same unit as heb pressure field
         if be_bar == float("inf"):
             be_str = "N/A"
@@ -2980,8 +3008,8 @@ class NozzleCalculatorScreen(QWidget):
 
                 a_p   = row["a_pf"].bar_value()
                 b_p   = row["b_pf"].bar_value()
-                a_qh  = _air_flow_nm3h(a_diam, a_holes, a_p)
-                b_qh  = _air_flow_nm3h(b_diam, b_holes, b_p)
+                a_qh  = _air_flow_nm3h(a_diam, a_holes, a_p, a_jet.get("Luftverbrauch"))
+                b_qh  = _air_flow_nm3h(b_diam, b_holes, b_p, b_jet.get("Luftverbrauch"))
 
                 if a_diam <= 0:
                     continue
@@ -3161,9 +3189,24 @@ class NozzleCalculatorScreen(QWidget):
         if callable(self._on_back_home):
             self._on_back_home()
 
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
     def showEvent(self, event):
         super().showEvent(event)
         self._load_jets()
         # Refresh accent colour in case it changed after login
         self._cb_jet.refresh_accent()
         self._cb_currency.refresh_accent()
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass

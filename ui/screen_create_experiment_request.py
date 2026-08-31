@@ -55,10 +55,11 @@ from PySide6.QtWidgets import (
 )
 
 import app_meta
-from db.connection import get_connection, new_global_id, current_db_name, is_dev_mode
+from db.connection import get_connection, new_global_id, current_db_name, is_dev_mode, is_offline_mode
+from db import experiment_request_changes as request_changes
 from ui.pathutil import resource_path
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 
 import datetime
 import shutil
@@ -66,7 +67,14 @@ import shutil
 
 # Felder, die im Formular nicht angezeigt werden sollen
 # (werden teils automatisch beim Speichern gesetzt)
-EXCLUDE_FIELDS = {"ID", "Timestamp", "CreatedBy", "RequestStatus"}
+# ChangeOfRequestID ist reine Kopie-Metadaten (siehe db/experiment_request_changes.py),
+# nie ein vom Nutzer editierbares Feld. DenialReason wird ausschliesslich ueber
+# den Status-Wechsel "Denied" in screen_my_requests.py gesetzt (dort per
+# eigenem Dialog abgefragt) - hier nur lesend als Banner angezeigt, siehe
+# load_request()/_lbl_denial_banner.
+EXCLUDE_FIELDS = {
+    "ID", "Timestamp", "CreatedBy", "RequestStatus", "ChangeOfRequestID", "DenialReason",
+}
 
 # Basisordner fuer Experiment-Request-Bilder
 # - PROD: Netzlaufwerk (gemeinsame Ablage)
@@ -514,8 +522,6 @@ class ExperimentRequestImagesDialog(QDialog):
             return
 
         deleted_dirs: set[str] = set()
-        deleted_ok_full: set[str] = set()
-        deleted_ok_full: set[str] = set()
         errors: List[str] = []
 
         # Delete in reverse row order so indices remain valid
@@ -524,25 +530,54 @@ class ExperimentRequestImagesDialog(QDialog):
             rel_path = str(img.get("RelativePath") or "")
             stored = str(img.get("StoredFilename") or img.get("StoredFile") or "")
             full_path = str(img.get("FullPath") or (os.path.join(rel_path, stored) if rel_path else stored))
+            img_id = img.get("ID")
 
-            if rel_path:
-                deleted_dirs.add(os.path.normpath(rel_path))
-
-            # 1) Delete file from disk
-            try:
-                if full_path and os.path.exists(full_path):
-                    os.remove(full_path)
-            except Exception as e:
-                errors.append(f"Could not delete file:\n{full_path}\n\n{e}")
-
-            # 2) Delete row from DB
+            # 1) Delete the DB row FIRST, the file SECOND (deliberately reversed
+            # from the previous file-then-DB order). Root cause found by tracing
+            # a real incident (8 images physically removed from disk, but their
+            # tblTrialSeriesImage rows still present): tblTrialSeriesImageAnalysis
+            # (Garnspiegel auto-analysis, runs on every wrap-test upload) has an
+            # FK on TrialSeriesImageID - deleting the file FIRST and the DB row
+            # SECOND meant that whenever that DELETE then failed (here: 1451
+            # foreign key constraint fails, since the analysis row was never
+            # cleaned up first), the file was already gone but the DB row
+            # survived the failed DELETE. Fixed on two levels: (a) this reordered
+            # DB-first sequence means ANY DB-delete failure (this one or any
+            # other) now leaves the file untouched instead of orphaning the row -
+            # `cur.rowcount` confirms real success (0 affected rows is NOT a
+            # MySQL error/exception, so it needed an explicit check); (b) the
+            # analysis row is now deleted first (see below), so the delete
+            # actually succeeds instead of merely failing safely. Matcht
+            # bevorzugt über die Primary-Key-ID (jetzt von
+            # _fetch_series_images() mitgeliefert), fällt auf
+            # RelativePath+StoredFilename zurück für Aufrufer, die (wie die
+            # Experiment-Request-Bilder) keine ID mitliefern.
+            db_deleted = False
             try:
                 with get_connection() as cn:
                     cur = cn.cursor()
-                    cur.execute(
-                        f"DELETE FROM [{self._table_name}] WHERE [{self._fk_field}]=? AND [RelativePath]=? AND [StoredFilename]=?",
-                        [self._fk_value, rel_path, stored],
-                    )
+                    # Child row first (FK-Kind von tblTrialSeriesImage) - nur
+                    # relevant/vorhanden für genau diese Tabelle, best-effort
+                    # falls die Analyse-Tabelle in einer Umgebung fehlt oder
+                    # gar keine Analyse für dieses Bild existiert.
+                    if img_id not in (None, "") and self._table_name.lower() == "tbltrialseriesimage":
+                        try:
+                            cur.execute(
+                                "DELETE FROM tblTrialSeriesImageAnalysis WHERE TrialSeriesImageID=?",
+                                [img_id],
+                            )
+                        except Exception:
+                            pass
+                    if img_id not in (None, ""):
+                        cur.execute(
+                            f"DELETE FROM [{self._table_name}] WHERE [ID]=?", [img_id])
+                    else:
+                        cur.execute(
+                            f"DELETE FROM [{self._table_name}] WHERE [{self._fk_field}]=? "
+                            f"AND [RelativePath]=? AND [StoredFilename]=?",
+                            [self._fk_value, rel_path, stored],
+                        )
+                    db_deleted = (cur.rowcount or 0) > 0
                     try:
                         cn.commit()
                     except Exception:
@@ -550,7 +585,32 @@ class ExperimentRequestImagesDialog(QDialog):
             except Exception as e:
                 errors.append(f"Could not delete database entry for:\n{stored}\n\n{e}")
 
-            # 3) Remove from in-memory list + UI
+            if not db_deleted:
+                if not errors or "database entry for" not in errors[-1]:
+                    errors.append(
+                        f"Database entry not found (already deleted?), file left untouched:\n{stored}")
+                continue  # Datei bewusst NICHT anfassen, Eintrag bleibt in der Liste sichtbar
+
+            # 2) DB-Zeile ist nachweislich weg - jetzt erst die Datei löschen.
+            # deleted_dirs erst HIER (nicht schon am Loop-Anfang für jedes
+            # Item unconditional) befüllen: der "Ordner komplett löschen,
+            # wenn keine Bilder mehr übrig sind"-Schritt unten träfe sonst
+            # auch Ordner, in denen bewusst übersprungene Dateien (db_deleted
+            # False, siehe oben) noch unangetastet liegen - beim Testen real
+            # reproduziert: eine übersprungene Datei wurde trotzdem von
+            # shutil.rmtree() mitgerissen, weil ihr rel_path unconditional in
+            # deleted_dirs landete, obwohl NUR die anderen beiden Dateien
+            # dieses Batches tatsächlich gelöscht wurden.
+            if rel_path:
+                deleted_dirs.add(os.path.normpath(rel_path))
+            try:
+                if full_path and os.path.exists(full_path):
+                    os.remove(full_path)
+            except Exception as e:
+                errors.append(
+                    f"Database entry deleted, but the file could not be removed:\n{full_path}\n\n{e}")
+
+            # 3) Remove from in-memory list + UI (nur nach bestätigtem DB-Delete)
             try:
                 self._images = [
                     d for d in self._images
@@ -578,26 +638,35 @@ class ExperimentRequestImagesDialog(QDialog):
         except Exception:
             pass
 
-        # If no images remain for this FK, delete the folder too
+        # If no images remain for this FK, delete the folder too - but only if
+        # this batch had zero errors/skips. "0 rows remain in the DB" alone
+        # isn't proof the folder is actually empty: a skipped item (db_deleted
+        # False further up, e.g. its row was already gone independently)
+        # leaves its file physically untouched on purpose, yet the FK-wide
+        # COUNT(*) can still come back 0 (that row was never counted to begin
+        # with) - reproduced while testing: a deliberately preserved file got
+        # wiped out anyway by shutil.rmtree() here, undoing the whole point of
+        # skipping it above.
         try:
-            remaining = 1
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute(
-                    f"SELECT COUNT(*) FROM [{self._table_name}] WHERE [{self._fk_field}]=?",
-                    [self._fk_value],
-                )
-                row = cur.fetchone()
-                remaining = int(row[0]) if row and row[0] is not None else 0
+            if not errors:
+                remaining = 1
+                with get_connection() as cn:
+                    cur = cn.cursor()
+                    cur.execute(
+                        f"SELECT COUNT(*) FROM [{self._table_name}] WHERE [{self._fk_field}]=?",
+                        [self._fk_value],
+                    )
+                    row = cur.fetchone()
+                    remaining = int(row[0]) if row and row[0] is not None else 0
 
-            if remaining == 0:
-                for d in list(deleted_dirs):
-                    try:
-                        if d and os.path.isdir(d):
-                            shutil.rmtree(d)
-                    except Exception:
-                        # Best-effort cleanup; no UI errors for folder deletion.
-                        pass
+                if remaining == 0:
+                    for d in list(deleted_dirs):
+                        try:
+                            if d and os.path.isdir(d):
+                                shutil.rmtree(d)
+                        except Exception:
+                            # Best-effort cleanup; no UI errors for folder deletion.
+                            pass
         except Exception:
             # Folder cleanup is best-effort
             pass
@@ -941,7 +1010,25 @@ def _pick_display_column(table: str) -> Optional[str]:
 
 
 def _get_table_columns(table: str) -> List[ColumnInfo]:
-    """Lädt alle Spalten einer Tabelle als ColumnInfo-Liste aus der DB."""
+    """Lädt alle Spalten einer Tabelle als ColumnInfo-Liste aus der DB.
+
+    tblExperimentRequests ist nicht Teil der Offline-SQLite-Kopie (kein
+    ROOT_TABLES-Eintrag, siehe db/offline_schema.py) - dieser Screen ist im
+    Offline-Modus ohnehin per Navigation-Guard gesperrt. Der SQLite-Zweig hier
+    sorgt nur dafür, dass ein versehentlicher Aufruf (z.B. durch die eager
+    Konstruktion in main.py) sauber "keine Spalten gefunden" statt eines
+    information_schema-Fehlers (SQLite kennt information_schema nicht)
+    zurückgibt, statt die ganze App am Start zu blockieren.
+    """
+    if is_offline_mode():
+        with get_connection() as cn:
+            cur = cn.cursor()
+            cur.execute(f'PRAGMA table_info("{table}")')
+            cols: List[ColumnInfo] = []
+            for _cid, name, col_type, *_rest in cur.fetchall() or []:
+                cols.append(ColumnInfo(name=str(name), data_type=None, type_name=str(col_type or "")))
+            return cols
+
     with get_connection() as cn:
         cur = cn.cursor()
         cur.execute(
@@ -961,6 +1048,15 @@ def _get_table_columns(table: str) -> List[ColumnInfo]:
 
 def _table_exists(table: str) -> bool:
     """Gibt True zurück wenn die Tabelle in der DB existiert."""
+    if is_offline_mode():
+        with get_connection() as cn:
+            cur = cn.cursor()
+            cur.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND lower(name) = ? LIMIT 1",
+                (table.lower(),),
+            )
+            return cur.fetchone() is not None
+
     with get_connection() as cn:
         cur = cn.cursor()
         cur.execute(
@@ -2046,13 +2142,23 @@ class CreateExperimentRequestScreen(QWidget):
     - Wunschtermin als Date Picker
     """
 
-    def __init__(self, on_back_home=None, on_back_experiment_request=None, request_id: Any | None = None):
+    def __init__(self, on_back_home=None, on_back_experiment_request=None, request_id: Any | None = None,
+                 sidebar_callbacks: Optional[dict] = None):
         super().__init__()
         self.on_back_home = on_back_home
         self.on_back_experiment_request = on_back_experiment_request
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         # Wenn gesetzt, wird ein bestehender Request geladen und beim Speichern per UPDATE gespeichert.
         self._edit_request_id: Any | None = request_id
+
+        # Snapshot der beim Laden vorgefundenen Feldwerte (fuer den "wurde
+        # ueberhaupt etwas geaendert?"-Check beim Speichern), siehe load_request().
+        self._loaded_values: Dict[str, Any] = {}
+        # Falls die aktuell editierte Zeile selbst schon eine Aenderungs-Kopie
+        # ist (ChangeOfRequestID gesetzt): deren Original-ID, sonst None.
+        self._change_of_id: Any | None = None
 
         self._table = "tblExperimentRequests"
         self._cols: List[ColumnInfo] = []
@@ -2079,15 +2185,13 @@ class CreateExperimentRequestScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header_title = (
-            "Edit Experiment Request"
-            if self._edit_request_id not in (None, "")
-            else "Create Experiment Request"
-        )
-        header = HeaderBar(title=header_title, show_home=True, show_back=True)
-        header.connect_home(self._go_home)
-        header.connect_back(self._go_experiment_request)
-        root.addWidget(header, 0)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring). Der frühere
+        # Header-Titel ("Create"/"Edit Experiment Request") entfällt
+        # ersatzlos - das in-page `title`-Label weiter unten zeigt bereits
+        # dieselbe Information. Der Header-Back-Button lebt als kontextueller
+        # Back-Chip weiter (gleiches Muster wie ShowExperimentScreen).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # Scrollbarer Center
         center = QFrame()
@@ -2104,6 +2208,23 @@ class CreateExperimentRequestScreen(QWidget):
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(8)
+
+        # Bearbeiten (request_id gesetzt) kommt immer von "My Requests" her,
+        # Neuanlage vom Experiment-Request-Hub - Chip-Text spiegelt das
+        # tatsaechliche Rueckziel (siehe main.py::_go_edit_experiment_request()).
+        back_chip_label = (
+            "← My Requests" if self._edit_request_id not in (None, "") else "← Experiment Request"
+        )
+        self.btn_back_chip = QPushButton(back_chip_label)
+        self.btn_back_chip.setCursor(Qt.PointingHandCursor)
+        self.btn_back_chip.setStyleSheet(
+            "QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
+            "border-radius:4px;padding:5px 10px;font-weight:600;}"
+            "QPushButton:hover{background:#e8f5e9;}"
+        )
+        self.btn_back_chip.clicked.connect(self._go_experiment_request)
+        self.btn_back_chip.setVisible(callable(self.on_back_experiment_request))
+        title_row.addWidget(self.btn_back_chip, 0, Qt.AlignVCenter)
 
         title = QLabel(title_text)
         title.setStyleSheet("font-size: 18px; font-weight: 600;")
@@ -2130,6 +2251,17 @@ class CreateExperimentRequestScreen(QWidget):
         title_row.addWidget(self.btn_show_images, 0, Qt.AlignVCenter)
 
         center_layout.addLayout(title_row)
+
+        # Denial-Banner (nur sichtbar bei RequestStatus=Denied + gesetztem
+        # DenialReason, siehe load_request()) - reine Anzeige, kein Formularfeld.
+        self._lbl_denial_banner = QLabel()
+        self._lbl_denial_banner.setWordWrap(True)
+        self._lbl_denial_banner.setStyleSheet(
+            "background:#fdecea;color:#611a15;border:1px solid #f5c6cb;"
+            "border-radius:4px;padding:8px 12px;font-size:12px;"
+        )
+        self._lbl_denial_banner.setVisible(False)
+        center_layout.addWidget(self._lbl_denial_banner)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -2165,8 +2297,26 @@ class CreateExperimentRequestScreen(QWidget):
 
         center_layout.addLayout(actions)
 
-        root.addWidget(center, 1)
+        content_layout.addWidget(center, 1)
         root.addWidget(FooterBar(), 0)
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
         # Initial state for the images indicator
         self._update_images_icon()
@@ -2480,9 +2630,22 @@ class CreateExperimentRequestScreen(QWidget):
             return
 
         values = {str(col_names[i]): row[i] for i in range(len(col_names))}
+        self._change_of_id = values.get("ChangeOfRequestID")
         self._populate_fields(values)
+        # Snapshot NACH _populate_fields, damit die Widgets schon befuellt sind -
+        # _collect_values() liest aus den Widgets, das muss beim Diff-Vergleich
+        # in _save() exakt dieselbe Normalisierung durchlaufen wie der aktuelle
+        # Formularinhalt (z.B. Datum ueber QDateEdit statt Roh-DB-Typ).
+        self._loaded_values = self._collect_values(for_insert=False)
         self._check_required_fields()
         self._update_images_icon()
+
+        denial_reason = values.get("DenialReason")
+        if values.get("RequestStatus") == 2 and denial_reason:
+            self._lbl_denial_banner.setText(f"⚠ This request was denied.\nReason: {denial_reason}")
+            self._lbl_denial_banner.setVisible(True)
+        else:
+            self._lbl_denial_banner.setVisible(False)
 
     def _populate_fields(self, values: Dict[str, Any]) -> None:
         """Schreibt DB-Werte in die Widgets (nur im Formular sichtbare Felder)."""
@@ -2954,6 +3117,25 @@ class CreateExperimentRequestScreen(QWidget):
 
         return values
 
+    def _has_unsaved_changes(self, values: Dict[str, Any]) -> bool:
+        """True, wenn sich mindestens ein Feld gegenueber dem beim Laden
+        vorgefundenen Stand (self._loaded_values, siehe load_request())
+        geaendert hat. Ohne Snapshot (z.B. brandneuer Request) immer True."""
+        if not self._loaded_values:
+            return True
+
+        def _norm(v: Any) -> Any:
+            if v is None:
+                return ""
+            if isinstance(v, str):
+                return v.strip()
+            return v
+
+        for key in self._widgets:
+            if _norm(values.get(key)) != _norm(self._loaded_values.get(key)):
+                return True
+        return False
+
     def _save(self):
         # Generisches INSERT in tblExperimentRequests.
         try:
@@ -3035,33 +3217,65 @@ class CreateExperimentRequestScreen(QWidget):
                 QMessageBox.information(self, "Gespeichert", "Experiment Request wurde gespeichert.")
                 self._go_experiment_request()
             else:
-                # UPDATE: nur sichtbare Felder schreiben (keine Auto-Felder)
-                # Falls Feld leer ist (None), schreiben wir NULL.
-                cols = [k for k in values.keys() if k not in ("ID",) and k in self._widgets]
-
-                # Finales Speichern soll den Request "aktiv" machen.
-                # Du verwendest RequestStatus=NULL als Draft und RequestStatus=1 als gespeichert.
-                if any(c.name == "RequestStatus" for c in self._cols):
-                    values["RequestStatus"] = 1
-                    cols.append("RequestStatus")
-                if not cols:
-                    QMessageBox.warning(self, "Hinweis", "Keine Werte zum Speichern.")
+                # Nichts geaendert? Dann gar nichts schreiben - kein Status-
+                # Wechsel, keine Kopie (haeufigster Fall: Request nur zum
+                # Ansehen geoeffnet und wieder gespeichert).
+                if not self._has_unsaved_changes(values):
+                    self._go_experiment_request()
                     return
 
-                set_clause = ",".join([f"[{c}]=?" for c in cols])
-                sql = f"UPDATE [{self._table}] SET {set_clause} WHERE [ID]=?"
-                params = [values.get(c) for c in cols] + [self._edit_request_id]
+                is_superuser = bool(getattr(app_meta, "is_superuser_level", lambda: False)())
+                change_tracking_on = request_changes.supports_change_tracking()
+                cols = [k for k in values.keys() if k in self._widgets]
 
-                with get_connection() as cn:
-                    cur = cn.cursor()
-                    cur.execute(sql, params)
-                    try:
-                        cn.commit()
-                    except Exception:
-                        pass
+                if self._change_of_id is not None or is_superuser or not change_tracking_on:
+                    # Diese Zeile ist entweder selbst schon eine offene
+                    # Aenderungs-Kopie (noch nicht freigegeben, direktes
+                    # Ueberschreiben also unbedenklich), ein Superuser
+                    # bearbeitet direkt, oder diese Umgebung hat die
+                    # ChangeOfRequestID-Spalte noch nicht (Feature bisher nur
+                    # auf dev_local ausgerollt) - in allen drei Faellen kein
+                    # Kopie-Umweg, und RequestStatus bleibt unangetastet
+                    # (nicht mehr zwangsweise auf 1 zuruecksetzen, siehe
+                    # Bugreport).
+                    if not cols:
+                        QMessageBox.warning(self, "Hinweis", "Keine Werte zum Speichern.")
+                        return
 
-                QMessageBox.information(self, "Gespeichert", "Experiment Request wurde aktualisiert.")
-                self._go_experiment_request()
+                    set_clause = ",".join([f"[{c}]=?" for c in cols])
+                    sql = f"UPDATE [{self._table}] SET {set_clause} WHERE [ID]=?"
+                    params = [values.get(c) for c in cols] + [self._edit_request_id]
+
+                    with get_connection() as cn:
+                        cur = cn.cursor()
+                        cur.execute(sql, params)
+                        try:
+                            cn.commit()
+                        except Exception:
+                            pass
+
+                    QMessageBox.information(self, "Gespeichert", "Experiment Request wurde aktualisiert.")
+                    self._go_experiment_request()
+                else:
+                    # Normaler Nutzer bearbeitet ein bereits gespeichertes
+                    # Original: das Original bleibt unangetastet (inkl. Status
+                    # und einer evtl. schon verknuepften Experiment-Zeile) -
+                    # die Aenderung geht als Kopie zur Pruefung an die
+                    # Superuser (siehe db/experiment_request_changes.py).
+                    cu = getattr(app_meta, "current_user", {}) or {}
+                    request_changes.create_or_update_pending_change(
+                        original_id=self._edit_request_id,
+                        values=values,
+                        created_by=cu.get("id"),
+                    )
+                    QMessageBox.information(
+                        self,
+                        "Zur Pruefung eingereicht",
+                        "Deine Aenderungen wurden als Vorschlag gespeichert und warten auf "
+                        "die Freigabe durch einen Superuser. Der bestehende Request bleibt "
+                        "bis dahin unveraendert.",
+                    )
+                    self._go_experiment_request()
 
         except Exception as e:
             QMessageBox.critical(self, "Save Error", str(e))

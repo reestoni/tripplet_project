@@ -5,14 +5,34 @@ Desktop-App (PySide6) für Textil-/Garnlabor-Tests (Heberlein). MySQL-Backend, h
 ## Setup & Ausführen
 
 - **Python-Interpreter**: `C:\Users\soj\AppData\Local\Programs\Python\Python312\python.exe` (nicht `.venv/`, das ist eine andere/unvollständige Umgebung ohne `pytest`).
-- **DB-Modus**: `db/connection.py` liest `TRIPPLET_MODE` (`prod`/`dev`/`dev_local`). Beim Start aus dem Quellcode (`python main.py`) fragt `main.py` per Dialog danach (Default `prod`). Für Skripte/Tests: `os.environ["TRIPPLET_MODE"] = "dev_local"` **vor** dem ersten Import von `db.connection` setzen.
+- **DB-Modus**: `db/connection.py` liest `TRIPPLET_MODE` (`prod`/`dev`/`dev_local`/`offline`). Beim Start aus dem Quellcode (`python main.py`) fragt `main.py` per Dialog danach (Default `prod`) – `offline` ist dort noch nicht als Option verdrahtet (siehe Offline-Modus-Bullet unten, Stand: Proof-of-Concept, noch nicht in main.py/UI angebunden). Für Skripte/Tests: `os.environ["TRIPPLET_MODE"] = "dev_local"` **vor** dem ersten Import von `db.connection` setzen.
 - **dev_local** = lokale MySQL-Instanz (`tripplet_dev_local`, localhost) – hier darf frei getestet/geschrieben werden. `dev`/`prod` liegen auf einem Remote-Server (10.50.212.60) – **niemals** ungefragt Schreiboperationen dort ausführen.
 - Headless-Test: `QT_QPA_PLATFORM=offscreen` setzen, dann normal `QApplication`/Screens instanziieren.
 - Tests: `python -m pytest tests/` (299 Tests, ~8s, alle grün).
 
+## Aktuell offene Threads (Codewords)
+
+- **"Jet Engineering"** (seit 2026-08-25, Nutzer trainiert ca. 1 Woche lang ML-Modelle
+  auf eigener Maschine, danach will er ohne grosse Erklärung direkt weitermachen –
+  sagt der Nutzer dieses Codewort, sofort den vollständigen Bullet in `HISTORY.md`
+  im Abschnitt **"Jet Engineering (DTY-Jet-Empfehler)"** lesen, nicht nachfragen was
+  gemeint ist): DTY-Jet-Empfehler-Projekt. Kurzstand: Trainings-CSV steht
+  (`export_dty_jet_training_data.py` → `dty_jet_training_data.csv`, dev_local,
+  10'102 Zeilen), inkl. Leakage-sicherem `ConditionGroup`-Grouping-Fix. Nutzer
+  trainiert die 6 Zielmodelle selbst im externen `C:\python\ModelCreator`-Tool.
+  Nächster Schritt nach Rückkehr: Modelle sichten (Feature Importances,
+  Segment-RMSE, welcher Algorithmus pro Target gewonnen hat – **verschiedene
+  Gewinner-Algorithmen pro Target sind erwartet und explizit ok**, keine
+  Rückfrage nötig), dann Leave-one-Jet-out-Validierung (härterer Test als das
+  ConditionGroup-Grouping, siehe Bullet) und die generativ-vs-Katalog-Ranking-
+  Entscheidung (siehe Bullet für die vollständige Boundaries-Diskussion).
+
 ## Architektur
 
+Diese Datei enthält nur noch aktuell gültige Architektur-Fakten und Konventionen. Die vollständige, chronologische Entstehungsgeschichte (Bugfixes, Feature-für-Feature-Aufbau, Datenmigrationen, Verifikationsschritte) steht in `HISTORY.md` – dort nachschlagen, wenn ein Detail zu einem der untenstehenden Themen fehlt oder der "warum wurde das so gebaut"-Kontext gebraucht wird.
+
 - **`db/connection.py`**: Einzige DB-Zugriffsschicht. `get_connection()` liefert eine Connection aus einem lazy erzeugten `mysql.connector.pooling.MySQLConnectionPool` (Größe 5, `connect_timeout=10s`) – **niemals** direkt `mysql.connector.connect()` aufrufen. `_to_mysql_sql()` übersetzt Access-Syntax (`[Spalte]`, `?`-Platzhalter, `True`/`False`) automatisch zu MySQL – dadurch kann viel altes Access-SQL unverändert bleiben. Bekannter Quirk: der Klammer-Regex übersetzt auch `[...]` **innerhalb von String-Literalen** fälschlich (z. B. `LIKE '%[Gen]%'` bricht) – bei sowas lieber in Python filtern statt SQL-Pattern mit literalen Klammern zu bauen.
+- **Offline-Modus (SQLite)**: `TRIPPLET_MODE=offline` schaltet `db/connection.py` auf eine lokale SQLite-Datei (`%LOCALAPPDATA%\TrippleT\tripplet_offline.sqlite`, bzw. `tripplet_offline_prod.sqlite`/`tripplet_offline_dev_local.sqlite` für die Dev-Komfort-Flags `offline_prod`/`offline_dev_local`) statt den MySQL-Pool. Drei Kernmodule: `db/offline_schema.py` (`ROOT_TABLES` = 17 mergeable Tabellen, plus `EXTRA_REFERENCE_TABLES` als reine Referenzdaten – u. a. `tbluser`, **nie** mergeable, offline geänderte Passwörter/Profile gehen beim Merge verloren), `db/offline_snapshot.py` (`pull_snapshot()`, MySQL→SQLite), `db/offline_merge.py` (`plan_merge()`/`execute_merge()`, SQLite→MySQL, GlobalID-basiertes FK-Remapping). `LOCAL_TRACKING_COLUMN` (`_offline_modified_at`) markiert offline editierte Zeilen für den Merge – Policy ist "wer später syncet, gewinnt", bewusst kein echtes Konflikt-Handling. **Prod ist seit 2026-08-13 explizit autorisiert** als Snapshot-Quelle UND Merge-Ziel (folgt automatisch dem Modus, in dem gerade gearbeitet wird) – aber noch nie live gegen die echte Prod-DB ausgeführt (nur end-to-end gegen dev_local verifiziert), vor dem ersten echten Zugriff kurz nachfragen. `ui/screen_offline_sync.py` (Home/Sidebar → Superuser-Bereich, `AccessLevel >= 4`) bietet Prepare/Refresh + Merge (als Dry-Run-Report vor der Ausführung). **Bekannte, bewusste Lücken**: Manage User bleibt offline gesperrt (kein Merge-Pfad für `tbluser`), Backlog-Bild-/PDF-Upload offline nicht umgesetzt, ob `tbltrialsettings`-Ply-Settings beim Offline-Klonen mergebar werden müssen war zuletzt offen. Volle Entstehungsgeschichte inkl. aller gefundenen Bugs (Datenverlust-Guard `UnmergedChangesError`, Trigger-Rekursionsschutz, Launcher-Ping-Fix, Login-Gate) siehe `HISTORY.md` → Abschnitt "Offline-Modus (SQLite)".
 - **Zwei `fetch_all`-Funktionen existieren**: `db.connection.fetch_all` (Basis) und eine eigene, lowercase-normalisierende Variante in `ui/screen_show_experiment.py` (dort auch `table_exists`/`get_columns_map`/`resolve_field`/`norm` lokal reimplementiert bzw. reexportiert). Extrahierte Module (`machine_tab.py`, `screen_show_experiment_pdf_import.py`, `dty_yarnscope_tab.py`, `advisor_tab.py`) importieren diese Helfer **lazy** (innerhalb der Funktion) aus `ui.screen_show_experiment`, nicht aus `db.connection` – beim Patchen/Testen darauf achten, welche der beiden Funktionen man mockt.
 - **`ui/screen_show_experiment.py`** (ShowExperimentScreen) ist der zentralste, größte Screen (Pivot-Tabelle: Zeilen = Messfelder, Spalten = Trials/Plies). Wurde in mehreren Schritten in eigene Module ausgelagert – siehe `TODO.md` für die Historie. Neue Tab-Typen dort folgen dem Muster `_ensure_XXX_tab` / `_build_XXX_tab` / `_remove_XXX_tab_if_exists`.
 - **`ui/machine_tab.py`**: Machine-Data- und R&D-Machine-Data-Tab (ausgelagert aus ShowExperimentScreen). `fill_machine_row_from_title_impl()` nimmt `is_rd: bool` und muss **konsequent** die is_rd-abhängige `_model`/`_col_specs`-Variable verwenden statt hart `self.model_machine` – das war lange ein Bug (siehe `TODO.md`, jetzt gefixt).
@@ -21,6 +41,18 @@ Desktop-App (PySide6) für Textil-/Garnlabor-Tests (Heberlein). MySQL-Backend, h
 - **Monkey-Patch-Extraktion**: Mehrere Große Methoden aus `ShowExperimentScreen` wurden nach dem Muster "Modul-Funktion `xxx_impl(self, ...)` + dünner Wrapper `self._xxx(...)` in der Klasse" ausgelagert (siehe `advisor_tab.py`, `dty_yarnscope_tab.py`, `machine_tab.py`). Neue Extraktionen sollten demselben Muster folgen.
 - **Nutzungs-Tracking** (`db/usage_log.py`, `ui/screen_usage_stats.py`, live auf Prod seit 2026-07-29): `log_usage_event(event_type, event_name, detail="")` ist best-effort (schlägt nie sichtbar fehl) und schreibt in `tblUsageLog`. Screen-Opens laufen automatisch über einen zentralen `QStackedWidget.currentChanged`-Hook in `main.py` – dafür muss nichts ergänzt werden. Für ein neues "großes Feature", das getrackt werden soll: einfach `from db.usage_log import log_usage_event; log_usage_event("feature", "name", "optionales_detail")` an der Stelle einfügen, wo die Aktion tatsächlich ausgeführt wird (nicht beim bloßen Öffnen eines Dialogs). Der Admin-Screen (`ui/screen_usage_stats.py`, nur `AccessLevel >= 4`) zeigt ein Dashboard (2 matplotlib-Charts) plus Detailtabellen, inkl. "zuletzt benutzt" pro Screen/Feature.
 
+## Wichtige Fakten aus der Historie
+
+Kurzfassung von Entscheidungen/Konstanten aus `HISTORY.md`, die für laufende Arbeit direkt relevant bleiben (volle Herleitung/Verifikation jeweils dort):
+
+- `db.connection.execute_insert()` ist der Standard-Weg für "INSERT + neue ID abfragen" (ersetzt das fragile `execute()`+`SELECT @@IDENTITY`/`LAST_INSERT_ID()`-Muster, das an ein paar Altstellen noch existiert) – bei neuem Insert-Code immer `execute_insert()` verwenden.
+- `RADAR_BOUNDS` in `ui/yarnscope/aty_core_analysis.py` sind eine feste, von Hand kalibrierte v1 (n=38) – nie automatisch neu berechnen, nur nach expliziter Rekalibrierung von Hand anpassen.
+- Bei Qt-Tabellenmodellen (`ManageYarnScreen` & analoge Manage-Screens) **nie** `model.layoutChanged.emit()` für reine Style-/Permission-Updates verwenden (Absturzrisiko bei wiederholtem Aufruf, reproduzierter Bug) – `dataChanged.emit(...)` verwenden.
+- Duplicate-Yarn-Check (Garntyp/Material/Titer/Endtiter/NumberOfFilaments/Colour) läuft bei jedem Yarn-Save (`screen_manage_yarn.py`) – bei neuen Yarn-Schreibpfaden mitziehen.
+- `ui/widgets/tab_container.py` (Browser-Tabs-Feature) ist fertig gebaut, aber **bewusst nicht verdrahtet** (Nutzerwunsch nach dem 2026-08-27-Rückbau) – nicht ungefragt wieder aktivieren, "in neuem Fenster öffnen" ist der aktuelle Weg für parallele Screens.
+- Lab Assistant (`ui/lab_assistant_worker.py`) hat keinen separaten read-only DB-User – SQL-Absicherung ist rein anwendungsseitig (`validate_readonly_sql()`), `tbluser` ist dort komplett gesperrt.
+- Sidebar-Navigation (`ui/widgets/sidebar.py`/`sidebar_nav.py`) ist seit 2026-08-26/27 der App-weite Standard (ersetzt die alte Topbar/Karten-Optik), `BacklogScreen` ist der Post-Login-Landing-Screen (nicht mehr `HomeScreen`).
+
 ## Arbeitsweise, die sich bewährt hat
 
 - Bei reinen Code-Verschiebungen (keine Verhaltensänderung beabsichtigt): Extraktion **skriptbasiert** per exakter Zeilen-Slicing + Dedent durchführen (kein manuelles Abtippen), danach per AST-Vergleich (`ast.get_source_segment`/`ast.dump` ohne Docstring) gegen das Original auf Byte-/Verhaltens-Identität prüfen.
@@ -28,9 +60,11 @@ Desktop-App (PySide6) für Textil-/Garnlabor-Tests (Heberlein). MySQL-Backend, h
 - Bei Performance-Fragen: mit `cProfile` messen, nicht raten. Lokale (dev_local) Latenz ist nicht repräsentativ für den echten Remote-Server – bei Query-Anzahl-Optimierungen (Roundtrips) im Hinterkopf behalten, dass das über eine langsame Verbindung viel mehr zählt als lokal.
 - `git stash` (nur die betroffenen Dateien, nie pauschal) ist der bewährte Weg für Vorher/Nachher-Vergleiche im selben Arbeitsverzeichnis.
 - `TODO.md` im Projekt-Root wird laufend als Fortschritts-/Entscheidungsprotokoll gepflegt – vor neuer Arbeit dort nachschauen, was schon geprüft/entschieden wurde (inkl. bewusst abgelehnter Ideen).
+- Bei der Kalibrierung normierter/skalierter Kennzahlen (z. B. feste 0–100-Achsen für ein Radar-Chart): Grenzen aus einem Batch-Lauf über möglichst viele echte, vorhandene Trials herleiten (Min/Max + Puffer, oder Perzentile) statt zu raten – `suggest_radar_bounds()` in `aty_core_analysis.py` ist das Muster für ein solches Kalibrierungs-Skript.
 
 ## Bekannte, bewusst zurückgestellte Punkte
 
 - DB-Secrets-Setup (Klartext-Fallback `db_secrets.json`) bleibt unverändert – auf expliziten Wunsch, nicht erneut vorschlagen.
 - `BaseScreen`-Basisklasse wurde geprüft und verworfen (Konstruktor-Signaturen der ~30 Screens zu inkonsistent für einen sicheren Umbau).
 - Generisches Labormaschinen-Setup (Admin-Tool statt Code pro neuer Maschine) wurde prototypisch gebaut, getestet und auf Wunsch komplett zurückgerollt (Code + DB) – Details in der Git-Historie, falls das Thema nochmal aufkommt.
+- ATY-Radar-Rekalibrierung aus **DB-Historie**: die Datengrundlage dafür existiert jetzt (`tblLaborATYoMat` speichert seit 2026-08-13 die neuen Kennzahlen pro gespeichertem Trial), aber `suggest_radar_bounds()` selbst liest noch nicht direkt aus der DB – es erwartet weiterhin eine Liste von `analyze_trial()`-Ergebnissen (aktuell also aus einem Batch-Skript über TDMS-Dateien, nicht aus `SELECT * FROM tblLaborATYoMat`). Naheliegende, aber noch nicht gebaute Erweiterung: `suggest_radar_bounds()` DB-Zeilen direkt annehmen lassen, sobald genug echte Analysen gespeichert wurden.

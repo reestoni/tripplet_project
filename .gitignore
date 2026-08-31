@@ -19,3 +19,6 @@ dist/
 # IDE
 .idea/
 .vscode/
+
+# Laufzeit-generierte Logs
+crash_log.txt

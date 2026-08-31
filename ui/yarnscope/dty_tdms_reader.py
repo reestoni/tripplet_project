@@ -259,6 +259,126 @@ def read_step_mm_from_tdms(path: Path) -> float | None:
     return None  # Schrittweite konnte nicht ermittelt werden
 
 
+def _numeric_data_channels(tdms: TdmsFile) -> list[np.ndarray]:
+    """Numeric data channels in file order, excluding the Parameter/Wert/
+    Einheit housekeeping channels (and any empty channel). A standard
+    single-axis TDMS has exactly one of these ("... (x-Achse)"); a dual-axis
+    file (two 90°-offset sensors) has two ("... (x-Achse)"/"... (y-Achse)").
+    There is no separate flag in the file for this - channel *count* is the
+    only tell, so that's what read_axis_channels() keys off of."""
+    result = []
+    for grp in tdms.groups():
+        for ch in grp.channels():
+            if _normalize_key(ch.name) in {
+                "parameter", "wert", "value", "values", "einheit", "einheiten", "unit", "units",
+            }:
+                continue
+            try:
+                arr = np.asarray(ch[:])
+            except Exception:
+                continue
+            if arr.size > 0 and np.issubdtype(arr.dtype, np.number):
+                result.append(np.asarray(arr, dtype=float))
+    return result
+
+
+def read_axis_channels(path: Path):
+    """Returns (x, y): raw, unscaled channel data. `y` is None for a
+    standard single-axis file, the second sensor's array for a dual-axis
+    file. No unit scaling applied here - DTY and ATY use different raw-unit
+    conventions (see read_dty_signal()/read_aty_signal()), so scaling is
+    each domain's own responsibility, not this shared low-level reader's.
+    """
+    tdms = TdmsFile.read(str(path))
+    channels = _numeric_data_channels(tdms)
+    if not channels:
+        return None, None
+    x = channels[0]
+    y = channels[1] if len(channels) > 1 else None
+    return x, y
+
+
+def read_dty_signal(path: Path):
+    """Drop-in replacement for read_first_numeric_channel() for DTY use
+    (dty_analysis.analyze_series) - identical behaviour for a single-axis
+    file, and for a dual-axis file combines the two 90°-offset sensor axes
+    via their arithmetic mean (x+y)/2.
+
+    Originally geometric mean sqrt(x*y) (the elliptical-cross-section
+    equivalent diameter, matching the area formula) - switched 2026-08-20
+    after validating both against TrialSeries 382 (6 yarns, each measured
+    simultaneously on both a single-axis and a dual-axis device - same
+    speed/step/length/timestamp per pair, so a same-yarn apples-to-apples
+    comparison). Finding: the two axes there only weakly correlate
+    (r=0.13-0.30, well below the r=0.89 seen in the file pair the two-axis
+    feature was originally built from - axis correlation apparently isn't
+    a fixed sensor property but varies per yarn/session). sqrt(x*y) is
+    disproportionately pulled down by a dip in either axis, which inflated
+    every unevenness metric (rapport/knot/open CV%) by 30-45% relative to
+    the single-axis reference on all 6 pairs, while (x+y)/2 landed BELOW
+    the single-axis reference on all 18 (pair x metric) comparisons -
+    consistent with x and y here having similar absolute noise (std) but
+    very different means, so averaging dilutes relative noise rather than
+    amplifying it. Knot counts/rapport spacing stay within ~2% of the
+    single-axis reference either way, so this only affects unevenness
+    (CV%) metrics, not detection itself.
+
+    Same caveat as the ATY radar calibration (aty_core_analysis.py,
+    RADAR_BOUNDS): validated on one measurement session/yarn type (n=6) -
+    revisit once more dual-axis DTY series accumulate, the same way
+    suggest_radar_bounds() gets rerun for ATY.
+    """
+    x, y = read_axis_channels(path)
+    if x is None:
+        return None
+    if y is None:
+        return x
+    n = min(len(x), len(y))
+    return (x[:n] + y[:n]) / 2.0
+
+
+def _aty_auto_scale_mm(arr: np.ndarray) -> np.ndarray:
+    """ATY's existing mm-unit heuristic (median >= 10 -> assume the channel
+    is in a finer raw unit and divide by 1000), duplicated from the several
+    call sites that already do this inline (aty_yarnscope_tab.py,
+    screen_aty_batch.py) so read_aty_signal() can apply it per-axis before
+    combining - scaling has to happen before max()/the ellipticity ratio,
+    not after, since those are only meaningful once both axes share a unit.
+    """
+    if arr is None or arr.size == 0:
+        return arr
+    return arr / 1000.0 if float(np.median(arr)) >= 10.0 else arr
+
+
+def read_aty_signal(path: Path):
+    """Returns (primary_arr, ellipticity_pct) for ATY use
+    (aty_core_analysis.analyze_trial). `primary_arr` is a drop-in
+    replacement for read_first_numeric_channel() + the mm-scaling ATY call
+    sites already apply inline - identical for a single-axis file. For a
+    dual-axis file, combines the two axes via max(x,y) per point rather than
+    a mean: a loop bulges preferentially in one axis, and averaging would
+    dilute a strong single-axis excursion with the other (non-bulging) axis
+    instead of preserving it. `ellipticity_pct` is the per-point relative
+    asymmetry between the two axes as a percentage - None for a single-axis
+    file (nothing to compare), otherwise a genuinely new signal a
+    single-axis device can't provide (see aty_core_analysis.analyze_trial()'s
+    ellipticity_pct parameter for what it's used for).
+    """
+    x, y = read_axis_channels(path)
+    if x is None:
+        return None, None
+    x = _aty_auto_scale_mm(x)
+    if y is None:
+        return x, None
+    y = _aty_auto_scale_mm(y)
+    n = min(len(x), len(y))
+    x, y = x[:n], y[:n]
+    primary = np.maximum(x, y)
+    mean = (x + y) / 2.0
+    ellipticity_pct = np.divide(np.abs(x - y), mean, out=np.zeros(n), where=mean > 0) * 100.0
+    return primary, ellipticity_pct
+
+
 def points_per_meter(step_mm: float) -> int:
     """Berechnet die Anzahl Datenpunkte pro Meter.
 

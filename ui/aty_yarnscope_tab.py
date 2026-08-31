@@ -42,19 +42,29 @@ from PySide6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as _FCA
 from matplotlib.figure import Figure as _Fig
 
-from db.connection import fetch_all
+from db.connection import fetch_all, table_exists
 from ui.yarnscope.garngraf_canvas import (
     GarnCanvas, CLASS_THRESHOLDS, COLOR_STATE, VISIBILITY_STATE,
     DI_COLORS, DUE_COLORS,
 )
 from ui.yarnscope.aty_canvas import ATYFabricCanvas, ATYKnittedCanvas
 from ui.yarnscope.dty_tdms_reader import (
-    read_first_numeric_channel, read_step_mm_from_tdms,
+    read_step_mm_from_tdms, read_aty_signal,
 )
 from ui.yarnscope.thick_spot_analysis import (
     detect_thick_spots, compute_db_values,
     aggregate_per_100m, compute_histograms,
 )
+from ui.yarnscope.aty_core_analysis import (
+    analyze_trial as _aty_analyze_trial_core,
+    get_zoom_segment as _aty_get_zoom_segment,
+    compute_radar_scores as _aty_compute_radar_scores,
+    describe_yarn as _aty_describe_yarn,
+    to_db_row as _aty_to_db_row,
+    RADAR_AXES as _ATY_RADAR_AXES,
+    RADAR_LABELS as _ATY_RADAR_LABELS,
+)
+from ui.theme import get_accent, CARD_BG, LIGHT_BG, TEXT
 
 # ---------------------------------------------------------------------------
 # TDMS-Ordner-Helpers
@@ -105,6 +115,10 @@ def _build_aty_yarnscope_tab(self):
 def _remove_aty_yarnscope_tab_if_exists(self):
     if self.tab_aty_yarnscope is None:
         return
+    timer = getattr(self, "_aty_auto_timer", None)
+    if timer is not None:
+        timer.stop()
+    self._aty_auto_timer = None
     idx = self.tabs.indexOf(self.tab_aty_yarnscope)
     if idx != -1:
         self.tabs.removeTab(idx)
@@ -142,8 +156,24 @@ def _create_aty_yarnscope_tab_if_needed(self):
     """)
     self._aty_trial_list.currentRowChanged.connect(
         lambda row: _aty_on_trial_selected(self, row))
+    # Multi-select (Ctrl/Shift-click) in addition to the existing
+    # currentRowChanged handler above, used only by the "Compare" sub-tab --
+    # does not change the existing single-trial flow.
+    self._aty_trial_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
+    self._aty_trial_list.itemSelectionChanged.connect(
+        lambda: _aty_on_compare_selection_changed(self))
     lv.addWidget(self._aty_trial_list, 1)
     splitter.addWidget(left)
+
+    # Auto-refresh: analog zum DTY-YarnScope-Tab (siehe dty_yarnscope_tab.py)
+    # - re-scannt den TDMS-Ordner nur, waehrend dieser Tab aktiv ist UND
+    # mindestens ein Trial noch ohne File dasteht.
+    self._aty_auto_timer = QTimer()
+    self._aty_auto_timer.setInterval(20000)
+    self._aty_auto_timer.timeout.connect(lambda: _aty_populate_trial_list(self))
+    if not getattr(self, "_aty_tab_watch_connected", False):
+        self.tabs.currentChanged.connect(lambda idx: _aty_update_auto_refresh_state(self))
+        self._aty_tab_watch_connected = True
 
     # ══════════════════════════════════════════════════════════════════════
     # RECHTS: Analyse-Bereich
@@ -268,6 +298,313 @@ def _create_aty_yarnscope_tab_if_needed(self):
         self._aty_knitted_canvas = None
     self._aty_sub_tabs.addTab(knt_w, "Knitted")
 
+    # ── Sub-Tab 4: Compare (multi-select in the trial list) ────────────────
+    # Light theme by design (instead of the dark YarnScope look of the other
+    # sub-tabs) -- follows the card/KPI design from screen_nozzle_calculator.py
+    # (_card/_kpi_widget).
+    accent = get_accent()
+    # The whole tab content sits inside a vertical QScrollArea: on a smaller
+    # window the two tables + signal cards + histograms no longer fit without
+    # squashing the charts' aspect ratio -- scrolling keeps everything at a
+    # readable size instead.
+    cmp_outer_scroll = QScrollArea()
+    cmp_outer_scroll.setWidgetResizable(True)
+    cmp_outer_scroll.setStyleSheet(f"QScrollArea{{background:{LIGHT_BG};border:none;}}")
+    cmp_w = QWidget(); cmp_w.setStyleSheet(f"background:{LIGHT_BG};")
+    cmp_v = QVBoxLayout(cmp_w); cmp_v.setContentsMargins(10,10,10,10); cmp_v.setSpacing(8)
+
+    cmp_top = QHBoxLayout(); cmp_top.setSpacing(10)
+    self._aty_cmp_btn_run = QPushButton("Run Comparison")
+    self._aty_cmp_btn_run.setStyleSheet(
+        f"QPushButton{{background:{accent};color:#fff;border-radius:3px;"
+        f"font-size:12px;font-weight:600;padding:5px 14px;border:none;}}"
+        f"QPushButton:hover{{background:{accent};}}"
+        f"QPushButton:disabled{{background:#d0d0d0;color:#888;}}")
+    self._aty_cmp_btn_run.setFixedHeight(28); self._aty_cmp_btn_run.setEnabled(False)
+    self._aty_cmp_btn_run.clicked.connect(lambda: _aty_on_compare_run(self))
+    cmp_top.addWidget(self._aty_cmp_btn_run)
+
+    self._aty_cmp_btn_info = QPushButton("ⓘ How is this calculated?")
+    self._aty_cmp_btn_info.setCheckable(True); self._aty_cmp_btn_info.setChecked(False)
+    self._aty_cmp_btn_info.setFixedHeight(28)
+    self._aty_cmp_btn_info.setStyleSheet(
+        f"QPushButton{{background:{CARD_BG};color:#666;border:1px solid #dbe2dc;"
+        f"border-radius:3px;font-size:11.5px;padding:5px 10px;}}"
+        f"QPushButton:hover{{background:#f0f2f0;}}"
+        f"QPushButton:checked{{background:#eef6ef;color:{accent};border-color:{accent};}}")
+    cmp_top.addWidget(self._aty_cmp_btn_info)
+
+    self._aty_cmp_lbl_status = QLabel(
+        "No trials selected (Ctrl/Shift-click for multi-select in the list on the left).")
+    self._aty_cmp_lbl_status.setStyleSheet(f"color:{TEXT}; font-size:11.5px;")
+    cmp_top.addWidget(self._aty_cmp_lbl_status, 1)
+    cmp_v.addLayout(cmp_top)
+
+    # ── Collapsible methodology panel (hidden by default) ──────────────────
+    self._aty_cmp_info_panel = QFrame()
+    self._aty_cmp_info_panel.setStyleSheet(
+        f"QFrame{{background:#f4f8f5;border:1px solid #dbe2dc;border-radius:3px;}}")
+    info_lay = QVBoxLayout(self._aty_cmp_info_panel)
+    info_lay.setContentsMargins(12,10,12,10)
+    lbl_info = QLabel(
+        "<b>Core</b> = rolling 10th-percentile of the shadow-diameter signal (40&nbsp;mm window), "
+        "not a global mean &ndash; loops only push the signal up, so the local lower envelope is the "
+        "true core. The <b>Signal &amp; core</b> chart below shows this directly: raw signal, the "
+        "core baseline, and the old global-mean reference line.<br>"
+        "<b>Core CV</b> = variability of that core baseline itself along the yarn length.<br>"
+        "<b>Frequency / Spacing</b> = distance between consecutive detected loop peaks "
+        "(<code>scipy.signal.find_peaks</code>, prominence &gt; 30&nbsp;&micro;m, min. distance 1&nbsp;mm).<br>"
+        "<b>Relative height</b> = loop height as % of the local core diameter at that position &ndash; "
+        "200&nbsp;&micro;m means something very different on a 100&nbsp;&micro;m core than on a "
+        "1200&nbsp;&micro;m core.<br>"
+        "<b>Bulk Index</b> = total loop area (Rohsignal&minus;core, integrated over each loop's extent) as "
+        "a % of the area a loop-free yarn of the same Core thickness would take up &ndash; one headline "
+        "number combining frequency, height, and width, self-normalizing so it stays in a readable range "
+        "instead of a raw &micro;m&middot;mm figure.<br>"
+        "<b>Bin1/Bin2 (Kurzhocker/Langwelle)</b> = same 100&nbsp;&micro;m/mm height&#8202;/&#8202;length split as the "
+        "Verteilung tab, recomputed on these (more accurate) loops &ndash; so the percentages won't exactly "
+        "match that tab's numbers.<br>"
+        "<b>Core CV @1m / @20m</b> = core unevenness at two length scales (meter-to-meter vs. tens-of-metres "
+        "drift) &ndash; a simplified take on the classic \"CV at different cut lengths\" idea.<br>"
+        "<b>Tail metrics (P95/P99/max)</b> = how extreme the worst loops are, since two yarns can share a "
+        "similar median but differ a lot in their outliers.<br>"
+        "<i>Defaults tuned on TrialSeries 288 (Aug 2026); not yet exposed as UI settings "
+        "&ndash; see ui/yarnscope/aty_core_analysis.py.</i>"
+    )
+    lbl_info.setStyleSheet("color:#555; font-size:11px;")
+    lbl_info.setWordWrap(True)
+    lbl_info.setTextFormat(Qt.RichText)
+    info_lay.addWidget(lbl_info)
+    self._aty_cmp_info_panel.setVisible(False)
+    self._aty_cmp_btn_info.toggled.connect(self._aty_cmp_info_panel.setVisible)
+    cmp_v.addWidget(self._aty_cmp_info_panel)
+
+    # ── Radar chart: 5-axis "yarn fingerprint", the headline overview ──────
+    # (detail tables + charts follow below). Fixed calibration -- see
+    # RADAR_BOUNDS in aty_core_analysis.py for what the axes mean and how to
+    # recalibrate as more trials become available.
+    lbl_radar = QLabel("Yarn fingerprint")
+    lbl_radar.setStyleSheet(f"color:{TEXT}; font-size:12px; font-weight:600;")
+    lbl_radar.setTextFormat(Qt.RichText)
+    cmp_v.addWidget(lbl_radar)
+
+    radar_card = QFrame()
+    radar_card.setStyleSheet(
+        f"QFrame{{background:{CARD_BG};border:1px solid #dbe2dc;border-radius:3px;}}")
+    radar_row = QHBoxLayout(radar_card); radar_row.setContentsMargins(6, 6, 6, 6); radar_row.setSpacing(12)
+    radar_fig = _Fig(figsize=(4.6, 4.6), facecolor=CARD_BG)
+    radar_fig.subplots_adjust(top=0.90, bottom=0.08)
+    self._aty_cmp_radar_ax = radar_fig.add_subplot(111, polar=True)
+    self._aty_cmp_radar_canvas = _FCA(radar_fig)
+    self._aty_cmp_radar_canvas.setStyleSheet(f"background:{CARD_BG};")
+    self._aty_cmp_radar_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+    self._aty_cmp_radar_canvas.setMinimumHeight(360)
+    radar_row.addWidget(self._aty_cmp_radar_canvas, 3)
+
+    # Plain-language axis descriptions, using the space beside the (fairly
+    # small, mostly-empty-card) chart rather than relying on people already
+    # knowing what "Character" or "Outliers" is supposed to mean here.
+    lbl_radar_desc = QLabel(
+        "<b>Volume</b> &ndash; how puffy the yarn looks overall. High = a lot of "
+        "extra bulk from loops sticking out.<br><br>"
+        "<b>Frequency</b> &ndash; how many loops there are per metre. High = "
+        "densely packed, low = sparse.<br><br>"
+        "<b>Character</b> &ndash; the loop type mix. High = mostly short, spiky "
+        "loops (Kurzhocker). Low = mostly long, flat loops (Langwelle).<br><br>"
+        "<b>Evenness</b> &ndash; how regularly the loops are spaced out along the "
+        "yarn. High = evenly spread like beads on a string. Low = clumped "
+        "together with gaps in between.<br><br>"
+        "<b>Outliers</b> &ndash; how extreme the worst loops are compared to a "
+        "typical one. High = a few loops stick out much taller than the rest, "
+        "even if the average looks normal."
+    )
+    lbl_radar_desc.setStyleSheet(f"color:{TEXT}; font-size:11px;")
+    lbl_radar_desc.setWordWrap(True)
+    lbl_radar_desc.setTextFormat(Qt.RichText)
+    lbl_radar_desc.setAlignment(Qt.AlignTop)
+
+    # Right column: axis legend on top, then the per-trial one-sentence
+    # characterization below it -- both live beside the chart, in the space
+    # that was otherwise just empty card background.
+    radar_desc_col = QVBoxLayout(); radar_desc_col.setSpacing(10)
+    radar_desc_col.addWidget(lbl_radar_desc)
+
+    self._aty_cmp_radar_summary = QLabel("")
+    self._aty_cmp_radar_summary.setStyleSheet(f"color:{TEXT}; font-size:11.5px;")
+    self._aty_cmp_radar_summary.setWordWrap(True)
+    self._aty_cmp_radar_summary.setTextFormat(Qt.RichText)
+    self._aty_cmp_radar_summary.setAlignment(Qt.AlignTop)
+    radar_desc_col.addWidget(self._aty_cmp_radar_summary)
+    radar_desc_col.addStretch(1)
+
+    radar_row.addLayout(radar_desc_col, 2)
+
+    cmp_v.addWidget(radar_card)
+
+    self._aty_cmp_table = QTableWidget(0, 9)
+    self._aty_cmp_table.setHorizontalHeaderLabels([
+        "Trial", "Global Mean [µm]", "Core [µm]", "Δ [%]", "Core CV [%]",
+        "Freq [1/m]", "Spacing CV [%]", "Height median [µm]", "Height median rel. [%]",
+    ])
+    _aty_set_header_tooltips(self._aty_cmp_table, _CMP_TABLE1_TOOLTIPS)
+    self._aty_cmp_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    self._aty_cmp_table.setAlternatingRowColors(True)
+    self._aty_cmp_table.setStyleSheet(
+        f"QTableWidget{{background:{CARD_BG};alternate-background-color:#f4f6f4;"
+        f"color:{TEXT};gridline-color:#e6e9e6;border:1px solid #dbe2dc;border-radius:3px;}}"
+        f"QHeaderView::section{{background:{CARD_BG};color:#888;border:none;"
+        f"border-bottom:1px solid #dbe2dc;padding:4px 4px;font-size:10.5px;font-weight:600;}}"
+        f"QTableWidget::item{{padding:2px;}}"
+        f"QTableWidget::item:selected{{background:{accent};color:#fff;}}")
+    self._aty_cmp_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    self._aty_cmp_table.verticalHeader().setDefaultSectionSize(24)
+    self._aty_cmp_table.verticalHeader().setVisible(False)
+    self._aty_cmp_table.setFixedHeight(150)
+    cmp_v.addWidget(self._aty_cmp_table)
+
+    # Second table: loop shape (Bin1/Bin2), bulk, two-scale core unevenness,
+    # and tail metrics -- kept separate from the main table above instead of
+    # widening it further, since Stretch-resize with 15+ columns would get
+    # unreadably cramped.
+    lbl_shape = QLabel("Shape &amp; bulk")
+    lbl_shape.setStyleSheet(f"color:{TEXT}; font-size:12px; font-weight:600;")
+    lbl_shape.setTextFormat(Qt.RichText)
+    cmp_v.addWidget(lbl_shape)
+
+    self._aty_cmp_table2 = QTableWidget(0, 11)
+    self._aty_cmp_table2.setHorizontalHeaderLabels([
+        "Trial", "Bulk Index [%]", "Garnspiegel CV [%]", "Bin1 % (Kurzhocker)", "Bin2 % (Langwelle)",
+        "Bin1 [1/m]", "Bin2 [1/m]",
+        "Core CV @1m [%]", "Core CV @20m [%]", "Rel. height P99 [%]", "Rel. height max [%]",
+    ])
+    _aty_set_header_tooltips(self._aty_cmp_table2, _CMP_TABLE2_TOOLTIPS)
+    self._aty_cmp_table2.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    self._aty_cmp_table2.setAlternatingRowColors(True)
+    self._aty_cmp_table2.setStyleSheet(
+        f"QTableWidget{{background:{CARD_BG};alternate-background-color:#f4f6f4;"
+        f"color:{TEXT};gridline-color:#e6e9e6;border:1px solid #dbe2dc;border-radius:3px;}}"
+        f"QHeaderView::section{{background:{CARD_BG};color:#888;border:none;"
+        f"border-bottom:1px solid #dbe2dc;padding:4px 4px;font-size:10.5px;font-weight:600;}}"
+        f"QTableWidget::item{{padding:2px;}}"
+        f"QTableWidget::item:selected{{background:{accent};color:#fff;}}")
+    self._aty_cmp_table2.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    self._aty_cmp_table2.verticalHeader().setDefaultSectionSize(24)
+    self._aty_cmp_table2.verticalHeader().setVisible(False)
+    self._aty_cmp_table2.setFixedHeight(150)
+    cmp_v.addWidget(self._aty_cmp_table2)
+
+    # Third table: "quality" (typical size) within each loop type, plus how
+    # much of the overall Bulk Index each type is responsible for. Count
+    # alone (table above) can't tell "many small loops" apart from "few big
+    # ones" -- this can.
+    lbl_quality = QLabel("Loop quality by type")
+    lbl_quality.setStyleSheet(f"color:{TEXT}; font-size:12px; font-weight:600;")
+    lbl_quality.setTextFormat(Qt.RichText)
+    cmp_v.addWidget(lbl_quality)
+
+    self._aty_cmp_table3 = QTableWidget(0, 7)
+    self._aty_cmp_table3.setHorizontalHeaderLabels([
+        "Trial", "Kurzhocker height med. [µm]", "Kurzhocker height rel. [%]", "Kurzhocker bulk contrib. [%]",
+        "Langwelle height med. [µm]", "Langwelle height rel. [%]", "Langwelle bulk contrib. [%]",
+    ])
+    _aty_set_header_tooltips(self._aty_cmp_table3, _CMP_TABLE3_TOOLTIPS)
+    self._aty_cmp_table3.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    self._aty_cmp_table3.setAlternatingRowColors(True)
+    self._aty_cmp_table3.setStyleSheet(
+        f"QTableWidget{{background:{CARD_BG};alternate-background-color:#f4f6f4;"
+        f"color:{TEXT};gridline-color:#e6e9e6;border:1px solid #dbe2dc;border-radius:3px;}}"
+        f"QHeaderView::section{{background:{CARD_BG};color:#888;border:none;"
+        f"border-bottom:1px solid #dbe2dc;padding:4px 4px;font-size:10.5px;font-weight:600;}}"
+        f"QTableWidget::item{{padding:2px;}}"
+        f"QTableWidget::item:selected{{background:{accent};color:#fff;}}")
+    self._aty_cmp_table3.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    self._aty_cmp_table3.verticalHeader().setDefaultSectionSize(24)
+    self._aty_cmp_table3.verticalHeader().setVisible(False)
+    self._aty_cmp_table3.setFixedHeight(150)
+    cmp_v.addWidget(self._aty_cmp_table3)
+
+    def _chart_card(fig_w, fig_h):
+        """White bordered card (like _card() in screen_nozzle_calculator.py) wrapping a chart."""
+        card = QFrame()
+        card.setStyleSheet(
+            f"QFrame{{background:{CARD_BG};border:1px solid #dbe2dc;border-radius:3px;}}")
+        lay = QVBoxLayout(card); lay.setContentsMargins(6,6,6,6)
+        fig = _Fig(figsize=(fig_w, fig_h), facecolor=CARD_BG)
+        fig.subplots_adjust(left=0.13, right=0.97, top=0.90, bottom=0.18)
+        ax = fig.add_subplot(111)
+        canvas = _FCA(fig)
+        canvas.setStyleSheet(f"background:{CARD_BG};")
+        canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # Expanding + a stretch factor inside a resizable QScrollArea can
+        # collapse the canvas toward its (tiny) minimumSizeHint instead of a
+        # readable size -- pin a floor derived from the figure's own inches
+        # so it can grow but never gets squashed flat.
+        canvas.setMinimumHeight(int(fig_h * 90))
+        lay.addWidget(canvas)
+        return card, ax, canvas
+
+    # ── Signal & core (zoom), one card per selected trial ──────────────────
+    # Uses the "Start [m]" spinbox from the shared control panel below (also
+    # used by Garnspiegel/Fabric/Knitted) as the zoom window's start position,
+    # so there's no duplicate control. Window is fixed at 40mm (matches the
+    # default core-baseline window) -- re-click "Run Comparison" after
+    # changing Start to refresh.
+    lbl_sig = QLabel("Signal &amp; core (40mm zoom)")
+    lbl_sig.setStyleSheet(f"color:{TEXT}; font-size:12px; font-weight:600;")
+    lbl_sig.setTextFormat(Qt.RichText)
+    cmp_v.addWidget(lbl_sig)
+
+    self._aty_cmp_signal_scroll = QScrollArea()
+    self._aty_cmp_signal_scroll.setWidgetResizable(True)
+    self._aty_cmp_signal_scroll.setStyleSheet(
+        f"QScrollArea{{background:{LIGHT_BG};border:none;}}")
+    # This scroll area only exists for the HORIZONTAL case (more trial cards
+    # than fit side by side) -- the outer cmp_outer_scroll already handles
+    # vertical scrolling for the whole tab, so a nested vertical scrollbar
+    # here would just be a second, redundant scroll gesture. Fixed height is
+    # the card's own floor (2.6in canvas -> 234px, see _chart_card's
+    # setMinimumHeight, + 12px card margins = 246px) plus room for the
+    # horizontal scrollbar track so it never needs to grow into a vertical
+    # one; the policy below is the actual guarantee.
+    self._aty_cmp_signal_scroll.setFixedHeight(264)
+    self._aty_cmp_signal_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    sig_inner = QWidget(); sig_inner.setStyleSheet(f"background:{LIGHT_BG};")
+    self._aty_cmp_signal_layout = QHBoxLayout(sig_inner)
+    self._aty_cmp_signal_layout.setContentsMargins(0,0,0,0)
+    self._aty_cmp_signal_layout.setSpacing(8)
+    self._aty_cmp_signal_scroll.setWidget(sig_inner)
+    cmp_v.addWidget(self._aty_cmp_signal_scroll)
+    self._aty_cmp_chart_card = _chart_card  # reused by _aty_render_compare for signal cards
+
+    cmp_charts = QHBoxLayout(); cmp_charts.setSpacing(8)
+    sp_card, self._aty_cmp_spacing_ax, self._aty_cmp_spacing_canvas = _chart_card(4.2, 2.6)
+    cmp_charts.addWidget(sp_card, 1)
+    rh_card, self._aty_cmp_relheight_ax, self._aty_cmp_relheight_canvas = _chart_card(4.2, 2.6)
+    cmp_charts.addWidget(rh_card, 1)
+    # No vertical stretch here: inside a resizable QScrollArea (see
+    # cmp_outer_scroll above) every section should just take its natural
+    # size and let the scrollbar handle overflow, rather than fight over
+    # leftover space -- a stretch factor was fine back when this tab had a
+    # fixed height, but now it just invites the same squash-to-minimum
+    # behaviour the canvas minimumHeight above guards against.
+    cmp_v.addLayout(cmp_charts)
+
+    # Histogram canvases are persistent (re-drawn in place on every "Run
+    # Comparison" click, not rebuilt) -- attach the hover handler exactly
+    # once here; _aty_render_compare only updates the *_hist_data lists the
+    # lookup closures read from, it never re-attaches.
+    self._aty_cmp_spacing_hist_data = []
+    self._aty_cmp_relheight_hist_data = []
+    self._aty_cmp_spacing_hover_state = _aty_attach_hover(
+        self._aty_cmp_spacing_canvas, self._aty_cmp_spacing_ax,
+        _aty_make_hist_lookup(self, "_aty_cmp_spacing_hist_data", "mm"))
+    self._aty_cmp_relheight_hover_state = _aty_attach_hover(
+        self._aty_cmp_relheight_canvas, self._aty_cmp_relheight_ax,
+        _aty_make_hist_lookup(self, "_aty_cmp_relheight_hist_data", "%"))
+
+    cmp_outer_scroll.setWidget(cmp_w)
+    self._aty_sub_tabs.addTab(cmp_outer_scroll, "Compare")
+
     rv.addWidget(self._aty_sub_tabs, 3)
 
     # ── Kennzahlen-Label ──────────────────────────────────────────────────
@@ -334,7 +671,22 @@ def _create_aty_yarnscope_tab_if_needed(self):
     splitter.addWidget(right)
     splitter.setStretchFactor(0,0); splitter.setStretchFactor(1,1)
     splitter.setSizes([200, 900])
-    root.addWidget(splitter, 1)
+
+    # Auf kleinen/niedrig aufgelösten Laptop-Bildschirmen quetschen sich
+    # Trial-Liste, Sub-Tabs (Charts) und Bedienelemente sonst ineinander
+    # (Nutzerfeedback 2026-08-27) - eine QScrollArea um den ganzen Tab-Inhalt
+    # sorgt dafür, dass unterhalb dieser Mindestgrösse gescrollt statt
+    # gequetscht wird (gleiches Muster wie beim "Compare"-Sub-Tab weiter
+    # oben, nur jetzt für den ganzen Haupt-Tab). Die Mindestgrösse muss auf
+    # dem Splitter selbst sitzen (nicht auf der QScrollArea) - sonst hätte
+    # die QScrollArea nichts, das ihre Sichtfläche tatsächlich überschreiten
+    # könnte, und würde nie Scrollbalken zeigen.
+    splitter.setMinimumSize(950, 650)
+    outer_scroll = QScrollArea()
+    outer_scroll.setWidgetResizable(True)
+    outer_scroll.setFrameShape(QFrame.NoFrame)
+    outer_scroll.setWidget(splitter)
+    root.addWidget(outer_scroll, 1)
     self._aty_histograms: dict = {}
     self.tabs.addTab(self.tab_aty_yarnscope, "YarnScope ATY")
 
@@ -547,14 +899,33 @@ def _aty_invalidate_spans(self):
 def _aty_populate_trial_list(self):
     if self._aty_trial_list is None:
         return
+    # Aktuelle Einzel- und Mehrfachauswahl (Trial-ID statt Zeilenindex)
+    # merken, damit ein automatischer Refresh (siehe
+    # _aty_update_auto_refresh_state()) weder die laufende Analyse noch eine
+    # aktive Compare-Auswahl zuruecksetzt.
+    prev_row = self._aty_trial_list.currentRow()
+    prev_tid = None
+    if prev_row >= 0:
+        prev_item = self._aty_trial_list.item(prev_row)
+        if prev_item:
+            prev_tid = (prev_item.data(Qt.UserRole) or {}).get("trial_id")
+    prev_selected_tids = set()
+    for it in self._aty_trial_list.selectedItems():
+        d = it.data(Qt.UserRole) or {}
+        if d.get("trial_id") is not None:
+            prev_selected_tids.add(d.get("trial_id"))
     self._aty_trial_list.blockSignals(True)
     self._aty_trial_list.clear()
     sid = self._series_pk
-    for t in self._trials:
+    all_have_tdms = True
+    restore_row = -1
+    for i, t in enumerate(self._trials):
         tl = {k.lower(): v for k, v in t.items()}
         tid = tl.get("id")
         vno = int(tl.get("versuchsnummer") or 0)
         tdms = _aty_find_tdms(sid, vno) if sid else None
+        if not tdms:
+            all_have_tdms = False
         db_ok = False
         try:
             rows = fetch_all("SELECT 1 FROM tblLaborATYoMat WHERE TrialID=? AND Timestamp IS NOT NULL",(tid,))
@@ -568,7 +939,38 @@ def _aty_populate_trial_list(self):
         if not tdms:
             item.setForeground(QColor("#555"))
         self._aty_trial_list.addItem(item)
+        if tid is not None and tid == prev_tid:
+            restore_row = i
+        if tid in prev_selected_tids:
+            item.setSelected(True)
+    if restore_row >= 0:
+        self._aty_trial_list.setCurrentRow(restore_row)
     self._aty_trial_list.blockSignals(False)
+    # Stoppt den Auto-Refresh-Timer, sobald fuer jeden Trial ein TDMS-File
+    # gefunden wurde - siehe _aty_update_auto_refresh_state().
+    self._aty_all_tdms_present = all_have_tdms
+    _aty_update_auto_refresh_state(self)
+
+
+def _aty_update_auto_refresh_state(self):
+    """Startet/stoppt den ATY-YarnScope-Auto-Refresh-Timer.
+
+    Analog zu dty_yarnscope_tab.py::_ys_update_auto_refresh_state(): laeuft
+    nur, waehrend der ATY-YarnScope-Tab aktiv ist UND mindestens ein Trial
+    noch ohne TDMS-File dasteht.
+    """
+    timer = getattr(self, "_aty_auto_timer", None)
+    if timer is None:
+        return
+    should_run = (
+        self.tab_aty_yarnscope is not None
+        and self.tabs.currentWidget() is self.tab_aty_yarnscope
+        and not getattr(self, "_aty_all_tdms_present", False)
+    )
+    if should_run and not timer.isActive():
+        timer.start()
+    elif not should_run and timer.isActive():
+        timer.stop()
 
 
 # ---------------------------------------------------------------------------
@@ -609,6 +1011,597 @@ def _aty_on_trial_selected(self, row: int):
 
 
 # ---------------------------------------------------------------------------
+# Compare multiple trials (core baseline + loop metrics)
+# ---------------------------------------------------------------------------
+# Independent path, decoupled from the existing single-trial flow above
+# (currentRowChanged / _aty_cache / detect_thick_spots). Uses
+# ui.yarnscope.aty_core_analysis, NOT thick_spot_analysis -- the latter stays
+# unchanged for the existing single-trial flow. Reversible: this block plus
+# the "Compare" sub-tab can be removed without touching the rest of the file.
+
+# Validated categorical palette (see dataviz skill, references/palette.md) --
+# fixed order, do not rotate/reorder.
+_CMP_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
+               "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
+
+
+def _aty_on_compare_selection_changed(self):
+    """Reacts to multi-select in the trial list (used only by the Compare tab)."""
+    if self._aty_trial_list is None:
+        return
+    items = self._aty_trial_list.selectedItems()
+    n = len(items)
+    btn = getattr(self, "_aty_cmp_btn_run", None)
+    lbl = getattr(self, "_aty_cmp_lbl_status", None)
+    if btn is not None:
+        btn.setEnabled(n >= 1)
+    if lbl is not None:
+        if n == 0:
+            lbl.setText("No trials selected (Ctrl/Shift-click for multi-select in the list on the left).")
+        else:
+            names = []
+            for it in items:
+                d = it.data(Qt.UserRole) or {}
+                vno = d.get("vno")
+                names.append(f"V{vno:03d}" if isinstance(vno, int) else "?")
+            lbl.setText(f"{n} trial(s) selected: " + ", ".join(names))
+
+
+def _aty_get_arr_mm_pp(self, trial_id, tdms_path):
+    """Returns (arr_mm, mm_per_point, ellipticity_pct) for a trial.
+    ellipticity_pct is None for a single-axis TDMS (the vast majority) - see
+    dty_tdms_reader.read_aty_signal().
+
+    Reuses the existing single-trial cache (self._aty_cache) if the trial was
+    already loaded there (via "Analysieren"), then self._aty_raw_cache
+    (populated by this function itself on first read for Compare-only
+    trials) -- otherwise reads the TDMS fresh, identical to the conversion
+    in _aty_on_analyze.
+    """
+    entry = self._aty_cache.get(trial_id) if trial_id is not None else None
+    if entry is not None:
+        return entry[2], entry[4], (entry[7] if len(entry) > 7 else None)
+    cached = self._aty_raw_cache.get(trial_id) if trial_id is not None else None
+    if cached is not None:
+        return cached
+    if not tdms_path:
+        return None, None, None
+    arr, ell = read_aty_signal(str(tdms_path))
+    mm_pp = float(read_step_mm_from_tdms(str(tdms_path)) or 0.25)
+    if arr is None or len(arr) == 0:
+        return None, None, None
+    if trial_id is not None:
+        self._aty_raw_cache[trial_id] = (arr, mm_pp, ell)
+    return arr, mm_pp, ell
+
+
+def _aty_on_compare_run(self):
+    """Computes core/loop metrics for all selected trials and renders the
+    table + histograms in the "Compare" sub-tab."""
+    items = self._aty_trial_list.selectedItems() if self._aty_trial_list else []
+    if not items:
+        return
+    self._aty_cmp_btn_run.setEnabled(False)
+    self._aty_cmp_lbl_status.setText("Computing…")
+    QApplication.processEvents()
+
+    zoom_start_mm = float(self._aty_spin_start.value()) * 1000.0
+
+    results = []
+    try:
+        for it in items:
+            d = it.data(Qt.UserRole) or {}
+            tid, vno, tdms = d.get("trial_id"), d.get("vno"), d.get("tdms")
+            if not tdms:
+                continue
+            arr, mm_pp, ell = _aty_get_arr_mm_pp(self, tid, tdms)
+            if arr is None:
+                continue
+            cached = self._aty_core_cache.get(tid) if tid is not None else None
+            if cached is None:
+                cached = _aty_analyze_trial_core(arr, mm_pp, ellipticity_pct=ell)
+                if tid is not None:
+                    self._aty_core_cache[tid] = cached
+            results.append((vno, cached, arr, mm_pp))
+        results.sort(key=lambda r: (r[0] is None, r[0]))
+        _aty_render_compare(self, results, zoom_start_mm)
+        self._aty_cmp_lbl_status.setText(f"Done – {len(results)} trial(s).")
+    except Exception as e:
+        traceback.print_exc()
+        self._aty_cmp_lbl_status.setText(f"Error: {e}")
+    finally:
+        self._aty_cmp_btn_run.setEnabled(True)
+
+
+def _aty_make_hover_artists(ax):
+    """Creates the vline+annotation pair used by _aty_attach_hover.
+
+    Must be called again after every ax.clear() -- clear() destroys any
+    previously created artists, including these. Re-pins the current x/y
+    limits afterwards: axvline(0, ...) would otherwise feed into Matplotlib's
+    autoscale and drag the x-axis down to include x=0, distorting the plot
+    regardless of where the real data actually sits.
+    """
+    # Force autoscale to run now (it's otherwise deferred to the next draw()),
+    # so the limits captured below reflect the already-plotted real data,
+    # not stale pre-clear()/default (0,1) limits.
+    ax.relim()
+    ax.autoscale_view()
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    vline = ax.axvline(0, color="#999", linewidth=0.8, linestyle=":",
+                        visible=False, zorder=10)
+    annot = ax.annotate(
+        "", xy=(0, 0), xytext=(10, 10), textcoords="offset points",
+        bbox=dict(boxstyle="round,pad=0.4", fc="#ffffff", ec="#dbe2dc", lw=0.8),
+        fontsize=7, color="#2b2b2b", visible=False, zorder=11, annotation_clip=False,
+    )
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    return {"vline": vline, "annot": annot}
+
+
+def _aty_attach_hover(canvas, ax, lookup_fn, state=None):
+    """Attaches a crosshair + tooltip to a matplotlib axes on mouse hover.
+
+    lookup_fn(x_data) -> (header_str, [(label, value_str, color), ...]) or
+    None/falsy to hide the tooltip at that x. Returns the artist state dict.
+
+    Call this exactly ONCE per canvas. For axes that get ax.clear()'d and
+    redrawn in place on every render (rather than recreated) -- clear()
+    destroys the vline/annotation artists along with everything else -- have
+    the render function call _aty_make_hover_artists(ax) again after each
+    clear() and overwrite this returned dict's entries in place; the
+    handlers below always read the current values from `state`, so they
+    keep working after a refresh.
+    """
+    if state is None:
+        state = _aty_make_hover_artists(ax)
+
+    def _hide():
+        vline, annot = state.get("vline"), state.get("annot")
+        if vline is None or annot is None:
+            return
+        if vline.get_visible() or annot.get_visible():
+            vline.set_visible(False)
+            annot.set_visible(False)
+            canvas.draw_idle()
+
+    def _on_move(event):
+        vline, annot = state.get("vline"), state.get("annot")
+        if vline is None or annot is None:
+            return
+        if event.inaxes != ax or event.xdata is None:
+            _hide()
+            return
+        result = lookup_fn(event.xdata)
+        if not result:
+            _hide()
+            return
+        header, rows = result
+        vline.set_xdata([event.xdata, event.xdata])
+        vline.set_visible(True)
+        annot.set_text(header + "\n" + "\n".join(f"{lbl}: {val}" for lbl, val, _c in rows))
+        annot.xy = (event.xdata, event.ydata if event.ydata is not None else ax.get_ylim()[0])
+        # Flip the box to the left once we're past ~70% of the x-range so it
+        # doesn't run off the right edge of the canvas.
+        xlim = ax.get_xlim()
+        frac = (event.xdata - xlim[0]) / (xlim[1] - xlim[0]) if xlim[1] != xlim[0] else 0.0
+        annot.set_position((-100, 10) if frac > 0.7 else (10, 10))
+        annot.set_visible(True)
+        canvas.draw_idle()
+
+    canvas.mpl_connect("motion_notify_event", _on_move)
+    canvas.mpl_connect("figure_leave_event", lambda _e: _hide())
+    return state
+
+
+def _aty_make_hist_lookup(self, attr_name, unit):
+    """Returns a lookup_fn for _aty_attach_hover reading self.<attr_name>,
+    a list of (label, color, bin_edges, pct_values) tuples kept up to date
+    by _aty_render_compare on every "Run Comparison" click."""
+    def lookup(x):
+        data = getattr(self, attr_name, None)
+        if not data:
+            return None
+        edges = data[0][2]
+        if x < edges[0] or x > edges[-1]:
+            return None
+        bin_idx = int(np.clip(np.searchsorted(edges, x, side="right") - 1, 0, len(edges) - 2))
+        header = f"{edges[bin_idx]:.1f}–{edges[bin_idx+1]:.1f} {unit}"
+        rows = [(label, f"{vals[bin_idx]:.1f}%", color) for label, color, _e, vals in data]
+        return header, rows
+    return lookup
+
+
+def _aty_set_header_tooltips(table, tooltips):
+    """Sets a hover tooltip on each column header of a QTableWidget.
+
+    tooltips must have exactly as many entries as the table has columns,
+    in the same order.
+    """
+    for col, text in enumerate(tooltips):
+        item = table.horizontalHeaderItem(col)
+        if item is not None:
+            item.setToolTip(text)
+
+
+# Plain-language explanations for the Compare tab's two tables' column
+# headers -- deliberately non-technical (an analogy alongside the definition,
+# not just a formula), per explicit user request.
+_CMP_TABLE1_TOOLTIPS = [
+    "Which measurement (trial) this row is.",
+    "The old, simple way of measuring yarn thickness: just average every single "
+    "measurement point. Problem: the fluffy loops sticking out of the yarn pull "
+    "this average upward, so it doesn't really tell you how thick the smooth "
+    "'core' strand actually is.",
+    "The new, more honest estimate of how thick the actual yarn strand is, with "
+    "the loops ignored. Think of it as: 'if you only looked at the smooth parts "
+    "between the loops, how thick would the yarn be?'",
+    "How much lower the new Core number is compared to the old Global Mean. A "
+    "negative value means the old method was overestimating the yarn's "
+    "thickness because it got fooled by the loops.",
+    "How much that Core thickness itself wobbles up and down along the length "
+    "of the yarn. Low = very consistent thickness everywhere. High = the yarn "
+    "gets noticeably thicker and thinner in different spots.",
+    "How many loops there are per metre of yarn. Higher number = more loops "
+    "packed into the same length -- a denser, fluffier yarn.",
+    "How evenly the loops are spread out. Low = loops appear at fairly regular "
+    "intervals, like beads on a string. High = sometimes several loops bunch up "
+    "together, then a long empty stretch follows.",
+    "Line up every single loop from smallest to tallest and pick the one "
+    "exactly in the middle -- how tall is it, in micrometres (thousandths of a "
+    "millimetre)? This is the 'typical' loop size, not skewed by a few extreme "
+    "ones.",
+    "The same typical loop height, but shown as a percentage of the yarn's own "
+    "Core thickness instead of an absolute number. This makes thin and thick "
+    "yarns comparable: 50% means a typical loop sticks out half as tall as the "
+    "yarn strand itself.",
+]
+
+_CMP_TABLE2_TOOLTIPS = [
+    "Which measurement (trial) this row is.",
+    "One single number for 'how puffy is this yarn overall'. It adds up the "
+    "size (both height and width) of every loop, then compares that total to "
+    "how much material a perfectly smooth, loop-free yarn of the same Core "
+    "thickness would take up. 20% means the loops add roughly a fifth more "
+    "bulk on top of the bare core -- usually the number that best matches "
+    "what you actually see and feel.",
+    "Width-CV% measured directly from the Garnspiegel wrap-test photo for this "
+    "trial (image processing, not the TDMS signal) -- '-' if no matching photo "
+    "(filename 'V<n>.jpg') has been analyzed yet. Correlates well with Bulk "
+    "Index within one photo session (r=0.94 on the TrialSeries 288 validation "
+    "batch), but treat it as a rough proxy across different photo sessions -- "
+    "not yet corrected for session-to-session lighting/distance differences. "
+    "See ui/yarnscope/garnspiegel_analysis.py.",
+    "What percentage of loops are short and steep ('Kurzhocker') rather than "
+    "long and flat ('Langwelle', the next column). Two yarns can have the "
+    "exact same number of loops but look completely different if one is "
+    "mostly short spikes and the other mostly long flat bumps.",
+    "What percentage of loops are long and flat ('Langwelle') instead of "
+    "short and steep ('Kurzhocker', the column before). This and the Bin1 "
+    "column always add up to 100% -- a yarn with a low Kurzhocker share is "
+    "dominated by these long, flat bumps instead.",
+    "How many short, steep 'Kurzhocker' loops there are in every metre of "
+    "yarn -- the count version of the Bin1 % column.",
+    "How many long, flat 'Langwelle' loops there are in every metre of yarn "
+    "-- the count version of the Bin2 % column.",
+    "Does the yarn's thickness drift up and down from one metre to the next? A "
+    "high value means some 1-metre stretches are noticeably thicker than "
+    "others right next to them.",
+    "Same question, but zoomed out to 20-metre stretches -- does the average "
+    "thickness slowly drift over longer sections, e.g. one part of the bobbin "
+    "coming out thicker than another?",
+    "Ignore the typical loop for a moment and look only at the tallest 1% of "
+    "all loops -- the extreme ones. How tall are those, relative to the yarn's "
+    "Core thickness? Good for spotting occasional trouble spots that a median "
+    "would hide.",
+    "The single biggest loop found anywhere in this trial, as a percentage of "
+    "the Core thickness. The absolute worst-case outlier -- a value over 100% "
+    "means that one loop actually stuck out taller than the yarn's own "
+    "thickness.",
+]
+
+_CMP_TABLE3_TOOLTIPS = [
+    "Which measurement (trial) this row is.",
+    "How tall a typical short, steep 'Kurzhocker' loop is, in micrometres. "
+    "Two yarns can have the same NUMBER of Kurzhocker loops (see the Shape & "
+    "bulk table above) yet look totally different if one yarn's are small "
+    "bumps and the other's are big spikes -- this tells them apart.",
+    "The same typical Kurzhocker height, but as a percentage of the yarn's "
+    "own Core thickness, so thin and thick yarns stay comparable.",
+    "How much of the overall Bulk Index (see the Shape & bulk table) comes "
+    "specifically from Kurzhocker loops -- combines 'how many there are' and "
+    "'how big they are' into one number. If this is high but the Kurzhocker % "
+    "count wasn't, it means there are relatively few Kurzhocker loops but "
+    "they're substantial ones.",
+    "How tall a typical long, flat 'Langwelle' loop is, in micrometres -- "
+    "same idea as the Kurzhocker height column, for the other loop type.",
+    "The same typical Langwelle height, but as a percentage of the yarn's own "
+    "Core thickness.",
+    "How much of the overall Bulk Index comes specifically from Langwelle "
+    "loops. Together with the Kurzhocker bulk contribution column, these two "
+    "always add up to the Bulk Index in the Shape & bulk table.",
+]
+
+
+def _aty_clear_layout(layout):
+    """Removes and deletes all widgets from a QLayout (used to rebuild the
+    per-trial signal-card row on every "Run Comparison" click).
+
+    setParent(None) removes the widget from display immediately; deleteLater()
+    alone would leave it visible until the event loop next goes idle.
+    """
+    while layout.count():
+        item = layout.takeAt(0)
+        w = item.widget()
+        if w is not None:
+            w.setParent(None)
+            w.deleteLater()
+
+
+def _aty_render_signal_cards(self, results, zoom_start_mm, window_mm=40.0):
+    """Rebuilds the "Signal & core" card row: one raw-signal + core-baseline
+    + global-mean chart per selected trial, all at the same start position."""
+    _aty_clear_layout(self._aty_cmp_signal_layout)
+    # Minimum width (not fixed) + stretch: cards grow to fill available
+    # space with few trials selected, and the surrounding QScrollArea kicks
+    # in once N cards no longer fit at their minimum width.
+    for i, (vno, r, arr, mm_pp) in enumerate(results):
+        color = _CMP_COLORS[i % len(_CMP_COLORS)]
+        card, ax, canvas = self._aty_cmp_chart_card(3.6, 2.6)
+        card.setMinimumWidth(340)
+        self._aty_cmp_signal_layout.addWidget(card, 1)
+
+        pos_mm, raw_mm, base_mm = _aty_get_zoom_segment(arr, mm_pp, zoom_start_mm, window_mm)
+        if len(pos_mm) == 0:
+            continue
+        global_mean_mm = r["global_mean_um"] / 1000.0
+        label = f"V{vno:03d}" if isinstance(vno, int) else "?"
+
+        ax.clear(); ax.set_facecolor(CARD_BG); ax.figure.patch.set_facecolor(CARD_BG)
+        ax.set_title(f"{label} @ {zoom_start_mm/1000:.2f}m", color=TEXT, fontsize=9, fontweight="bold")
+        ax.set_xlabel("mm", color="#888", fontsize=8)
+        ax.set_ylabel("mm", color="#888", fontsize=8)
+        ax.tick_params(colors="#999", labelsize=7)
+        ax.grid(axis="y", color="#e6e9e6", linewidth=0.8, zorder=0)
+        ax.set_axisbelow(True)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        for side in ("left", "bottom"):
+            ax.spines[side].set_color("#dbe2dc")
+
+        ax.axhline(global_mean_mm, color=_CMP_COLORS[1], linewidth=1.4,
+                   linestyle="--", zorder=2, label="global mean (old)")
+        ax.fill_between(pos_mm, base_mm, raw_mm, color=color, alpha=0.15, zorder=2)
+        ax.plot(pos_mm, raw_mm, color="#52514e", linewidth=1.3, zorder=3, label="raw signal")
+        ax.plot(pos_mm, base_mm, color=color, linewidth=2.0, zorder=4, label="core (new)")
+        leg = ax.legend(fontsize=6, framealpha=0.9, facecolor=CARD_BG,
+                        edgecolor="#dbe2dc", labelcolor=TEXT, loc="upper right")
+        leg.set_zorder(5)
+
+        def _lookup(x, _pos=pos_mm, _raw=raw_mm, _base=base_mm):
+            idx = int(np.clip(np.searchsorted(_pos, x), 0, len(_pos) - 1))
+            if idx > 0 and abs(_pos[idx - 1] - x) < abs(_pos[idx] - x):
+                idx -= 1
+            return (f"{_pos[idx]:.2f} mm",
+                    [("raw", f"{_raw[idx]:.4f} mm", None),
+                     ("core", f"{_base[idx]:.4f} mm", None)])
+
+        _aty_attach_hover(canvas, ax, _lookup)
+        canvas.draw_idle()
+
+
+def _aty_render_radar(self, results):
+    """Draws the 5-axis "yarn fingerprint" radar, one polygon per selected
+    trial, using aty_core_analysis.compute_radar_scores() (fixed 0-100
+    calibration -- see RADAR_BOUNDS there)."""
+    ax = self._aty_cmp_radar_ax
+    ax.clear()
+    ax.figure.patch.set_facecolor(CARD_BG)
+    ax.set_facecolor(CARD_BG)
+
+    n_axes = len(_ATY_RADAR_AXES)
+    angles = [2 * math.pi * i / n_axes for i in range(n_axes)]
+    angles += angles[:1]
+
+    ax.set_theta_offset(math.pi / 2)
+    ax.set_theta_direction(-1)
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels([_ATY_RADAR_LABELS[a] for a in _ATY_RADAR_AXES],
+                        color=TEXT, fontsize=9)
+    ax.set_ylim(0, 100)
+    ax.set_yticks([20, 40, 60, 80, 100])
+    ax.set_yticklabels(["20", "40", "60", "80", "100"], color="#999", fontsize=6)
+    ax.grid(color="#e6e9e6", linewidth=0.8)
+    ax.spines["polar"].set_color("#dbe2dc")
+
+    summary_lines = []
+    for i, (vno, r, _arr, _mm_pp) in enumerate(results):
+        color = _CMP_COLORS[i % len(_CMP_COLORS)]
+        label = f"V{vno:03d}" if isinstance(vno, int) else "?"
+        scores = _aty_compute_radar_scores(r)
+        values = [scores[a] if math.isfinite(scores[a]) else 0.0 for a in _ATY_RADAR_AXES]
+        values += values[:1]
+        ax.plot(angles, values, color=color, linewidth=2, label=label, zorder=3)
+        ax.fill(angles, values, color=color, alpha=0.12, zorder=2)
+        sentence = _aty_describe_yarn(scores)
+        raw_line = " &middot; ".join(
+            f"{_ATY_RADAR_LABELS[a]} "
+            f"{(f'{scores[a]:.1f}' if math.isfinite(scores[a]) else '–')}"
+            for a in _ATY_RADAR_AXES)
+        summary_lines.append(
+            f'<span style="color:{color}; font-weight:700;">{label}</span> &ndash; {sentence}'
+            f'<br><span style="font-size:10px; color:#8a938c;">{raw_line}</span>')
+
+    if results:
+        ax.legend(loc="upper right", bbox_to_anchor=(1.25, 1.1), fontsize=7.5,
+                   framealpha=0.9, facecolor=CARD_BG, edgecolor="#dbe2dc", labelcolor=TEXT)
+
+    self._aty_cmp_radar_canvas.draw_idle()
+    self._aty_cmp_radar_summary.setText("<br><br>".join(summary_lines))
+
+
+def _aty_fetch_garnspiegel_cv(self) -> dict:
+    """{Versuchsnummer: CVPct} for the current TrialSeries, from photo-based
+    Garnspiegel analysis (tblTrialSeriesImageAnalysis, see
+    ui/yarnscope/garnspiegel_analysis.py) - independent of and complementary
+    to the TDMS-based metrics in the rest of this Compare tab. Table may not
+    exist yet on every environment (rolled out gradually), so this quietly
+    returns {} rather than erroring. If a trial has more than one analyzed
+    photo, the most recently analyzed one wins."""
+    sid = getattr(self, "_series_pk", None)
+    if sid is None or not table_exists("tblTrialSeriesImageAnalysis"):
+        return {}
+    try:
+        from ui.yarnscope.garnspiegel_analysis import parse_versuchsnummer
+        rows = fetch_all(
+            "SELECT img.OriginalFilename, a.CVPct, a.Timestamp "
+            "FROM tblTrialSeriesImageAnalysis a "
+            "JOIN tblTrialSeriesImage img ON img.ID = a.TrialSeriesImageID "
+            "WHERE img.TrialSeriesID = ? AND a.Status = 'ok' "
+            "ORDER BY a.Timestamp ASC",
+            [sid],
+        )
+        result = {}
+        for r in rows:
+            vno = parse_versuchsnummer(r.get("OriginalFilename") or "")
+            if vno is not None and r.get("CVPct") is not None:
+                result[vno] = float(r["CVPct"])  # later (more recent) rows overwrite earlier ones
+        return result
+    except Exception:
+        return {}
+
+
+def _aty_render_compare(self, results, zoom_start_mm=0.0):
+    """Fills the comparison table, the signal/core cards, and the two
+    histograms (spacing, relative loop height) for a list of
+    (vno, stats_dict, arr_mm, mm_per_point) tuples."""
+    _aty_render_radar(self, results)
+
+    tbl = self._aty_cmp_table
+    tbl.setRowCount(len(results))
+
+    def _fmt(v, dec=1):
+        try:
+            vv = float(v)
+            return f"{vv:.{dec}f}" if math.isfinite(vv) else "–"
+        except Exception:
+            return "–"
+
+    for row, (vno, r, _arr, _mm_pp) in enumerate(results):
+        vals = [
+            f"V{vno:03d}" if isinstance(vno, int) else "?",
+            _fmt(r["global_mean_um"]), _fmt(r["core_mean_um"]), _fmt(r["delta_pct"]),
+            _fmt(r["core_cv_pct"], 2), _fmt(r["density_per_m"]), _fmt(r["spacing_cv_pct"]),
+            _fmt(r["height_median_um"]), _fmt(r["rel_height_median_pct"]),
+        ]
+        for col, v in enumerate(vals):
+            item = QTableWidgetItem(v)
+            item.setTextAlignment(Qt.AlignCenter)
+            tbl.setItem(row, col, item)
+
+    garnspiegel_cv_by_vno = _aty_fetch_garnspiegel_cv(self)
+
+    tbl2 = self._aty_cmp_table2
+    tbl2.setRowCount(len(results))
+    for row, (vno, r, _arr, _mm_pp) in enumerate(results):
+        cv = garnspiegel_cv_by_vno.get(vno)
+        vals2 = [
+            f"V{vno:03d}" if isinstance(vno, int) else "?",
+            _fmt(r["bulk_index_pct"]), (_fmt(cv) if cv is not None else "–"),
+            _fmt(r["bin1_pct"]), _fmt(r["bin2_pct"]),
+            _fmt(r["bin1_density_per_m"]), _fmt(r["bin2_density_per_m"]),
+            _fmt(r["core_cv_short_pct"]), _fmt(r["core_cv_long_pct"]),
+            _fmt(r["rel_height_p99_pct"]), _fmt(r["rel_height_max_pct"]),
+        ]
+        for col, v in enumerate(vals2):
+            item = QTableWidgetItem(v)
+            item.setTextAlignment(Qt.AlignCenter)
+            tbl2.setItem(row, col, item)
+
+    tbl3 = self._aty_cmp_table3
+    tbl3.setRowCount(len(results))
+    for row, (vno, r, _arr, _mm_pp) in enumerate(results):
+        vals3 = [
+            f"V{vno:03d}" if isinstance(vno, int) else "?",
+            _fmt(r["bin1_height_median_um"]), _fmt(r["bin1_rel_height_median_pct"]), _fmt(r["bin1_bulk_pct"]),
+            _fmt(r["bin2_height_median_um"]), _fmt(r["bin2_rel_height_median_pct"]), _fmt(r["bin2_bulk_pct"]),
+        ]
+        for col, v in enumerate(vals3):
+            item = QTableWidgetItem(v)
+            item.setTextAlignment(Qt.AlignCenter)
+            tbl3.setItem(row, col, item)
+
+    _aty_render_signal_cards(self, results, zoom_start_mm)
+
+    def _style_ax(ax, title, xlabel):
+        ax.clear(); ax.set_facecolor(CARD_BG); ax.figure.patch.set_facecolor(CARD_BG)
+        ax.set_title(title, color=TEXT, fontsize=9, fontweight="bold")
+        ax.set_xlabel(xlabel, color="#888", fontsize=8)
+        ax.set_ylabel("% of loops", color="#888", fontsize=8)
+        ax.tick_params(colors="#999", labelsize=7)
+        ax.grid(axis="y", color="#e6e9e6", linewidth=0.8, zorder=0)
+        ax.set_axisbelow(True)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        for side in ("left", "bottom"):
+            ax.spines[side].set_color("#dbe2dc")
+
+    ax_sp = self._aty_cmp_spacing_ax
+    _style_ax(ax_sp, "Spacing between peaks", "mm")
+    ax_rh = self._aty_cmp_relheight_ax
+    _style_ax(ax_rh, "Height relative to core", "%")
+
+    self._aty_cmp_spacing_hist_data = []
+    self._aty_cmp_relheight_hist_data = []
+    sp_bins = np.arange(0, 16.5, 0.5)
+    rh_bins = np.arange(0, 105, 5)
+
+    for i, (vno, r, _arr, _mm_pp) in enumerate(results):
+        color = _CMP_COLORS[i % len(_CMP_COLORS)]
+        label = f"V{vno:03d}" if isinstance(vno, int) else "?"
+        spacing = r.get("spacing_mm")
+        if spacing is not None and len(spacing):
+            w = np.full(len(spacing), 100.0/len(spacing))
+            counts, _e = np.histogram(spacing, bins=sp_bins, weights=w)
+            self._aty_cmp_spacing_hist_data.append((label, color, sp_bins, counts))
+            ax_sp.hist(spacing, bins=sp_bins, weights=w, histtype="stepfilled",
+                       color=color, alpha=0.18, zorder=2)
+            ax_sp.hist(spacing, bins=sp_bins, weights=w, histtype="step",
+                       color=color, linewidth=1.8, label=label, zorder=3)
+        rel = r.get("rel_height_pct")
+        if rel is not None and len(rel):
+            w = np.full(len(rel), 100.0/len(rel))
+            counts, _e = np.histogram(rel, bins=rh_bins, weights=w)
+            self._aty_cmp_relheight_hist_data.append((label, color, rh_bins, counts))
+            ax_rh.hist(rel, bins=rh_bins, weights=w, histtype="stepfilled",
+                       color=color, alpha=0.18, zorder=2)
+            ax_rh.hist(rel, bins=rh_bins, weights=w, histtype="step",
+                       color=color, linewidth=1.8, label=label, zorder=3)
+
+    if results:
+        for ax in (ax_sp, ax_rh):
+            leg = ax.legend(fontsize=7.5, framealpha=0.9, facecolor=CARD_BG,
+                             edgecolor="#dbe2dc", labelcolor=TEXT)
+            leg.set_zorder(4)
+
+    # ax.clear() earlier destroyed the previous hover artists -- recreate them
+    # now, AFTER the real hist() data is plotted, so _aty_make_hover_artists's
+    # limit re-pin locks in the correct (data-based) range rather than the
+    # empty pre-plot default. Refreshes the state dicts the (already-attached,
+    # see tab construction) hover handlers read from, in place.
+    fresh_sp = _aty_make_hover_artists(ax_sp)
+    self._aty_cmp_spacing_hover_state["vline"] = fresh_sp["vline"]
+    self._aty_cmp_spacing_hover_state["annot"] = fresh_sp["annot"]
+    fresh_rh = _aty_make_hover_artists(ax_rh)
+    self._aty_cmp_relheight_hover_state["vline"] = fresh_rh["vline"]
+    self._aty_cmp_relheight_hover_state["annot"] = fresh_rh["annot"]
+
+    self._aty_cmp_spacing_canvas.draw_idle()
+    self._aty_cmp_relheight_canvas.draw_idle()
+
+
+# ---------------------------------------------------------------------------
 # Analyse – synchron im UI-Thread (wie YarnScope)
 # ---------------------------------------------------------------------------
 
@@ -636,14 +1629,11 @@ def _aty_on_analyze(self):
     QApplication.processEvents()
 
     try:
-        y     = read_first_numeric_channel(str(tdms))
+        arr, ell = read_aty_signal(str(tdms))
         mm_pp = float(read_step_mm_from_tdms(str(tdms)) or 0.25)
-        if y is None or len(y) == 0:
+        if arr is None or len(arr) == 0:
             self._aty_lbl_status.setText("Fehler: Kein Signal.")
             return
-        arr = np.asarray(y, dtype=float)
-        if float(np.median(arr)) >= 10.0:
-            arr = arr / 1000.0
 
         self._aty_lbl_status.setText("Analysiere Dickstellen…")
         QApplication.processEvents()
@@ -663,9 +1653,9 @@ def _aty_on_analyze(self):
         except Exception:
             traceback.print_exc()
             fab_spans = []; knt_spans = []
-        # Cache: (db_vals, hists, arr, spots, mm_pp, fab_spans, knt_spans)
+        # Cache: (db_vals, hists, arr, spots, mm_pp, fab_spans, knt_spans, ellipticity_pct)
         if tid is not None:
-            self._aty_cache[tid] = (db_vals, hists, arr, spots, mm_pp, fab_spans, knt_spans)
+            self._aty_cache[tid] = (db_vals, hists, arr, spots, mm_pp, fab_spans, knt_spans, ell)
 
         self._aty_histograms = hists
         self._aty_btn_save.setEnabled(tid is not None)
@@ -1055,10 +2045,22 @@ def _aty_redraw_histogram(self):
 # ---------------------------------------------------------------------------
 
 def _aty_on_save(self):
+    """Saves to tblLaborATYoMat using the new core-baseline analysis
+    (aty_core_analysis.analyze_trial), NOT the cached thick_spot_analysis
+    result the Verteilung/Garnspiegel/Fabric/Knitted visuals still use --
+    since 2026-08-13 the DB schema only has columns for the new metrics
+    (see CLAUDE.md). Recomputed fresh here rather than cached, since only
+    explicit "In DB speichern" clicks need it (cheap, ~1-2s)."""
     tid  = getattr(self,"_aty_current_trial_id",None)
     tdms = getattr(self,"_aty_current_tdms",None)
     if tid is None or tid not in self._aty_cache: return
-    db_vals = self._aty_cache[tid][0]
+    entry = self._aty_cache[tid]
+    arr, mm_pp = entry[2], entry[4]
+    ell = entry[7] if len(entry) > 7 else None
+    if arr is None:
+        return
+    metrics = _aty_analyze_trial_core(arr, float(mm_pp), ellipticity_pct=ell)
+    db_vals = _aty_to_db_row(metrics)
     try:
         from ui.screen_aty_batch import _save_aty_to_db  # noqa: lazy import OK here
         ok = _save_aty_to_db(tid, db_vals, tdms)
@@ -1079,7 +2081,8 @@ def _aty_open_batch(self):
         except: pass
         mw=self.window()
         if not hasattr(mw,"aty_batch") or mw.aty_batch is None:
-            mw.aty_batch=ATYBatchScreen(on_back_home=lambda: mw.stack.setCurrentWidget(self),locked_series_id=sid,locked_series_name=sname)
+            _sb_kwargs = mw._sidebar_nav_kwargs() if hasattr(mw, "_sidebar_nav_kwargs") else None
+            mw.aty_batch=ATYBatchScreen(on_back_home=lambda: mw.stack.setCurrentWidget(self),locked_series_id=sid,locked_series_name=sname,sidebar_callbacks=_sb_kwargs)
             mw.stack.addWidget(mw.aty_batch)
         else:
             mw.aty_batch._locked_series_id=sid; mw.aty_batch._locked_series_name=sname

@@ -66,7 +66,7 @@ class LoginScreen(QWidget):
         root.setSpacing(0)
 
         # Header ohne Home-Button (kein Zurück vom Login)
-        header = HeaderBar(title="Log In", show_home=False)
+        header = HeaderBar(title="Log In", show_home=False, show_search=False)
         root.addWidget(header)
 
         # --- Zentrierte Card ---

@@ -56,7 +56,7 @@ from db.connection import (
     get_columns_map as _db_get_columns_map,
 )
 from ui.widgets.footer import FooterBar
-from ui.widgets.header import HeaderBar
+from ui.widgets import sidebar_nav
 from ui.widgets.spool_picker import SpoolPickerDialog, spool_label
 from ui.pathutil import resource_path
 from ui.text_normalize import norm as _norm, resolve_field
@@ -124,6 +124,92 @@ def get_columns_info(table: str) -> List[Dict[str, Any]]:
     for lc, real in cmap.items():
         out.append({"lower": lc, "real": real, "data_type": None, "type_name": None})
     return out
+
+
+def get_or_create_shadow_yarn(trial_id: int) -> Optional[int]:
+    """Multimaschinen-Halbfabrikat-Verknüpfung: liefert die YarnID einer
+    "Schatten"-tblYarn-Zeile für den Output eines bestimmten Trials, damit er
+    als Ply-Input für einen Trial auf einer anderen Maschine referenziert
+    werden kann - ohne den bestehenden Ply-Mechanismus (tbltrialsettings.
+    YarnID -> tblYarn) anzufassen und ohne für JEDEN tbltrial einen
+    Katalog-Eintrag anzulegen (nur lazy, beim tatsächlichen Auswählen).
+
+    Dedup: eine zweite Anfrage für denselben trial_id gibt dieselbe YarnID
+    zurück (SourceTrialID ist der eindeutige Schlüssel), statt einen neuen
+    Eintrag anzulegen. Material/Titer/Filamentzahl werden vom Eingangsgarn
+    des Quell-Trials übernommen, der gemessene Titer des Quell-Trials
+    (tbllabortiter, falls vorhanden) überschreibt den kopierten Wert - beides
+    nur für Anzeige/Reports relevant, die Ply-Speicherlogik selbst braucht
+    nur eine gültige YarnID.
+    """
+    existing = fetch_all("SELECT ID FROM tblYarn WHERE SourceTrialID = ?", [trial_id])
+    if existing:
+        return int(existing[0]["ID"])
+
+    trial_rows = fetch_all(
+        "SELECT t.Versuchsnummer, ts.SeriesName "
+        "FROM tbltrial t JOIN tbltrialseries ts ON ts.ID = t.TrialSeriesID "
+        "WHERE t.ID = ?",
+        [trial_id],
+    )
+    if not trial_rows:
+        return None
+    vno = trial_rows[0].get("Versuchsnummer")
+    series_name = trial_rows[0].get("SeriesName") or ""
+    name = f"Semi-finished V{vno} ({series_name})".strip()
+    # tblYarn.Name ist varchar(45) - lange SeriesNames muessen gekuerzt
+    # werden, sonst bricht der INSERT ("Data too long for column 'Name'").
+    _NAME_MAXLEN = 45
+    if len(name) > _NAME_MAXLEN:
+        prefix = f"Semi-finished V{vno} ("
+        suffix = ")"
+        budget = _NAME_MAXLEN - len(prefix) - len(suffix) - 1  # -1 fuer "…"
+        name = f"{prefix}{series_name[:max(budget, 0)]}…{suffix}"
+
+    # Eingangsgarn des Quell-Trials (erste/Haupt-Ply) als Vorlage für
+    # Material/Garntyp/Filamentzahl/dpf.
+    input_yarn_rows = fetch_all(
+        "SELECT y.Material, y.Garntyp, y.NumberOfFilaments, y.dpf, y.Titer, y.Endtiter "
+        "FROM tbltrialsettings ts2 JOIN tblYarn y ON y.ID = ts2.YarnID "
+        "WHERE ts2.TrialID = ? ORDER BY ts2.ID LIMIT 1",
+        [trial_id],
+    )
+    template = input_yarn_rows[0] if input_yarn_rows else {}
+
+    # Gemessener Titer des Quell-Trials (gleiches AVG-über-Plies-Muster wie
+    # report_queries._fetch_y_values) überschreibt den kopierten Titer, falls vorhanden.
+    titer_rows = fetch_all(
+        "SELECT AVG(Titer) AS val FROM tbllabortiter "
+        "WHERE TrialID = ? AND Titer IS NOT NULL AND Titer <> 0",
+        [trial_id],
+    )
+    measured_titer = titer_rows[0]["val"] if titer_rows and titer_rows[0]["val"] is not None else None
+    titer = int(round(float(measured_titer))) if measured_titer is not None else template.get("Titer")
+
+    with get_connection() as cn:
+        cur = cn.cursor()
+        cur.execute(
+            "INSERT INTO tblYarn "
+            "(Name, Material, Garntyp, NumberOfFilaments, dpf, Titer, Endtiter, GlobalID, SourceTrialID) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            [
+                name,
+                template.get("Material"),
+                template.get("Garntyp"),
+                template.get("NumberOfFilaments"),
+                template.get("dpf"),
+                titer,
+                template.get("Endtiter"),
+                new_global_id(),
+                trial_id,
+            ],
+        )
+        new_id = cur.lastrowid
+        try:
+            cn.commit()
+        except Exception:
+            pass
+    return int(new_id) if new_id else None
 
 
 # -->-->-->-->-->-->-->-->-->- UI Helpers -->-->-->-->-->-->-->-->-->-
@@ -210,13 +296,36 @@ class ReadOnlyTable(QTableWidget):
     """Tabelle für Trial-Einträge mit Delete-Taste-Support.
 
     Zeilen können mit Delete-Taste markiert und beim Speichern entfernt werden.
-    """
-    def __init__(self, rows: int, cols: int, on_delete_row=None, parent: Optional[QWidget] = None):
+
+    `on_row_moved(src_row, dst_row)` (optional, 2026-08-28 ergänzt auf
+    Nutzerwunsch: "kann ich die einzelnen düsen/druck listeneinträge mittels
+    buttons hoch resp. runter machen. kannst du das auch zusätzlich via
+    drag&drop realisieren") aktiviert Drag&Drop-Umsortierung per Maus,
+    zusätzlich zu (nicht statt) bestehenden Up/Down-Buttons - siehe
+    CreateExperimentScreen.tblJets. Bewegt dabei bewusst nur EINE Zeile pro
+    Drag (die beim Drag-Start aktuelle Zeile, siehe startDrag()), analog zu
+    den Up/Down-Buttons, die ebenfalls nur `currentRow()` bewegen und nicht
+    die ganze Mehrfachauswahl (tblJets erlaubt ExtendedSelection nur fürs
+    "Markierte kopieren"-Feature, nicht fürs Verschieben)."""
+    def __init__(self, rows: int, cols: int, on_delete_row=None, on_row_moved=None,
+                 parent: Optional[QWidget] = None):
         super().__init__(rows, cols, parent)
         self.on_delete_row = on_delete_row
+        self._on_row_moved = on_row_moved
+        self._drag_src_row = -1
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
+        if callable(on_row_moved):
+            self.setDragEnabled(True)
+            self.setAcceptDrops(True)
+            self.setDropIndicatorShown(True)
+            self.setDragDropMode(QAbstractItemView.InternalMove)
+            # Ohne das liefert dropIndicatorPosition() teils OnItem (Zell-
+            # Overwrite-Semantik) statt Above-/BelowItem - für eine reine
+            # Zeilen-Umsortierung wollen wir ausschliesslich "vor"/"nach"
+            # dieser Zeile, nie "auf" ihr.
+            self.setDragDropOverwriteMode(False)
 
     def keyPressEvent(self, event: QKeyEvent):
         """Delete-Taste markiert die selektierte Zeile zum Löschen."""
@@ -233,6 +342,45 @@ class ReadOnlyTable(QTableWidget):
                 event.accept()
                 return
         super().keyPressEvent(event)
+
+    def startDrag(self, supported_actions):
+        """Merkt sich die Zeile, auf der der Drag tatsächlich begonnen hat -
+        `currentRow()` allein wäre nach dem Drop nicht mehr zuverlässig
+        rekonstruierbar (siehe dropEvent())."""
+        self._drag_src_row = self.currentRow()
+        super().startDrag(supported_actions)
+
+    def dropEvent(self, event):
+        """Eigene Zeilen-Umsortierung statt Qt's Default-Itemverschiebung
+        (die würde nur die QTableWidgetItems bewegen, nicht die externe
+        Python-Datenliste eines Aufrufers wie CreateExperimentScreen._jets_data
+        - daher hier bewusst KEIN super().dropEvent(), sondern volle
+        Delegation an on_row_moved(), das Tabelle UND Datenliste synchron
+        hält, siehe CreateExperimentScreen._move_jet_row())."""
+        if not callable(self._on_row_moved) or event.source() is not self:
+            super().dropEvent(event)
+            return
+        src = self._drag_src_row
+        self._drag_src_row = -1
+        if src < 0:
+            event.ignore()
+            return
+        pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        target_row = self.rowAt(pos.y())
+        if target_row < 0:
+            insert_before = self.rowCount()
+        elif self.dropIndicatorPosition() == QAbstractItemView.BelowItem:
+            insert_before = target_row + 1
+        else:
+            insert_before = target_row
+        # Standard-Umsortierungs-Arithmetik: `insert_before` bezieht sich auf
+        # die Reihenfolge VOR dem Entfernen von `src` - liegt das Ziel dahinter,
+        # rutscht der Index durchs Entfernen selbst um 1 nach vorne.
+        dst = insert_before - 1 if insert_before > src else insert_before
+        dst = max(0, min(self.rowCount() - 1, dst))
+        event.acceptProposedAction()
+        if dst != src:
+            self._on_row_moved(src, dst)
 
 
 from PySide6.QtWidgets import QStyledItemDelegate
@@ -275,6 +423,7 @@ class CreateExperimentScreen(QWidget):
         parent: Optional[QWidget] = None,
         mode: str = "create",
         existing_experiment_id: Optional[int] = None,
+        sidebar_callbacks: Optional[dict] = None,
     ):
         super().__init__(parent)
         self.on_back_home = on_back_home
@@ -282,6 +431,8 @@ class CreateExperimentScreen(QWidget):
         self.on_back_experiment = on_back_experiment
         self.mode = (mode or "create").lower()
         self.existing_experiment_id = existing_experiment_id
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         # State
         # [Year, PG, OT, Num, MachineID, MachineName]
@@ -348,16 +499,33 @@ class CreateExperimentScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self.header = HeaderBar(
-            title="Create / Add Trial Series / Add Trials", show_home=True)
-        self.header.connect_home(self._back_home_clicked)
-        self.header.connect_back(self._back_experiment_clicked)
-        root.addWidget(self.header)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring). Der frühere
+        # Header-Back-Button (nur im addtrials-Modus sichtbar, zurück zum
+        # ShowExperimentScreen, von dem aus "Add Trials" geöffnet wurde) lebt
+        # jetzt als kontextueller Back-Chip in der Tools-Leiste weiter -
+        # gleiches Muster wie ShowExperimentScreen.btn_back_chip, siehe
+        # _apply_mode_addtrials(). Der separate kurze Header-"Titel" pro Modus
+        # (z.B. "Create Experiment") entfällt ersatzlos - lbl_small_title
+        # trägt bereits einen ausführlicheren, modusabhängigen Untertitel.
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 # Tools
         tools = QFrame()
         tl = QHBoxLayout(tools)
         tl.setContentsMargins(24, 12, 24, 0)
         tl.setSpacing(8)
+
+        self.btn_back_chip = QPushButton("← Back to Experiment")
+        self.btn_back_chip.setCursor(Qt.PointingHandCursor)
+        self.btn_back_chip.setStyleSheet(
+            "QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
+            "border-radius:4px;padding:5px 10px;font-weight:600;}"
+            "QPushButton:hover{background:#e8f5e9;}"
+        )
+        self.btn_back_chip.clicked.connect(self._back_experiment_clicked)
+        self.btn_back_chip.setVisible(False)
+        tl.addWidget(self.btn_back_chip)
+
         self.lbl_small_title = QLabel("")
         self.lbl_small_title.setStyleSheet(
             "padding: 6px 10px; background: #3f3f3f; color: white; font-weight: 600;")
@@ -406,7 +574,7 @@ class CreateExperimentScreen(QWidget):
         tl.addStretch(1)
         tl.addWidget(self.btn_experiment_request)
         tl.addWidget(self.butSave)
-        root.addWidget(tools)
+        content_layout.addWidget(tools)
 
         # Tabs
         self.tabs = QTabWidget()
@@ -418,7 +586,7 @@ class CreateExperimentScreen(QWidget):
             QTabBar::tab:hover { background: #e9e9e9; }
             QTabBar::tab:selected { background: #000000; color: #39a650; }
         """.replace("#39a650", get_accent()))
-        root.addWidget(self.tabs, 1)
+        content_layout.addWidget(self.tabs, 1)
 
         # --> Tab: General -->
         self.tab_general = QFrame()
@@ -541,8 +709,17 @@ class CreateExperimentScreen(QWidget):
         """)
         self.butAddMaterial = QPushButton("+")
         self.butAddMaterial.setEnabled(False)
+        # Multimaschinen-Halbfabrikat: statt eines Katalog-Garns den Output
+        # eines bestehenden Trials (ggf. auf einer anderen Maschine) als Ply
+        # verwenden - siehe get_or_create_shadow_yarn().
+        self.butAddTrialPly = QPushButton("+ Trial")
+        self.butAddTrialPly.setToolTip(
+            "Use the output of an existing trial (e.g. from another machine) as this ply's input, "
+            "instead of picking a catalog yarn."
+        )
         row_mat.addWidget(self.treeMaterial, 1)
         row_mat.addWidget(self.butAddMaterial, 0)
+        row_mat.addWidget(self.butAddTrialPly, 0)
         form_m.addRow("Material", row_mat)
 
         # Number of ends + YarnUse nebeneinander
@@ -710,7 +887,8 @@ class CreateExperimentScreen(QWidget):
         grid_jet.addWidget(QLabel("Air Pressure (bar)"), 4, 0)
         grid_jet.addWidget(self.txtPressure, 4, 1, 1, 2)
 
-        self.tblJets = ReadOnlyTable(0, 5, on_delete_row=self._delete_jet_row)
+        self.tblJets = ReadOnlyTable(0, 5, on_delete_row=self._delete_jet_row,
+                                     on_row_moved=self._on_jet_row_dragged)
         self.tblJets.setHorizontalHeaderLabels(
             ["Housing", "Jet", "Number of Plates", "Air Pressure (bar)", "Jet Plate(s)"])
         self.tblJets.verticalHeader().setVisible(False)
@@ -849,6 +1027,24 @@ class CreateExperimentScreen(QWidget):
 
         # Bottom bar
         root.addWidget(FooterBar())
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
     # -->-->-->- Helpers -->-->-->-
     def _keep_only_tabs(self, titles: set[str]):
@@ -1434,26 +1630,35 @@ class CreateExperimentScreen(QWidget):
         ytable = "tblYarn"
         if not table_exists(ytable):
             self.butAddMaterial.setEnabled(False)
+            self.butAddTrialPly.setEnabled(False)
             return
 
         ycmap = get_columns_map(ytable)
         y_id = resolve_field(["ID"], ycmap) or "ID"
         y_name = resolve_field(["Name", "Bezeichnung", "YarnName", "Material"], ycmap)
         y_group = resolve_field(["YarnGroupID", "YarnGroup", "GroupID", "Group"], ycmap)
+        # Automatisch angelegte Halbfabrikat-"Schatten"-Garne (siehe
+        # get_or_create_shadow_yarn()) sollen hier nicht auftauchen - die
+        # werden gezielt über den "+ Trial"-Button ausgewählt, nicht über den
+        # normalen Katalog-Baum. Spalte optional (resolve_field), falls diese
+        # Umgebung die Migration noch nicht hat.
+        y_src_trial = resolve_field(["SourceTrialID"], ycmap)
+        _where_no_shadow = f" WHERE [{y_src_trial}] IS NULL" if y_src_trial else ""
 
         if not y_name:
             self.butAddMaterial.setEnabled(False)
+            self.butAddTrialPly.setEnabled(False)
             return
 
         if y_group:
             yrows = fetch_all(
                 f"SELECT [{y_id}] AS YarnID, [{y_name}] AS YarnName, [{y_group}] AS GID "
-                f"FROM {ytable} ORDER BY [{y_group}] ASC, [{y_name}] ASC"
+                f"FROM {ytable}{_where_no_shadow} ORDER BY [{y_group}] ASC, [{y_name}] ASC"
             )
         else:
             yrows = fetch_all(
                 f"SELECT [{y_id}] AS YarnID, [{y_name}] AS YarnName, NULL AS GID "
-                f"FROM {ytable} ORDER BY [{y_name}] ASC"
+                f"FROM {ytable}{_where_no_shadow} ORDER BY [{y_name}] ASC"
             )
 
         yarns_by_gid: dict[Any, list[dict]] = {}
@@ -1526,7 +1731,7 @@ class CreateExperimentScreen(QWidget):
                 self.treeMaterial.topLevelItem(i).setExpanded(True)
 
         self.treeMaterial.clearSelection()
-        self.butAddMaterial.setEnabled(False)
+        self._update_add_material_enabled()
 
     def _load_jets(self):
         """Jet-Auswahl als einklappbarer Tree nach JetGroup.
@@ -1839,11 +2044,20 @@ class CreateExperimentScreen(QWidget):
             if idx >= 0:
                 self.cmbHousing.setCurrentIndex(idx)
         self.cmbHousing.blockSignals(False)
-        try:
-            self.cmbHousing.currentIndexChanged.disconnect()
-        except Exception:
-            pass
+        # _load_housing() kann mehrfach laufen (z.B. nach Jet-Add) und
+        # verbindet cmbHousing dabei jedes Mal neu - ein unbedingtes
+        # disconnect() (ohne verbundenen Slot) läuft zwar dank try/except
+        # nie auf einen Fehler, aber Qt loggt dabei trotzdem eine
+        # RuntimeWarning auf stderr (unabhängig vom except) - daher hier
+        # stattdessen ein Flag, das den ersten (verbindungslosen) Aufruf
+        # ganz vermeidet statt nur dessen Exception abzufangen.
+        if getattr(self, "_housing_signal_connected", False):
+            try:
+                self.cmbHousing.currentIndexChanged.disconnect(self._on_housing_changed)
+            except Exception:
+                pass
         self.cmbHousing.currentIndexChanged.connect(self._on_housing_changed)
+        self._housing_signal_connected = True
 
     def _on_housing_changed(self):
         self._on_jet_inputs_changed()
@@ -2055,6 +2269,7 @@ class CreateExperimentScreen(QWidget):
         self.txtSeriesName.textChanged.connect(self._on_series_name_changed)
         self.treeMaterial.itemSelectionChanged.connect(self._update_add_material_enabled)
         self.butAddMaterial.clicked.connect(self._add_material)
+        self.butAddTrialPly.clicked.connect(self._add_trial_ply)
 
         # Jet
         self.treeJet.itemSelectionChanged.connect(self._on_jet_inputs_changed)
@@ -2091,7 +2306,7 @@ class CreateExperimentScreen(QWidget):
         self._hide_row(self._lbl_ser, self.cmbExistingSeries, True)
 
         self.cmbMachine.setEnabled(True)
-        self.header.set_title("Create Experiment")
+        self.btn_back_chip.setVisible(False)
         self.lbl_small_title.setText("New Experiment – fill all tabs")
         self.tabs.setTabEnabled(1, True)   # Material
 
@@ -2109,7 +2324,7 @@ class CreateExperimentScreen(QWidget):
         self._hide_row(self._lbl_ser, self.cmbExistingSeries, True)
 
         self.cmbMachine.setEnabled(True)
-        self.header.set_title("Add Trial Series to Experiment")
+        self.btn_back_chip.setVisible(False)
         self.lbl_small_title.setText(
             "Add Trial Series – choose existing experiment")
         self.tabs.setTabEnabled(1, True)   # Material benötigt
@@ -2156,13 +2371,12 @@ class CreateExperimentScreen(QWidget):
         except Exception:
             pass
 
-        self.header.set_title("Add Trials to Trial Series")
         self.lbl_small_title.setText(
             "Select experiment & series, then configure trials")
 
-        # Im addtrials-Modus: Back → zurück zum Experiment, kein Home
-        self.header.set_home_visible(False)
-        self.header.set_back_visible(True)
+        # Im addtrials-Modus: Back-Chip zeigt zurück zum Experiment (Ersatz
+        # für den früheren Header-Back-Button, siehe _build_ui()-Docstring).
+        self.btn_back_chip.setVisible(callable(self.on_back_experiment))
 
         # Material leer + editierbar; Lab Machines frei
         self._set_material_readonly(False)
@@ -2846,11 +3060,8 @@ class CreateExperimentScreen(QWidget):
         # Tabs: nur General + Lab Machines sichtbar lassen (spezifisch für addlabmachines)
         self._keep_only_tabs({"General", "Lab Machines"})
 
-        # Titel/Untertitel beibehalten (addlabmachines-spezifisch)
-        try:
-            self.header.set_title("Add Lab Machines to Trials")
-        except Exception:
-            pass
+        # Untertitel beibehalten (addlabmachines-spezifisch)
+        self.btn_back_chip.setVisible(False)
         try:
             self.lbl_small_title.setText(
                 "Select experiment & series, then choose trials below")
@@ -2984,6 +3195,8 @@ class CreateExperimentScreen(QWidget):
         y = self._get_selected_yarn_from_tree()
         at_max = self.tblYarns.rowCount() >= self.MAX_PLIES
         self.butAddMaterial.setEnabled(y is not None and not at_max)
+        if hasattr(self, "butAddTrialPly"):
+            self.butAddTrialPly.setEnabled(not at_max)
 
     def _on_yarn_delete_row(self, row: int) -> bool:
         """Callback von ReadOnlyTable wenn eine Zeile gelöscht wird.
@@ -3013,15 +3226,22 @@ class CreateExperimentScreen(QWidget):
                 self.tblYarns.setItem(i, 1, QTableWidgetItem(m["Ply"]))
         self._update_add_material_enabled()
 
-    def _add_material(self):
-        sel = self._get_selected_yarn_from_tree()
+    def _add_material(self, override_sel: Optional[tuple[Any, str]] = None, skip_spool: bool = False):
+        """override_sel: (yarn_id, yarn_name) statt der Tree-Auswahl - genutzt
+        von _add_trial_ply(), damit die komplette restliche Logik hier
+        (Konflikt-Checks, Ply-Nummerierung, Spool-Picker, MAX_PLIES) für
+        Halbfabrikat-Plies unverändert mitgilt, statt sie zu duplizieren.
+        skip_spool: Halbfabrikat-"Schatten"-Garne (siehe _add_trial_ply())
+        haben keine physische Spule - der Spool-Picker macht fuer sie keinen
+        Sinn und wird deshalb uebersprungen."""
+        sel = override_sel or self._get_selected_yarn_from_tree()
         if not sel:
             return
         yarn_id, yarn_name = sel
         if self.tblYarns.rowCount() >= self.MAX_PLIES:
             QMessageBox.information(
                 self, "Material",
-                f"Maximal {self.MAX_PLIES} Garne pro TrialSeries erlaubt.")
+                f"Maximum of {self.MAX_PLIES} yarns per trial series allowed.")
             return
         # Konsistenzprüfung gegen bestehende Series (addtrials / addlabmachines)
         # Hinweis: _series_pk/_edit_series_pk gibt es in dieser Klasse nicht -
@@ -3057,6 +3277,19 @@ class CreateExperimentScreen(QWidget):
                     existing_ply_for_yarn = next(iter(plys))
             except Exception:
                 existing_ply_for_yarn = None
+
+        # Gleiches Prinzip fuer den gerade in Bearbeitung befindlichen (noch
+        # nicht gespeicherten) Trial selbst: wird dasselbe Garn ein zweites
+        # Mal ueber einen separaten "Add"-Klick hinzugefuegt (statt ueber
+        # n_ends unten in einem Rutsch), soll es dieselbe Ply-Nummer bekommen
+        # statt eine neue - sonst haette z.B. TrialSeries 385 Garn A viermal
+        # als Ply 1/2/3/4 im selben Trial bekommen (2026-08-20, Nutzer-Bugreport
+        # + Feature-Wunsch: "dasselbe Garn im selben Versuch = dieselbe Ply").
+        if existing_ply_for_yarn is None:
+            for m in self._materials_data:
+                if int(m.get("YarnID") or -1) == int(yarn_id):
+                    existing_ply_for_yarn = m.get("Ply")
+                    break
 
         ply_offset = getattr(self, "_ply_offset", 0)
         # Gleiche Formel wie beim spaeteren Speichern (Zeile mit ply_offset weiter
@@ -3110,13 +3343,15 @@ class CreateExperimentScreen(QWidget):
         # Physische Spule zuordnen (optional) - nur Spulen desselben Garns,
         # die am Lager sind, sind waehlbar. Kein Verbrauch/keine Abbuchung
         # hier, rein informative Verknuepfung fuer Rueckverfolgbarkeit.
+        # Halbfabrikat-Schatten-Garne haben keine physische Spule -> skip_spool.
         spool_id = None
-        try:
-            dlg = SpoolPickerDialog(yarn_id, yarn_name, current_spool_id=None, parent=self)
-            if dlg.exec() == QDialog.Accepted:
-                spool_id = dlg.selected_spool_id()
-        except Exception:
-            spool_id = None
+        if not skip_spool:
+            try:
+                dlg = SpoolPickerDialog(yarn_id, yarn_name, current_spool_id=None, parent=self)
+                if dlg.exec() == QDialog.Accepted:
+                    spool_id = dlg.selected_spool_id()
+            except Exception:
+                spool_id = None
 
         spool_display = "—"
         if spool_id is not None:
@@ -3130,15 +3365,15 @@ class CreateExperimentScreen(QWidget):
                 spool_display = f"#{spool_id}"
 
         for end_idx in range(n_ends):
-            local_idx = self.tblYarns.rowCount()
-            if end_idx == 0:
-                # Erste (bzw. einzige) Zeile: der oben geprüfte/konsistente Wert
-                # (uebernommene Ply bei gleichem Garn, sonst Offset-basiert).
-                this_ply_label = ply_label
-            else:
-                # Weitere Enden desselben Garns (mehrfaedig) -> fortlaufend
-                # nach dem Offset durchnummerieren.
-                this_ply_label = f"Ply {ply_offset + local_idx + 1}"
+            # Alle Enden desselben Garns (mehrfaedig) teilen sich dieselbe
+            # Ply-Nummer - vorher bekam nur die erste Zeile den geprüften/
+            # konsistenten ply_label, jedes weitere Ende wurde separat
+            # durchnummeriert (Ply 2, Ply 3, ...), obwohl es dasselbe Garn
+            # ist. Das kollidierte mit der Serien-weiten "gleiches Garn =
+            # gleiche Ply"-Regel, sobald ein anderer Trial dieselbe Nummer
+            # schon fuer ein anderes Garn belegt hatte (siehe Yarn-Conflict-
+            # Fehler, TrialSeries 385).
+            this_ply_label = ply_label
             rr = self.tblYarns.rowCount()
             self.tblYarns.insertRow(rr)
             self.tblYarns.setItem(rr, 0, QTableWidgetItem(yarn_name))
@@ -3156,6 +3391,29 @@ class CreateExperimentScreen(QWidget):
         self._update_add_material_enabled()
         self._check_material()
         self._check_safe()
+
+    def _add_trial_ply(self):
+        """Handler für butAddTrialPly: Halbfabrikat-Output eines bestehenden
+        Trials (ggf. andere Maschine) als Ply verwenden, statt eines
+        Katalog-Garns - siehe get_or_create_shadow_yarn()."""
+        from ui.widgets.trial_picker import TrialPickerDialog
+        dlg = TrialPickerDialog(parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        trial_id = dlg.selected_trial_id()
+        if trial_id is None:
+            return
+        try:
+            yarn_id = get_or_create_shadow_yarn(trial_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Trial Ply", f"Could not create yarn entry for this trial:\n{e}")
+            return
+        if yarn_id is None:
+            QMessageBox.warning(self, "Trial Ply", "Could not find this trial.")
+            return
+        rows = fetch_all("SELECT Name FROM tblYarn WHERE ID = ?", [yarn_id])
+        yarn_name = rows[0]["Name"] if rows else f"Yarn #{yarn_id}"
+        self._add_material(override_sel=(yarn_id, yarn_name), skip_spool=True)
 
     def _get_selected_jet_from_tree(self) -> Optional[tuple[Any, str]]:
         items = self.treeJet.selectedItems() if hasattr(self, "treeJet") else []
@@ -3323,7 +3581,7 @@ class CreateExperimentScreen(QWidget):
         row = self.tblJets.currentRow()
         if row <= 0 or row >= self.tblJets.rowCount():
             return
-        self._swap_jet_rows(row, row - 1)
+        self._move_jet_row(row, row - 1)
         self.tblJets.setCurrentCell(row - 1, self.tblJets.currentColumn())
 
     def _move_jet_row_down(self):
@@ -3331,18 +3589,40 @@ class CreateExperimentScreen(QWidget):
         row = self.tblJets.currentRow()
         if row < 0 or row >= self.tblJets.rowCount() - 1:
             return
-        self._swap_jet_rows(row, row + 1)
+        self._move_jet_row(row, row + 1)
         self.tblJets.setCurrentCell(row + 1, self.tblJets.currentColumn())
 
-    def _swap_jet_rows(self, a: int, b: int):
-        """Tauscht Zeilen a und b in tblJets und _jets_data."""
+    def _on_jet_row_dragged(self, src: int, dst: int):
+        """Drag&Drop-Gegenstück zu den Up/Down-Buttons (siehe
+        ReadOnlyTable.on_row_moved) - dieselbe _move_jet_row()-Logik,
+        nur mit beliebiger statt fester Distanz von 1."""
+        self._move_jet_row(src, dst)
+        self.tblJets.setCurrentCell(dst, self.tblJets.currentColumn())
+
+    def _move_jet_row(self, src: int, dst: int):
+        """Verschiebt Zeile `src` an Position `dst` in tblJets UND
+        _jets_data synchron (Generalisierung des früheren _swap_jet_rows(),
+        das nur benachbarte Zeilen tauschen konnte - gemeinsam genutzt von
+        den Up/Down-Buttons [Distanz 1] und der Drag&Drop-Umsortierung
+        [beliebige Distanz], 2026-08-28)."""
+        n = self.tblJets.rowCount()
+        if src == dst or not (0 <= src < n) or not (0 <= dst < n):
+            return
         self.tblJets.blockSignals(True)
-        for col in range(self.tblJets.columnCount()):
-            item_a = self.tblJets.takeItem(a, col)
-            item_b = self.tblJets.takeItem(b, col)
-            self.tblJets.setItem(a, col, item_b)
-            self.tblJets.setItem(b, col, item_a)
-        self._jets_data[a], self._jets_data[b] = self._jets_data[b], self._jets_data[a]
+        ncols = self.tblJets.columnCount()
+        # Zeile src zwischenspeichern, dann alle dazwischenliegenden Zeilen
+        # um eine Position in Richtung src verschieben (wie beim Verschieben
+        # einer Karte in einem Stapel) - danach src-Inhalt bei dst einsetzen.
+        texts = [self.tblJets.item(src, c).text() if self.tblJets.item(src, c) else ""
+                 for c in range(ncols)]
+        data = self._jets_data.pop(src)
+        self._jets_data.insert(dst, data)
+        step = 1 if dst > src else -1
+        for r in range(src, dst, step):
+            for c in range(ncols):
+                self.tblJets.setItem(r, c, self.tblJets.takeItem(r + step, c))
+        for c in range(ncols):
+            self.tblJets.setItem(dst, c, QTableWidgetItem(texts[c]))
         self.tblJets.blockSignals(False)
 
     # ---> Ende Jets list helpers <---
@@ -3673,6 +3953,42 @@ class CreateExperimentScreen(QWidget):
                 return True
         return False
 
+    def _addlabmachines_value_needed(self, table: str, add_src: str, value: float) -> bool:
+        """In addlabmachines mode: True if at least one currently checked
+        trial does not yet have this (table, value) combination in the DB.
+        Used to suppress the automatic Itemat 0.0-baseline from the pending
+        list when every checked trial already has it - _lab_entry_exists()
+        alone can't see that, it only knows about entries added in this UI
+        session, not what's already saved for the selected (existing)
+        trials. In create/addtrials mode trials don't exist yet, so this
+        is always True there (nothing to check against)."""
+        if self.mode != "addlabmachines" or not table or not table_exists(table):
+            return True
+        trial_ids = self._get_checked_trial_ids()
+        if not trial_ids:
+            return True
+        try:
+            lcols = get_columns_map(table)
+            col_trial = resolve_field(["TrialID"], lcols) or "TrialID"
+            add_real = resolve_field([add_src], lcols) if add_src else None
+            placeholders = ",".join(["?"] * len(trial_ids))
+            if add_real:
+                rows = fetch_all(
+                    f"SELECT DISTINCT [{col_trial}] AS TrialID FROM [{table}] "
+                    f"WHERE [{col_trial}] IN ({placeholders}) AND [{add_real}] = ?",
+                    trial_ids + [value],
+                )
+            else:
+                rows = fetch_all(
+                    f"SELECT DISTINCT [{col_trial}] AS TrialID FROM [{table}] "
+                    f"WHERE [{col_trial}] IN ({placeholders})",
+                    trial_ids,
+                )
+            have = {int(r["TrialID"]) for r in rows}
+            return any(tid not in have for tid in trial_ids)
+        except Exception:
+            return True
+
     def _is_itemat(self, meta: dict, fallback_name: str = "") -> bool:
         """
         Erkenne Itemat-Maschinen robust (DB-Name kann 'Itemat Lab', 'ITEMATLAB', etc. sein).
@@ -3804,9 +4120,12 @@ class CreateExperimentScreen(QWidget):
                 return
 
             # Alle Werte die eingefügt werden sollen: 0.0 immer + angehakte + manuell
+            # (0.0-Baseline nur, falls noch nicht in der Pending-Liste UND
+            # noch nicht für mindestens einen der angehakten Trials in der DB)
             vals_to_insert: List[float] = []
             baseline_norm = self._norm_add_val(0.0)
-            if not self._lab_entry_exists(lm_id, baseline_norm):
+            if not self._lab_entry_exists(lm_id, baseline_norm) and \
+                    self._addlabmachines_value_needed(table, src, 0.0):
                 vals_to_insert.append(0.0)
             for tv in checked_vals:
                 if not self._lab_entry_exists(lm_id, self._norm_add_val(tv)):
@@ -3870,7 +4189,8 @@ class CreateExperimentScreen(QWidget):
         # Nur wenn Maschine ein Additional Field hat und Itemat-Variante ist.
         if needs_additional and is_itemat:
             baseline_norm = self._norm_add_val(0.0)
-            if not self._lab_entry_exists(lm_id, baseline_norm):
+            if not self._lab_entry_exists(lm_id, baseline_norm) and \
+                    self._addlabmachines_value_needed(table, src, 0.0):
                 # Insert baseline row first
                 rr = self.tblLabMachines.rowCount()
                 self.tblLabMachines.insertRow(rr)
@@ -4892,6 +5212,7 @@ class CreateExperimentScreen(QWidget):
         self.txtSeriesName.setReadOnly(ro)
         self.treeMaterial.setEnabled(not ro)
         self.butAddMaterial.setVisible(not ro)
+        self.butAddTrialPly.setVisible(not ro)
         self._strict_ro_tbl_yarns = ro
         if ro:
             self.tblYarns.keyPressEvent = lambda e: None  # block Delete/Backspace

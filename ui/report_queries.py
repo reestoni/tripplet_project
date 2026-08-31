@@ -307,8 +307,17 @@ def _fetch_series_data(series_pk: int) -> List[Dict[str, Any]]:
                 "overfeed":     _f(r.get("overfeed")),
                 "speed":        _f(r.get("speed")),
                 "jet_plate":    _f(r.get("jet_plate")),
-                "air_cons":      _f(r.get("air_cons")),
-                "air_cons_real": (_f(r.get("air_cons")) * (_f(r.get("air_pressure")) + 1))
+                # Realer Luftverbrauch = Jet-Faktor * (gefahrener Betriebsdruck
+                # dieses Trials + 1), nicht der reine Jet-Faktor - der Faktor
+                # allein sagt nichts ueber den tatsaechlich gefahrenen Druck aus.
+                "air_cons":      round(_f(r.get("air_cons")) * (_f(r.get("air_pressure")) + 1), 2)
+                                 if _f(r.get("air_cons")) is not None and _f(r.get("air_pressure")) is not None
+                                 else None,
+                # Separater Y-Achsen-Eintrag (tblSmartChartAxis ID 45, "air_cons_real")
+                # nutzt dieselbe Formel wie die X-Achse oben - eigener Key, da als
+                # eigenstaendige Y-Achse ueber die generische Achsen-Iteration
+                # (axes_to_load) auswaehlbar, nicht nur als X-Feld.
+                "air_cons_real": round(_f(r.get("air_cons")) * (_f(r.get("air_pressure")) + 1), 2)
                                  if _f(r.get("air_cons")) is not None and _f(r.get("air_pressure")) is not None
                                  else None,
                 "jet_name":     str(r.get("jet_name") or "Unbekannt"),

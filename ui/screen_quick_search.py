@@ -26,13 +26,35 @@ Das Ergebnis liefert eine Experiment-ID an den ``on_open``-Callback, der in
 from typing import Any, Dict, List, Optional, Set
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QColor, QKeyEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QDialog, QFrame, QGraphicsDropShadowEffect, QGridLayout, QHBoxLayout,
+    QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from db.connection import get_connection
+from ui.pathutil import resource_path
+from ui.theme import BORDER, CARD_BG, TEXT, accent_hover_tint, accent_tint, get_accent
+
+# Modernisierung 2026-08-28 (Nutzerwunsch: "das such fenster selbst, kannst
+# du das auch etwas modernisieren?", direkt nach dem Sidebar-Pinned-Search-
+# Umbau): der Dialog stammte noch aus der Zeit vor dem Theme-/Akzentfarben-
+# System und war hart auf ein eigenständiges, sehr dunkles Schema (#161616/
+# #1e1e1e, festes Heberlein-Grün #39A650) verdrahtet - unabhängig von
+# `ui/theme.py` und der App-weiten Akzentfarben-Wahl (siehe "Accent Colour"
+# im Sidebar-Account-Bereich), und deutlich dunkler als der Rest der (hell
+# gehaltenen) App inkl. der eigentlichen Sidebar (SIDEBAR_BG ist ein mittleres
+# Grau, kein Schwarzton). Umgestellt auf dieselbe helle Karten-Optik wie der
+# Rest der App (CARD_BG/BORDER/TEXT + get_accent()), plus ein echter
+# Drop-Shadow (QGraphicsDropShadowEffect - frameless Fenster ohne das wirken
+# sonst papierflach) und WA_TranslucentBackground (ohne das rendert Qt bei
+# einem frameless QDialog trotz `border-radius` in der QSS ein rechteckiges,
+# opakes Fenster - die "runden" Ecken waren dadurch zuvor eigentlich eckig
+# mit sichtbaren Artefakten in den vier Ecken, nur auf dem sehr dunklen
+# Hintergrund kaum auffällig). Reine Optik/Layout-Politur - Suchlogik
+# (_terms/_search), Tastatur-Navigation und die drei nach aussen sichtbaren
+# main.py-Schnittstellen (Konstruktor, `open_experiment`-Signal, `show()`)
+# sind unverändert.
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +218,66 @@ def _search(jets: List[str], machines: List[str], series_names: List[str], yarns
 
 
 # ---------------------------------------------------------------------------
+# Close button (custom-painted, seit Modernisierung 2026-08-28)
+# ---------------------------------------------------------------------------
+
+class _CloseButton(QPushButton):
+    """Abgerundetes Quadrat mit selbst gezeichnetem X statt eines reinen
+    Text-Glyphen ("✕") in einem harten Kreis - Nutzerfeedback: "den button
+    selbst kannst du sicherlich noch etwas schöner machen als einfach nur
+    einen kreis". Selbst gemalt statt Font-Glyph, damit der Strich unabhängig
+    von Systemschriftart/DPI immer gleich sauber, zentriert und in
+    konsistenter Strichstärke aussieht (schliesst nebenbei die Lücke aus der
+    Modernisierung oben, wo ✕ auf mind. einem Testsystem als leeres
+    Font-Rechteck statt eines echten Glyphen gerendert wurde) - und passt mit
+    seiner abgerundeten Ecke (8px, wie die Suchfeld-Chips) besser zur übrigen
+    Formsprache der Karte als ein isolierter perfekter Kreis. Roter Hover
+    bleibt (etabliertes "Fenster schliessen"-Muster), aber gedeckter/wärmer
+    (#e8837a) statt knallig, damit er neben dem sonst durchgehend hellen,
+    ruhigen Karten-Look nicht wie ein Alarm wirkt."""
+
+    _BG_IDLE = "#f6f8f6"
+    _BG_HOVER = "#e8837a"
+    _X_IDLE = "#7a827c"
+    _X_HOVER = "#ffffff"
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setFixedSize(30, 30)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFlat(True)
+        self.setStyleSheet("QPushButton { border: none; background: transparent; }")
+
+    def paintEvent(self, ev):
+        hovered = self.underMouse() and self.isEnabled()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        rect = self.rect().adjusted(1, 1, -1, -1)
+        p.setPen(QPen(QColor(BORDER) if not hovered else QColor(self._BG_HOVER), 1))
+        p.setBrush(QColor(self._BG_HOVER if hovered else self._BG_IDLE))
+        p.drawRoundedRect(rect, 8, 8)
+
+        pen = QPen(QColor(self._X_HOVER if hovered else self._X_IDLE))
+        pen.setWidthF(1.6)
+        pen.setCapStyle(Qt.RoundCap)
+        p.setPen(pen)
+        m = 10.0
+        c = rect.center()
+        p.drawLine(c.x() - m / 2, c.y() - m / 2, c.x() + m / 2, c.y() + m / 2)
+        p.drawLine(c.x() - m / 2, c.y() + m / 2, c.x() + m / 2, c.y() - m / 2)
+        p.end()
+
+    def enterEvent(self, ev):
+        self.update()
+        super().enterEvent(ev)
+
+    def leaveEvent(self, ev):
+        self.update()
+        super().leaveEvent(ev)
+
+
+# ---------------------------------------------------------------------------
 # Result row widget
 # ---------------------------------------------------------------------------
 
@@ -211,36 +293,39 @@ class _ResultRow(QFrame):
         super().__init__(parent)
         self._data = data
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedHeight(48)
+        self.setFixedHeight(52)
+        accent = get_accent()
         self._style_normal = (
-            "QFrame { background: #1e1e1e; border: none; border-bottom: 1px solid #2a2a2a; }"
-            "QFrame:hover { background: #2d4a35; }"
+            f"QFrame {{ background: {CARD_BG}; border: none; border-left: 3px solid transparent;"
+            f" border-bottom: 1px solid {BORDER}; }}"
+            f"QFrame:hover {{ background: {accent_hover_tint()}; }}"
         )
         self._style_active = (
-            "QFrame { background: #2d4a35; border: none; border-bottom: 1px solid #2a2a2a; }"
+            f"QFrame {{ background: {accent_tint()}; border: none; border-left: 3px solid {accent};"
+            f" border-bottom: 1px solid {BORDER}; }}"
         )
         self.setStyleSheet(self._style_normal)
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(12, 4, 12, 4)
+        lay.setContentsMargins(13, 4, 14, 4)
         lay.setSpacing(8)
 
         col = QVBoxLayout()
         col.setSpacing(1)
 
         lbl_main = QLabel(data.get("_display", ""))
-        lbl_main.setStyleSheet("font-size: 12px; font-weight: bold; color: #f0f0f0;")
+        lbl_main.setStyleSheet(f"font-size: 12.5px; font-weight: 600; color: {TEXT};")
         col.addWidget(lbl_main)
 
         if subtitle:
             lbl_sub = QLabel(subtitle)
-            lbl_sub.setStyleSheet("font-size: 10px; color: #888;")
+            lbl_sub.setStyleSheet("font-size: 10.5px; color: #7a827c;")
             col.addWidget(lbl_sub)
 
         lay.addLayout(col, 1)
 
         arrow = QLabel("→")
-        arrow.setStyleSheet("color: #39A650; font-size: 14px;")
+        arrow.setStyleSheet(f"color: {accent}; font-size: 14px;")
         lay.addWidget(arrow)
 
     def set_active(self, active: bool):
@@ -262,16 +347,16 @@ class _SectionHeader(QFrame):
     """Trennzeile zwischen Ergebnisgruppen (z.B. "Jet-Treffer (3)")."""
     def __init__(self, title: str, count: int, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setFixedHeight(28)
-        self.setStyleSheet("QFrame { background: #111; border-bottom: 1px solid #39A650; }")
+        self.setFixedHeight(30)
+        self.setStyleSheet(f"QFrame {{ background: {accent_tint()}; border-bottom: 1px solid {BORDER}; }}")
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(12, 0, 12, 0)
+        lay.setContentsMargins(14, 0, 14, 0)
         lbl = QLabel(title)
-        lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #39A650; letter-spacing: 1px;")
+        lbl.setStyleSheet(f"font-size: 11px; font-weight: 700; color: {get_accent()}; letter-spacing: 1px;")
         lay.addWidget(lbl)
         lay.addStretch(1)
         cnt = QLabel(f"{count} result(s)")
-        cnt.setStyleSheet("font-size: 10px; color: #666;")
+        cnt.setStyleSheet("font-size: 10px; color: #7a827c;")
         lay.addWidget(cnt)
 
 
@@ -283,23 +368,41 @@ class _SearchField(QFrame):
     """Einzelnes Suchfeld mit Label (z.B. "Jet:", "Maschine:")."""
     def __init__(self, label: str, placeholder: str, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setStyleSheet("QFrame { background: #222; border-radius: 4px; border: 1px solid #333; }")
-        self.setMinimumHeight(58)
+        self.setObjectName("QuickSearchField")
+        accent = get_accent()
+        self._style_normal = (
+            f"QFrame#QuickSearchField {{ background: #f6f8f6; border-radius: 8px; border: 1px solid {BORDER}; }}"
+        )
+        self._style_focus = (
+            f"QFrame#QuickSearchField {{ background: #f6f8f6; border-radius: 8px; border: 1.5px solid {accent}; }}"
+        )
+        self.setStyleSheet(self._style_normal)
+        self.setMinimumHeight(56)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(10, 6, 10, 6)
+        lay.setContentsMargins(12, 7, 12, 7)
         lay.setSpacing(3)
 
         lbl = QLabel(label)
-        lbl.setStyleSheet("font-size: 9px; color: #39A650; font-weight: bold; letter-spacing: 1px;")
+        lbl.setStyleSheet(f"font-size: 9px; color: {accent}; font-weight: 700; letter-spacing: 1px;")
         lay.addWidget(lbl)
 
         self.edit = QLineEdit()
         self.edit.setPlaceholderText(placeholder)
         self.edit.setStyleSheet(
-            "QLineEdit { background: transparent; border: none; "
-            "font-size: 14px; color: #f0f0f0; }"
+            f"QLineEdit {{ background: transparent; border: none; "
+            f"font-size: 14px; color: {TEXT}; }}"
         )
+        # Fokus-Ring auf dem umschliessenden Frame statt nur auf dem
+        # QLineEdit selbst - konsistent mit den runden "Chip"-Feldern.
+        self.edit.focusInEvent = self._wrap_focus(self.edit.focusInEvent, True)
+        self.edit.focusOutEvent = self._wrap_focus(self.edit.focusOutEvent, False)
         lay.addWidget(self.edit)
+
+    def _wrap_focus(self, original, focused: bool):
+        def handler(ev):
+            self.setStyleSheet(self._style_focus if focused else self._style_normal)
+            original(ev)
+        return handler
 
 
 # ---------------------------------------------------------------------------
@@ -314,32 +417,67 @@ class QuickSearchDialog(QDialog):
     """
     open_experiment = Signal(int, int, str)   # exp_pk, series_pk, exp_id
 
+    # Bausteine für die dynamische Fensterhöhe (siehe _show_hint()/_populate()) -
+    # als Konstanten statt wiederholter Magic Numbers, seit der Modernisierung
+    # 2026-08-28 (Karte + 16px Drop-Shadow-Rand statt Dialog == Karte 1:1).
+    _OUTER_MARGIN = 32   # 16px Rand oben+unten für den Drop-Shadow (siehe outer.setContentsMargins)
+    _BAR_HEIGHT = 84
+    _FOOTER_HEIGHT = 30
+    _HEADER_HEIGHT = 30
+    _ROW_HEIGHT = 52
+    _HINT_HEIGHT = 90
+
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        # Ohne das rendert Qt bei einem frameless QDialog trotz `border-radius`
+        # in der QSS ein rechteckiges, opakes Fenster - die "runden" Ecken
+        # unten sind ohne dieses Attribut nur optisch gerundet, tatsächlich
+        # aber eckig mit sichtbaren Artefakten (siehe Moduldocstring).
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setModal(True)
         self.setFixedWidth(860)
-        self.setStyleSheet("""
-            QDialog {
-                background: #161616;
-                border: 1px solid #39A650;
-                border-radius: 8px;
-            }
-        """)
 
-        root = QVBoxLayout(self)
+        accent = get_accent()
+        # Der eigentliche Karten-Look sitzt auf `_card` statt direkt auf dem
+        # (jetzt transparenten) QDialog, da WA_TranslucentBackground +
+        # border-radius auf dem Dialog selbst je nach Plattform inkonsequent
+        # gerendert wird - ein normales QFrame-Kind rundet zuverlässig.
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(16, 16, 16, 16)  # Platz für den Drop-Shadow
+        card = QFrame()
+        card.setObjectName("QuickSearchCard")
+        card.setStyleSheet(
+            f"QFrame#QuickSearchCard {{ background: {CARD_BG}; border: 1px solid {BORDER};"
+            f" border-radius: 14px; }}"
+        )
+        shadow = QGraphicsDropShadowEffect(card)
+        shadow.setBlurRadius(48)
+        shadow.setXOffset(0)
+        shadow.setYOffset(10)
+        shadow.setColor(QColor(0, 0, 0, 90))
+        card.setGraphicsEffect(shadow)
+        outer.addWidget(card)
+
+        root = QVBoxLayout(card)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         # ---- Search fields bar ----
         bar = QFrame()
-        bar.setStyleSheet("QFrame { background: #1a1a1a; border-bottom: 1px solid #333; }")
+        bar.setStyleSheet(f"QFrame {{ background: {CARD_BG}; border-bottom: 1px solid {BORDER};"
+                           f" border-top-left-radius: 14px; border-top-right-radius: 14px; }}")
         bar_lay = QHBoxLayout(bar)
-        bar_lay.setContentsMargins(12, 10, 12, 10)
-        bar_lay.setSpacing(8)
+        bar_lay.setContentsMargins(16, 14, 12, 14)
+        bar_lay.setSpacing(10)
 
-        lbl_icon = QLabel("🔍")
-        lbl_icon.setStyleSheet("font-size: 20px;")
+        lbl_icon = QLabel()
+        icon_pm = QPixmap(resource_path("assets/images/quick_Search.png"))
+        if not icon_pm.isNull():
+            lbl_icon.setPixmap(icon_pm.scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            lbl_icon.setText("🔍")
+            lbl_icon.setStyleSheet("font-size: 18px;")
         bar_lay.addWidget(lbl_icon, 0, Qt.AlignVCenter)
 
         self._f_series  = _SearchField("SERIES NAME", "e.g. Intermingling")
@@ -352,12 +490,8 @@ class QuickSearchDialog(QDialog):
         bar_lay.addWidget(self._f_yarn, 2)
         bar_lay.addWidget(self._f_machine, 1)
 
-        btn_close = QPushButton("✕")
-        btn_close.setFixedSize(28, 28)
-        btn_close.setStyleSheet(
-            "QPushButton { background: #333; border-radius: 14px; color: #aaa; font-size: 13px; border: none; }"
-            "QPushButton:hover { background: #c0392b; color: white; }"
-        )
+        btn_close = _CloseButton()
+        btn_close.setToolTip("Close (Esc)")
         btn_close.clicked.connect(self.close)
         bar_lay.addWidget(btn_close, 0, Qt.AlignVCenter)
 
@@ -366,18 +500,18 @@ class QuickSearchDialog(QDialog):
         # ---- Hint ----
         self._lbl_hint = QLabel("Fill in at least one field to search…")
         self._lbl_hint.setAlignment(Qt.AlignCenter)
-        self._lbl_hint.setStyleSheet("color: #555; font-size: 12px; padding: 24px;")
+        self._lbl_hint.setStyleSheet(f"color: #7a827c; font-size: 12px; padding: 28px; background: {CARD_BG};")
         root.addWidget(self._lbl_hint)
 
         # ---- Results ----
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.NoFrame)
-        self._scroll.setStyleSheet("QScrollArea { background: #161616; border: none; }")
+        self._scroll.setStyleSheet(f"QScrollArea {{ background: {CARD_BG}; border: none; }}")
         self._scroll.hide()
 
         self._results_host = QWidget()
-        self._results_host.setStyleSheet("QWidget { background: #161616; }")
+        self._results_host.setStyleSheet(f"QWidget {{ background: {CARD_BG}; }}")
         self._results_lay = QVBoxLayout(self._results_host)
         self._results_lay.setContentsMargins(0, 0, 0, 0)
         self._results_lay.setSpacing(0)
@@ -387,12 +521,15 @@ class QuickSearchDialog(QDialog):
 
         # ---- Footer ----
         footer = QFrame()
-        footer.setFixedHeight(28)
-        footer.setStyleSheet("QFrame { background: #111; border-top: 1px solid #2a2a2a; }")
+        footer.setFixedHeight(30)
+        footer.setStyleSheet(
+            f"QFrame {{ background: #f6f8f6; border-top: 1px solid {BORDER};"
+            f" border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; }}"
+        )
         footer_lay = QHBoxLayout(footer)
-        footer_lay.setContentsMargins(12, 0, 12, 0)
+        footer_lay.setContentsMargins(16, 0, 16, 0)
         lbl_esc = QLabel("ESC to close  ·  ↑↓ to navigate  ·  Enter to open  ·  comma = AND within field")
-        lbl_esc.setStyleSheet("color: #444; font-size: 10px;")
+        lbl_esc.setStyleSheet("color: #9aa39c; font-size: 10px;")
         footer_lay.addWidget(lbl_esc)
         root.addWidget(footer)
 
@@ -410,7 +547,7 @@ class QuickSearchDialog(QDialog):
         self._all_widgets: List[QWidget] = []
         self._active_row: int = -1
 
-        self.setFixedHeight(160)
+        self.setFixedHeight(self._OUTER_MARGIN + self._BAR_HEIGHT + self._FOOTER_HEIGHT + self._HINT_HEIGHT)
 
     def showEvent(self, ev):
         """Setzt den Fokus auf das erste Suchfeld beim Öffnen."""
@@ -508,14 +645,15 @@ class QuickSearchDialog(QDialog):
 
         self._lbl_hint.hide()
         self._scroll.show()
-        self.setFixedHeight(min(700, 100 + 28 + len(results) * 48 + 28))
+        content_h = self._HEADER_HEIGHT + len(results) * self._ROW_HEIGHT
+        self.setFixedHeight(min(760, self._OUTER_MARGIN + self._BAR_HEIGHT + self._FOOTER_HEIGHT + content_h))
 
     def _show_hint(self, text: str):
         """Zeigt einen Hinweistext (z.B. "Keine Ergebnisse") statt der Ergebnisliste."""
         self._scroll.hide()
         self._lbl_hint.setText(text)
         self._lbl_hint.show()
-        self.setFixedHeight(160)
+        self.setFixedHeight(self._OUTER_MARGIN + self._BAR_HEIGHT + self._FOOTER_HEIGHT + self._HINT_HEIGHT)
 
     def _move_selection(self, delta: int):
         """Bewegt die Tastatur-Selektion um delta Schritte (+1 / -1)."""

@@ -13,9 +13,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize, QRectF, QPointF, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QIcon, QColor, QPainter, QPen, QBrush, QFont, QPainterPath
 
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
-from db.connection import fetch_all, execute
+from ui.widgets import sidebar_nav
+from db.connection import fetch_all, execute, execute_insert
 import app_meta
 
 
@@ -1017,7 +1017,10 @@ class AdhocFieldDialog:
             field["field_id"] = fid
             return fid
 
-        execute(
+        # execute_insert() statt execute()+separatem fetch_all('SELECT
+        # LAST_INSERT_ID()') - Letzteres zieht sich unabhängig eine (nicht
+        # notwendigerweise dieselbe) Connection aus dem Pool, siehe CLAUDE.md.
+        fid = execute_insert(
             "INSERT INTO tblrequirementfield "
             "(field_key, field_label, source_table_primary, source_table_fallback, "
             " source_column, tension_filter, data_type, unit, is_active, sort_order) "
@@ -1033,8 +1036,6 @@ class AdhocFieldDialog:
                 field.get("unit"),
             ]
         )
-        rows2 = fetch_all("SELECT LAST_INSERT_ID() AS id", [])
-        fid = rows2[0]["id"]
         field["field_id"] = fid
         return fid
 
@@ -1362,9 +1363,11 @@ class QuickScanEvaluator:
 # QuickScanScreen
 # ---------------------------------------------------------------------------
 class QuickScanScreen(QWidget):
-    def __init__(self, on_back_hub=None):
+    def __init__(self, on_back_hub=None, sidebar_callbacks=None):
         super().__init__()
         self._on_back_hub  = on_back_hub
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
         self._all_fields   = []
         self._filter_rows  = []
         self._target_rows  = []
@@ -1421,10 +1424,9 @@ class QuickScanScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="Quick Scan", show_home=True)
-        if callable(self._on_back_hub):
-            header.connect_home(self._on_back_hub)
-        root.addWidget(header)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         main = QWidget()
         main_lay = QHBoxLayout(main)
@@ -1740,8 +1742,25 @@ class QuickScanScreen(QWidget):
         rl.addWidget(self._lbl_status)
 
         main_lay.addWidget(right, 1)
-        root.addWidget(main, 1)
+        content_layout.addWidget(main, 1)
         root.addWidget(FooterBar())
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
     # ------------------------------------------------------------------
     # Ruleset Save / Load
@@ -1793,14 +1812,13 @@ class QuickScanScreen(QWidget):
             import app_meta
             created_by = app_meta.current_user.get("username", "")
 
-            # tblrequirementset anlegen
-            execute(
+            # tblrequirementset anlegen - execute_insert() statt execute()+
+            # separatem fetch_all('SELECT LAST_INSERT_ID()'), siehe CLAUDE.md.
+            set_id = execute_insert(
                 "INSERT INTO tblrequirementset (set_name, description, is_active, created_by) "
                 "VALUES (%s, %s, 1, %s)",
                 [name, desc or None, created_by]
             )
-            rows = fetch_all("SELECT LAST_INSERT_ID() AS id", [])
-            set_id = rows[0]["id"]
 
             # Alle Filter + Targets als Rules speichern
             all_rows = (

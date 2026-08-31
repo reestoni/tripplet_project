@@ -29,8 +29,8 @@ from PySide6.QtWidgets import (
 )
 
 from ui.theme import accent_tint, accent_gridline
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 from ui.widgets.label_printing import (
     MM, fit_text, wrap_text_lines, draw_qr, generate_label_sheet_pdf,
     load_label_template, save_label_template, PrintLabelsDialog,
@@ -533,9 +533,11 @@ class YarnStockScreen(QWidget):
     YARN_TABLE = "tblYarn"
     SPOOL_TABLE = "tblYarnSpool"
 
-    def __init__(self, on_back_home=None):
+    def __init__(self, on_back_home=None, sidebar_callbacks=None):
         super().__init__()
         self.on_back_home = on_back_home
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
         self._writable = _has_write_rights()
 
         self._yarn_id_col = "ID"
@@ -568,9 +570,9 @@ class YarnStockScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="Yarn Stock", show_home=True)
-        header.connect_home(self._go_home)
-        root.addWidget(header, 0)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         _qss = """
             QTableView, QTableWidget { gridline-color: #B5D7B5; }
@@ -791,8 +793,26 @@ class YarnStockScreen(QWidget):
 
         bl.addWidget(self.rack_content)
 
-        root.addWidget(body, 1)
+        content_layout.addWidget(body, 1)
         root.addWidget(FooterBar(), 0)
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
         if not self._writable:
             self.btn_select_all.setEnabled(False)
@@ -841,6 +861,7 @@ class YarnStockScreen(QWidget):
         self._yarn_name_col = _resolve_field(
             ["Name", "Bezeichnung", "YarnName", "Material"], cmap)
         self._yarn_minstock_col = _resolve_field(["MinStock"], cmap)
+        self._yarn_source_trial_col = _resolve_field(["SourceTrialID"], cmap)
 
     def reload_data(self):
         if not table_exists(self.YARN_TABLE) or not table_exists(self.SPOOL_TABLE):
@@ -853,10 +874,13 @@ class YarnStockScreen(QWidget):
             QMessageBox.warning(self, "Yarn Stock", "Could not determine the name field of tblYarn.")
             return
 
+        # Halbfabrikat-"Schatten"-Garne (Multimaschinen-Ply-Verknüpfung) sind
+        # kein echter Lagerbestand und sollen hier nicht auftauchen.
+        _where = f" WHERE [{self._yarn_source_trial_col}] IS NULL" if self._yarn_source_trial_col else ""
         yrows = fetch_all(
             f"SELECT [{self._yarn_id_col}] AS YarnID, [{self._yarn_name_col}] AS YarnName"
             + (f", [{self._yarn_minstock_col}] AS MinStock" if self._yarn_minstock_col else "")
-            + f" FROM {self.YARN_TABLE} ORDER BY [{self._yarn_name_col}]"
+            + f" FROM {self.YARN_TABLE}{_where} ORDER BY [{self._yarn_name_col}]"
         )
         yarn_name_map: Dict[int, str] = {}
         yarn_minstock_map: Dict[int, float] = {}
@@ -967,11 +991,23 @@ class YarnStockScreen(QWidget):
 
         try:
             low_or_empty = [g for g in self._overview if g["Status"] in ("Low", "Empty")]
+            ok_now = [g for g in self._overview if g["Status"] == "OK"]
+            from ui.notifications import (
+                create_yarn_stock_notifications,
+                expire_recovered_yarn_stock_notifications,
+            )
             if low_or_empty:
-                from ui.notifications import create_yarn_stock_notifications
                 create_yarn_stock_notifications([
                     {"YarnID": g["YarnID"], "YarnName": g["YarnName"], "Charge": g["Charge"], "Status": g["Status"]}
                     for g in low_or_empty
+                ])
+            if ok_now:
+                # Räumt Notifications für inzwischen wieder aufgefüllte
+                # Garn/Batch-Kombinationen weg, sonst würde ein erneuter
+                # Rückgang unter den Schwellwert nie wieder benachrichtigen
+                # (siehe expire_recovered_yarn_stock_notifications()).
+                expire_recovered_yarn_stock_notifications([
+                    {"YarnID": g["YarnID"], "Charge": g["Charge"]} for g in ok_now
                 ])
         except Exception:
             pass  # Notification-Feature ist optional, darf reload_data nie blockieren

@@ -55,7 +55,11 @@ def _fmt_time(created) -> str:
 class _NotifItem(QFrame):
     clicked   = Signal(int, str)   # series_id, exp_id_txt
     yarn_clicked = Signal(int, str)  # payload_yarn_id, payload_charge
+    request_clicked = Signal(int)  # payload_experiment_request_id
     read_toggled = Signal()
+
+    _TYPE_ICON = {"yarn_stock": "🧵", "experiment_request": "📝"}
+    _TYPE_TAG = {"yarn_stock": "YARN STOCK", "experiment_request": "EXPERIMENT REQUEST"}
 
     def __init__(self, n: dict, parent: QWidget | None = None):
         super().__init__(parent)
@@ -66,9 +70,13 @@ class _NotifItem(QFrame):
         self._notif_type = str(n.get("NotificationType") or "series")
         self._payload_yarn_id = n.get("PayloadYarnID")
         self._payload_charge = n.get("PayloadCharge")
+        self._payload_request_id = n.get("PayloadExperimentRequestID")
         series_name     = str(n.get("SeriesName") or f"Series {self._series_id}")
         created         = n.get("CreatedAt")
         message         = str(n.get("Message") or "")
+        # "Message"-basierte Typen (kein Series-Bezug) - zeigen den Message-
+        # Text statt des Serien-Namens, siehe unten.
+        _is_message_type = self._notif_type in ("yarn_stock", "experiment_request")
 
         self.setObjectName("NItem")
         self.setCursor(Qt.PointingHandCursor)
@@ -88,7 +96,7 @@ class _NotifItem(QFrame):
         root.addWidget(dot, 0, Qt.AlignTop | Qt.AlignHCenter)
 
         # Icon (je nach Notification-Typ)
-        ico = QLabel("🧵" if self._notif_type == "yarn_stock" else "📦")
+        ico = QLabel(self._TYPE_ICON.get(self._notif_type, "📦"))
         ico.setStyleSheet("font-size:20px; background:transparent;")
         ico.setFixedWidth(28)
         root.addWidget(ico, 0, Qt.AlignTop)
@@ -98,7 +106,7 @@ class _NotifItem(QFrame):
         col.setSpacing(3)
         col.setContentsMargins(0, 0, 0, 0)
 
-        tag = QLabel("YARN STOCK" if self._notif_type == "yarn_stock" else "SERIES ARCHIVIERT")
+        tag = QLabel(self._TYPE_TAG.get(self._notif_type, "SERIES DONE"))
         tag.setStyleSheet(
             f"font-size:9px; font-weight:800; letter-spacing:0.8px;"
             f"color:{'#3b82f6' if self._is_unread else '#94a3b8'};"
@@ -106,7 +114,7 @@ class _NotifItem(QFrame):
         )
         col.addWidget(tag)
 
-        name = QLabel(message if self._notif_type == "yarn_stock" else series_name)
+        name = QLabel(message if _is_message_type else series_name)
         name.setWordWrap(True)
         name.setStyleSheet(
             f"font-size:13px; font-weight:{'700' if self._is_unread else '400'};"
@@ -114,7 +122,7 @@ class _NotifItem(QFrame):
         )
         col.addWidget(name)
 
-        if self._exp_id and self._notif_type != "yarn_stock":
+        if self._exp_id and not _is_message_type:
             exp = QLabel(f"Experiment: {self._exp_id}")
             exp.setStyleSheet(f"font-size:11px; color:{_C_SUB}; background:transparent;")
             col.addWidget(exp)
@@ -174,6 +182,11 @@ class _NotifItem(QFrame):
                 self._mark_read()
                 if self._payload_yarn_id is not None:
                     self.yarn_clicked.emit(int(self._payload_yarn_id), self._payload_charge or "")
+            elif self._notif_type == "experiment_request":
+                self._mark_read()
+                self.request_clicked.emit(
+                    int(self._payload_request_id) if self._payload_request_id is not None else 0
+                )
             else:
                 self.clicked.emit(self._series_id, self._exp_id)
 
@@ -190,6 +203,7 @@ class NotificationPanel(QWidget):
     """
     notification_clicked = Signal(int, int, str)
     yarn_stock_clicked = Signal(int, str)  # payload_yarn_id, payload_charge
+    experiment_request_clicked = Signal(int)  # payload_experiment_request_id
     all_read = Signal()
 
     def __init__(self, parent=None):
@@ -333,6 +347,7 @@ class NotificationPanel(QWidget):
                 item = _NotifItem(n)
                 item.clicked.connect(self._on_item_clicked)
                 item.yarn_clicked.connect(self._on_item_yarn_clicked)
+                item.request_clicked.connect(self._on_item_request_clicked)
                 item.read_toggled.connect(lambda: self._refresh_footer(notifications))
                 lay.addWidget(item)
             lay.addStretch()
@@ -385,6 +400,10 @@ class NotificationPanel(QWidget):
     def _on_item_yarn_clicked(self, yarn_id: int, charge: str):
         self.hide()
         self.yarn_stock_clicked.emit(yarn_id, charge)
+
+    def _on_item_request_clicked(self, request_id: int):
+        self.hide()
+        self.experiment_request_clicked.emit(request_id)
 
     def _on_mark_all(self):
         self.all_read.emit()

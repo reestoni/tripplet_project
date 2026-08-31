@@ -40,7 +40,7 @@ from ui.pathutil import resource_path
 from ui.text_normalize import norm, resolve_field
 from ui.widgets.statimat_pdf_parser import parse_statimat_pdf
 from ui.widgets.itemat_pdf_parser import parse_itemat_pdf, DB_TENSIONS as ITEMAT_DB_TENSIONS
-from ui.widgets.header import HeaderBar
+from ui.widgets import sidebar_nav
 from ui.yarnscope.garngraf_canvas import GarnCanvas
 from ui.widgets.footer import FooterBar
 from ui.widgets.frozen_first_column_table import FrozenFirstColumnTable
@@ -71,6 +71,7 @@ from db.connection import (
     is_dev_mode,
 )
 
+import html
 import math
 import re
 import os
@@ -81,8 +82,10 @@ import uuid
 import datetime
 import app_meta
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal, QObject, QEvent, QSize, QRect, QRegularExpression
 from PySide6.QtGui import QShortcut, QKeySequence, QPainter, QPen, QBrush, QFont, QRegularExpressionValidator
@@ -377,6 +380,57 @@ class _FillRowRangeJetDialog(QDialog):
         if b < a:
             a, b = b, a
         return a, b, self.cb_jet.currentData()
+
+
+class _CopyTrialsRangeDialog(QDialog):
+    """Dialog to batch-copy a range of trials (by Versuchsnummer), each once
+    by default - counterpart to the single-trial "copy N times" flow for
+    "copy trials V7 through V20, once each" (From==To with Copies>1 still
+    covers the old single-trial-N-times case, so this replaces that dialog
+    rather than living alongside it)."""
+
+    def __init__(self, parent: QWidget, v_min: int, v_max: int, v_default: int):
+        super().__init__(parent)
+        self.setWindowTitle("Copy trials")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+        layout.addWidget(QLabel(f"Trials V{v_min}–V{v_max} in this series."))
+
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignRight)
+        form.setFormAlignment(Qt.AlignLeft)
+
+        self.sp_from = QSpinBox()
+        self.sp_from.setRange(v_min, v_max)
+        self.sp_from.setValue(v_default)
+
+        self.sp_to = QSpinBox()
+        self.sp_to.setRange(v_min, v_max)
+        self.sp_to.setValue(v_default)
+
+        self.sp_copies = QSpinBox()
+        self.sp_copies.setRange(1, 50)
+        self.sp_copies.setValue(1)
+
+        form.addRow("From trial #", self.sp_from)
+        form.addRow("To trial #", self.sp_to)
+        form.addRow("Copies per trial", self.sp_copies)
+        layout.addLayout(form)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    def get_values(self) -> Tuple[int, int, int]:
+        """Returns (from_versuchsnummer, to_versuchsnummer, copies_per_trial)."""
+        a = int(self.sp_from.value())
+        b = int(self.sp_to.value())
+        if b < a:
+            a, b = b, a
+        return a, b, int(self.sp_copies.value())
 
 
 class _FillRowRangeDropdownDialog(QDialog):
@@ -1036,6 +1090,26 @@ def canon_rule(ff: Optional[str]) -> Optional[str]:
 
 # ------------------------ Pivot Table Model ------------------------
 
+_RETEST_FLAG_DOT_ICON: Optional[QIcon] = None
+
+
+def _retest_flag_dot_icon() -> QIcon:
+    """Small red dot as a QIcon (cached) - column-header marker for open retest flags."""
+    global _RETEST_FLAG_DOT_ICON
+    if _RETEST_FLAG_DOT_ICON is not None:
+        return _RETEST_FLAG_DOT_ICON
+    pm = QPixmap(12, 12)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing, True)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor("#D6432E"))
+    p.drawEllipse(1, 1, 10, 10)
+    p.end()
+    _RETEST_FLAG_DOT_ICON = QIcon(pm)
+    return _RETEST_FLAG_DOT_ICON
+
+
 @dataclass
 class CellBinding:
     """Verbindet eine Pivot-Tabellen-Zelle mit einem konkreten DB-Datensatz.
@@ -1139,6 +1213,17 @@ class PivotEditModel(QAbstractTableModel):
         # keine Umrechnung (betrifft alle anderen Tabs nicht).
         self._unit_scale: float = 1.0
         self._unit_scale_field: Optional[str] = None
+        # col_idx (0-based, in _col_titles) -> tooltip text; see set_flagged_columns()
+        self._flagged_cols: Dict[int, str] = {}
+
+    def set_flagged_columns(self, mapping: Dict[int, str]) -> None:
+        """Marks columns with a red dot in the column header (e.g. an open retest flag).
+
+        mapping: {col_idx (0-based, as in col_titles): tooltip text}.
+        """
+        self._flagged_cols = dict(mapping or {})
+        if self._col_titles:
+            self.headerDataChanged.emit(Qt.Horizontal, 1, len(self._col_titles))
 
     def set_unit_scale(self, scale: float, field: Optional[str]) -> None:
         """Aktiviert Anzeige/Eingabe in einer umgerechneten Einheit fuer ein
@@ -1208,6 +1293,14 @@ class PivotEditModel(QAbstractTableModel):
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):  # type: ignore[override]
         """Gibt Kopfzeile/Kopfspalte zurück (Feldnamen vertikal, Trial-IDs horizontal)."""
+        if orientation == Qt.Horizontal and section > 0:
+            col_idx = section - 1
+            note = self._flagged_cols.get(col_idx)
+            if note is not None:
+                if role == Qt.DecorationRole:
+                    return _retest_flag_dot_icon()
+                if role == Qt.ToolTipRole:
+                    return note or "Retest pending"
         if role != Qt.DisplayRole:
             return None
         if orientation == Qt.Horizontal:
@@ -1955,13 +2048,24 @@ class _ManagePliesDialog(QDialog):
             self._cmb_yarn.addItem(yname, yid)
         self._cmb_yarn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
+        # Multimaschinen-Halbfabrikat: statt eines Katalog-Garns den Output
+        # eines bestehenden Trials (ggf. auf einer anderen Maschine) als Ply
+        # verwenden - selbe Logik/Schatten-Garn wie in screen_create_experiment.
+        btn_trial_ply = QPushButton("+ Trial")
+        btn_trial_ply.setFixedWidth(70)
+        btn_trial_ply.setToolTip(
+            "Use the output of an existing trial (e.g. from another machine) as this ply's input, "
+            "instead of picking a catalog yarn."
+        )
+        btn_trial_ply.clicked.connect(self._add_trial_ply)
+
         self._cmb_yarn_use = QComboBox()
         self._cmb_yarn_use.setToolTip("Group (optional)")
         for uid, uname in self._yarn_use_list:
             self._cmb_yarn_use.addItem(uname, uid)
         self._cmb_yarn_use.setFixedWidth(100)
 
-        from PySide6.QtWidgets import QSpinBox, QLabel as _Lbl
+        from PySide6.QtWidgets import QSpinBox, QAbstractSpinBox, QLabel as _Lbl
         lbl_ends = _Lbl("Ends:")
         self._spn_ends = QSpinBox()
         self._spn_ends.setMinimum(1)
@@ -1969,11 +2073,16 @@ class _ManagePliesDialog(QDialog):
         self._spn_ends.setValue(1)
         self._spn_ends.setFixedWidth(55)
         self._spn_ends.setToolTip("Number of ends")
+        # Up/down step buttons don't render/respond correctly in this dialog
+        # (2026-08-20, user report) - removed rather than debugged further,
+        # plain numeric entry (typing a number, default stays 1) works fine.
+        self._spn_ends.setButtonSymbols(QAbstractSpinBox.NoButtons)
 
         btn_add = QPushButton("+ Add Ply")
         btn_add.setFixedWidth(100)
         btn_add.clicked.connect(self._on_add)
         add_lay.addWidget(self._cmb_yarn)
+        add_lay.addWidget(btn_trial_ply)
         add_lay.addWidget(self._cmb_yarn_use)
         add_lay.addWidget(lbl_ends)
         add_lay.addWidget(self._spn_ends)
@@ -2077,7 +2186,36 @@ class _ManagePliesDialog(QDialog):
         if yarn_id is None:
             QMessageBox.warning(self, "Add Ply", "Please select a yarn.")
             return
+        self._add_ply(yarn_id)
 
+    def _add_trial_ply(self):
+        """Handler für "+ Trial": Halbfabrikat-Output eines bestehenden Trials
+        (ggf. andere Maschine) als Ply verwenden, statt eines Katalog-Garns -
+        siehe screen_create_experiment.get_or_create_shadow_yarn(). Fügt die
+        Ply direkt hinzu (analog zum "+ Trial"-Flow in CreateExperimentScreen),
+        ohne den Umweg über die Yarn-Combo, da Schatten-Garne dort bewusst
+        ausgeblendet sind."""
+        from ui.widgets.trial_picker import TrialPickerDialog
+        dlg = TrialPickerDialog(parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        trial_id = dlg.selected_trial_id()
+        if trial_id is None:
+            return
+        from ui.screen_create_experiment import get_or_create_shadow_yarn
+        try:
+            yarn_id = get_or_create_shadow_yarn(trial_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Trial Ply", f"Could not create yarn entry for this trial:\n{e}")
+            return
+        if yarn_id is None:
+            QMessageBox.warning(self, "Trial Ply", "Could not find this trial.")
+            return
+        self._add_ply(yarn_id)
+
+    def _add_ply(self, yarn_id):
+        """Gemeinsame Add-Logik für _on_add() (Katalog-Garn aus der Combo)
+        und _add_trial_ply() (Halbfabrikat-Schatten-Garn)."""
         n_ends = max(1, int(self._spn_ends.value()))
         yarn_use_id = self._cmb_yarn_use.currentData()
 
@@ -2089,27 +2227,67 @@ class _ManagePliesDialog(QDialog):
         if not target_ids:
             target_ids = [self._trial_id]
 
-        # Nächste n freie Ply-Nummern berechnen
-        trial_rows = fetch_all(
-            "SELECT Ply FROM tblTrialSettings WHERE TrialID = ?",
-            [self._trial_id],
-        )
-        used_numbers: set = set()
-        for r in trial_rows:
-            ply = (r.get("Ply") or "").strip()
-            if ply:
-                m = re.search(r"\d+", ply)
-                if m:
-                    used_numbers.add(int(m.group()))
+        # Ply-Nummer bestimmen: alle n_ends Enden desselben Garns teilen sich
+        # EIN Label - vorher bekam jedes Ende sein eigenes hochgezaehltes
+        # Label (Ply 1/2/3/4 fuer 4x dasselbe Garn), was sich mit der
+        # Serien-weiten "gleiches Garn = gleiche Ply"-Regel biss, sobald ein
+        # anderer Trial eine dieser Nummern schon fuer ein anderes Garn belegt
+        # hatte (2026-08-20, Nutzer-Bugreport - derselbe Fix wie zuvor in
+        # screen_create_experiment.py::_add_material(), hier separat noetig,
+        # da dieser Dialog eine eigene, unabhaengige Ply-Berechnung hat).
+        # Zuerst: hat dieses Garn bereits eine einzige, eindeutige Ply-Nummer
+        # irgendwo in der Series? Falls ja, wiederverwenden statt neu zu
+        # vergeben (gleiches Prinzip wie _add_material()s existing_ply_for_yarn).
+        existing_ply_for_yarn: Optional[str] = None
+        try:
+            yarn_ply_rows = fetch_all(
+                """
+                SELECT DISTINCT ts.Ply
+                FROM tblTrialSettings ts
+                JOIN tblTrial t ON t.ID = ts.TrialID
+                WHERE t.TrialSeriesID = ? AND ts.YarnID = ?
+                """,
+                [self._series_pk, yarn_id],
+            )
+            yarn_plys = {r["Ply"] for r in yarn_ply_rows if r.get("Ply")}
+            if len(yarn_plys) == 1:
+                existing_ply_for_yarn = next(iter(yarn_plys))
+        except Exception:
+            existing_ply_for_yarn = None
 
-        ply_labels = []
-        n = 1
-        for _ in range(n_ends):
+        if existing_ply_for_yarn:
+            ply_label = existing_ply_for_yarn
+        else:
+            # Neues Garn in der Series: naechste freie Nummer - serienweit,
+            # nicht nur innerhalb dieses Trials (2026-08-20, Nutzer-Bugreport:
+            # "Ply 1" war im AKTUELLEN Trial noch unbenutzt, serienweit aber
+            # schon durch ein anderes Garn belegt -> die alte, nur-trial-lokale
+            # Pruefung schlug "Ply 1" trotzdem vor und lief prompt in den
+            # Yarn-Conflict-Check unten. Jede in der Series irgendwo (von
+            # irgendeinem Garn/Trial) benutzte Nummer muss ausgeschlossen
+            # werden, nicht nur die im aktuellen Trial.
+            series_rows = fetch_all(
+                """
+                SELECT DISTINCT ts.Ply
+                FROM tblTrialSettings ts
+                JOIN tblTrial t ON t.ID = ts.TrialID
+                WHERE t.TrialSeriesID = ?
+                """,
+                [self._series_pk],
+            )
+            used_numbers: set = set()
+            for r in series_rows:
+                ply = (r.get("Ply") or "").strip()
+                if ply:
+                    m = re.search(r"\d+", ply)
+                    if m:
+                        used_numbers.add(int(m.group()))
+            n = 1
             while n in used_numbers:
                 n += 1
-            ply_labels.append(f"Ply {n}")
-            used_numbers.add(n)
-            n += 1
+            ply_label = f"Ply {n}"
+
+        ply_labels = [ply_label] * n_ends
 
         # Konsistenzprüfung für alle Ply-Labels
         for ply_label in ply_labels:
@@ -2437,12 +2615,76 @@ class _RDHousingTooltipFilter(QObject):
 
 
 class ShowExperimentScreen(QWidget):
-    def __init__(self, on_back_home, on_back_all_experiments=None, on_add_trials=None):
+    def __init__(self, on_back_home, on_back_all_experiments=None, on_add_trials=None,
+                 # Sidebar-Navigation (siehe ui/widgets/sidebar_nav.py, geteilt mit
+                 # HomeScreen/BacklogScreen/AllExperimentsScreen) - dieselben
+                 # Callbacks, siehe BacklogScreen für die Begründung des Musters
+                 # (Access-Level erst zur Laufzeit über app_meta bekannt, Sidebar
+                 # daher lazy in showEvent() aufgebaut statt hier).
+                 on_all_experiments=None, on_open_backlog=None,
+                 on_create_experiment=None, on_create_experiment_legacy=None,
+                 on_add_series=None, on_add_lab_machines=None, on_open_experiment_request=None,
+                 on_create_experiment_request=None, on_open_my_requests=None,
+                 on_preview_requests=None, on_preview_open_requests=None,
+                 on_image_compare=None, on_canvas=None, on_nozzle_calculator=None, on_air_supply=None,
+                 on_requirement_hub=None, on_smartchart=None, on_yarn_stock=None, on_label_generator=None,
+                 on_tdms_inspector=None,
+                 on_add_jet=None, on_add_top_plate=None, on_add_yarn=None,
+                 on_manage_order_type=None, on_manage_product_groups=None, on_manage_material=None,
+                 on_add_user=None, on_usage_stats=None, on_statistics=None, on_offline_sync=None,
+                 on_lab_assistant=None,
+                 # Log-Out-Callback für die Sidebar-Account-Gruppe (Ersatz für
+                 # den früheren Header-Log-Out-Button, der nur auf Home
+                 # existierte - siehe screen_home.py::_build_ui()-Docstring).
+                 on_logout=None,
+                 # Ctrl+Klick "in neuem Tab öffnen" (siehe ui/widgets/tab_container.py)
+                 open_in_new_tab=None):
         super().__init__()
         self.on_back_home = on_back_home
         self.on_back_all_experiments = on_back_all_experiments
         self.on_add_trials = on_add_trials
         self.on_open_report = None  # wird von MainWindow gesetzt (→ _go_report)
+        # Label für den kontextuellen Back-Chip in der Tools-Leiste (Ersatz
+        # für den früheren Header-Back-Button) - siehe set_back_target().
+        self._back_label: Optional[str] = None
+
+        self._sidebar_nav_callbacks = dict(
+            on_all_experiments=on_all_experiments,
+            on_open_backlog=on_open_backlog,
+            on_create_experiment=on_create_experiment,
+            on_create_experiment_legacy=on_create_experiment_legacy,
+            on_add_series=on_add_series,
+            on_add_lab_machines=on_add_lab_machines,
+            on_open_experiment_request=on_open_experiment_request,
+            on_create_experiment_request=on_create_experiment_request,
+            on_open_my_requests=on_open_my_requests,
+            on_preview_requests=on_preview_requests,
+            on_preview_open_requests=on_preview_open_requests,
+            on_image_compare=on_image_compare,
+            on_canvas=on_canvas,
+            on_nozzle_calculator=on_nozzle_calculator,
+            on_air_supply=on_air_supply,
+            on_requirement_hub=on_requirement_hub,
+            on_smartchart=on_smartchart,
+            on_yarn_stock=on_yarn_stock,
+            on_label_generator=on_label_generator,
+            on_tdms_inspector=on_tdms_inspector,
+            on_add_jet=on_add_jet,
+            on_add_top_plate=on_add_top_plate,
+            on_add_yarn=on_add_yarn,
+            on_manage_order_type=on_manage_order_type,
+            on_manage_product_groups=on_manage_product_groups,
+            on_manage_material=on_manage_material,
+            on_add_user=on_add_user,
+            on_usage_stats=on_usage_stats,
+            on_statistics=on_statistics,
+            on_offline_sync=on_offline_sync,
+            on_lab_assistant=on_lab_assistant,
+            on_logout=on_logout,
+            open_in_new_tab=open_in_new_tab,
+        )
+        self._sidebar_built_for_level = None
+        self._offline_gated_buttons: list = []
         # Jet-Lookup (für Dropdown im Machine-Tab)
         self._jets_list: List[Tuple[Any, str]] = []
         self._jets_map: Dict[Any, str] = {}
@@ -2459,6 +2701,24 @@ class ShowExperimentScreen(QWidget):
         self._trials: List[Dict[str, Any]] = []
         self._trial_ids: List[int] = []
         self._trial_labels: List[str] = []
+
+        # Lazy tab population (2026-08-13, perf): profiled that opening an
+        # experiment with many trials spends most of its (post-DB-caching)
+        # time in Qt work - setStyleSheet() re-parsing + headerData() for
+        # wide pivot tables - repeated for every lab tab (Titer, Statimat,
+        # EKB, shrinkage tabs, ...) on every load_record(), even ones the
+        # user never looks at. The DATA FETCH per tab still runs eagerly
+        # (it's what decides whether the tab exists at all - some lab
+        # tables have zero rows for a given experiment, so applicability
+        # isn't knowable from schema alone), but the expensive tail (build
+        # model, setModel, resize columns, apply styling) is deferred to
+        # the first time the user actually selects that tab - see
+        # _defer_or_populate()/_on_tab_current_changed() below. Machine
+        # Data is deliberately NOT routed through this - it stays eager,
+        # unconditionally, so the screen always opens showing real data
+        # immediately instead of a blank first tab.
+        self._pending_tab_populate: Dict[str, Any] = {}
+        self._tab_widget_to_key: Dict[Any, str] = {}
 
         # Modeless PDF viewer (so the user can keep editing this screen)
         self._series_pdfs_viewer = None
@@ -2505,6 +2765,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_itemat: Optional[QWidget] = None
         self.tbl_itemat: Optional[QTableView] = None
         self.model_itemat: Optional[PivotEditModel] = None
+        self.lbl_itemat_retest_banner: Optional[QLabel] = None
         self._itemat_tensions: List[float] = []
 
         self.tab_itemat_plus: Optional[QWidget] = None
@@ -2541,6 +2802,8 @@ class ShowExperimentScreen(QWidget):
         self._aty_current_trial_id: Optional[int] = None
         self._aty_current_tdms = None
         self._aty_cache: dict = {}
+        self._aty_core_cache: dict = {}  # Compare tab: trial ID -> aty_core_analysis.analyze_trial() result
+        self._aty_raw_cache: dict = {}   # Compare tab: trial ID -> (arr_mm, mm_per_point), avoids re-reading TDMS
 
         self.tab_rapid600: Optional[QWidget] = None
         self.tbl_rapid600: Optional[QTableView] = None
@@ -2897,11 +3160,43 @@ class ShowExperimentScreen(QWidget):
                     pass
                 self._housing_image_map[str(hid)] = str(link).strip()
 
+    # ---------- Lazy tab population ----------
+
+    def _defer_or_populate(self, key: str, tab_widget, populate_fn):
+        """Runs `populate_fn` now if `tab_widget` is the currently selected
+        tab, otherwise stores it to run the first time the user actually
+        selects that tab (see _on_tab_current_changed()). `populate_fn`
+        should be the expensive "build model / setModel / resize columns /
+        apply styling" tail of a _build_XXX_tab() method - the row fetch
+        that decides whether the tab exists at all must already have
+        happened in the caller before this is invoked.
+        """
+        self._tab_widget_to_key[tab_widget] = key
+        if self.tabs.currentWidget() is tab_widget:
+            populate_fn()
+        else:
+            self._pending_tab_populate[key] = populate_fn
+
+    def _on_tab_current_changed(self, index: int):
+        """Runs a deferred tab's populate_fn (see _defer_or_populate()) the
+        first time the user actually switches to it."""
+        widget = self.tabs.widget(index)
+        key = self._tab_widget_to_key.get(widget)
+        if key is None:
+            return
+        populate_fn = self._pending_tab_populate.pop(key, None)
+        if populate_fn is not None:
+            populate_fn()
+
     # ---------- PUBLIC API ----------
 
     def load_record(self, exp_pk: int, series_pk: int, experiment_id: str):
         self._ys_cache = {}  # Neue Series -> Cache leeren
         self._machine_cache = {}  # Machine-Cache immer neu aufbauen (verhindert Stale-Fields)
+        # Discard any not-yet-run deferred tab populates from a PREVIOUS
+        # experiment (see _defer_or_populate()) - they'd describe stale data
+        # if triggered late for a tab widget reused by this new experiment.
+        self._pending_tab_populate = {}
         # Alle Akzent-abhängigen Styles mit aktuellem Akzent neu anwenden
         try:
             _acc = get_accent()
@@ -2946,11 +3241,30 @@ class ShowExperimentScreen(QWidget):
         self._series_pk = series_pk
         self._experiment_id_txt = experiment_id
 
+        try:
+            self._refresh_saved_reports_dropdown()
+        except Exception:
+            pass
+
         ts = fetch_all(
             "SELECT SeriesName, Notes FROM tblTrialSeries WHERE ID = ?", [series_pk])
         series_name = ts[0]["SeriesName"] if ts else ""
         self.lbl_small_title.setText(f"{experiment_id} – {series_name}")
         self.lbl_series_id.setText(f"TrialSeriesID: {series_pk}")
+
+        # Fenster-/Tab-Titel: "ExperimentID.SS" (erste 2 Zeichen des
+        # Series-Namens, z.B. "2026-73-024.09") statt "Show Experiment
+        # 2026-73-024" - Nutzerwunsch 2026-08-27 ("das ist für den User
+        # klarer"), gleiche Kurzform wie schon beim Print-Labels-Header
+        # (siehe _on_print_trial_labels() weiter unten). main.py setzt
+        # vor load_record() bereits einen generischen Platzhaltertitel -
+        # dieser hier ist der zuletzt gesetzte und damit der tatsächlich
+        # sichtbare (auch für den Tab-Label-Sync, siehe
+        # ui/widgets/tab_container.py).
+        try:
+            self.window().setWindowTitle(f"TrippleT – {experiment_id}.{series_name[:2]}")
+        except Exception:
+            pass
 
         # Load Notes
         self._load_notes(ts[0] if ts else {})
@@ -2970,6 +3284,14 @@ class ShowExperimentScreen(QWidget):
         self._save_model_names = []  # reset save registry
         self._init_machine_cache()  # statische DB-Daten einmalig cachen
         self._build_machine_tab()
+        # Always show Machine Data first when a (new) experiment loads -
+        # makes _defer_or_populate()'s "is this tab currently visible"
+        # check meaningful/predictable, and matches the actual ask (open
+        # fast showing Machine Data, lazy-load the rest on demand) rather
+        # than leaving the view on whatever lab tab happened to be selected
+        # for the PREVIOUS experiment.
+        if self.tab_machine is not None:
+            self.tabs.setCurrentWidget(self.tab_machine)
         self._build_titer_tab()
         self._build_jet_air_tab()
         self._build_statimat_tab()
@@ -3021,21 +3343,40 @@ class ShowExperimentScreen(QWidget):
     # ---------- UI ----------
 
     def _build_ui(self):
+        # Keine TopBar (HeaderBar) mehr (2026-08-26, siehe screen_home.py::
+        # _build_ui()-Docstring) - Glocke/Suche/Accent-Farbe/Log Out sitzen
+        # jetzt in der Sidebar-Account-Gruppe. Das frühere Back-Button-
+        # Bedürfnis (zurück zu Backlog/All Experiments/Manage Yarn/Manage
+        # Jets, je nachdem von wo aus geöffnet wurde) bleibt exklusiv hier
+        # (Nutzer-Feedback: "will lieber eine andere Lösung als die TopBar
+        # nür für 'once in a while' zu behalten") - siehe der kontextuelle
+        # Back-Chip weiter unten in der Tools-Leiste, gesetzt über
+        # set_back_target().
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="Show Experiment",
-                           show_home=True, show_back=True)
-        header.connect_home(self._back_home)
-        header.connect_back(self._back_all_experiments)
-        root.addWidget(header)
+        # Sidebar-Navigation (siehe ui/widgets/sidebar.py + sidebar_nav.py,
+        # geteilt mit allen anderen Screens) - Inhalt bleibt hier leer, wird
+        # lazy beim ersten showEvent() befüllt (access_level ist zum
+        # Zeitpunkt dieses Konstruktoraufrufs noch nicht bekannt). Der
+        # restliche, bereits bestehende Inhalt dieser Methode wandert von
+        # `root` nach `content_layout` (siehe unten) - FooterBar bleibt
+        # bewusst auf `root`, spannt also volle Breite unter Sidebar+Inhalt.
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # Titelzeile (dunkler Balken + Save)
         tools = QFrame()
         tl = QHBoxLayout(tools)
         tl.setContentsMargins(24, 12, 24, 0)
         tl.setSpacing(8)
+
+        # Kontextueller Back-Chip entfernt (2026-08-27, Nutzerwunsch: "der
+        # button oben der mich zurück führt will ich nicht mehr" - die
+        # Sidebar-Einträge "Backlog"/"All Experiments" bleiben unverändert
+        # bestehen, siehe sidebar_nav.py; set_back_target() bleibt als
+        # No-Op-Bookkeeping bestehen, da main.py an mehreren Stellen weiterhin
+        # danach ruft, hat aber kein UI-Gegenstück mehr).
 
         self.lbl_small_title = QLabel("")
         self.lbl_small_title.setStyleSheet(
@@ -3143,6 +3484,25 @@ class ShowExperimentScreen(QWidget):
         self.btn_report.clicked.connect(self._open_report)
         tl.addWidget(self.btn_report)
 
+        # Gespeicherte Reports zu dieser TrialSeries: Dropdown + "Go!"-Button
+        # (2026-08-27, Nutzerwunsch) - beide nur sichtbar, wenn tatsächlich
+        # mind. ein Report für diese Series existiert (siehe load_record()/
+        # _refresh_saved_reports_dropdown()). Auswahl öffnet den Report-
+        # Screen direkt mit genau diesem Report geladen, statt der leeren
+        # Standardansicht (siehe _open_selected_saved_report()).
+        self.cmb_saved_reports = QComboBox()
+        self.cmb_saved_reports.setMinimumWidth(220)
+        self.cmb_saved_reports.setToolTip("Saved Smart Chart reports for this trial series")
+        self.cmb_saved_reports.setVisible(False)
+        tl.addWidget(self.cmb_saved_reports)
+
+        self.btn_go_saved_report = QPushButton("Go!")
+        self.btn_go_saved_report.setMinimumHeight(30)
+        self.btn_go_saved_report.setToolTip("Open the selected saved report")
+        self.btn_go_saved_report.clicked.connect(self._open_selected_saved_report)
+        self.btn_go_saved_report.setVisible(False)
+        tl.addWidget(self.btn_go_saved_report)
+
         tl.addStretch(1)
         self.btn_refresh = QPushButton("↻")
         self.btn_refresh.setToolTip("Screen aktualisieren (F5)")
@@ -3162,7 +3522,7 @@ class ShowExperimentScreen(QWidget):
             pass
         tl.addWidget(self.btn_refresh)
         tl.addWidget(self.btn_save)
-        root.addWidget(tools)
+        content_layout.addWidget(tools)
 
         # NEU: Material-Infobox direkt unter dem Balken
         mat_wrap = QFrame()
@@ -3177,14 +3537,23 @@ class ShowExperimentScreen(QWidget):
 
         self.lbl_material_value = QLabel("—")
         self.lbl_material_value.setWordWrap(True)
+        self.lbl_material_value.setTextFormat(Qt.RichText)
+        self.lbl_material_value.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
         self.lbl_material_value.setStyleSheet(
             "border:1px solid " + get_accent() + "; border-radius:4px; padding:6px 10px;"
                                                  "color:#202020; background:#f8fff9;"
         )
+        self.lbl_material_value.setMouseTracking(True)
+        self._material_label_hover_href = ""
+        self.lbl_material_value.linkHovered.connect(
+            self._on_material_label_link_hovered)
+        self.lbl_material_value.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.lbl_material_value.customContextMenuRequested.connect(
+            self._on_material_label_context_menu)
 
         mwl.addWidget(self.lbl_material_title, 0, Qt.AlignVCenter)
         mwl.addWidget(self.lbl_material_value, 1, Qt.AlignVCenter)
-        root.addWidget(mat_wrap)
+        content_layout.addWidget(mat_wrap)
 
         # Tabs
         self.tabs = QTabWidget()
@@ -3199,6 +3568,7 @@ class ShowExperimentScreen(QWidget):
             QTabBar::tab:hover { background: #e9e9e9; }
             QTabBar::tab:selected { background: #000000; color: #39a650; }
         """.replace("#39a650", get_accent()))
+        self.tabs.currentChanged.connect(self._on_tab_current_changed)
 
         # Experiment Request icon (visible only when linked)
         self.btn_experiment_request = QPushButton()
@@ -3249,9 +3619,9 @@ class ShowExperimentScreen(QWidget):
         thl.setSpacing(8)
         thl.addStretch(1)
         thl.addWidget(self.btn_experiment_request, 0, Qt.AlignRight | Qt.AlignVCenter)
-        root.addWidget(tabs_header, 0)
+        content_layout.addWidget(tabs_header, 0)
 
-        root.addWidget(self.tabs, 1)
+        content_layout.addWidget(self.tabs, 1)
 
         # Machine Data Tab
         self.tab_machine = QWidget()
@@ -3478,6 +3848,14 @@ class ShowExperimentScreen(QWidget):
         except Exception:
             return 0
 
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat (siehe BacklogScreen._refresh_sidebar()
+        für die ausführliche Begründung des Musters). Aktualisiert sonst nur
+        die Badges. Rumpf in ui/widgets/sidebar_nav.py::refresh_lazy_sidebar()
+        ausgelagert (2026-08-27, App-weiter Sidebar-Rollout)."""
+        sidebar_nav.refresh_lazy_sidebar(self, self._get_access_level())
+
     def _sync_save_button_access(self) -> None:
         """Keep Save button state consistent with the behaviour of Ctrl+S."""
         try:
@@ -3526,6 +3904,10 @@ class ShowExperimentScreen(QWidget):
             self._sync_save_button_access()
         except Exception:
             pass
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
         return super().showEvent(event)
 
     def keyPressEvent(self, event):
@@ -3545,22 +3927,52 @@ class ShowExperimentScreen(QWidget):
         if callable(self.on_open_report):
             self.on_open_report(self._series_pk)
 
-    def _back_home(self):
-        if self._has_unsaved():
-            res = QMessageBox.question(
-                self,
-                "Unsaved changes",
-                "There are unsaved changes. Save now?",
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-                QMessageBox.Yes,
+    def _refresh_saved_reports_dropdown(self) -> None:
+        """Füllt das "Saved Reports"-Dropdown mit allen gespeicherten Smart-
+        Chart-Reports für die aktuelle TrialSeries (siehe _build_ui()).
+        Dropdown + Go-Button bleiben unsichtbar, solange es keinen einzigen
+        Report für diese Series gibt."""
+        self.cmb_saved_reports.clear()
+        if not self._series_pk or not table_exists("tblSmartChartReport"):
+            self.cmb_saved_reports.setVisible(False)
+            self.btn_go_saved_report.setVisible(False)
+            return
+        try:
+            rows = fetch_all(
+                "SELECT ID, Title, Author FROM tblSmartChartReport "
+                "WHERE SeriesPK=? AND IsTemplate=0 ORDER BY UpdatedAt DESC",
+                [self._series_pk],
             )
-            if res == QMessageBox.Cancel:
-                return
-            if res == QMessageBox.Yes:
-                self._save_all()
-        self._close_series_pdfs_viewer()
-        self._ys_cache = {}  # Screen verlassen -> Cache leeren
-        self.on_back_home()
+        except Exception:
+            rows = []
+        has_reports = bool(rows)
+        for r in rows:
+            title = str(r.get("Title") or "").strip() or "(untitled)"
+            author = str(r.get("Author") or "").strip()
+            label = f"{title} ({author})" if author else title
+            self.cmb_saved_reports.addItem(label, int(r["ID"]))
+        self.cmb_saved_reports.setVisible(has_reports)
+        self.btn_go_saved_report.setVisible(has_reports)
+
+    def _open_selected_saved_report(self) -> None:
+        """"Go!"-Button neben dem Saved-Reports-Dropdown - öffnet den
+        Report-Screen direkt mit dem gerade ausgewählten Report geladen."""
+        if self._series_pk is None:
+            return
+        report_id = self.cmb_saved_reports.currentData()
+        if report_id is None:
+            return
+        if callable(self.on_open_report):
+            self.on_open_report(self._series_pk, report_id)
+
+    def set_back_target(self, label: Optional[str], callback: Optional[Callable]):
+        """Merkt sich Label + Sprungziel für eine Rückwärts-Navigation, ohne
+        UI-Gegenstück (der frühere Back-Chip wurde 2026-08-27 auf
+        Nutzerwunsch entfernt - siehe _build_ui()). Bleibt als reines
+        Bookkeeping bestehen, da main.py an mehreren Stellen weiterhin danach
+        ruft (Backlog/All Experiments/Manage Yarn/Manage Jets/...)."""
+        self.on_back_all_experiments = callback
+        self._back_label = label
 
     def _back_all_experiments(self):
         if self._has_unsaved():
@@ -3610,6 +4022,28 @@ class ShowExperimentScreen(QWidget):
             except Exception:
                 continue
         return False
+
+    def _confirm_proceed_despite_unsaved(self) -> bool:
+        """Same "Unsaved changes - Save now?" guard used for back-navigation
+        (see _back_home/_back_all_experiments), reused before any action
+        that reloads/rebuilds tabs (e.g. copying trials) and would otherwise
+        silently discard pending edits without ever asking. Returns True if
+        the caller should proceed (nothing was unsaved, or the user chose
+        Save or Discard), False if the caller should abort (Cancel)."""
+        if not self._has_unsaved():
+            return True
+        res = QMessageBox.question(
+            self,
+            "Unsaved changes",
+            "There are unsaved changes. Save now?",
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            QMessageBox.Yes,
+        )
+        if res == QMessageBox.Cancel:
+            return False
+        if res == QMessageBox.Yes:
+            self._save_all()
+        return True
 
     def _stamp_trial_timestamp(self, trial_id: int) -> int:
         """Setzt NOW() in tblTrial.[Timestamp] **und** den aktuellen User in tblTrial.[User] für die angegebene Trial-ID."""
@@ -3716,6 +4150,13 @@ class ShowExperimentScreen(QWidget):
                     _n("Yarn Tension after Jet (cN)"),
                     _n("YarnTensionBeforeJet"),
                     _n("YarnTensionAfterJet"),
+                    # W3Tension ("Tension W3 (cN)"): the SSM/draw-machine equivalent
+                    # of the jet machines' after-jet tension above - the last tension
+                    # reading taken on those machines, so its edit time is the closest
+                    # available proxy for "this trial's machine data is complete"
+                    # (2026-08-20, explicit user request; see also the Done-status
+                    # fallback in screen_backlog.py's _update_backlog_status()).
+                    _n("W3Tension"),
                 }
                 for (rr, cc, _newtext) in list(getattr(self.model_machine, "_dirty", [])):
                     try:
@@ -3868,6 +4309,9 @@ class ShowExperimentScreen(QWidget):
         self._trials = rows
         self._trial_ids = [r["ID"] for r in rows]
         self._trial_labels = [f"V{r['Versuchsnummer']}" for r in rows]
+        # Invalidate the per-load cache in _get_jet_info_rows() - new trial
+        # list means its cached result (if any) is stale.
+        self._jet_info_rows_cache = None
 
     def _init_machine_cache(self):
         """Lädt alle statischen DB-Daten für _build_machine_tab einmalig in den Cache."""
@@ -4059,26 +4503,32 @@ class ShowExperimentScreen(QWidget):
             return False
 
     def _fetch_series_images(self, series_id: Any) -> List[Dict[str, str]]:
-        """Returns dicts with FullPath + display name fields."""
+        """Returns dicts with FullPath + display name fields.
+
+        Liefert jetzt auch die primary-key `ID` mit (vorher nicht abgefragt) -
+        ExperimentRequestImagesDialog._delete_selected() matcht den DELETE
+        darüber, statt nur über RelativePath+StoredFilename (siehe dortiger
+        Kommentar: robuster, und Grundlage für den DB-first-Löschfix)."""
         if series_id in (None, ""):
             return []
         rows: List[Dict[str, str]] = []
         with get_connection() as cn:
             cur = cn.cursor()
             cur.execute(
-                "SELECT [RelativePath], [StoredFilename], [OriginalFilename] "
+                "SELECT [ID], [RelativePath], [StoredFilename], [OriginalFilename] "
                 "FROM [tblTrialSeriesImage] "
                 "WHERE [TrialSeriesID]=? "
                 "ORDER BY [ID] DESC",
                 [series_id],
             )
-            for rel_path, stored, orig_name in cur.fetchall() or []:
+            for img_id, rel_path, stored, orig_name in cur.fetchall() or []:
                 rel_path = str(rel_path or "")
                 stored = str(stored or "")
                 orig_name = str(orig_name or "")
                 full = os.path.join(rel_path, stored) if rel_path else stored
                 rows.append(
                     {
+                        "ID": img_id,
                         "RelativePath": rel_path,
                         "StoredFilename": stored,
                         "OriginalFilename": orig_name,
@@ -4128,8 +4578,10 @@ class ShowExperimentScreen(QWidget):
             relative_path: str,
             stored_filename: str,
             original_filename: str,
-    ) -> None:
-        """Erzeugt einen Datensatz in tblTrialSeriesImage."""
+    ) -> Optional[int]:
+        """Erzeugt einen Datensatz in tblTrialSeriesImage. Gibt die neue ID
+        zurueck (fuer die anschliessende Garnspiegel-Analyse, siehe
+        _analyze_and_save_garnspiegel)."""
         created_by = self._current_user_id()
         if created_by in (None, ""):
             raise RuntimeError("CreatedBy/UserID konnte nicht ermittelt werden.")
@@ -4150,10 +4602,47 @@ class ShowExperimentScreen(QWidget):
         with get_connection() as cn:
             cur = cn.cursor()
             cur.execute(sql, params)
+            new_id = cur.lastrowid
             try:
                 cn.commit()
             except Exception:
                 pass
+        return new_id
+
+    def _analyze_and_save_garnspiegel(self, image_id: Optional[int], file_path: str, original_filename: str) -> None:
+        """Best-effort: berechnet die Garnspiegel-Breiten-CV% (siehe
+        ui/yarnscope/garnspiegel_analysis.py) fuer ein frisch hochgeladenes
+        TrialSeries-Bild und speichert das Ergebnis in
+        tblTrialSeriesImageAnalysis. Laeuft synchron beim Upload (Analyse
+        eines einzelnen Fotos dauert <1s) - ein Fehler hier darf den Upload
+        selbst nie verhindern, deshalb komplett stumm abgefangen (gleiches
+        Muster wie das Feature-Tracking direkt darunter).
+
+        Nicht jedes hochgeladene Bild ist ein Garnspiegel (Defekt-/Setup-
+        Fotos laufen ueber denselben Dialog) - nur Dateien nach der
+        bestehenden Labor-Namenskonvention "V<n>.jpg" werden ueberhaupt
+        versucht, sonst gar kein Eintrag (kein falsch-positives Ergebnis auf
+        einem zufaellig streifig aussehenden, unrelated Foto)."""
+        if image_id is None or not _db_table_exists("tblTrialSeriesImageAnalysis"):
+            return
+        try:
+            from ui.yarnscope.garnspiegel_analysis import (
+                analyze_image, to_db_row, PARAMS_VERSION, looks_like_garnspiegel_filename,
+            )
+            if not looks_like_garnspiegel_filename(original_filename):
+                return
+            stats = analyze_image(file_path)
+            db_row = to_db_row(stats)
+            user_id = self._current_user_id()
+            cols = ["TrialSeriesImageID", "GlobalID", "UserID", "Timestamp", "ParamsVersion"] + list(db_row.keys())
+            vals = [image_id, new_global_id(), user_id, datetime.datetime.now(), PARAMS_VERSION] + list(db_row.values())
+            placeholders = ",".join(["?"] * len(cols))
+            _db_execute(
+                f"INSERT INTO tblTrialSeriesImageAnalysis ({','.join(cols)}) VALUES ({placeholders})",
+                vals,
+            )
+        except Exception as e:
+            logger.warning("_analyze_and_save_garnspiegel: %s", e)
 
     def _upload_series_images(self) -> None:
         """Button-Handler: Bilder waehlen, speichern, DB-Records anlegen."""
@@ -4210,12 +4699,13 @@ class ShowExperimentScreen(QWidget):
                     with open(dst, "wb") as fdst:
                         fdst.write(data)
 
-                    self._insert_trialseries_image_row(
+                    new_image_id = self._insert_trialseries_image_row(
                         series_id=sid,
                         relative_path=db_rel_path,
                         stored_filename=stored_name,
                         original_filename=orig_name,
                     )
+                    self._analyze_and_save_garnspiegel(new_image_id, dst, orig_name)
 
                     stored_any += 1
                 except Exception as e:
@@ -4605,18 +5095,24 @@ class ShowExperimentScreen(QWidget):
         """
         Liest Yarn-Zusammensetzung aus tblTrialSettings (Trial-Ebene).
         Pro Ply wird das häufigste Garn angezeigt (robust gegen vereinzelte Datenfehler).
+
+        Gibt Rich-Text (HTML) zurück: jedes Ply ist ein Link-Anchor
+        ("yarn:<YarnID>"), damit ein Rechtsklick (siehe
+        _on_material_label_context_menu) per QLabel.anchorAt() erkennen
+        kann, auf welches Material genau geklickt wurde, und dessen
+        Lagerplätze (tblYarnSpool) als Tooltip zeigen kann.
         """
         if not getattr(self, "_series_pk", None):
             return ""
 
         rows = fetch_all(
             """
-            SELECT ts.Ply, y.Name AS YarnName, COUNT(*) AS cnt
+            SELECT ts.Ply, y.ID AS YarnID, y.Name AS YarnName, COUNT(*) AS cnt
             FROM tblTrialSettings ts
                      JOIN tblYarn y ON y.ID = ts.YarnID
                      JOIN tblTrial t ON t.ID = ts.TrialID
             WHERE t.TrialSeriesID = ?
-            GROUP BY ts.Ply, y.Name
+            GROUP BY ts.Ply, y.ID, y.Name
             ORDER BY ts.Ply, cnt DESC
             """,
             [self._series_pk],
@@ -4633,14 +5129,90 @@ class ShowExperimentScreen(QWidget):
             if ply in seen_plies:
                 continue
             seen_plies.add(ply)
-            result.append((ply, (r.get("YarnName") or "").strip() or "(ohne Name)"))
+            yid = r.get("YarnID")
+            name = (r.get("YarnName") or "").strip() or "(ohne Name)"
+            result.append((ply, yid, name))
 
-        def _ply_sort_key(pair):
-            m = re.search(r"\d+", pair[0])
+        def _ply_sort_key(triple):
+            m = re.search(r"\d+", triple[0])
             return int(m.group()) if m else 9999
 
         result.sort(key=_ply_sort_key)
-        return " • ".join(f"{ply}: {name}" for ply, name in result)
+
+        parts = []
+        for ply, yid, name in result:
+            label = html.escape(f"{ply}: {name}" if ply else name)
+            if yid is not None:
+                parts.append(
+                    f'<a href="yarn:{int(yid)}" style="color:#202020; text-decoration:none;">{label}</a>')
+            else:
+                parts.append(label)
+        return " • ".join(parts)
+
+    def _on_material_label_link_hovered(self, href: str) -> None:
+        """Verfolgt, über welchem Material-Link die Maus gerade steht.
+        QLabel hat kein anchorAt(pos) (anders als QTextEdit/QTextBrowser) -
+        der Rechtsklick-Handler muss sich deshalb auf die zuletzt per
+        linkHovered gemeldete Position verlassen (die Maus steht beim
+        Rechtsklick bereits dort, das vorangehende Hover-Event ist also
+        zuverlässig aktuell)."""
+        self._material_label_hover_href = href or ""
+
+    def _on_material_label_context_menu(self, pos) -> None:
+        """Rechtsklick auf ein Material in der Material-Infobox oben:
+        zeigt dessen Lagerplätze (tblYarnSpool) als Tooltip."""
+        href = getattr(self, "_material_label_hover_href", "")
+        if not href.startswith("yarn:"):
+            QToolTip.hideText()
+            return
+        try:
+            yarn_id = int(href.split(":", 1)[1])
+        except Exception:
+            return
+        tip = self._yarn_stock_tooltip_html(yarn_id)
+        QToolTip.showText(self.lbl_material_value.mapToGlobal(pos), tip, self.lbl_material_value)
+
+    def _yarn_stock_tooltip_html(self, yarn_id: int) -> str:
+        """Baut den Tooltip-Text mit den aktuellen Lagerplätzen (tblYarnSpool,
+        Status='in stock') für ein Garn - gleiche Datenquelle/Filterung wie
+        ManageYarn/Yarn Stock (screen_yarn_stock.py)."""
+        yname = f"Yarn {yarn_id}"
+        try:
+            yrows = fetch_all("SELECT Name FROM tblYarn WHERE ID = ?", [yarn_id])
+            if yrows and yrows[0].get("Name"):
+                yname = str(yrows[0]["Name"])
+        except Exception:
+            pass
+        header = f"<b>{html.escape(yname)}</b>"
+
+        if not table_exists("tblYarnSpool"):
+            return header + "<br>Stock tracking not available."
+
+        try:
+            rows = fetch_all(
+                "SELECT Location, Charge, WeightKg FROM tblYarnSpool "
+                "WHERE YarnID = ? AND Status = 'in stock' "
+                "ORDER BY Location, Charge",
+                [yarn_id],
+            )
+        except Exception:
+            return header + "<br>Could not load stock."
+
+        if not rows:
+            return header + "<br>No stock in Yarn Stock."
+
+        lines = [header]
+        for r in rows:
+            loc = (r.get("Location") or "").strip() or "–"
+            charge = (r.get("Charge") or "").strip()
+            wt = r.get("WeightKg")
+            try:
+                wt_txt = f"{float(wt):.2f} kg"
+            except Exception:
+                wt_txt = "? kg"
+            charge_txt = f" (Charge {html.escape(charge)})" if charge else ""
+            lines.append(f"{html.escape(loc)}: {wt_txt}{charge_txt}")
+        return "<br>".join(lines)
 
     # ---------- Machine Data ----------
 
@@ -4768,16 +5340,20 @@ class ShowExperimentScreen(QWidget):
     # ---------- Titer (nur sichtbar wenn Daten) ----------
 
     def _on_machine_header_context(self, pos):
-        """Rechtsklick auf Spaltenkopf im Machine-Tab.
+        """Right-click on the column header in the Machine tab.
 
-        Ermöglicht das Kopieren eines Trials (inkl. Labor-Struktur) mehrfach.
+        Opens the batch-copy dialog (from/to trial # + copies per trial),
+        pre-filled with the clicked trial as both From and To - this still
+        covers the simple "copy this one trial N times" case (From == To,
+        Copies > 1), plus the batch case "copy trials 7 through 20, once
+        each" (From != To, Copies = 1).
         """
         if not self.model_machine or not self._trial_ids:
             return
 
         header = self.tbl_machine.horizontalHeader()
         col = header.logicalIndexAt(pos)
-        # Spalte 0 = Zeilentitel (kein Trial)
+        # Column 0 = row title column (not a trial)
         if col <= 0:
             return
 
@@ -4785,19 +5361,29 @@ class ShowExperimentScreen(QWidget):
         if trial_index < 0 or trial_index >= len(self._trial_ids):
             return
 
-        trial_label = self._trial_labels[trial_index] if trial_index < len(
-            self._trial_labels) else f"V?"
-
-        count, ok = QInputDialog.getInt(
-            self,
-            "Trials kopieren",
-            f"Wie viele Kopien von Trial {trial_label} erstellen?",
-            1, 1, 50, 1,
-        )
-        if not ok or count <= 0:
+        # Derive each trial's Versuchsnummer from its label (format "V{n}",
+        # guaranteed by _load_trials() - see self._trial_labels there).
+        try:
+            trial_numbers = [int(lbl[1:]) for lbl in self._trial_labels]
+        except (ValueError, IndexError):
+            return
+        if not trial_numbers:
             return
 
-        self._duplicate_trials_from_machine_col(trial_index, count)
+        dlg = _CopyTrialsRangeDialog(
+            self, min(trial_numbers), max(trial_numbers),
+            trial_numbers[trial_index],
+        )
+        if dlg.exec() != QDialog.Accepted:
+            return
+        v_from, v_to, copies = dlg.get_values()
+
+        trial_indices = [i for i, v in enumerate(trial_numbers) if v_from <= v <= v_to]
+        if not trial_indices:
+            QMessageBox.information(self, "Copy trials", "No trials found in the selected range.")
+            return
+
+        self._duplicate_trial_range(trial_indices, copies)
 
     def _toggle_custom_group_row(self) -> None:
         """Schaltet die Custom-Group-Zeile im Machine-Tab ein/aus und speichert den Zustand."""
@@ -4818,10 +5404,13 @@ class ShowExperimentScreen(QWidget):
         trial_id = cs.get("trial_id")
         vno = cs.get("vno", "?")
 
-        # Alle verfügbaren Yarns laden
-        yarn_rows = fetch_all("SELECT ID, Name FROM tblYarn ORDER BY Name")
+        # Alle verfügbaren Yarns laden - Halbfabrikat-"Schatten"-Garne
+        # (Multimaschinen-Ply-Verknüpfung) bleiben hier aussen vor.
+        _src_col = resolve_field(['SourceTrialID'], get_columns_map('tblYarn'))
+        _where = f" WHERE [{_src_col}] IS NULL" if _src_col else ""
+        yarn_rows = fetch_all(f"SELECT ID, Name FROM tblYarn{_where} ORDER BY Name")
         if not yarn_rows:
-            QMessageBox.warning(self, "Manage Plies", "Keine Yarns in tblYarn gefunden.")
+            QMessageBox.warning(self, "Manage Plies", "No yarns found in tblYarn.")
             return
         yarn_list = [(int(r["ID"]), str(r["Name"] or "")) for r in yarn_rows]
 
@@ -4859,11 +5448,16 @@ class ShowExperimentScreen(QWidget):
                 self.lbl_material_value.setText(txt or "—")
 
     def _multiply_trial_from_col_spec_idx(self, col_spec_idx: int) -> None:
-        """Öffnet den Vervielfältigungs-Dialog für den Versuch, der col_spec_idx zugeordnet ist.
+        """Opens the batch-copy dialog for the trial mapped to col_spec_idx.
+        This is the actually active right-click path (row 0 of the Machine
+        table shows the trial numbers as a pseudo-header - the real Qt
+        column header is hidden, see _MachineContextMenuFilter);
+        _on_machine_header_context is wired to that hidden real header and
+        is therefore effectively never reached.
 
-        col_spec_idx = Index in _machine_col_specs (= Modell-Spalte minus 1).
-        Da mehrere Ply-Spalten zum selben Trial gehören können, wird via
-        _machine_col_specs der korrekte trial_id + trial_index ermittelt.
+        col_spec_idx = index into _machine_col_specs (= model column minus
+        1). Multiple ply columns can belong to the same trial, so the
+        correct trial_id/trial_index is resolved via _machine_col_specs.
         """
         if not self.model_machine or not self._trial_ids:
             return
@@ -4874,142 +5468,111 @@ class ShowExperimentScreen(QWidget):
 
         cs = col_specs[col_spec_idx]
         trial_id = cs.get("trial_id")
-        vno = cs.get("vno", "?")
 
-        # trial_index = Position in self._trial_ids
+        # trial_index = position in self._trial_ids
         try:
             trial_index = self._trial_ids.index(trial_id)
         except ValueError:
-            QMessageBox.warning(self, "Fehler", f"Trial-ID {trial_id} nicht gefunden.")
+            QMessageBox.warning(self, "Error", f"Trial ID {trial_id} not found.")
             return
 
-        trial_label = f"V{vno}"
+        # Derive each trial's Versuchsnummer from its label (format "V{n}",
+        # guaranteed by _load_trials() - see self._trial_labels there).
+        try:
+            trial_numbers = [int(lbl[1:]) for lbl in self._trial_labels]
+        except (ValueError, IndexError):
+            return
+        if not trial_numbers:
+            return
 
-        count, ok = QInputDialog.getInt(
-            self,
-            "Versuch kopieren",
-            f"Wie viele Kopien von {trial_label} erstellen?",
-            1, 1, 50, 1,
+        dlg = _CopyTrialsRangeDialog(
+            self, min(trial_numbers), max(trial_numbers),
+            trial_numbers[trial_index],
         )
-        if not ok or count <= 0:
+        if dlg.exec() != QDialog.Accepted:
+            return
+        v_from, v_to, copies = dlg.get_values()
+
+        trial_indices = [i for i, v in enumerate(trial_numbers) if v_from <= v <= v_to]
+        if not trial_indices:
+            QMessageBox.information(self, "Copy trials", "No trials found in the selected range.")
             return
 
-        self._duplicate_trials_from_machine_col(trial_index, count)
+        self._duplicate_trial_range(trial_indices, copies)
 
-    def _duplicate_trials_from_machine_col(self, trial_index: int, copies: int) -> None:
-        """Erstellt `copies` neue Trials auf Basis des Trials an `trial_index`.
+    def _insert_trial_copy(self, cur, src_trial_id: int, series_id: Any, new_versuchsnummer: int) -> int:
+        """Inserts one new tblTrial row as a copy of src_trial_id (machine
+        params 1:1, lab rows structurally cloned but nulled, ply settings
+        cloned) at new_versuchsnummer within series_id. Shared by the
+        single-trial "N copies" flow and the "copy a range of trials, once
+        each" flow so both stay behaviorally identical. Returns the new
+        trial's ID."""
+        cur.execute("SELECT * FROM tblTrial WHERE ID = ?", (src_trial_id,))
+        src_row = cur.fetchone()
+        if not src_row:
+            raise RuntimeError("Source trial not found.")
 
-        - TrialSeriesID bleibt gleich
-        - Versuchsnummer wird hochgezählt (MAX+1, MAX+2, ...)
-        - Maschinenparameter werden 1:1 übernommen
-        - Labor-Datensätze werden strukturell kopiert, Messwerte aber genullt
-        """
-        if not self._trial_ids or self._series_pk is None:
-            return
-        if trial_index < 0 or trial_index >= len(self._trial_ids):
-            return
+        col_names = [c[0] for c in cur.description]
+        src_map = dict(zip(col_names, src_row))
 
-        src_trial_id = self._trial_ids[trial_index]
-        series_id = self._series_pk
+        # ID / TrialSeriesID / Versuchsnummer are set explicitly below.
+        # Also skip computed/read-only fields (e.g. "D/Y Ratio (T2/T1)").
+        skip_lower = {
+            "id",  # never copy the primary key
+            # TrialSeriesID and Versuchsnummer are set explicitly, so they
+            # are NOT skipped here.
+            "d/y ratio (t2/t1)",  # computed field in Access
+            # never copy DATETIME/TIMESTAMP columns 1:1 (MySQL rejects '0')
+            "timestamp",
+            "createdat",
+            "updatedat",
+        }
+        # don't copy an existing GlobalID column directly
+        gid_col = None
+        for c in col_names:
+            if c.lower() == "globalid":
+                gid_col = c
+                skip_lower.add("globalid")
+                break
+        insert_cols = [c for c in col_names if c.lower() not in skip_lower]
 
-        try:
-            from db.connection import get_connection  # sollte bereits importiert sein
-        except Exception:
-            from db.connection import get_connection  # type: ignore
+        values = []
+        for col in insert_cols:
+            cl = col.lower()
+            if cl == "trialseriesid":
+                values.append(series_id)
+            elif cl == "versuchsnummer":
+                values.append(new_versuchsnummer)
+            else:
+                values.append(src_map.get(col))
 
-        try:
-            with get_connection() as cn:
-                cur = cn.cursor()
+        cols_for_insert = list(insert_cols)
+        vals_for_insert = list(values)
+        if gid_col:
+            cols_for_insert.append(gid_col)
+            vals_for_insert.append(new_global_id())
+        cols_sql = ", ".join(f"[{c}]" for c in cols_for_insert)
+        ph = ", ".join("?" for _ in cols_for_insert)
+        cur.execute(
+            f"INSERT INTO tblTrial ({cols_sql}) VALUES ({ph})",
+            vals_for_insert,
+        )
+        # fetch the new ID (Access-ODBC idiom)
+        cur.execute("SELECT @@IDENTITY")
+        new_id_row = cur.fetchone()
+        new_trial_id = int(new_id_row[0]) if new_id_row else None
+        if not new_trial_id:
+            raise RuntimeError("Could not determine the new trial ID.")
 
-                # Aktuelle maximale Versuchsnummer in dieser TrialSeries
-                cur.execute(
-                    "SELECT MAX(Versuchsnummer) FROM tblTrial WHERE TrialSeriesID = ?",
-                    (series_id,),
-                )
-                row = cur.fetchone()
-                max_v = int(row[0]) if row and row[0] is not None else 0
+        # copy the lab records for this trial
+        self._clone_lab_rows_for_trial(cur, src_trial_id, new_trial_id)
+        # copy the tblTrialSettings rows (ply data)
+        self._clone_trial_settings_rows(cur, src_trial_id, new_trial_id)
+        return new_trial_id
 
-                # Quell-Trial holen
-                cur.execute("SELECT * FROM tblTrial WHERE ID = ?",
-                            (src_trial_id,))
-                src_row = cur.fetchone()
-                if not src_row:
-                    raise RuntimeError("Quell-Trial nicht gefunden.")
-
-                col_names = [c[0] for c in cur.description]
-                src_map = dict(zip(col_names, src_row))
-
-                # ID / TrialSeriesID / Versuchsnummer werden explizit gesetzt
-                # Zusätzlich: berechnete / schreibgeschützte Felder (z. B. "D/Y Ratio (T2/T1)") nicht setzen
-                skip_lower = {
-                    "id",  # Primärschlüssel nie kopieren
-                    # TrialSeriesID und Versuchsnummer werden explizit gesetzt,
-                    # deshalb NICHT hier überspringen.
-                    "d/y ratio (t2/t1)",  # berechnetes Feld in Access
-                    # DATETIME/TIMESTAMP-Spalten nie 1:1 kopieren (MySQL akzeptiert kein '0')
-                    "timestamp",
-                    "createdat",
-                    "updatedat",
-                }
-                # optionale GlobalID-Spalte nicht direkt kopieren
-                gid_col = None
-                for c in col_names:
-                    if c.lower() == "globalid":
-                        gid_col = c
-                        skip_lower.add("globalid")
-                        break
-                insert_cols = [c for c in col_names if c.lower()
-                               not in skip_lower]
-
-                for _ in range(copies):
-                    max_v += 1  # nächste freie Versuchsnummer
-
-                    values = []
-                    for col in insert_cols:
-                        cl = col.lower()
-                        if cl == "trialseriesid":
-                            values.append(series_id)
-                        elif cl == "versuchsnummer":
-                            values.append(max_v)
-                        else:
-                            values.append(src_map.get(col))
-
-                    cols_for_insert = list(insert_cols)
-                    vals_for_insert = list(values)
-                    if gid_col:
-                        cols_for_insert.append(gid_col)
-                        vals_for_insert.append(new_global_id())
-                    cols_sql = ", ".join(f"[{c}]" for c in cols_for_insert)
-                    ph = ", ".join("?" for _ in cols_for_insert)
-                    cur.execute(
-                        f"INSERT INTO tblTrial ({cols_sql}) VALUES ({ph})",
-                        vals_for_insert,
-                    )
-                    # neue ID holen (Access-ODBC)
-                    cur.execute("SELECT @@IDENTITY")
-                    new_id_row = cur.fetchone()
-                    new_trial_id = int(new_id_row[0]) if new_id_row else None
-                    if not new_trial_id:
-                        raise RuntimeError(
-                            "Neue Trial-ID konnte nicht ermittelt werden.")
-
-                    # Labor-Datensätze für diesen Trial kopieren
-                    self._clone_lab_rows_for_trial(
-                        cur, src_trial_id, new_trial_id)
-
-                    # tblTrialSettings-Zeilen (Ply-Daten) kopieren
-                    self._clone_trial_settings_rows(
-                        cur, src_trial_id, new_trial_id)
-
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                "Fehler beim Kopieren",
-                f"Die Trials konnten nicht kopiert werden:\n{e}",
-            )
-            return
-
-        # Modelle erneut laden, damit neue Trials in allen Tabs erscheinen
+    def _reload_after_trial_copy(self) -> None:
+        """Reloads/rebuilds every tab that can show newly-inserted trials -
+        shared by both trial-copy flows below."""
         self._load_trials()
         self._build_machine_tab()
         self._build_titer_tab()
@@ -5022,10 +5585,61 @@ class ShowExperimentScreen(QWidget):
         self._build_dtyomat_tab()
         self._build_atyomat_tab()
 
+    def _duplicate_trial_range(self, trial_indices: List[int], copies_per_trial: int = 1) -> None:
+        """Copies each trial in trial_indices (positions into self._trial_ids)
+        `copies_per_trial` times, in ascending Versuchsnummer order, all
+        appended after the series' current highest Versuchsnummer.
+
+        Single-trial "N copies" (From == To in the dialog) and "copy a whole
+        range once each" (Copies == 1) both go through here - e.g. V7 through
+        V20 in one go, instead of repeating a single-trial dialog 14 times.
+
+        Guards against silently discarding unsaved edits: _reload_after_trial_copy()
+        below rebuilds every tab from the DB, which would wipe any pending
+        (not-yet-saved) cell edits in e.g. Machine Data without asking.
+        """
+        if not self._trial_ids or self._series_pk is None or not trial_indices:
+            return
+
+        if not self._confirm_proceed_despite_unsaved():
+            return
+
+        series_id = self._series_pk
+
+        try:
+            with get_connection() as cn:
+                cur = cn.cursor()
+                cur.execute(
+                    "SELECT MAX(Versuchsnummer) FROM tblTrial WHERE TrialSeriesID = ?",
+                    (series_id,),
+                )
+                row = cur.fetchone()
+                max_v = int(row[0]) if row and row[0] is not None else 0
+
+                created = 0
+                for trial_index in trial_indices:
+                    if trial_index < 0 or trial_index >= len(self._trial_ids):
+                        continue
+                    src_trial_id = self._trial_ids[trial_index]
+                    for _ in range(copies_per_trial):
+                        max_v += 1
+                        self._insert_trial_copy(cur, src_trial_id, series_id, max_v)
+                        created += 1
+
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Error copying trials",
+                f"The trials could not be copied:\n{e}",
+            )
+            return
+
+        self._reload_after_trial_copy()
+
         QMessageBox.information(
             self,
-            "Trials kopiert",
-            f"{copies} Kopie(n) von Trial {self._trial_labels[trial_index]} wurden erstellt.",
+            "Trials copied",
+            f"{created} new trial(s) created.",
         )
 
     def _on_print_trial_labels(self) -> None:
@@ -5289,10 +5903,23 @@ class ShowExperimentScreen(QWidget):
 
     def _get_jet_info_rows(self) -> list:
         """3 Zeilen (label, [wert_pro_trial]) für Jet / Jet Plate / Air Pressure.
-        Lädt direkt aus DB – unabhängig vom Machine Tab."""
+        Lädt direkt aus DB – unabhängig vom Machine Tab.
+
+        Cached per load_record() call (invalidated in _load_trials()) - up to
+        13 different lab tab builders (Titer, Statimat, EKB, shrinkage tabs,
+        Waterbath, ITEMAT, DTYoMat, ATYoMat, Rapid600, ...) each call this for
+        the exact same trial list during a single experiment open, previously
+        re-querying the DB every single time (profiled: ~0.23s / ~21% of a
+        255-trial open's total time was this alone, before caching).
+        """
+        cached = getattr(self, "_jet_info_rows_cache", None)
+        if cached is not None:
+            return cached
         trial_ids = getattr(self, "_trial_ids", []) or []
         if not trial_ids:
-            return [("Jet", []), ("Jet Plate", []), ("Air Pressure", [])]
+            result = [("Jet", []), ("Jet Plate", []), ("Air Pressure", [])]
+            self._jet_info_rows_cache = result
+            return result
         try:
             placeholders = ",".join(["?"] * len(trial_ids))
             # Jet name via JOIN auf tblDTYJets
@@ -5311,10 +5938,12 @@ class ShowExperimentScreen(QWidget):
             jets = [str(r.get("JetName") or "") for r in ordered]
             plates = [str(r.get("JetPlate") or "") for r in ordered]
             airs = [str(r.get("AirPressure") or "") for r in ordered]
-            return [("Jet", jets), ("Jet Plate", plates), ("Air Pressure", airs)]
+            result = [("Jet", jets), ("Jet Plate", plates), ("Air Pressure", airs)]
         except Exception:
             n = len(trial_ids)
-            return [("Jet", [""] * n), ("Jet Plate", [""] * n), ("Air Pressure", [""] * n)]
+            result = [("Jet", [""] * n), ("Jet Plate", [""] * n), ("Air Pressure", [""] * n)]
+        self._jet_info_rows_cache = result
+        return result
 
     def _ensure_titer_tab(self):
         _titer_qss = """
@@ -5332,12 +5961,17 @@ class ShowExperimentScreen(QWidget):
         self.tab_titer = QWidget()
         vt = QVBoxLayout(self.tab_titer)
         vt.setContentsMargins(24, 12, 24, 24)
+        self.lbl_titer_retest_banner = self._make_retest_banner()
+        vt.addWidget(self.lbl_titer_retest_banner)
         self.tbl_titer = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_titer)
         self._enable_paste_for_table(self.tbl_titer)
         self.tbl_titer.verticalHeader().setVisible(False)
         self.tbl_titer.setStyleSheet(_titer_qss)
         self.tbl_titer.horizontalHeader().setMinimumSectionSize(90)
+        self.tbl_titer.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_titer.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_titer, ls="Titer": self._on_lab_header_context_menu(tw, pos, ls))
         vt.addWidget(self.tbl_titer)
         self.tabs.addTab(self.tab_titer, "Titer")
 
@@ -5351,6 +5985,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_titer = None
         self.tbl_titer = None
         self.model_titer = None
+        self.lbl_titer_retest_banner = None
 
     def _build_titer_tab(self):
         # Tabelle kann je nach Schema unterschiedlich heissen
@@ -5385,82 +6020,87 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_titer_tab()
 
-        self.model_titer = PivotEditModel(
-            row_titles=["Titer (dtex)"],
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"],  # nur Zahlen (mit Komma/Punkt)
-        )
-        by_trial = defaultdict(dict)
-        for r in rows:
-            by_trial[int(r["TrialID"])] = r
+        def _populate():
+            self.model_titer = PivotEditModel(
+                row_titles=["Titer (dtex)"],
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"],  # nur Zahlen (mit Komma/Punkt)
+            )
+            by_trial = defaultdict(dict)
+            for r in rows:
+                by_trial[int(r["TrialID"])] = r
 
-        for c_idx, trial in enumerate(self._trials):
-            rec = by_trial.get(trial["ID"])
-            if rec:
-                binding = CellBinding(
-                    titer_table, "ID", rec["ID"], col_titer)
-                self.model_titer.set_cell(
-                    0, c_idx, rec.get("Titer"), binding)
-            else:
-                self.model_titer.set_cell(0, c_idx, None, None)
+            for c_idx, trial in enumerate(self._trials):
+                rec = by_trial.get(trial["ID"])
+                if rec:
+                    binding = CellBinding(
+                        titer_table, "ID", rec["ID"], col_titer)
+                    self.model_titer.set_cell(
+                        0, c_idx, rec.get("Titer"), binding)
+                else:
+                    self.model_titer.set_cell(0, c_idx, None, None)
 
-        self.tbl_titer.setModel(self.model_titer)
-        self.model_titer.insert_readonly_rows_at_top(self._get_jet_info_rows())
-        self._register_save_model("model_titer")
-        self.tbl_titer.resizeColumnsToContents(fixed_data_column_width=90)
+            self.tbl_titer.setModel(self.model_titer)
+            self.model_titer.insert_readonly_rows_at_top(self._get_jet_info_rows())
+            self._register_save_model("model_titer")
+            self.tbl_titer.resizeColumnsToContents(fixed_data_column_width=90)
+            self._apply_lab_retest_flags(
+                self.model_titer, self.tab_titer, "Titer", self.lbl_titer_retest_banner)
 
-        # ── Soll-Titer aus Trial 1 berechnen (einmalig für die ganze Series) ──
-        self._titer_out_of_tolerance: set = set()  # c_idx der auffälligen Trials
-        try:
-            first_trial_id = self._trials[0]["ID"] if self._trials else None
-            if first_trial_id is not None:
-                yarn_rows = fetch_all(
-                    "SELECT YarnID FROM tbltrialsettings WHERE TrialID = ?",
-                    [first_trial_id],
-                )
-                yarn_ids = [r["YarnID"] for r in yarn_rows if r.get("YarnID") is not None]
-                soll_titer = None
-                if yarn_ids:
-                    # Lookup: eindeutige YarnIDs -> Endtiter
-                    unique_ids = list(set(yarn_ids))
-                    placeholders = ",".join(["?"] * len(unique_ids))
-                    titer_rows = fetch_all(
-                        f"SELECT ID, Endtiter FROM tblyarn WHERE ID IN ({placeholders})",
-                        unique_ids,
+            # ── Soll-Titer aus Trial 1 berechnen (einmalig für die ganze Series) ──
+            self._titer_out_of_tolerance: set = set()  # c_idx der auffälligen Trials
+            try:
+                first_trial_id = self._trials[0]["ID"] if self._trials else None
+                if first_trial_id is not None:
+                    yarn_rows = fetch_all(
+                        "SELECT YarnID FROM tbltrialsettings WHERE TrialID = ?",
+                        [first_trial_id],
                     )
-                    endtiter_by_id = {}
-                    for tr in titer_rows:
-                        try:
-                            endtiter_by_id[int(tr["ID"])] = float(tr["Endtiter"] or 0)
-                        except Exception:
-                            pass
-                    # Summiere pro Vorkommen in yarn_ids (Duplikate = mehrere Plies desselben Garns)
-                    total = 0.0
-                    for yid in yarn_ids:
-                        total += endtiter_by_id.get(int(yid), 0.0)
-                    soll_titer = total if total > 0 else None
+                    yarn_ids = [r["YarnID"] for r in yarn_rows if r.get("YarnID") is not None]
+                    soll_titer = None
+                    if yarn_ids:
+                        # Lookup: eindeutige YarnIDs -> Endtiter
+                        unique_ids = list(set(yarn_ids))
+                        placeholders = ",".join(["?"] * len(unique_ids))
+                        titer_rows = fetch_all(
+                            f"SELECT ID, Endtiter FROM tblyarn WHERE ID IN ({placeholders})",
+                            unique_ids,
+                        )
+                        endtiter_by_id = {}
+                        for tr in titer_rows:
+                            try:
+                                endtiter_by_id[int(tr["ID"])] = float(tr["Endtiter"] or 0)
+                            except Exception:
+                                pass
+                        # Summiere pro Vorkommen in yarn_ids (Duplikate = mehrere Plies desselben Garns)
+                        total = 0.0
+                        for yid in yarn_ids:
+                            total += endtiter_by_id.get(int(yid), 0.0)
+                        soll_titer = total if total > 0 else None
 
-                if soll_titer:
-                    lo = soll_titer * 0.95
-                    hi = soll_titer * 1.05
-                    for c_idx, trial in enumerate(self._trials):
-                        rec = by_trial.get(trial["ID"])
-                        if not rec:
-                            continue
-                        raw = rec.get("Titer")
-                        if raw in (None, ""):
-                            continue
-                        try:
-                            val = float(str(raw).replace(",", "."))
-                        except Exception:
-                            continue
-                        if val < lo or val > hi:
-                            self._titer_out_of_tolerance.add(c_idx)
-                            self.model_titer.set_cell_alert(len(self._get_jet_info_rows()), c_idx, "red")
-                    # Statimat DS Tenacity orange markieren (falls Modell schon existiert)
-                    self._apply_titer_alert_to_stat_ds()
-        except Exception:
-            pass
+                    if soll_titer:
+                        lo = soll_titer * 0.95
+                        hi = soll_titer * 1.05
+                        for c_idx, trial in enumerate(self._trials):
+                            rec = by_trial.get(trial["ID"])
+                            if not rec:
+                                continue
+                            raw = rec.get("Titer")
+                            if raw in (None, ""):
+                                continue
+                            try:
+                                val = float(str(raw).replace(",", "."))
+                            except Exception:
+                                continue
+                            if val < lo or val > hi:
+                                self._titer_out_of_tolerance.add(c_idx)
+                                self.model_titer.set_cell_alert(len(self._get_jet_info_rows()), c_idx, "red")
+                        # Statimat DS Tenacity orange markieren (falls Modell schon existiert)
+                        self._apply_titer_alert_to_stat_ds()
+            except Exception:
+                pass
+
+        self._defer_or_populate("titer", self.tab_titer, _populate)
 
     def _apply_titer_alert_to_stat_ds(self):
         """Markiert die Tenacity-Zeile in Statimat DS orange für Trials mit Titer-Abweichung."""
@@ -5523,6 +6163,13 @@ class ShowExperimentScreen(QWidget):
         hdr1 = QHBoxLayout()
         hdr1.addWidget(QLabel("<b>Air Consumption</b>"))
         hdr1.addStretch(1)
+        btn_sync_jets = QPushButton("Physische Düsen synchronisieren")
+        btn_sync_jets.setToolTip(
+            "Gleicht diese Tabelle mit den aktuell in den Trials hinterlegten "
+            "Duesen/Plates ab (z.B. nachdem JetID/JetPlate eines Trials "
+            "nachtraeglich geaendert wurde).")
+        btn_sync_jets.clicked.connect(self._sync_jet_air_physical_jets)
+        hdr1.addWidget(btn_sync_jets)
         hdr1.addWidget(QLabel("Einheit:"))
         self.cmb_jet_air_unit = QComboBox()
         self.cmb_jet_air_unit.addItem("Nm³/h", "Nm3h")
@@ -5713,74 +6360,234 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_jet_air_tab()
 
-        by_key: Dict[Tuple[int, str, float], dict] = {}
+        def _populate():
+            by_key: Dict[Tuple[int, str, float], dict] = {}
+            for r in rows:
+                if r.get("JetID") is None or r.get("AirPressure") is None:
+                    continue
+                key = (int(r["JetID"]), _plate_key(r.get("JetPlate")), round(float(r["AirPressure"]), 6))
+                by_key[key] = r
+
+            # 1 Nm3/h = 1000 l / 60 min = 16.6667 l/min
+            LMIN_PER_NM3H = 1000.0 / 60.0
+            use_lmin = (self._jet_air_unit == "lmin")
+
+            # ── Air Consumption ──────────────────────────────────────────────
+            self.model_jet_air = PivotEditModel(
+                row_titles=row_titles, col_titles=col_titles,
+                row_validators=["onlyDoubles"] * len(row_titles),
+            )
+            if use_lmin:
+                self.model_jet_air.set_unit_scale(LMIN_PER_NM3H, "AirConsumption")
+            for r_idx, (jid, plate) in enumerate(physical_jets):
+                for c_idx, p in enumerate(pressures):
+                    rec = by_key.get((jid, plate, round(p, 6)))
+                    if rec:
+                        binding = CellBinding(table, "ID", rec["ID"], "AirConsumption")
+                        val = rec.get("AirConsumption")
+                        disp = None
+                        if val is not None:
+                            v = float(val) * LMIN_PER_NM3H if use_lmin else float(val)
+                            disp = f"{v:.2f}"
+                        self.model_jet_air.set_cell(r_idx, c_idx, disp, binding)
+                    else:
+                        self.model_jet_air.set_cell(r_idx, c_idx, None, None)
+            self.tbl_jet_air.setModel(self.model_jet_air)
+            self._register_save_model("model_jet_air")
+            self.tbl_jet_air.resizeColumnsToContents(fixed_data_column_width=90)
+
+            # ── Atmospheric Pressure ────────────────────────────────────────
+            self.model_jet_air_atm = PivotEditModel(
+                row_titles=row_titles, col_titles=col_titles,
+                row_validators=["onlyDoubles"] * len(row_titles),
+            )
+            for r_idx, (jid, plate) in enumerate(physical_jets):
+                for c_idx, p in enumerate(pressures):
+                    rec = by_key.get((jid, plate, round(p, 6)))
+                    if rec:
+                        binding = CellBinding(table, "ID", rec["ID"], "AtmosphericPressure")
+                        self.model_jet_air_atm.set_cell(r_idx, c_idx, rec.get("AtmosphericPressure"), binding)
+                    else:
+                        self.model_jet_air_atm.set_cell(r_idx, c_idx, None, None)
+            self.tbl_jet_air_atm.setModel(self.model_jet_air_atm)
+            self._register_save_model("model_jet_air_atm")
+            self.tbl_jet_air_atm.resizeColumnsToContents(fixed_data_column_width=90)
+
+            # ── Air Temperature ─────────────────────────────────────────────
+            self.model_jet_air_temp = PivotEditModel(
+                row_titles=row_titles, col_titles=col_titles,
+                row_validators=["onlyDoubles"] * len(row_titles),
+            )
+            for r_idx, (jid, plate) in enumerate(physical_jets):
+                for c_idx, p in enumerate(pressures):
+                    rec = by_key.get((jid, plate, round(p, 6)))
+                    if rec:
+                        binding = CellBinding(table, "ID", rec["ID"], "AirTemperature")
+                        self.model_jet_air_temp.set_cell(r_idx, c_idx, rec.get("AirTemperature"), binding)
+                    else:
+                        self.model_jet_air_temp.set_cell(r_idx, c_idx, None, None)
+            self.tbl_jet_air_temp.setModel(self.model_jet_air_temp)
+            self._register_save_model("model_jet_air_temp")
+            self.tbl_jet_air_temp.resizeColumnsToContents(fixed_data_column_width=90)
+
+        self._defer_or_populate("jet_air", self.tab_jet_air, _populate)
+
+    def _get_current_physical_jets_for_series(self, series_id: int) -> List[Tuple[int, Optional[str]]]:
+        """Ermittelt die aktuell in den Trials der Series hinterlegten
+        physischen Duesen (JetID + JetPlate) - siehe
+        screen_create_experiment.py:_get_physical_jets_for_series fuer das
+        Original dieser Logik (dort zur Erstbefuellung beim Series-Anlegen,
+        hier zum nachtraeglichen Abgleich)."""
+        if not table_exists("tbltrialsettings") or not table_exists("tbltrial"):
+            return []
+        ts_cols = get_columns_map("tbltrialsettings")
+        t_cols = get_columns_map("tbltrial")
+        col_jet_ts = resolve_field(["JetID"], ts_cols)
+        col_jet_t = resolve_field(["JetID"], t_cols)
+        col_plate = resolve_field(
+            ["Jet Plate Number", "JetPlate", "Jet Plate", "JetPlateNumber"], t_cols) or "Jet Plate Number"
+        if not col_jet_ts and not col_jet_t:
+            return []
+        if col_jet_ts and col_jet_t:
+            jet_expr = f"COALESCE(ts.[{col_jet_ts}], t.[{col_jet_t}])"
+        elif col_jet_ts:
+            jet_expr = f"ts.[{col_jet_ts}]"
+        else:
+            jet_expr = f"t.[{col_jet_t}]"
+        try:
+            rows = fetch_all(
+                f"SELECT DISTINCT {jet_expr} AS JetID, t.[{col_plate}] AS JetPlate "
+                f"FROM tbltrialsettings ts "
+                f"JOIN tbltrial t ON t.ID = ts.TrialID "
+                f"WHERE t.TrialSeriesID = ? AND {jet_expr} IS NOT NULL",
+                [series_id],
+            )
+        except Exception:
+            return []
+        return [(int(r["JetID"]), r.get("JetPlate")) for r in rows]
+
+    def _sync_jet_air_physical_jets(self):
+        """Gleicht tblLaborJetAirConsumption mit den aktuell in den Trials
+        hinterlegten physischen Duesen ab. Faelle wie 'Jet wurde nachtraeglich
+        auf einem oder mehreren Trials geaendert' fuehren sonst dazu, dass das
+        Grid Duesen zeigt, die keinem Trial mehr entsprechen, waehrend die
+        neuen Duesen fehlen - dieses Grid wird naemlich nur additiv beim
+        Series-Anlegen/Trials-Hinzufuegen befuellt (siehe
+        screen_create_experiment.py:_save_jet_air_consumption_rows).
+
+        Fehlende Duese x Druck-Kombis werden ergaenzt (leer, Werte danach
+        nachtragen). Kombis, die keinem aktuellen Trial mehr entsprechen,
+        werden nur zur Loeschung angeboten, wenn sie komplett unbefuellt sind
+        (AirConsumption/AtmosphericPressure/AirTemperature alle NULL) - sonst
+        nur angezeigt, damit echte Messwerte nie automatisch verloren gehen."""
+        table = "tblLaborJetAirConsumption"
+        series_id = getattr(self, "_series_pk", None)
+        if not table_exists(table) or not series_id:
+            return
+
+        current_jets = self._get_current_physical_jets_for_series(series_id)
+        rows = fetch_all(
+            f"SELECT [ID],[JetID],[JetPlate],[AirPressure],[AirConsumption],"
+            f"[AtmosphericPressure],[AirTemperature] FROM {table} WHERE [TrialSeriesID] = ?",
+            [series_id],
+        )
+        pressures = sorted({float(r["AirPressure"]) for r in rows if r.get("AirPressure") is not None})
+        if not current_jets or not pressures:
+            QMessageBox.information(
+                self, "Physische Düsen synchronisieren",
+                "Keine Duesen/Druckstufen gefunden - Sync nicht möglich.")
+            return
+
+        def _plate_key(p):
+            return "" if p is None else str(p)
+
+        existing_keys = {
+            (int(r["JetID"]), _plate_key(r.get("JetPlate")), round(float(r["AirPressure"]), 6))
+            for r in rows if r.get("JetID") is not None and r.get("AirPressure") is not None
+        }
+        current_key_set = {(jid, _plate_key(plate)) for jid, plate in current_jets}
+
+        to_insert: List[Tuple[int, Optional[str], float]] = []
+        for jid, plate in current_jets:
+            for p in pressures:
+                key = (jid, _plate_key(plate), round(p, 6))
+                if key not in existing_keys:
+                    to_insert.append((jid, plate, p))
+
+        orphan_combo_rows: Dict[Tuple[int, str], List[dict]] = {}
         for r in rows:
-            if r.get("JetID") is None or r.get("AirPressure") is None:
+            if r.get("JetID") is None:
                 continue
-            key = (int(r["JetID"]), _plate_key(r.get("JetPlate")), round(float(r["AirPressure"]), 6))
-            by_key[key] = r
+            combo = (int(r["JetID"]), _plate_key(r.get("JetPlate")))
+            if combo not in current_key_set:
+                orphan_combo_rows.setdefault(combo, []).append(r)
 
-        # 1 Nm3/h = 1000 l / 60 min = 16.6667 l/min
-        LMIN_PER_NM3H = 1000.0 / 60.0
-        use_lmin = (self._jet_air_unit == "lmin")
+        if not to_insert and not orphan_combo_rows:
+            QMessageBox.information(
+                self, "Physische Düsen synchronisieren",
+                "Bereits synchron - keine Änderungen notwendig.")
+            return
 
-        # ── Air Consumption ──────────────────────────────────────────────
-        self.model_jet_air = PivotEditModel(
-            row_titles=row_titles, col_titles=col_titles,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
-        if use_lmin:
-            self.model_jet_air.set_unit_scale(LMIN_PER_NM3H, "AirConsumption")
-        for r_idx, (jid, plate) in enumerate(physical_jets):
-            for c_idx, p in enumerate(pressures):
-                rec = by_key.get((jid, plate, round(p, 6)))
-                if rec:
-                    binding = CellBinding(table, "ID", rec["ID"], "AirConsumption")
-                    val = rec.get("AirConsumption")
-                    disp = None
-                    if val is not None:
-                        v = float(val) * LMIN_PER_NM3H if use_lmin else float(val)
-                        disp = f"{v:.2f}"
-                    self.model_jet_air.set_cell(r_idx, c_idx, disp, binding)
+        jet_ids = sorted({jid for jid, _ in current_jets} | {c[0] for c in orphan_combo_rows})
+        jet_name_map: Dict[int, str] = {}
+        try:
+            if jet_ids and table_exists("tblDTYJets"):
+                ph = ",".join(["?"] * len(jet_ids))
+                for jr in fetch_all(
+                        f"SELECT [ID], [Jet] AS JName FROM tblDTYJets WHERE [ID] IN ({ph})", jet_ids):
+                    jet_name_map[int(jr["ID"])] = str(jr.get("JName") or "")
+        except Exception:
+            pass
+
+        msg_lines = []
+        if to_insert:
+            msg_lines.append(f"{len(to_insert)} fehlende Zeile(n) werden ergänzt (leer, Werte danach eintragen).")
+
+        delete_ids: List[int] = []
+        if orphan_combo_rows:
+            msg_lines.append(
+                "\nFolgende Duese(n)/Plate(s) im Grid entsprechen keinem aktuellen Trial mehr:")
+            for (jid, plate), rr in sorted(orphan_combo_rows.items()):
+                jname = jet_name_map.get(jid, f"Jet {jid}")
+                has_data = any(
+                    r.get("AirConsumption") is not None
+                    or r.get("AtmosphericPressure") is not None
+                    or r.get("AirTemperature") is not None
+                    for r in rr
+                )
+                if has_data:
+                    msg_lines.append(f"  - {jname} / Plate {plate or '-'} (hat Messwerte - wird NICHT gelöscht)")
                 else:
-                    self.model_jet_air.set_cell(r_idx, c_idx, None, None)
-        self.tbl_jet_air.setModel(self.model_jet_air)
-        self._register_save_model("model_jet_air")
-        self.tbl_jet_air.resizeColumnsToContents(fixed_data_column_width=90)
+                    msg_lines.append(f"  - {jname} / Plate {plate or '-'} (leer - wird gelöscht)")
+                    delete_ids.extend(r["ID"] for r in rr)
 
-        # ── Atmospheric Pressure ────────────────────────────────────────
-        self.model_jet_air_atm = PivotEditModel(
-            row_titles=row_titles, col_titles=col_titles,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
-        for r_idx, (jid, plate) in enumerate(physical_jets):
-            for c_idx, p in enumerate(pressures):
-                rec = by_key.get((jid, plate, round(p, 6)))
-                if rec:
-                    binding = CellBinding(table, "ID", rec["ID"], "AtmosphericPressure")
-                    self.model_jet_air_atm.set_cell(r_idx, c_idx, rec.get("AtmosphericPressure"), binding)
-                else:
-                    self.model_jet_air_atm.set_cell(r_idx, c_idx, None, None)
-        self.tbl_jet_air_atm.setModel(self.model_jet_air_atm)
-        self._register_save_model("model_jet_air_atm")
-        self.tbl_jet_air_atm.resizeColumnsToContents(fixed_data_column_width=90)
+        resp = QMessageBox.question(
+            self, "Physische Düsen synchronisieren",
+            "\n".join(msg_lines) + "\n\nFortfahren?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if resp != QMessageBox.Yes:
+            return
 
-        # ── Air Temperature ─────────────────────────────────────────────
-        self.model_jet_air_temp = PivotEditModel(
-            row_titles=row_titles, col_titles=col_titles,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
-        for r_idx, (jid, plate) in enumerate(physical_jets):
-            for c_idx, p in enumerate(pressures):
-                rec = by_key.get((jid, plate, round(p, 6)))
-                if rec:
-                    binding = CellBinding(table, "ID", rec["ID"], "AirTemperature")
-                    self.model_jet_air_temp.set_cell(r_idx, c_idx, rec.get("AirTemperature"), binding)
-                else:
-                    self.model_jet_air_temp.set_cell(r_idx, c_idx, None, None)
-        self.tbl_jet_air_temp.setModel(self.model_jet_air_temp)
-        self._register_save_model("model_jet_air_temp")
-        self.tbl_jet_air_temp.resizeColumnsToContents(fixed_data_column_width=90)
+        try:
+            with get_connection() as cn:
+                cur = cn.cursor()
+                user_id = self._current_user_id()
+                for jid, plate, p in to_insert:
+                    cur.execute(
+                        f"INSERT INTO {table} (TrialSeriesID, JetID, JetPlate, AirPressure, UserID, GlobalID) "
+                        f"VALUES (?,?,?,?,?,?)",
+                        [series_id, jid, plate, p, user_id, new_global_id()],
+                    )
+                if delete_ids:
+                    ph = ",".join(["?"] * len(delete_ids))
+                    cur.execute(f"DELETE FROM {table} WHERE [ID] IN ({ph})", delete_ids)
+                cn.commit()
+        except Exception as e:
+            QMessageBox.critical(self, "DB Error", str(e))
+            return
+
+        self._build_jet_air_tab()
+        QMessageBox.information(self, "Physische Düsen synchronisieren", "Synchronisierung abgeschlossen.")
 
     # ---------- Statimat M (nur sichtbar wenn Daten) ----------
 
@@ -5790,11 +6597,16 @@ class ShowExperimentScreen(QWidget):
         self.tab_stat = QWidget()
         vs = QVBoxLayout(self.tab_stat)
         vs.setContentsMargins(24, 12, 24, 24)
+        self.lbl_stat_retest_banner = self._make_retest_banner()
+        vs.addWidget(self.lbl_stat_retest_banner)
         self.tbl_stat = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_stat)
         self._enable_paste_for_table(self.tbl_stat)
         self.tbl_stat.verticalHeader().setVisible(False)
         self.tbl_stat.horizontalHeader().setMinimumSectionSize(90)
+        self.tbl_stat.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_stat.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_stat, ls="Statimat": self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_stat.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_stat.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -5821,6 +6633,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_stat = None
         self.tbl_stat = None
         self.model_stat = None
+        self.lbl_stat_retest_banner = None
 
     def _build_statimat_tab(self):
         # Tabelle kann je nach Schema unterschiedlich heissen
@@ -5867,40 +6680,45 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_stat_tab()
 
-        row_titles = [
-            "Elongation (%)",
-            "Elongation CV (%)",
-            "Tenacity (cN/dtex)",
-            "Tenacity CV (%)",
-        ]
-        self.model_stat = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-        )
+        def _populate():
+            row_titles = [
+                "Elongation (%)",
+                "Elongation CV (%)",
+                "Tenacity (cN/dtex)",
+                "Tenacity CV (%)",
+            ]
+            self.model_stat = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
+            )
 
-        by_trial = {r["TrialID"]: r for r in rows}
-        for c_idx, trial in enumerate(self._trials):
-            rec = by_trial.get(trial["ID"])
-            if rec:
-                self.model_stat.set_cell(0, c_idx, rec.get("Elong"),
-                                         CellBinding(stat_table, "ID", rec["ID"], col_elong))
-                self.model_stat.set_cell(1, c_idx, rec.get("ElongCV"),
-                                         CellBinding(stat_table, "ID", rec["ID"], col_elong_cv))
-                self.model_stat.set_cell(2, c_idx, rec.get("Ten"),
-                                         CellBinding(stat_table, "ID", rec["ID"], col_ten))
-                self.model_stat.set_cell(3, c_idx, rec.get("TenCV"),
-                                         CellBinding(stat_table, "ID", rec["ID"], col_ten_cv))
-            else:
-                self.model_stat.set_cell(0, c_idx, None, None)
-                self.model_stat.set_cell(1, c_idx, None, None)
-                self.model_stat.set_cell(2, c_idx, None, None)
-                self.model_stat.set_cell(3, c_idx, None, None)
+            by_trial = {r["TrialID"]: r for r in rows}
+            for c_idx, trial in enumerate(self._trials):
+                rec = by_trial.get(trial["ID"])
+                if rec:
+                    self.model_stat.set_cell(0, c_idx, rec.get("Elong"),
+                                             CellBinding(stat_table, "ID", rec["ID"], col_elong))
+                    self.model_stat.set_cell(1, c_idx, rec.get("ElongCV"),
+                                             CellBinding(stat_table, "ID", rec["ID"], col_elong_cv))
+                    self.model_stat.set_cell(2, c_idx, rec.get("Ten"),
+                                             CellBinding(stat_table, "ID", rec["ID"], col_ten))
+                    self.model_stat.set_cell(3, c_idx, rec.get("TenCV"),
+                                             CellBinding(stat_table, "ID", rec["ID"], col_ten_cv))
+                else:
+                    self.model_stat.set_cell(0, c_idx, None, None)
+                    self.model_stat.set_cell(1, c_idx, None, None)
+                    self.model_stat.set_cell(2, c_idx, None, None)
+                    self.model_stat.set_cell(3, c_idx, None, None)
 
-        self.tbl_stat.setModel(self.model_stat)
-        self.model_stat.insert_readonly_rows_at_top(self._get_jet_info_rows())
-        self._register_save_model("model_stat")
-        self.tbl_stat.resizeColumnsToContents(fixed_data_column_width=90)
+            self.tbl_stat.setModel(self.model_stat)
+            self.model_stat.insert_readonly_rows_at_top(self._get_jet_info_rows())
+            self._register_save_model("model_stat")
+            self.tbl_stat.resizeColumnsToContents(fixed_data_column_width=90)
+            self._apply_lab_retest_flags(
+                self.model_stat, self.tab_stat, "Statimat", self.lbl_stat_retest_banner)
+
+        self._defer_or_populate("stat", self.tab_stat, _populate)
 
     # ---------- Statimat DS (nur sichtbar wenn Daten) ----------
 
@@ -5910,11 +6728,16 @@ class ShowExperimentScreen(QWidget):
         self.tab_stat_ds = QWidget()
         vs = QVBoxLayout(self.tab_stat_ds)
         vs.setContentsMargins(24, 12, 24, 24)
+        self.lbl_stat_ds_retest_banner = self._make_retest_banner()
+        vs.addWidget(self.lbl_stat_ds_retest_banner)
         self.tbl_stat_ds = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_stat_ds)
         self._enable_paste_for_table(self.tbl_stat_ds)
         self.tbl_stat_ds.verticalHeader().setVisible(False)
         self.tbl_stat_ds.horizontalHeader().setMinimumSectionSize(90)
+        self.tbl_stat_ds.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_stat_ds.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_stat_ds, ls="StatimatDS": self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_stat_ds.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_stat_ds.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -5941,6 +6764,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_stat_ds = None
         self.tbl_stat_ds = None
         self.model_stat_ds = None
+        self.lbl_stat_ds_retest_banner = None
 
     def _build_statimat_ds_tab(self):
         # Tabelle kann je nach Schema unterschiedlich heissen
@@ -5987,43 +6811,48 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_stat_ds_tab()
 
-        row_titles = [
-            "Elongation (%)",
-            "Elongation CV (%)",
-            "Tenacity (cN/dtex)",
-            "Tenacity CV (%)",
-        ]
-        self.model_stat_ds = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-        )
+        def _populate():
+            row_titles = [
+                "Elongation (%)",
+                "Elongation CV (%)",
+                "Tenacity (cN/dtex)",
+                "Tenacity CV (%)",
+            ]
+            self.model_stat_ds = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
+            )
 
-        by_trial = {r["TrialID"]: r for r in rows}
-        for c_idx, trial in enumerate(self._trials):
-            rec = by_trial.get(trial["ID"])
-            if rec:
-                self.model_stat_ds.set_cell(0, c_idx, rec.get("Elong"),
-                                            CellBinding(stat_ds_table, "ID", rec["ID"], col_elong))
-                self.model_stat_ds.set_cell(1, c_idx, rec.get("ElongCV"),
-                                            CellBinding(stat_ds_table, "ID", rec["ID"], col_elong_cv))
-                self.model_stat_ds.set_cell(2, c_idx, rec.get("Ten"),
-                                            CellBinding(stat_ds_table, "ID", rec["ID"], col_ten))
-                self.model_stat_ds.set_cell(3, c_idx, rec.get("TenCV"),
-                                            CellBinding(stat_ds_table, "ID", rec["ID"], col_ten_cv))
-            else:
-                self.model_stat_ds.set_cell(0, c_idx, None, None)
-                self.model_stat_ds.set_cell(1, c_idx, None, None)
-                self.model_stat_ds.set_cell(2, c_idx, None, None)
-                self.model_stat_ds.set_cell(3, c_idx, None, None)
+            by_trial = {r["TrialID"]: r for r in rows}
+            for c_idx, trial in enumerate(self._trials):
+                rec = by_trial.get(trial["ID"])
+                if rec:
+                    self.model_stat_ds.set_cell(0, c_idx, rec.get("Elong"),
+                                                CellBinding(stat_ds_table, "ID", rec["ID"], col_elong))
+                    self.model_stat_ds.set_cell(1, c_idx, rec.get("ElongCV"),
+                                                CellBinding(stat_ds_table, "ID", rec["ID"], col_elong_cv))
+                    self.model_stat_ds.set_cell(2, c_idx, rec.get("Ten"),
+                                                CellBinding(stat_ds_table, "ID", rec["ID"], col_ten))
+                    self.model_stat_ds.set_cell(3, c_idx, rec.get("TenCV"),
+                                                CellBinding(stat_ds_table, "ID", rec["ID"], col_ten_cv))
+                else:
+                    self.model_stat_ds.set_cell(0, c_idx, None, None)
+                    self.model_stat_ds.set_cell(1, c_idx, None, None)
+                    self.model_stat_ds.set_cell(2, c_idx, None, None)
+                    self.model_stat_ds.set_cell(3, c_idx, None, None)
 
-        self.tbl_stat_ds.setModel(self.model_stat_ds)
-        self.model_stat_ds.insert_readonly_rows_at_top(self._get_jet_info_rows())
-        self._register_save_model("model_stat_ds")
-        self.tbl_stat_ds.resizeColumnsToContents(fixed_data_column_width=90)
+            self.tbl_stat_ds.setModel(self.model_stat_ds)
+            self.model_stat_ds.insert_readonly_rows_at_top(self._get_jet_info_rows())
+            self._register_save_model("model_stat_ds")
+            self.tbl_stat_ds.resizeColumnsToContents(fixed_data_column_width=90)
+            self._apply_lab_retest_flags(
+                self.model_stat_ds, self.tab_stat_ds, "StatimatDS", self.lbl_stat_ds_retest_banner)
 
-        # Orange-Alerts für Tenacity falls Titer-Abweichungen bereits bekannt
-        self._apply_titer_alert_to_stat_ds()
+            # Orange-Alerts für Tenacity falls Titer-Abweichungen bereits bekannt
+            self._apply_titer_alert_to_stat_ds()
+
+        self._defer_or_populate("stat_ds", self.tab_stat_ds, _populate)
 
     # ---------- EKB (sichtbar nur bei Daten) ----------
 
@@ -6033,11 +6862,16 @@ class ShowExperimentScreen(QWidget):
         self.tab_ekb = QWidget()
         vl = QVBoxLayout(self.tab_ekb)
         vl.setContentsMargins(24, 12, 24, 24)
+        self.lbl_ekb_retest_banner = self._make_retest_banner()
+        vl.addWidget(self.lbl_ekb_retest_banner)
         self.tbl_ekb = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_ekb)
         self._enable_paste_for_table(self.tbl_ekb)
         self.tbl_ekb.verticalHeader().setVisible(False)
         self.tbl_ekb.horizontalHeader().setMinimumSectionSize(110)
+        self.tbl_ekb.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_ekb.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_ekb, ls="EKB": self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_ekb.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_ekb.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -6064,6 +6898,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_ekb = None
         self.tbl_ekb = None
         self.model_ekb = None
+        self.lbl_ekb_retest_banner = None
 
     def _build_ekb_tab(self):
         if not self._trial_ids or not table_exists("tblLaborEKB"):
@@ -6124,50 +6959,55 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_ekb_tab()
 
-        self.model_ekb = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
+        def _populate():
+            self.model_ekb = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),
+            )
 
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            rec = by_trial.get(tid)
-            if rec:
-                rec_id = rec["RecID"]
-                self.model_ekb.set_cell(
-                    0, c_idx, rec.get("E_X"),
-                    CellBinding("tblLaborEKB", "ID", rec_id, col_e_x),
-                )
-                self.model_ekb.set_cell(
-                    1, c_idx, rec.get("E_CV"),
-                    CellBinding("tblLaborEKB", "ID", rec_id, col_e_cv),
-                )
-                self.model_ekb.set_cell(
-                    2, c_idx, rec.get("K_X"),
-                    CellBinding("tblLaborEKB", "ID", rec_id, col_k_x),
-                )
-                self.model_ekb.set_cell(
-                    3, c_idx, rec.get("K_CV"),
-                    CellBinding("tblLaborEKB", "ID", rec_id, col_k_cv),
-                )
-                self.model_ekb.set_cell(
-                    4, c_idx, rec.get("B_X"),
-                    CellBinding("tblLaborEKB", "ID", rec_id, col_b_x),
-                )
-                self.model_ekb.set_cell(
-                    5, c_idx, rec.get("B_CV"),
-                    CellBinding("tblLaborEKB", "ID", rec_id, col_b_cv),
-                )
-            else:
-                for r_idx in range(len(row_titles)):
-                    self.model_ekb.set_cell(r_idx, c_idx, None, None)
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                rec = by_trial.get(tid)
+                if rec:
+                    rec_id = rec["RecID"]
+                    self.model_ekb.set_cell(
+                        0, c_idx, rec.get("E_X"),
+                        CellBinding("tblLaborEKB", "ID", rec_id, col_e_x),
+                    )
+                    self.model_ekb.set_cell(
+                        1, c_idx, rec.get("E_CV"),
+                        CellBinding("tblLaborEKB", "ID", rec_id, col_e_cv),
+                    )
+                    self.model_ekb.set_cell(
+                        2, c_idx, rec.get("K_X"),
+                        CellBinding("tblLaborEKB", "ID", rec_id, col_k_x),
+                    )
+                    self.model_ekb.set_cell(
+                        3, c_idx, rec.get("K_CV"),
+                        CellBinding("tblLaborEKB", "ID", rec_id, col_k_cv),
+                    )
+                    self.model_ekb.set_cell(
+                        4, c_idx, rec.get("B_X"),
+                        CellBinding("tblLaborEKB", "ID", rec_id, col_b_x),
+                    )
+                    self.model_ekb.set_cell(
+                        5, c_idx, rec.get("B_CV"),
+                        CellBinding("tblLaborEKB", "ID", rec_id, col_b_cv),
+                    )
+                else:
+                    for r_idx in range(len(row_titles)):
+                        self.model_ekb.set_cell(r_idx, c_idx, None, None)
 
-        if self.tbl_ekb is not None:
-            self.tbl_ekb.setModel(self.model_ekb)
-            self.model_ekb.insert_readonly_rows_at_top(self._get_jet_info_rows())
-            self._register_save_model("model_ekb")
-            self.tbl_ekb.resizeColumnsToContents(fixed_data_column_width=110)
+            if self.tbl_ekb is not None:
+                self.tbl_ekb.setModel(self.model_ekb)
+                self.model_ekb.insert_readonly_rows_at_top(self._get_jet_info_rows())
+                self._register_save_model("model_ekb")
+                self.tbl_ekb.resizeColumnsToContents(fixed_data_column_width=110)
+                self._apply_lab_retest_flags(
+                    self.model_ekb, self.tab_ekb, "EKB", self.lbl_ekb_retest_banner)
+
+        self._defer_or_populate("ekb", self.tab_ekb, _populate)
 
     # ---------- Hot Air Shrinkage (sichtbar nur bei Daten) ----------
 
@@ -6177,11 +7017,17 @@ class ShowExperimentScreen(QWidget):
         self.tab_hot_air_shrinkage = QWidget()
         vl = QVBoxLayout(self.tab_hot_air_shrinkage)
         vl.setContentsMargins(24, 12, 24, 24)
+        self.lbl_hot_air_shrinkage_retest_banner = self._make_retest_banner()
+        vl.addWidget(self.lbl_hot_air_shrinkage_retest_banner)
         self.tbl_hot_air_shrinkage = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_hot_air_shrinkage)
         self._enable_paste_for_table(self.tbl_hot_air_shrinkage)
         self.tbl_hot_air_shrinkage.verticalHeader().setVisible(False)
         self.tbl_hot_air_shrinkage.horizontalHeader().setMinimumSectionSize(110)
+        self.tbl_hot_air_shrinkage.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_hot_air_shrinkage.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_hot_air_shrinkage, ls="HotAirShrinkage":
+            self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_hot_air_shrinkage.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_hot_air_shrinkage.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -6208,6 +7054,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_hot_air_shrinkage = None
         self.tbl_hot_air_shrinkage = None
         self.model_hot_air_shrinkage = None
+        self.lbl_hot_air_shrinkage_retest_banner = None
 
     def _build_hot_air_shrinkage_tab(self):
         table_name = "tblLaborHeissLuftSchrumpf"
@@ -6247,35 +7094,41 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_hot_air_shrinkage_tab()
 
-        self.model_hot_air_shrinkage = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
+        def _populate():
+            self.model_hot_air_shrinkage = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),
+            )
 
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            rec = by_trial.get(tid)
-            if rec:
-                rec_id = rec["RecID"]
-                self.model_hot_air_shrinkage.set_cell(
-                    0, c_idx, rec.get("X"),
-                    CellBinding(table_name, "ID", rec_id, col_x),
-                )
-                self.model_hot_air_shrinkage.set_cell(
-                    1, c_idx, rec.get("CV"),
-                    CellBinding(table_name, "ID", rec_id, col_cv),
-                )
-            else:
-                for r_idx in range(len(row_titles)):
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                rec = by_trial.get(tid)
+                if rec:
+                    rec_id = rec["RecID"]
                     self.model_hot_air_shrinkage.set_cell(
-                        r_idx, c_idx, None, None)
+                        0, c_idx, rec.get("X"),
+                        CellBinding(table_name, "ID", rec_id, col_x),
+                    )
+                    self.model_hot_air_shrinkage.set_cell(
+                        1, c_idx, rec.get("CV"),
+                        CellBinding(table_name, "ID", rec_id, col_cv),
+                    )
+                else:
+                    for r_idx in range(len(row_titles)):
+                        self.model_hot_air_shrinkage.set_cell(
+                            r_idx, c_idx, None, None)
 
-        if self.tbl_hot_air_shrinkage is not None:
-            self.tbl_hot_air_shrinkage.setModel(self.model_hot_air_shrinkage)
-            self.model_hot_air_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
-            self._register_save_model("model_hot_air_shrinkage")
-            self.tbl_hot_air_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
+            if self.tbl_hot_air_shrinkage is not None:
+                self.tbl_hot_air_shrinkage.setModel(self.model_hot_air_shrinkage)
+                self.model_hot_air_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
+                self._register_save_model("model_hot_air_shrinkage")
+                self.tbl_hot_air_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
+                self._apply_lab_retest_flags(
+                    self.model_hot_air_shrinkage, self.tab_hot_air_shrinkage, "HotAirShrinkage",
+                    self.lbl_hot_air_shrinkage_retest_banner)
+
+        self._defer_or_populate("hot_air_shrinkage", self.tab_hot_air_shrinkage, _populate)
 
     # ---------- Hot Water Shrinkage (sichtbar nur bei Daten) ----------
 
@@ -6285,11 +7138,17 @@ class ShowExperimentScreen(QWidget):
         self.tab_hot_water_shrinkage = QWidget()
         vl = QVBoxLayout(self.tab_hot_water_shrinkage)
         vl.setContentsMargins(24, 12, 24, 24)
+        self.lbl_hot_water_shrinkage_retest_banner = self._make_retest_banner()
+        vl.addWidget(self.lbl_hot_water_shrinkage_retest_banner)
         self.tbl_hot_water_shrinkage = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_hot_water_shrinkage)
         self._enable_paste_for_table(self.tbl_hot_water_shrinkage)
         self.tbl_hot_water_shrinkage.verticalHeader().setVisible(False)
         self.tbl_hot_water_shrinkage.horizontalHeader().setMinimumSectionSize(110)
+        self.tbl_hot_water_shrinkage.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_hot_water_shrinkage.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_hot_water_shrinkage, ls="HotWaterShrinkage":
+            self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_hot_water_shrinkage.setSelectionBehavior(
             QTableView.SelectItems)
         self.tbl_hot_water_shrinkage.setEditTriggers(
@@ -6320,6 +7179,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_hot_water_shrinkage = None
         self.tbl_hot_water_shrinkage = None
         self.model_hot_water_shrinkage = None
+        self.lbl_hot_water_shrinkage_retest_banner = None
 
     def _build_hot_water_shrinkage_tab(self):
         table_name = "tblLaborKochSchrumpf"
@@ -6359,36 +7219,42 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_hot_water_shrinkage_tab()
 
-        self.model_hot_water_shrinkage = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
+        def _populate():
+            self.model_hot_water_shrinkage = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),
+            )
 
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            rec = by_trial.get(tid)
-            if rec:
-                rec_id = rec["RecID"]
-                self.model_hot_water_shrinkage.set_cell(
-                    0, c_idx, rec.get("X"),
-                    CellBinding(table_name, "ID", rec_id, col_x),
-                )
-                self.model_hot_water_shrinkage.set_cell(
-                    1, c_idx, rec.get("CV"),
-                    CellBinding(table_name, "ID", rec_id, col_cv),
-                )
-            else:
-                for r_idx in range(len(row_titles)):
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                rec = by_trial.get(tid)
+                if rec:
+                    rec_id = rec["RecID"]
                     self.model_hot_water_shrinkage.set_cell(
-                        r_idx, c_idx, None, None)
+                        0, c_idx, rec.get("X"),
+                        CellBinding(table_name, "ID", rec_id, col_x),
+                    )
+                    self.model_hot_water_shrinkage.set_cell(
+                        1, c_idx, rec.get("CV"),
+                        CellBinding(table_name, "ID", rec_id, col_cv),
+                    )
+                else:
+                    for r_idx in range(len(row_titles)):
+                        self.model_hot_water_shrinkage.set_cell(
+                            r_idx, c_idx, None, None)
 
-        if self.tbl_hot_water_shrinkage is not None:
-            self.tbl_hot_water_shrinkage.setModel(
-                self.model_hot_water_shrinkage)
-            self.model_hot_water_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
-            self._register_save_model("model_hot_water_shrinkage")
-            self.tbl_hot_water_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
+            if self.tbl_hot_water_shrinkage is not None:
+                self.tbl_hot_water_shrinkage.setModel(
+                    self.model_hot_water_shrinkage)
+                self.model_hot_water_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
+                self._register_save_model("model_hot_water_shrinkage")
+                self.tbl_hot_water_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
+                self._apply_lab_retest_flags(
+                    self.model_hot_water_shrinkage, self.tab_hot_water_shrinkage, "HotWaterShrinkage",
+                    self.lbl_hot_water_shrinkage_retest_banner)
+
+        self._defer_or_populate("hot_water_shrinkage", self.tab_hot_water_shrinkage, _populate)
 
     # ---------- ATY Shrinkage (sichtbar nur bei Daten) ----------
 
@@ -6398,11 +7264,17 @@ class ShowExperimentScreen(QWidget):
         self.tab_aty_shrinkage = QWidget()
         vl = QVBoxLayout(self.tab_aty_shrinkage)
         vl.setContentsMargins(24, 12, 24, 24)
+        self.lbl_aty_shrinkage_retest_banner = self._make_retest_banner()
+        vl.addWidget(self.lbl_aty_shrinkage_retest_banner)
         self.tbl_aty_shrinkage = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_aty_shrinkage)
         self._enable_paste_for_table(self.tbl_aty_shrinkage)
         self.tbl_aty_shrinkage.verticalHeader().setVisible(False)
         self.tbl_aty_shrinkage.horizontalHeader().setMinimumSectionSize(110)
+        self.tbl_aty_shrinkage.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_aty_shrinkage.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_aty_shrinkage, ls="ATYShrinkage":
+            self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_aty_shrinkage.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_aty_shrinkage.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -6429,6 +7301,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_aty_shrinkage = None
         self.tbl_aty_shrinkage = None
         self.model_aty_shrinkage = None
+        self.lbl_aty_shrinkage_retest_banner = None
 
     def _build_aty_shrinkage_tab(self):
         table_name = "tblLaborATYShrinkage"
@@ -6468,34 +7341,40 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_aty_shrinkage_tab()
 
-        self.model_aty_shrinkage = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
+        def _populate():
+            self.model_aty_shrinkage = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),
+            )
 
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            rec = by_trial.get(tid)
-            if rec:
-                rec_id = rec["RecID"]
-                self.model_aty_shrinkage.set_cell(
-                    0, c_idx, rec.get("X"),
-                    CellBinding(table_name, "ID", rec_id, col_x),
-                )
-                self.model_aty_shrinkage.set_cell(
-                    1, c_idx, rec.get("CV"),
-                    CellBinding(table_name, "ID", rec_id, col_cv),
-                )
-            else:
-                for r_idx in range(len(row_titles)):
-                    self.model_aty_shrinkage.set_cell(r_idx, c_idx, None, None)
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                rec = by_trial.get(tid)
+                if rec:
+                    rec_id = rec["RecID"]
+                    self.model_aty_shrinkage.set_cell(
+                        0, c_idx, rec.get("X"),
+                        CellBinding(table_name, "ID", rec_id, col_x),
+                    )
+                    self.model_aty_shrinkage.set_cell(
+                        1, c_idx, rec.get("CV"),
+                        CellBinding(table_name, "ID", rec_id, col_cv),
+                    )
+                else:
+                    for r_idx in range(len(row_titles)):
+                        self.model_aty_shrinkage.set_cell(r_idx, c_idx, None, None)
 
-        if self.tbl_aty_shrinkage is not None:
-            self.tbl_aty_shrinkage.setModel(self.model_aty_shrinkage)
-            self.model_aty_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
-            self._register_save_model("model_aty_shrinkage")
-            self.tbl_aty_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
+            if self.tbl_aty_shrinkage is not None:
+                self.tbl_aty_shrinkage.setModel(self.model_aty_shrinkage)
+                self.model_aty_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
+                self._register_save_model("model_aty_shrinkage")
+                self.tbl_aty_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
+                self._apply_lab_retest_flags(
+                    self.model_aty_shrinkage, self.tab_aty_shrinkage, "ATYShrinkage",
+                    self.lbl_aty_shrinkage_retest_banner)
+
+        self._defer_or_populate("aty_shrinkage", self.tab_aty_shrinkage, _populate)
 
     # ---------- Waterbath (fixe Spaltennamen) ----------
 
@@ -6505,11 +7384,16 @@ class ShowExperimentScreen(QWidget):
         self.tab_water = QWidget()
         lw = QVBoxLayout(self.tab_water)
         lw.setContentsMargins(24, 12, 24, 24)
+        self.lbl_water_retest_banner = self._make_retest_banner()
+        lw.addWidget(self.lbl_water_retest_banner)
         self.tbl_water = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_water)
         self._enable_paste_for_table(self.tbl_water)
         self.tbl_water.verticalHeader().setVisible(False)
         self.tbl_water.horizontalHeader().setMinimumSectionSize(90)
+        self.tbl_water.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_water.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_water, ls="Waterbath": self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_water.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_water.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -6536,6 +7420,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_water = None
         self.tbl_water = None
         self.model_water = None
+        self.lbl_water_retest_banner = None
 
     def _build_waterbath_tab(self):
         if not self._trial_ids:
@@ -6561,35 +7446,54 @@ class ShowExperimentScreen(QWidget):
             self._remove_waterbath_tab_if_exists()
             return
         self._ensure_waterbath_tab()
-        row_titles = ["Intermingling 1", "Intermingling 2", "Intermingling 3"]
-        self.model_water = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-        )
-        per_trial: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
-        for r in rows:
-            per_trial[int(r["WBTrialID"])].append(r)
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            vals = per_trial.get(tid, [])
-            for i in range(3):
-                if i < len(vals):
-                    rec = vals[i]
-                    self.model_water.set_cell(
-                        i, c_idx,
-                        rec.get("WBValue"),
-                        CellBinding(table_name, id_col,
-                                    rec["RecID"], inter_col),
-                    )
-                else:
-                    self.model_water.set_cell(i, c_idx, None, None)
-        self.tbl_water.setModel(self.model_water)
-        self.model_water.insert_readonly_rows_at_top(self._get_jet_info_rows())
-        self._register_save_model("model_water")
-        self.tbl_water.resizeColumnsToContents(fixed_data_column_width=90)
+
+        def _populate():
+            row_titles = ["Intermingling 1", "Intermingling 2", "Intermingling 3"]
+            self.model_water = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
+            )
+            per_trial: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+            for r in rows:
+                per_trial[int(r["WBTrialID"])].append(r)
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                vals = per_trial.get(tid, [])
+                for i in range(3):
+                    if i < len(vals):
+                        rec = vals[i]
+                        self.model_water.set_cell(
+                            i, c_idx,
+                            rec.get("WBValue"),
+                            CellBinding(table_name, id_col,
+                                        rec["RecID"], inter_col),
+                        )
+                    else:
+                        self.model_water.set_cell(i, c_idx, None, None)
+            self.tbl_water.setModel(self.model_water)
+            self.model_water.insert_readonly_rows_at_top(self._get_jet_info_rows())
+            self._register_save_model("model_water")
+            self.tbl_water.resizeColumnsToContents(fixed_data_column_width=90)
+            self._apply_lab_retest_flags(
+                self.model_water, self.tab_water, "Waterbath", self.lbl_water_retest_banner)
+
+        self._defer_or_populate("water", self.tab_water, _populate)
 
     # ---------- Itemat Lab (sichtbar nur bei Daten) ----------
+
+    def _make_retest_banner(self) -> QLabel:
+        """Creates the (initially hidden) 'retest pending' banner shown above
+        a lab pivot table - shared styling factory so every retest-capable
+        lab tab looks the same (see _apply_lab_retest_flags)."""
+        banner = QLabel()
+        banner.setWordWrap(True)
+        banner.setStyleSheet(
+            "QLabel { background: #FBE4DC; color: #8A2E17; border: 1px solid #D6432E; "
+            "border-radius: 6px; padding: 6px 10px; font-weight: 600; }"
+        )
+        banner.setVisible(False)
+        return banner
 
     def _ensure_itemat_tab(self):
         if self.tab_itemat is not None:
@@ -6597,11 +7501,16 @@ class ShowExperimentScreen(QWidget):
         self.tab_itemat = QWidget()
         vl = QVBoxLayout(self.tab_itemat)
         vl.setContentsMargins(24, 12, 24, 24)
+        self.lbl_itemat_retest_banner = self._make_retest_banner()
+        vl.addWidget(self.lbl_itemat_retest_banner)
         self.tbl_itemat = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_itemat)
         self._enable_paste_for_table(self.tbl_itemat)
         self.tbl_itemat.verticalHeader().setVisible(False)
         self.tbl_itemat.horizontalHeader().setMinimumSectionSize(110)
+        self.tbl_itemat.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_itemat.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_itemat, ls="ItematLab": self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_itemat.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_itemat.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -6628,7 +7537,91 @@ class ShowExperimentScreen(QWidget):
         self.tab_itemat = None
         self.tbl_itemat = None
         self.model_itemat = None
+        self.lbl_itemat_retest_banner = None
         self._itemat_tensions = []
+
+    # ---------- Retest flag (superuser flags a trial for a repeat measurement) ----------
+
+    def _on_lab_header_context_menu(self, table_widget, pos, lab_source: str):
+        """Right-click on a trial column in any lab pivot: flag for retest.
+
+        Generic version - works for every lab tab whose model columns are
+        trials 1:1 (col_titles=self._trial_labels), regardless of which
+        physical lab device/table it displays."""
+        header = table_widget.horizontalHeader()
+        section = header.logicalIndexAt(pos)
+        if section <= 0:
+            return
+        col_idx = section - 1
+        if col_idx >= len(self._trials):
+            return
+        trial = self._trials[col_idx]
+        trial_label = (self._trial_labels[col_idx]
+                        if col_idx < len(self._trial_labels)
+                        else f"Trial {trial.get('ID')}")
+
+        is_super = self._get_access_level() >= 4
+
+        menu = QMenu(self)
+        act_flag = menu.addAction(f"🏳  Flag {trial_label} for retest…")
+        act_flag.setEnabled(is_super)
+        if not is_super:
+            act_flag.setToolTip("Only superusers may flag a retest.")
+        chosen = menu.exec(header.mapToGlobal(pos))
+        if chosen == act_flag:
+            self._mark_trial_for_retest(trial, trial_label, lab_source)
+
+    def _mark_trial_for_retest(self, trial: Dict[str, Any], trial_label: str, lab_source: str):
+        """Creates an open retest flag and pulls the series back into the Backlog (top priority)."""
+        if self._get_access_level() < 4:
+            QMessageBox.warning(self, "No permission",
+                                "Only superusers may flag a retest.")
+            return
+        if self._series_pk is None:
+            return
+
+        note, ok = QInputDialog.getText(
+            self, f"Flag {trial_label} for retest",
+            f"Note (optional) — {lab_source}:")
+        if not ok:
+            return
+
+        from db.retest_flags import mark_trial_for_retest, flags_table_ready
+        if not flags_table_ready():
+            QMessageBox.warning(
+                self, "Not available",
+                "Retest flags are not set up on this database yet "
+                "(table tblTrialRetestFlag is missing).",
+            )
+            return
+
+        try:
+            mark_trial_for_retest(
+                trial_id=int(trial["ID"]),
+                trial_series_id=int(self._series_pk),
+                lab_source=lab_source,
+                note=(note or "").strip(),
+                user_id=self._current_user_id(),
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error",
+                                 f"Could not set the retest flag:\n{e}")
+            return
+
+        try:
+            from db.usage_log import log_usage_event
+            log_usage_event("feature", "retest_flag_set",
+                           f"{trial_label}/{lab_source}/series={self._series_pk}")
+        except Exception:
+            pass
+
+        self._refresh_lab_retest_flags(lab_source)
+
+        QMessageBox.information(
+            self, "Retest flagged",
+            f"{trial_label} ({lab_source}) has been flagged for a retest.\n"
+            f"The trial series was moved back to the Backlog (top priority).",
+        )
 
     def _build_itemat_tab(self):
         if not self._trial_ids or not table_exists("tblLaborItematLab"):
@@ -6674,57 +7667,158 @@ class ShowExperimentScreen(QWidget):
                                     "Intermingling Points CV (%) @0.0 cN/dtex",
                                 ] + [f"Stability@{t:.1f} cN/dtex" for t in tensions_sorted]
 
-        self.model_itemat = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-        )
+        self._ensure_itemat_tab()
 
-        def find_record(trial_list: List[Dict[str, Any]], tension_value: float) -> Optional[Dict[str, Any]]:
-            for rr in trial_list:
-                try:
-                    tt = float(str(rr["Tension"]).replace(",", "."))
-                except Exception:
-                    tt = 0.0
-                if abs(tt - tension_value) < 1e-6:
-                    return rr
-            return None
+        def _populate():
+            self.model_itemat = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
+            )
 
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            recs = by_trial.get(tid, [])
-            r0 = find_record(recs, 0.0)
-            if r0:
-                self.model_itemat.set_cell(
-                    0, c_idx, r0.get("IP"),
-                    CellBinding("tblLaborItematLab", "ID",
-                                r0["RecID"], "Intermingling Points (FP/m)"),
-                )
-                self.model_itemat.set_cell(
-                    1, c_idx, r0.get("IPCV"),
-                    CellBinding("tblLaborItematLab", "ID",
-                                r0["RecID"], "Intermingling Points CV (%)"),
-                )
-            else:
-                self.model_itemat.set_cell(0, c_idx, None, None)
-                self.model_itemat.set_cell(1, c_idx, None, None)
+            def find_record(trial_list: List[Dict[str, Any]], tension_value: float) -> Optional[Dict[str, Any]]:
+                for rr in trial_list:
+                    try:
+                        tt = float(str(rr["Tension"]).replace(",", "."))
+                    except Exception:
+                        tt = 0.0
+                    if abs(tt - tension_value) < 1e-6:
+                        return rr
+                return None
 
-            for idx, tval in enumerate(tensions_sorted, start=2):
-                rr = find_record(recs, tval)
-                if rr:
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                recs = by_trial.get(tid, [])
+                r0 = find_record(recs, 0.0)
+                if r0:
                     self.model_itemat.set_cell(
-                        idx, c_idx, rr.get("Stability"),
+                        0, c_idx, r0.get("IP"),
                         CellBinding("tblLaborItematLab", "ID",
-                                    rr["RecID"], "Stability (%)"),
+                                    r0["RecID"], "Intermingling Points (FP/m)"),
+                    )
+                    self.model_itemat.set_cell(
+                        1, c_idx, r0.get("IPCV"),
+                        CellBinding("tblLaborItematLab", "ID",
+                                    r0["RecID"], "Intermingling Points CV (%)"),
                     )
                 else:
-                    self.model_itemat.set_cell(idx, c_idx, None, None)
+                    self.model_itemat.set_cell(0, c_idx, None, None)
+                    self.model_itemat.set_cell(1, c_idx, None, None)
 
-        self._ensure_itemat_tab()
-        self.tbl_itemat.setModel(self.model_itemat)
-        self.model_itemat.insert_readonly_rows_at_top(self._get_jet_info_rows())
-        self._register_save_model("model_itemat")
-        self.tbl_itemat.resizeColumnsToContents(fixed_data_column_width=110)
+                for idx, tval in enumerate(tensions_sorted, start=2):
+                    rr = find_record(recs, tval)
+                    if rr:
+                        self.model_itemat.set_cell(
+                            idx, c_idx, rr.get("Stability"),
+                            CellBinding("tblLaborItematLab", "ID",
+                                        rr["RecID"], "Stability (%)"),
+                        )
+                    else:
+                        self.model_itemat.set_cell(idx, c_idx, None, None)
+
+            self.tbl_itemat.setModel(self.model_itemat)
+            self.model_itemat.insert_readonly_rows_at_top(self._get_jet_info_rows())
+            self._register_save_model("model_itemat")
+            self.tbl_itemat.resizeColumnsToContents(fixed_data_column_width=110)
+            self._apply_lab_retest_flags(
+                self.model_itemat, self.tab_itemat, "ItematLab", self.lbl_itemat_retest_banner)
+
+        self._defer_or_populate("itemat", self.tab_itemat, _populate)
+
+    def _apply_lab_retest_flags(self, model, tab_widget, lab_source: str, banner_label=None):
+        """Shows open retest flags for one lab tab: column-header red dot
+        (+ tooltip) on the model, a red dot on the tab icon, and - if the
+        tab has one - a banner with the flagged trial(s).
+
+        Generic version of the former itemat-only implementation; called
+        both right after a flag is set/resolved and at the end of every
+        lab tab's _build_XXX_tab (so reloading the series reflects the
+        current flag state everywhere, not just on Itemat Lab)."""
+        if model is None or tab_widget is None:
+            return
+        from db.retest_flags import get_open_retest_flags_for_series_and_source
+
+        flags: List[Dict[str, Any]] = []
+        if self._series_pk is not None:
+            try:
+                flags = get_open_retest_flags_for_series_and_source(
+                    int(self._series_pk), lab_source)
+            except Exception:
+                flags = []
+
+        trial_id_to_col = {int(t["ID"]): c for c, t in enumerate(self._trials)}
+        col_map: Dict[int, str] = {}
+        banner_parts: List[str] = []
+        for f in flags:
+            try:
+                col_idx = trial_id_to_col.get(int(f.get("TrialID")))
+            except Exception:
+                col_idx = None
+            vno = f.get("Versuchsnummer")
+            v_label = f"V{vno}" if vno not in (None, "") else "?"
+            note = (f.get("Note") or "").strip()
+            who = f.get("CreatedByUsername") or ""
+            tooltip = f"{v_label} — retest pending" + (f": {note}" if note else "")
+            if who:
+                tooltip += f" (flagged by {who})"
+            if col_idx is not None:
+                col_map[col_idx] = tooltip
+            banner_parts.append(v_label + (f': "{note}"' if note else ""))
+
+        model.set_flagged_columns(col_map)
+
+        if banner_label is not None:
+            if banner_parts:
+                banner_label.setText(
+                    "🏳 Retest pending — " + "; ".join(banner_parts))
+                banner_label.setVisible(True)
+            else:
+                banner_label.setVisible(False)
+
+        idx = self.tabs.indexOf(tab_widget)
+        if idx != -1:
+            self.tabs.setTabIcon(idx, _retest_flag_dot_icon() if flags else QIcon())
+
+    def _refresh_lab_retest_flags(self, lab_source: str) -> None:
+        """Dispatches to the right lab tab's _apply_lab_retest_flags() call
+        after a flag was set (see _mark_trial_for_retest). One entry per
+        retest-capable lab tab - add a new lab device here + wire its
+        _ensure_XXX_tab/_build_XXX_tab like the others to make it flaggable."""
+        dispatch = {
+            "ItematLab": lambda: self._apply_lab_retest_flags(
+                self.model_itemat, self.tab_itemat, "ItematLab", self.lbl_itemat_retest_banner),
+            "Titer": lambda: self._apply_lab_retest_flags(
+                self.model_titer, self.tab_titer, "Titer", self.lbl_titer_retest_banner),
+            "Statimat": lambda: self._apply_lab_retest_flags(
+                self.model_stat, self.tab_stat, "Statimat", self.lbl_stat_retest_banner),
+            "StatimatDS": lambda: self._apply_lab_retest_flags(
+                self.model_stat_ds, self.tab_stat_ds, "StatimatDS", self.lbl_stat_ds_retest_banner),
+            "EKB": lambda: self._apply_lab_retest_flags(
+                self.model_ekb, self.tab_ekb, "EKB", self.lbl_ekb_retest_banner),
+            "HotAirShrinkage": lambda: self._apply_lab_retest_flags(
+                self.model_hot_air_shrinkage, self.tab_hot_air_shrinkage, "HotAirShrinkage",
+                self.lbl_hot_air_shrinkage_retest_banner),
+            "HotWaterShrinkage": lambda: self._apply_lab_retest_flags(
+                self.model_hot_water_shrinkage, self.tab_hot_water_shrinkage, "HotWaterShrinkage",
+                self.lbl_hot_water_shrinkage_retest_banner),
+            "ATYShrinkage": lambda: self._apply_lab_retest_flags(
+                self.model_aty_shrinkage, self.tab_aty_shrinkage, "ATYShrinkage",
+                self.lbl_aty_shrinkage_retest_banner),
+            "Waterbath": lambda: self._apply_lab_retest_flags(
+                self.model_water, self.tab_water, "Waterbath", self.lbl_water_retest_banner),
+            "ItematPlus": lambda: self._apply_lab_retest_flags(
+                self.model_itemat_plus, self.tab_itemat_plus, "ItematPlus",
+                self.lbl_itemat_plus_retest_banner),
+            "DTYoMat": lambda: self._apply_lab_retest_flags(
+                self.model_dtyomat, self.tab_dtyomat, "DTYoMat", self.lbl_dtyomat_retest_banner),
+            "ATYoMat": lambda: self._apply_lab_retest_flags(
+                self.model_atyomat, self.tab_atyomat, "ATYoMat", self.lbl_atyomat_retest_banner),
+            "Rapid600": lambda: self._apply_lab_retest_flags(
+                self.model_rapid600, self.tab_rapid600, "Rapid600", self.lbl_rapid600_retest_banner),
+        }
+        handler = dispatch.get(lab_source)
+        if handler:
+            handler()
 
     def _to_float(self, s: Any) -> Optional[float]:
         if s is None:
@@ -6743,8 +7837,12 @@ class ShowExperimentScreen(QWidget):
             return 0
 
         updates = 0
-        ROW_IP0 = 0
-        ROW_STAB_START = 2
+        # Gleicher Offset-Bug wie in _recompute_itemat_plus() (siehe dort) -
+        # insert_readonly_rows_at_top(self._get_jet_info_rows()) verschiebt
+        # die echten Datenzeilen um die Jet-Info-Kopfzeilen nach unten.
+        n_header = len(self._get_jet_info_rows())
+        ROW_IP0 = n_header + 0
+        ROW_STAB_START = n_header + 2
 
         # Kandidaten sammeln
         cand_ids: List[Any] = []
@@ -6804,11 +7902,17 @@ class ShowExperimentScreen(QWidget):
         self.tab_itemat_plus = QWidget()
         vl = QVBoxLayout(self.tab_itemat_plus)
         vl.setContentsMargins(24, 12, 24, 24)
+        self.lbl_itemat_plus_retest_banner = self._make_retest_banner()
+        vl.addWidget(self.lbl_itemat_plus_retest_banner)
         self.tbl_itemat_plus = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_itemat_plus)
         self._enable_paste_for_table(self.tbl_itemat_plus)
         self.tbl_itemat_plus.verticalHeader().setVisible(False)
         self.tbl_itemat_plus.horizontalHeader().setMinimumSectionSize(120)
+        self.tbl_itemat_plus.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_itemat_plus.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_itemat_plus, ls="ItematPlus":
+            self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_itemat_plus.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_itemat_plus.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -6835,6 +7939,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_itemat_plus = None
         self.tbl_itemat_plus = None
         self.model_itemat_plus = None
+        self.lbl_itemat_plus_retest_banner = None
         self._itemat_plus_tensions = []
 
     def _build_itemat_plus_tab(self):
@@ -6889,76 +7994,83 @@ class ShowExperimentScreen(QWidget):
                                     "KL S (mm) @0.0 cN/dtex",
                                 ] + [f"Stability@{t:.1f} cN/dtex" for t in tensions_sorted]
 
-        self.model_itemat_plus = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-        )
+        self._ensure_itemat_plus_tab()
 
-        def find_record(trial_list: List[Dict[str, Any]], tension_value: float) -> Optional[Dict[str, Any]]:
-            for rr in trial_list:
-                try:
-                    tt = float(str(rr["Tension"]).replace(",", "."))
-                except Exception:
-                    tt = 0.0
-                if abs(tt - tension_value) < 1e-6:
-                    return rr
-            return None
+        def _populate():
+            self.model_itemat_plus = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
+            )
 
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            recs = by_trial.get(tid, [])
+            def find_record(trial_list: List[Dict[str, Any]], tension_value: float) -> Optional[Dict[str, Any]]:
+                for rr in trial_list:
+                    try:
+                        tt = float(str(rr["Tension"]).replace(",", "."))
+                    except Exception:
+                        tt = 0.0
+                    if abs(tt - tension_value) < 1e-6:
+                        return rr
+                return None
 
-            r0 = find_record(recs, 0.0)
-            if r0:
-                # Row 0: IP@0
-                self.model_itemat_plus.set_cell(
-                    0, c_idx, r0.get("InterP"),
-                    CellBinding("tblLaborItematPlus", "ID",
-                                r0["RecID"], "Intermingling Points (FP/m)"),
-                )
-                # Row 1..4: OLX, OLS, KLX, KLS @0
-                self.model_itemat_plus.set_cell(
-                    1, c_idx, r0.get("OLX"),
-                    CellBinding("tblLaborItematPlus", "ID",
-                                r0["RecID"], "OL X (mm)"),
-                )
-                self.model_itemat_plus.set_cell(
-                    2, c_idx, r0.get("OLS"),
-                    CellBinding("tblLaborItematPlus", "ID",
-                                r0["RecID"], "OL S (mm)"),
-                )
-                self.model_itemat_plus.set_cell(
-                    3, c_idx, r0.get("KLX"),
-                    CellBinding("tblLaborItematPlus", "ID",
-                                r0["RecID"], "KL X (mm)"),
-                )
-                self.model_itemat_plus.set_cell(
-                    4, c_idx, r0.get("KLS"),
-                    CellBinding("tblLaborItematPlus", "ID",
-                                r0["RecID"], "KL S (mm)"),
-                )
-            else:
-                for rr in range(5):
-                    self.model_itemat_plus.set_cell(rr, c_idx, None, None)
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                recs = by_trial.get(tid, [])
 
-            # Stability@t für jede Spannung > 0
-            for idx, tval in enumerate(tensions_sorted, start=5):
-                rr = find_record(recs, tval)
-                if rr:
+                r0 = find_record(recs, 0.0)
+                if r0:
+                    # Row 0: IP@0
                     self.model_itemat_plus.set_cell(
-                        idx, c_idx, rr.get("Stability"),
+                        0, c_idx, r0.get("InterP"),
                         CellBinding("tblLaborItematPlus", "ID",
-                                    rr["RecID"], "Stability (%)"),
+                                    r0["RecID"], "Intermingling Points (FP/m)"),
+                    )
+                    # Row 1..4: OLX, OLS, KLX, KLS @0
+                    self.model_itemat_plus.set_cell(
+                        1, c_idx, r0.get("OLX"),
+                        CellBinding("tblLaborItematPlus", "ID",
+                                    r0["RecID"], "OL X (mm)"),
+                    )
+                    self.model_itemat_plus.set_cell(
+                        2, c_idx, r0.get("OLS"),
+                        CellBinding("tblLaborItematPlus", "ID",
+                                    r0["RecID"], "OL S (mm)"),
+                    )
+                    self.model_itemat_plus.set_cell(
+                        3, c_idx, r0.get("KLX"),
+                        CellBinding("tblLaborItematPlus", "ID",
+                                    r0["RecID"], "KL X (mm)"),
+                    )
+                    self.model_itemat_plus.set_cell(
+                        4, c_idx, r0.get("KLS"),
+                        CellBinding("tblLaborItematPlus", "ID",
+                                    r0["RecID"], "KL S (mm)"),
                     )
                 else:
-                    self.model_itemat_plus.set_cell(idx, c_idx, None, None)
+                    for rr in range(5):
+                        self.model_itemat_plus.set_cell(rr, c_idx, None, None)
 
-        self._ensure_itemat_plus_tab()
-        self.tbl_itemat_plus.setModel(self.model_itemat_plus)
-        self.model_itemat_plus.insert_readonly_rows_at_top(self._get_jet_info_rows())
-        self._register_save_model("model_itemat_plus")
-        self.tbl_itemat_plus.resizeColumnsToContents(fixed_data_column_width=120)
+                # Stability@t für jede Spannung > 0
+                for idx, tval in enumerate(tensions_sorted, start=5):
+                    rr = find_record(recs, tval)
+                    if rr:
+                        self.model_itemat_plus.set_cell(
+                            idx, c_idx, rr.get("Stability"),
+                            CellBinding("tblLaborItematPlus", "ID",
+                                        rr["RecID"], "Stability (%)"),
+                        )
+                    else:
+                        self.model_itemat_plus.set_cell(idx, c_idx, None, None)
+
+            self.tbl_itemat_plus.setModel(self.model_itemat_plus)
+            self.model_itemat_plus.insert_readonly_rows_at_top(self._get_jet_info_rows())
+            self._register_save_model("model_itemat_plus")
+            self.tbl_itemat_plus.resizeColumnsToContents(fixed_data_column_width=120)
+            self._apply_lab_retest_flags(
+                self.model_itemat_plus, self.tab_itemat_plus, "ItematPlus",
+                self.lbl_itemat_plus_retest_banner)
+
+        self._defer_or_populate("itemat_plus", self.tab_itemat_plus, _populate)
 
     def _recompute_itemat_plus(self) -> int:
         """
@@ -6973,12 +8085,20 @@ class ShowExperimentScreen(QWidget):
 
         updates = 0
 
-        ROW_IP0 = 0
-        ROW_OLX0 = 1
-        ROW_OLS0 = 2
-        ROW_KLX0 = 3
-        ROW_KLS0 = 4
-        ROW_STAB_START = 5
+        # insert_readonly_rows_at_top(self._get_jet_info_rows()) schiebt beim
+        # Populaten des Tabs (siehe _build_itemat_plus_tab) die Jet/Jet Plate/
+        # Air Pressure-Kopfzeilen VOR die eigentlichen Datenzeilen - die
+        # Row-Konstanten muessen deshalb um diese Kopfzeilen-Anzahl versetzt
+        # werden, sonst liest _f() hier die Jet-Info-Zeilen (Text, kein float)
+        # statt OLX/OLS/KLX/KLS, "if None in (...)" greift dann immer und
+        # FPmCV wird nie mehr neu berechnet.
+        n_header = len(self._get_jet_info_rows())
+        ROW_IP0 = n_header + 0
+        ROW_OLX0 = n_header + 1
+        ROW_OLS0 = n_header + 2
+        ROW_KLX0 = n_header + 3
+        ROW_KLS0 = n_header + 4
+        ROW_STAB_START = n_header + 5
         EPS = 1e-9
 
         # -------- Teil 1: IP(t) für t>0 --------
@@ -7032,7 +8152,7 @@ class ShowExperimentScreen(QWidget):
             def _f(row_idx):
                 return self._to_float(self.model_itemat_plus.get_cell_value(row_idx, c_idx))
 
-            olx, ols, klx, kls = _f(1), _f(2), _f(3), _f(4)
+            olx, ols, klx, kls = _f(ROW_OLX0), _f(ROW_OLS0), _f(ROW_KLX0), _f(ROW_KLS0)
             if None in (olx, ols, klx, kls):
                 continue
             denom = (olx or 0.0) + (klx or 0.0)
@@ -7078,12 +8198,17 @@ class ShowExperimentScreen(QWidget):
         self.tab_dtyomat = QWidget()
         vl = QVBoxLayout(self.tab_dtyomat)
         vl.setContentsMargins(24, 12, 24, 24)
+        self.lbl_dtyomat_retest_banner = self._make_retest_banner()
+        vl.addWidget(self.lbl_dtyomat_retest_banner)
 
         self.tbl_dtyomat = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_dtyomat)
         self._enable_paste_for_table(self.tbl_dtyomat)
         self.tbl_dtyomat.verticalHeader().setVisible(False)
         self.tbl_dtyomat.horizontalHeader().setMinimumSectionSize(120)
+        self.tbl_dtyomat.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_dtyomat.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_dtyomat, ls="DTYoMat": self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_dtyomat.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_dtyomat.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -7111,6 +8236,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_dtyomat = None
         self.tbl_dtyomat = None
         self.model_dtyomat = None
+        self.lbl_dtyomat_retest_banner = None
 
     def _build_dtyomat_tab(self):
         """
@@ -7176,119 +8302,124 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_dtyomat_tab()
 
-        self.model_dtyomat = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
-
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            rec = by_trial.get(tid)
-            if not rec:
-                for r_idx in range(len(row_titles)):
-                    self.model_dtyomat.set_cell(r_idx, c_idx, None, None)
-                continue
-
-            rec_id = rec["RecID"]
-
-            # 0: FP/m
-            self.model_dtyomat.set_cell(
-                0,
-                c_idx,
-                rec.get("FPm"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "FP/m"),
-            )
-            # 1: CV_FP
-            self.model_dtyomat.set_cell(
-                1,
-                c_idx,
-                rec.get("CV_FP"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "CV_FP"),
-            )
-            # 2: AvgFP
-            self.model_dtyomat.set_cell(
-                2,
-                c_idx,
-                rec.get("AvgFP"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "AvgFP"),
-            )
-            # 3: StdDevFP
-            self.model_dtyomat.set_cell(
-                3,
-                c_idx,
-                rec.get("StdDevFP"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "StdDevFP"),
-            )
-            # 4: CV_KL
-            self.model_dtyomat.set_cell(
-                4,
-                c_idx,
-                rec.get("CV_KL"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "CV_KL"),
-            )
-            # 5: AvgKL
-            self.model_dtyomat.set_cell(
-                5,
-                c_idx,
-                rec.get("AvgKL"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "AvgKL"),
-            )
-            # 6: StdDevKL
-            self.model_dtyomat.set_cell(
-                6,
-                c_idx,
-                rec.get("StdDevKL"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "StdDevKL"),
-            )
-            # 7: CV_OL
-            self.model_dtyomat.set_cell(
-                7,
-                c_idx,
-                rec.get("CV_OL"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "CV_OL"),
-            )
-            # 8: AvgOL
-            self.model_dtyomat.set_cell(
-                8,
-                c_idx,
-                rec.get("AvgOL"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "AvgOL"),
-            )
-            # 9: StdDevOL
-            self.model_dtyomat.set_cell(
-                9,
-                c_idx,
-                rec.get("StdDevOL"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "StdDevOL"),
-            )
-            # 10: AKnots
-            self.model_dtyomat.set_cell(
-                10,
-                c_idx,
-                rec.get("AKnots"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "AKnots"),
-            )
-            # 11: BKnots
-            self.model_dtyomat.set_cell(
-                11,
-                c_idx,
-                rec.get("BKnots"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "BKnots"),
-            )
-            # 12: CKnots
-            self.model_dtyomat.set_cell(
-                12,
-                c_idx,
-                rec.get("CKnots"),
-                CellBinding("tblLaborDTYoMat", "ID", rec_id, "CKnots"),
+        def _populate():
+            self.model_dtyomat = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),
             )
 
-        if self.tbl_dtyomat is not None:
-            self.tbl_dtyomat.setModel(self.model_dtyomat)
-            self.model_dtyomat.insert_readonly_rows_at_top(self._get_jet_info_rows())
-            self._register_save_model("model_dtyomat")
-            self.tbl_dtyomat.resizeColumnsToContents(fixed_data_column_width=120)
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                rec = by_trial.get(tid)
+                if not rec:
+                    for r_idx in range(len(row_titles)):
+                        self.model_dtyomat.set_cell(r_idx, c_idx, None, None)
+                    continue
+
+                rec_id = rec["RecID"]
+
+                # 0: FP/m
+                self.model_dtyomat.set_cell(
+                    0,
+                    c_idx,
+                    rec.get("FPm"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "FP/m"),
+                )
+                # 1: CV_FP
+                self.model_dtyomat.set_cell(
+                    1,
+                    c_idx,
+                    rec.get("CV_FP"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "CV_FP"),
+                )
+                # 2: AvgFP
+                self.model_dtyomat.set_cell(
+                    2,
+                    c_idx,
+                    rec.get("AvgFP"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "AvgFP"),
+                )
+                # 3: StdDevFP
+                self.model_dtyomat.set_cell(
+                    3,
+                    c_idx,
+                    rec.get("StdDevFP"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "StdDevFP"),
+                )
+                # 4: CV_KL
+                self.model_dtyomat.set_cell(
+                    4,
+                    c_idx,
+                    rec.get("CV_KL"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "CV_KL"),
+                )
+                # 5: AvgKL
+                self.model_dtyomat.set_cell(
+                    5,
+                    c_idx,
+                    rec.get("AvgKL"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "AvgKL"),
+                )
+                # 6: StdDevKL
+                self.model_dtyomat.set_cell(
+                    6,
+                    c_idx,
+                    rec.get("StdDevKL"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "StdDevKL"),
+                )
+                # 7: CV_OL
+                self.model_dtyomat.set_cell(
+                    7,
+                    c_idx,
+                    rec.get("CV_OL"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "CV_OL"),
+                )
+                # 8: AvgOL
+                self.model_dtyomat.set_cell(
+                    8,
+                    c_idx,
+                    rec.get("AvgOL"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "AvgOL"),
+                )
+                # 9: StdDevOL
+                self.model_dtyomat.set_cell(
+                    9,
+                    c_idx,
+                    rec.get("StdDevOL"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "StdDevOL"),
+                )
+                # 10: AKnots
+                self.model_dtyomat.set_cell(
+                    10,
+                    c_idx,
+                    rec.get("AKnots"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "AKnots"),
+                )
+                # 11: BKnots
+                self.model_dtyomat.set_cell(
+                    11,
+                    c_idx,
+                    rec.get("BKnots"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "BKnots"),
+                )
+                # 12: CKnots
+                self.model_dtyomat.set_cell(
+                    12,
+                    c_idx,
+                    rec.get("CKnots"),
+                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "CKnots"),
+                )
+
+            if self.tbl_dtyomat is not None:
+                self.tbl_dtyomat.setModel(self.model_dtyomat)
+                self.model_dtyomat.insert_readonly_rows_at_top(self._get_jet_info_rows())
+                self._register_save_model("model_dtyomat")
+                self.tbl_dtyomat.resizeColumnsToContents(fixed_data_column_width=120)
+                self._apply_lab_retest_flags(
+                    self.model_dtyomat, self.tab_dtyomat, "DTYoMat", self.lbl_dtyomat_retest_banner)
+
+        self._defer_or_populate("dtyomat", self.tab_dtyomat, _populate)
 
     # ---------- ATYoMat (sichtbar nur bei vorhandenen Daten) ----------
 
@@ -7298,11 +8429,16 @@ class ShowExperimentScreen(QWidget):
         self.tab_atyomat = QWidget()
         vl = QVBoxLayout(self.tab_atyomat)
         vl.setContentsMargins(24, 12, 24, 24)
+        self.lbl_atyomat_retest_banner = self._make_retest_banner()
+        vl.addWidget(self.lbl_atyomat_retest_banner)
 
         self.tbl_atyomat = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_atyomat)
         self.tbl_atyomat.verticalHeader().setVisible(False)
         self.tbl_atyomat.horizontalHeader().setMinimumSectionSize(120)
+        self.tbl_atyomat.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_atyomat.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_atyomat, ls="ATYoMat": self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_atyomat.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_atyomat.setEditTriggers(
             QAbstractItemView.DoubleClicked |
@@ -7333,32 +8469,49 @@ class ShowExperimentScreen(QWidget):
         self.tab_atyomat = None
         self.tbl_atyomat = None
         self.model_atyomat = None
+        self.lbl_atyomat_retest_banner = None
 
     def _build_atyomat_tab(self):
         """
         Baut das ATYoMat-Tab aus tblLaborATYoMat auf.
-        Zeigt nur die Zusammenfassungs-Kennzahlen (Averages + Anzahl/100m).
+        Zeigt die Kern-/Schlaufen-Kennzahlen der neuen ATY-Analyse
+        (ui/yarnscope/aty_core_analysis.py, seit 2026-08-13 -- die Tabelle
+        wurde von der alten thick_spot_analysis.py-Methode komplett auf
+        diese umgestellt, siehe CLAUDE.md).
         Pro Trial wird der neueste Datensatz verwendet (MAX(ID)).
         """
         if not self._trial_ids or not table_exists("tblLaborATYoMat"):
             self._remove_atyomat_tab_if_exists()
             return
 
+        from ui.yarnscope.aty_core_analysis import DB_COLUMN_MAP  # lazy: avoid a new module-level import in this huge file
+
+        # DB_COLUMN_MAP keys are analyze_trial()'s python field names;
+        # ParamsVersion (a string) is metadata, not a numeric row to edit here.
+        col_db = [c for k, c in DB_COLUMN_MAP.items() if k != "params_version"]
+        row_titles: List[str] = [
+            "Laenge (m)", "Globaler Mittelwert (um)", "Kern (um)", "Kern-CV (%)",
+            "Differenz Kern vs. Mittelwert (%)", "Kern-CV @1m (%)", "Kern-CV @20m (%)",
+            "Anzahl Schlaufen", "Frequenz (1/m)", "Ø Abstand (mm)", "Abstand-CV (%)",
+            "Hoehe Median (um)", "Hoehe Mittelwert (um)", "Hoehe P95 (um)", "Hoehe P99 (um)", "Hoehe Max (um)",
+            "Rel. Hoehe Median (%)", "Rel. Hoehe Mittelwert (%)", "Rel. Hoehe P90 (%)",
+            "Rel. Hoehe P95 (%)", "Rel. Hoehe P99 (%)", "Rel. Hoehe Max (%)",
+            "Bulk Index (%)", "Kurzhocker Anteil (%)", "Langwelle Anteil (%)",
+            "Kurzhocker Dichte (1/m)", "Langwelle Dichte (1/m)",
+            "Kurzhocker Hoehe Median (um)", "Kurzhocker Rel. Hoehe Median (%)", "Kurzhocker Bulk-Beitrag (%)",
+            "Langwelle Hoehe Median (um)", "Langwelle Rel. Hoehe Median (%)", "Langwelle Bulk-Beitrag (%)",
+            "Ellipticity Mittel (%)", "Ellipticity Schlaufen (%)", "Ellipticity Kern (%)",
+            "Ellipticity Schlaufe/Kern-Verhaeltnis",
+        ]
+        assert len(row_titles) == len(col_db), "ATYoMat row_titles/col_db out of sync with DB_COLUMN_MAP"
+
+        cols_sql = ", ".join(f"D.{c} AS {c}" for c in col_db)
         rows = fetch_all(
             f"""
             SELECT
                 D.ID            AS RecID,
                 D.TrialID       AS TrialID,
-                D.TotalLen_m    AS TotalLen_m,
-                D.BinThreshold  AS BinThreshold,
-                D.N_B1          AS N_B1,
-                D.N_B2          AS N_B2,
-                D.AvgLen_B1     AS AvgLen_B1,
-                D.AvgLen_B2     AS AvgLen_B2,
-                D.AvgHeight_B1  AS AvgHeight_B1,
-                D.AvgHeight_B2  AS AvgHeight_B2,
-                D.AvgArea_B1    AS AvgArea_B1,
-                D.AvgArea_B2    AS AvgArea_B2
+                {cols_sql}
             FROM tblLaborATYoMat AS D
             INNER JOIN (
                 SELECT TrialID, MAX(ID) AS MaxID
@@ -7381,62 +8534,41 @@ class ShowExperimentScreen(QWidget):
             if tid not in by_trial:
                 by_trial[tid] = r
 
-        row_titles: List[str] = [
-            "Gesamtlaenge (m)",
-            "Bin-Schwelle (um/mm)",
-            "Kurzhocker Anzahl / 100 m",
-            "Langwelle Anzahl / 100 m",
-            "Kurzhocker Ø Laenge (mm)",
-            "Langwelle Ø Laenge (mm)",
-            "Kurzhocker Ø Hoehe (um)",
-            "Langwelle Ø Hoehe (um)",
-            "Kurzhocker Ø Flaeche (um*mm)",
-            "Langwelle Ø Flaeche (um*mm)",
-        ]
-
-        col_db = [
-            "TotalLen_m",
-            "BinThreshold",
-            "N_B1",
-            "N_B2",
-            "AvgLen_B1",
-            "AvgLen_B2",
-            "AvgHeight_B1",
-            "AvgHeight_B2",
-            "AvgArea_B1",
-            "AvgArea_B2",
-        ]
-
         self._ensure_atyomat_tab()
 
-        self.model_atyomat = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
+        def _populate():
+            self.model_atyomat = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),
+            )
 
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            rec = by_trial.get(tid)
-            if not rec:
-                for r_idx in range(len(row_titles)):
-                    self.model_atyomat.set_cell(r_idx, c_idx, None, None)
-                continue
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                rec = by_trial.get(tid)
+                if not rec:
+                    for r_idx in range(len(row_titles)):
+                        self.model_atyomat.set_cell(r_idx, c_idx, None, None)
+                    continue
 
-            rec_id = rec["RecID"]
-            for r_idx, col_name in enumerate(col_db):
-                self.model_atyomat.set_cell(
-                    r_idx,
-                    c_idx,
-                    rec.get(col_name),
-                    CellBinding("tblLaborATYoMat", "ID", rec_id, col_name),
-                )
+                rec_id = rec["RecID"]
+                for r_idx, col_name in enumerate(col_db):
+                    self.model_atyomat.set_cell(
+                        r_idx,
+                        c_idx,
+                        rec.get(col_name),
+                        CellBinding("tblLaborATYoMat", "ID", rec_id, col_name),
+                    )
 
-        if self.tbl_atyomat is not None:
-            self.tbl_atyomat.setModel(self.model_atyomat)
-            self.model_atyomat.insert_readonly_rows_at_top(self._get_jet_info_rows())
-            self._register_save_model("model_atyomat")
-            self.tbl_atyomat.resizeColumnsToContents(fixed_data_column_width=120)
+            if self.tbl_atyomat is not None:
+                self.tbl_atyomat.setModel(self.model_atyomat)
+                self.model_atyomat.insert_readonly_rows_at_top(self._get_jet_info_rows())
+                self._register_save_model("model_atyomat")
+                self.tbl_atyomat.resizeColumnsToContents(fixed_data_column_width=120)
+                self._apply_lab_retest_flags(
+                    self.model_atyomat, self.tab_atyomat, "ATYoMat", self.lbl_atyomat_retest_banner)
+
+        self._defer_or_populate("atyomat", self.tab_atyomat, _populate)
 
     # ---------- Rapid 600 (sichtbar nur bei vorhandenen Daten) ----------
 
@@ -7446,12 +8578,17 @@ class ShowExperimentScreen(QWidget):
         self.tab_rapid600 = QWidget()
         vl = QVBoxLayout(self.tab_rapid600)
         vl.setContentsMargins(24, 12, 24, 24)
+        self.lbl_rapid600_retest_banner = self._make_retest_banner()
+        vl.addWidget(self.lbl_rapid600_retest_banner)
 
         self.tbl_rapid600 = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_rapid600)
         self._enable_paste_for_table(self.tbl_rapid600)
         self.tbl_rapid600.verticalHeader().setVisible(False)
         self.tbl_rapid600.horizontalHeader().setMinimumSectionSize(120)
+        self.tbl_rapid600.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_rapid600.horizontalHeader().customContextMenuRequested.connect(
+            lambda pos, tw=self.tbl_rapid600, ls="Rapid600": self._on_lab_header_context_menu(tw, pos, ls))
         self.tbl_rapid600.setSelectionBehavior(QTableView.SelectItems)
         self.tbl_rapid600.setEditTriggers(
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -7479,6 +8616,7 @@ class ShowExperimentScreen(QWidget):
         self.tab_rapid600 = None
         self.tbl_rapid600 = None
         self.model_rapid600 = None
+        self.lbl_rapid600_retest_banner = None
 
     def _build_rapid600_tab(self):
         """
@@ -7524,49 +8662,54 @@ class ShowExperimentScreen(QWidget):
 
         self._ensure_rapid600_tab()
 
-        self.model_rapid600 = PivotEditModel(
-            row_titles=row_titles,
-            col_titles=self._trial_labels,
-            row_validators=["onlyDoubles"] * len(row_titles),
-        )
-
-        for c_idx, trial in enumerate(self._trials):
-            tid = trial["ID"]
-            rec = by_trial.get(tid)
-            if not rec:
-                for r_idx in range(len(row_titles)):
-                    self.model_rapid600.set_cell(r_idx, c_idx, None, None)
-                continue
-
-            rec_id = rec["RecID"]
-
-            # 0: SPD
-            self.model_rapid600.set_cell(
-                0,
-                c_idx,
-                rec.get("SPD"),
-                CellBinding("tblLaborRapid600", "ID", rec_id, "SPD"),
-            )
-            # 1: SPD Avg
-            self.model_rapid600.set_cell(
-                1,
-                c_idx,
-                rec.get("SPD_Avg"),
-                CellBinding("tblLaborRapid600", "ID", rec_id, "SPD Avg"),
-            )
-            # 2: SPD Dev
-            self.model_rapid600.set_cell(
-                2,
-                c_idx,
-                rec.get("SPD_Dev"),
-                CellBinding("tblLaborRapid600", "ID", rec_id, "SPD Dev"),
+        def _populate():
+            self.model_rapid600 = PivotEditModel(
+                row_titles=row_titles,
+                col_titles=self._trial_labels,
+                row_validators=["onlyDoubles"] * len(row_titles),
             )
 
-        if self.tbl_rapid600 is not None:
-            self.tbl_rapid600.setModel(self.model_rapid600)
-            self.model_rapid600.insert_readonly_rows_at_top(self._get_jet_info_rows())
-            self._register_save_model("model_rapid600")
-            self.tbl_rapid600.resizeColumnsToContents(fixed_data_column_width=120)
+            for c_idx, trial in enumerate(self._trials):
+                tid = trial["ID"]
+                rec = by_trial.get(tid)
+                if not rec:
+                    for r_idx in range(len(row_titles)):
+                        self.model_rapid600.set_cell(r_idx, c_idx, None, None)
+                    continue
+
+                rec_id = rec["RecID"]
+
+                # 0: SPD
+                self.model_rapid600.set_cell(
+                    0,
+                    c_idx,
+                    rec.get("SPD"),
+                    CellBinding("tblLaborRapid600", "ID", rec_id, "SPD"),
+                )
+                # 1: SPD Avg
+                self.model_rapid600.set_cell(
+                    1,
+                    c_idx,
+                    rec.get("SPD_Avg"),
+                    CellBinding("tblLaborRapid600", "ID", rec_id, "SPD Avg"),
+                )
+                # 2: SPD Dev
+                self.model_rapid600.set_cell(
+                    2,
+                    c_idx,
+                    rec.get("SPD_Dev"),
+                    CellBinding("tblLaborRapid600", "ID", rec_id, "SPD Dev"),
+                )
+
+            if self.tbl_rapid600 is not None:
+                self.tbl_rapid600.setModel(self.model_rapid600)
+                self.model_rapid600.insert_readonly_rows_at_top(self._get_jet_info_rows())
+                self._register_save_model("model_rapid600")
+                self.tbl_rapid600.resizeColumnsToContents(fixed_data_column_width=120)
+                self._apply_lab_retest_flags(
+                    self.model_rapid600, self.tab_rapid600, "Rapid600", self.lbl_rapid600_retest_banner)
+
+        self._defer_or_populate("rapid600", self.tab_rapid600, _populate)
 
 
 # ===========================================================================
@@ -7627,6 +8770,10 @@ def _patch_show_experiment_aty_yarnscope():
     cls._aty_redraw_histogram = _aty_mod._aty_redraw_histogram
     cls._aty_on_save = _aty_mod._aty_on_save
     cls._aty_open_batch = _aty_mod._aty_open_batch
+    cls._aty_on_compare_selection_changed = _aty_mod._aty_on_compare_selection_changed
+    cls._aty_on_compare_run = _aty_mod._aty_on_compare_run
+    cls._aty_render_compare = _aty_mod._aty_render_compare
+    cls._aty_render_radar = _aty_mod._aty_render_radar
 
 
 _patch_show_experiment_aty_yarnscope()

@@ -1,7 +1,7 @@
 from ui.theme import accent_tint, accent_gridline
 # ui/screen_manage_product_groups.py
 from typing import List, Dict, Optional, Set
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QRegularExpression
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton,
@@ -9,20 +9,31 @@ from PySide6.QtWidgets import (
 )
 
 from ui.widgets.footer import FooterBar
-from ui.widgets.header import HeaderBar
+from ui.widgets import sidebar_nav
 from ui.text_normalize import canon_simple as _canon
-from db.connection import fetch_all, execute
+from db.connection import fetch_all, execute, execute_insert
+
+# Wiederverwendet statt dupliziert (analog zu screen_manage_yarn.py/
+# screen_manage_material.py) - vollstaendig generisch (kein Jets-spezifischer
+# State), siehe ui/screen_manage_jets.py fuer die Implementierung.
+from ui.screen_manage_jets import FilterableHeaderView, ColumnOrderDialog, MultiColumnFilterProxy
 
 
 class GenericEditableModel(QAbstractTableModel):
     """Simple editable model with dirty tracking and alternating light background."""
 
-    def __init__(self, rows: List[Dict], headers: List[str], id_column: str = 'ID'):
+    def __init__(self, rows: List[Dict], headers: List[str], id_column: str = 'ID',
+                 read_only: bool = False):
         super().__init__()
         self._rows = rows[:]
         self._headers = headers[:]
         self._id_col = id_column
         self._dirty: Set[tuple] = set()
+        self._read_only = read_only
+
+    def set_read_only(self, read_only: bool):
+        """Schaltet die Editierbarkeit aller Zellen um (Ansicht muss danach neu gezeichnet werden)."""
+        self._read_only = read_only
 
     def rowCount(self, parent=QModelIndex()) -> int:
         return len(self._rows)
@@ -58,12 +69,12 @@ class GenericEditableModel(QAbstractTableModel):
         if not index.isValid():
             return Qt.ItemIsEnabled
         header = self._headers[index.column()]
-        if header.lower() == self._id_col.lower():
+        if header.lower() == self._id_col.lower() or self._read_only:
             return Qt.ItemIsSelectable | Qt.ItemIsEnabled
         return Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
 
     def setData(self, index: QModelIndex, value, role=Qt.EditRole):
-        if not index.isValid() or role != Qt.EditRole:
+        if not index.isValid() or role != Qt.EditRole or self._read_only:
             return False
         header = self._headers[index.column()]
         if header.lower() == self._id_col.lower():
@@ -94,62 +105,33 @@ class GenericEditableModel(QAbstractTableModel):
         return self._rows
 
 
-class TextFilterProxy(QSortFilterProxyModel):
-    """Filter by a preferred column if it exists, else across all columns (contains, case-insensitive)."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.pref_idx = -1
-        self.setFilterCaseSensitivity(Qt.CaseInsensitive)
-        self.setDynamicSortFilter(True)
-
-    def set_preferred_column(self, headers: List[str]):
-        self.pref_idx = -1
-        for i, h in enumerate(headers):
-            if _canon(h) in {'produktgruppe', 'productgroup', 'name', 'bezeichnung'}:
-                self.pref_idx = i
-                break
-
-    def filterAcceptsRow(self, source_row: int, source_parent) -> bool:
-        rx = self.filterRegularExpression()
-        if not rx.pattern():
-            return True
-
-        def match_col(col_idx: int) -> bool:
-            if col_idx < 0:
-                return False
-            idx = self.sourceModel().index(source_row, col_idx)
-            data = self.sourceModel().data(idx, Qt.DisplayRole)
-            return rx.match(str(data)).hasMatch()
-
-        # If we have a preferred column, use it; otherwise scan all columns.
-        if self.pref_idx >= 0:
-            return match_col(self.pref_idx)
-        for c in range(self.sourceModel().columnCount()):
-            if match_col(c):
-                return True
-        return False
-
-
 class ManageProductGroupsScreen(QWidget):
     TABLE = 'tblProduktgruppe'
+    _SCREEN_KEY = 'manage_product_groups'
 
-    def __init__(self, on_back_home=None):
+    def __init__(self, on_back_home=None, sidebar_callbacks: Optional[dict] = None):
         super().__init__()
         self.on_back_home = on_back_home
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         self.table: Optional[QTableView] = None
         self.model: Optional[GenericEditableModel] = None
-        self.proxy: Optional[TextFilterProxy] = None
+        self.proxy: Optional[MultiColumnFilterProxy] = None
+        self._header: Optional[FilterableHeaderView] = None
+        self._column_order_dialog: Optional[ColumnOrderDialog] = None
 
         self.search_edit: Optional[QLineEdit] = None
         self.btn_reload: Optional[QPushButton] = None
         self.btn_new: Optional[QPushButton] = None
+        self.btn_columns: Optional[QPushButton] = None
         self.btn_delete: Optional[QPushButton] = None
         self.btn_save: Optional[QPushButton] = None
         self.status_label: Optional[QLabel] = None
+        self._search_cols: List[int] = []
 
         self._id_col = 'ID'
+        self._read_only = False
 
         self._build_ui()
         self.reload_data()
@@ -159,8 +141,9 @@ class ManageProductGroupsScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title='Manage Product Groups', show_home=True)
-        header.connect_home(self._go_home)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # toolbar (search + actions)
         toolbar = QFrame()
@@ -178,6 +161,10 @@ class ManageProductGroupsScreen(QWidget):
         self.btn_new = QPushButton('New', objectName='GreenBtn')
         self.btn_new.clicked.connect(self._on_new)
 
+        self.btn_columns = QPushButton('Columns…', objectName='GreyBtn')
+        self.btn_columns.setToolTip('Reorder columns via a drag & drop list')
+        self.btn_columns.clicked.connect(self._on_columns_clicked)
+
         self.btn_delete = QPushButton('Delete', objectName='GreyBtn')
         self.btn_delete.clicked.connect(self._on_delete)
 
@@ -189,12 +176,19 @@ class ManageProductGroupsScreen(QWidget):
         tl.addWidget(self.search_edit, 1)
         tl.addWidget(self.btn_reload, 0)
         tl.addWidget(self.btn_new, 0)
+        tl.addWidget(self.btn_columns, 0)
         tl.addWidget(self.btn_delete, 0)
         tl.addWidget(self.btn_save, 0)
         tl.addWidget(self.status_label, 0, Qt.AlignVCenter)
 
         # table
         self.table = QTableView(objectName='ProductGroupsTable')
+        # FilterableHeaderView (aus screen_manage_jets) statt Standard-Header:
+        # Rechtsklick auf eine Spalte -> "contains"/"von-bis"-Filter, Sections
+        # movable fuer Drag&Drop-Umsortieren (siehe "Columns…"-Button).
+        self._header = FilterableHeaderView(Qt.Horizontal, self.table)
+        self._header.setSectionsMovable(True)
+        self.table.setHorizontalHeader(self._header)
         self.table.setAlternatingRowColors(False)
         self.table.setSortingEnabled(True)
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -217,20 +211,43 @@ class ManageProductGroupsScreen(QWidget):
             .replace("#B5D7B5", accent_gridline())
             .replace("#E9F6E9", accent_tint()))
 
-        root.addWidget(header)
-        root.addWidget(toolbar, 0)
-        root.addWidget(self.table, 1)
+        content_layout.addWidget(toolbar, 0)
+        content_layout.addWidget(self.table, 1)
         root.addWidget(FooterBar())
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
+
+    def _configure_search_column(self, headers: List[str]):
+        """Ermittelt die bevorzugte Suchspalte; faellt auf alle Spalten
+        zurueck, falls keine gefunden wird (bisheriges Verhalten der alten
+        TextFilterProxy)."""
+        pref = None
+        for i, h in enumerate(headers):
+            if _canon(h) in {'produktgruppe', 'productgroup', 'name', 'bezeichnung'}:
+                pref = i
+                break
+        self._search_cols = [pref] if pref is not None else list(range(len(headers)))
 
     def _on_search_changed(self, text: str):
         if not self.proxy:
             return
-        if not text:
-            self.proxy.setFilterRegularExpression(QRegularExpression())
-            return
-        rx = QRegularExpression('.*' + QRegularExpression.escape(text) + '.*')
-        rx.setPatternOptions(QRegularExpression.CaseInsensitiveOption)
-        self.proxy.setFilterRegularExpression(rx)
+        self.proxy.set_search_filter(self._search_cols, text)
 
     # ---- data layer ----
     def _load_rows(self) -> List[Dict]:
@@ -250,13 +267,16 @@ class ManageProductGroupsScreen(QWidget):
         self._id_col = self._infer_id_col(headers)
 
         self.model = GenericEditableModel(
-            rows, headers, id_column=self._id_col)
+            rows, headers, id_column=self._id_col, read_only=self._read_only)
 
         if not self.proxy:
-            self.proxy = TextFilterProxy(self)
+            self.proxy = MultiColumnFilterProxy(self)
+            self.proxy.setFilterCaseSensitivity(Qt.CaseInsensitive)
+            self.proxy.setDynamicSortFilter(True)
+            self._header.set_proxy(self.proxy)
         self.proxy.setSourceModel(self.model)
+        self._configure_search_column(headers)
         self.proxy.setSortRole(Qt.EditRole)
-        self.proxy.set_preferred_column(headers)
         self.table.setModel(self.proxy)
 
         self.table.resizeColumnsToContents()
@@ -267,12 +287,43 @@ class ManageProductGroupsScreen(QWidget):
                 id_idx = i
                 break
         self.table.sortByColumn(id_idx, Qt.AscendingOrder)
+        self._restore_column_order()
 
         self._set_status(f'{len(rows)} row(s) loaded.')
         self._on_search_changed(self.search_edit.text())
+        self._apply_read_only_ui()
+
+    def set_read_only(self, read_only: bool):
+        """Schaltet Schreibrechte um: New/Delete/Save + Zell-Editing gesperrt,
+        Suche bleibt immer nutzbar. Von main.py bei jeder Navigation zu diesem
+        Screen mit dem aktuellen Permission-Stand aufgerufen."""
+        self._read_only = bool(read_only)
+        self._apply_read_only_ui()
+
+    def _apply_read_only_ui(self):
+        ro = self._read_only
+        if self.model is not None:
+            self.model.set_read_only(ro)
+            # dataChanged statt layoutChanged: reiner Repaint (read-only-Styling),
+            # keine echte Zeilen-/Spaltenumordnung. layoutChanged invalidiert
+            # persistente Model-Indizes/Selection-State - bei jedem erneuten
+            # Sichtbarwerden dieses Screens wiederholt aufgerufen, führte das in
+            # screen_manage_yarn.py nachweislich (Bisektion, faulthandler) zu
+            # einem Absturz (Windows access violation) im nächsten selectRow() -
+            # gleiches Muster hier, siehe CLAUDE.md.
+            rows = self.model.rowCount()
+            cols = self.model.columnCount()
+            if rows and cols:
+                self.model.dataChanged.emit(
+                    self.model.index(0, 0), self.model.index(rows - 1, cols - 1))
+        tooltip = "Read-only access – you don't have permission to edit this table." if ro else ""
+        for btn in (self.btn_new, self.btn_delete, self.btn_save):
+            if btn is not None:
+                btn.setEnabled(not ro)
+                btn.setToolTip(tooltip)
 
     def save_changes(self):
-        if not self.model:
+        if not self.model or self._read_only:
             return
         dirty_rows = self.model.dirty_rows()
         if not dirty_rows:
@@ -301,6 +352,8 @@ class ManageProductGroupsScreen(QWidget):
             self._set_status(f'Save failed: {e}', error=True)
 
     def _on_new(self):
+        if self._read_only:
+            return
         try:
             rows = self._load_rows()
             headers = list(rows[0].keys()) if rows else ['ID', 'Produktgruppe']
@@ -315,10 +368,7 @@ class ManageProductGroupsScreen(QWidget):
             placeholders = ','.join(['?'] * len(cols))
             cols_sql = ', '.join([f'[{c}]' for c in cols])
             sql = f'INSERT INTO [{self.TABLE}] ({cols_sql}) VALUES ({placeholders})'
-            execute(sql, values)
-            row = fetch_all('SELECT @@IDENTITY AS NewID', [])
-            new_id = int(row[0]['NewID']
-                         ) if row and 'NewID' in row[0] else None
+            new_id = execute_insert(sql, values)
 
             self.reload_data()
             if new_id is not None:
@@ -329,7 +379,7 @@ class ManageProductGroupsScreen(QWidget):
             self._set_status(f'Create failed: {e}', error=True)
 
     def _on_delete(self):
-        if not self.model:
+        if not self.model or self._read_only:
             return
         src_rows = self._source_selection_rows()
         if not src_rows:
@@ -359,6 +409,52 @@ class ManageProductGroupsScreen(QWidget):
         except Exception as e:
             QMessageBox.critical(self, 'Delete failed', str(e))
             self._set_status(f'Delete failed: {e}', error=True)
+
+    # ---- column reordering (wie Manage Yarn/Jets/Material) ----
+    def _on_columns_clicked(self):
+        """Oeffnet/hebt die Drag&Drop-Spaltenliste zum Umsortieren."""
+        if not self.model:
+            return
+        if self._column_order_dialog is None or not self._column_order_dialog.isVisible():
+            self._column_order_dialog = ColumnOrderDialog(
+                self._header, self.model, 0, on_save=self._save_column_order_now, parent=self)
+            self._column_order_dialog.show()
+        else:
+            self._column_order_dialog.raise_()
+            self._column_order_dialog.activateWindow()
+
+    def _save_column_order_now(self):
+        """Persistiert die AKTUELLE Spaltenreihenfolge fuer den eingeloggten
+        User. Nur explizit aufgerufen (Save-Button im Columns-Dialog)."""
+        if not self.model:
+            return
+        headers = self.model.headers()
+        order = []
+        for v in range(self._header.count()):
+            logical = self._header.logicalIndex(v)
+            if logical < len(headers) and not self._header.isSectionHidden(logical):
+                order.append(headers[logical])
+        from db.user_column_order import save_column_order
+        save_column_order(self._SCREEN_KEY, order)
+
+    def _restore_column_order(self):
+        """Wendet die zuletzt fuer diesen User gespeicherte Spaltenreihenfolge an (falls vorhanden)."""
+        if not self.model:
+            return
+        from db.user_column_order import load_column_order
+        saved = load_column_order(self._SCREEN_KEY)
+        if not saved:
+            return
+        name_to_logical = {h: i for i, h in enumerate(self.model.headers())}
+        pos = 0
+        for name in saved:
+            logical = name_to_logical.get(name)
+            if logical is None:
+                continue
+            current_visual = self._header.visualIndex(logical)
+            if current_visual != pos:
+                self._header.moveSection(current_visual, pos)
+            pos += 1
 
     # ---- helpers ----
     def _source_selection_rows(self) -> List[int]:

@@ -25,7 +25,7 @@ from matplotlib.figure import Figure
 
 from ui.theme import accent_tint, accent_gridline, get_accent
 from ui.widgets.footer import FooterBar
-from ui.widgets.header import HeaderBar
+from ui.widgets import sidebar_nav
 from db.connection import fetch_all, table_exists
 
 
@@ -148,9 +148,11 @@ class LoginTimelineChart(FigureCanvas):
 
 
 class UsageStatsScreen(QWidget):
-    def __init__(self, on_back_home=None):
+    def __init__(self, on_back_home=None, sidebar_callbacks=None):
         super().__init__()
         self.on_back_home = on_back_home
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         self.chart_ranking = UsageRankingChart()
         self.chart_logins = LoginTimelineChart()
@@ -166,8 +168,9 @@ class UsageStatsScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="Usage Stats", show_home=True)
-        header.connect_home(self._go_home)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(24, 12, 24, 0)
@@ -190,10 +193,27 @@ class UsageStatsScreen(QWidget):
         tabs.addTab(self.tbl_screens, "Screens")
         tabs.addTab(self.tbl_features, "Features")
 
-        root.addWidget(header)
-        root.addWidget(toolbar_frame, 0)
-        root.addWidget(tabs, 1)
+        content_layout.addWidget(toolbar_frame, 0)
+        content_layout.addWidget(tabs, 1)
         root.addWidget(FooterBar())
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
     def reload_data(self):
         if not table_exists("tblUsageLog"):

@@ -6,7 +6,8 @@ Ermöglicht es, viele ATY-Trials auf einmal zu analysieren:
   1. Serien aus der DB auswählen (Checkbox-Liste)
   2. TDMS-Dateien im konfigurierten ATY-Ordner scannen
   3. Analyse im Hintergrund ausführen
-  4. Ergebnisse (N_B1, N_B2, Avg-Werte, Histogramme) in tblLaborATYoMat schreiben
+  4. Ergebnisse (Kern, Frequenz, Bulk Index, Bin1/Bin2 u.a. -- siehe
+     aty_core_analysis.DB_COLUMN_MAP) in tblLaborATYoMat schreiben
 
 TDMS-Datei-Namenskonvention: <SeriesID>_<TrialNr>_...tdms
 Ordner: H:\\Technik\\TrippleT\\ATYtdms
@@ -34,9 +35,10 @@ from PySide6.QtWidgets import (
     QCheckBox, QListWidget, QListWidgetItem, QApplication,
 )
 
-from db.connection import fetch_all, execute
-from ui.widgets.header import HeaderBar
+from db.connection import fetch_all, execute, new_global_id
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
+import app_meta
 
 # ---------------------------------------------------------------------------
 # Konstanten
@@ -57,40 +59,30 @@ _COL_TRIAL_NO = 1
 _COL_TRIAL_ID = 2
 _COL_FILE     = 3
 _COL_STATUS   = 4
-_COL_TOTAL_LEN = 5
-_COL_N_B1     = 6
-_COL_N_B2     = 7
-_COL_AVG_LEN_B1   = 8
-_COL_AVG_LEN_B2   = 9
-_COL_AVG_HGT_B1   = 10
-_COL_AVG_HGT_B2   = 11
-_COL_AVG_AREA_B1  = 12
-_COL_AVG_AREA_B2  = 13
+_COL_LENGTH_M   = 5
+_COL_CORE_UM    = 6
+_COL_BULK_PCT   = 7
+_COL_DENSITY    = 8
+_COL_BIN1_PCT   = 9
+_COL_CORE_CV    = 10
 
 _HEADERS = [
     "Serie", "Vers.", "TrialID", "Datei", "Status",
-    "Length [m]", "N_B1 /100m", "N_B2 /100m",
-    "AvgLen B1 [mm]", "AvgLen B2 [mm]",
-    "AvgHgt B1 [µm]", "AvgHgt B2 [µm]",
-    "AvgArea B1", "AvgArea B2",
+    "Length [m]", "Core [µm]", "Bulk Index [%]",
+    "Freq [1/m]", "Bin1 % (Kurzhocker)", "Core CV [%]",
 ]
 
-# DB-Felder für tblLaborATYoMat (Zusammenfassung)
-_DB_SUMMARY_COLS = [
-    "TotalLen_m", "BinThreshold",
-    "N_B1", "N_B2",
-    "AvgLen_B1", "AvgLen_B2",
-    "AvgHeight_B1", "AvgHeight_B2",
-    "AvgArea_B1", "AvgArea_B2",
-]
-# Histogramm-Spalten: len_b1_bin_1..20, len_b2_bin_1..20, hgt_..., area_...
-_DB_HIST_COLS: List[str] = []
-for _prefix in ("len", "hgt", "area"):
-    for _bid in (1, 2):
-        for _i in range(1, 21):
-            _DB_HIST_COLS.append(f"{_prefix}_b{_bid}_bin_{_i}")
-
-_ALL_DB_COLS = _DB_SUMMARY_COLS + _DB_HIST_COLS  # 10 + 120 = 130
+# DB-Spalten für tblLaborATYoMat -- Single Source of Truth ist
+# aty_core_analysis.DB_COLUMN_MAP; hier nur importiert, nicht dupliziert
+# (frueher, mit der alten thick_spot_analysis-Methode, war das eine
+# eigenstaendige 130-Spalten-Liste -- seit 2026-08-13 komplett auf die neue
+# Kern-Analyse umgestellt, siehe CLAUDE.md).
+from ui.yarnscope.aty_core_analysis import (
+    analyze_trial as _core_analyze_trial,
+    to_db_row as _core_to_db_row,
+    from_db_row as _core_from_db_row,
+    DB_COLUMNS as _ALL_DB_COLS,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +263,57 @@ class ATYFolderScanner:
         return rows
 
 
+def build_calibration_dataset(series_ids: List[int]) -> List[Dict[str, Any]]:
+    """Recalibration-batch builder for aty_core_analysis.suggest_radar_bounds():
+    DB-first, TDMS-fallback per trial, so recalibrating from trials that have
+    already been analyzed and saved (the common case as more ATY trials get
+    saved through normal use) needs no TDMS file access at all - only trials
+    with no tblLaborATYoMat row yet fall back to reading + analyzing their
+    TDMS file, exactly like the interactive batch run above.
+
+    Reuses ATYFolderScanner.scan_multi() (same DB-batch-fetch + TDMS-folder-
+    scan already used by the interactive batch screen) instead of querying
+    either source again.
+
+    A tblLaborATYoMat row only counts as usable if BulkIndexPct is actually
+    set, not merely because Timestamp is - found in dev_local while testing
+    this: all 15 rows of TrialSeries 270 have Timestamp set but every metric
+    column NULL (stale rows, presumably from before the 2026-08-13 schema
+    migration to the new 34-column layout, see CLAUDE.md). Trusting a
+    non-empty row dict without checking its actual values would have quietly
+    fed None into suggest_radar_bounds() for those trials instead of falling
+    back to their TDMS file.
+
+    Example (run from a scratch script, not part of the app UI - same
+    pattern as suggest_radar_bounds() itself):
+        from ui.screen_aty_batch import build_calibration_dataset
+        from ui.yarnscope.aty_core_analysis import suggest_radar_bounds
+        results = build_calibration_dataset([270, 288])
+        print(suggest_radar_bounds(results))
+    """
+    from ui.yarnscope.dty_tdms_reader import read_aty_signal, read_step_mm_from_tdms
+
+    rows = ATYFolderScanner.scan_multi(series_ids)
+    results: List[Dict[str, Any]] = []
+    for row in rows:
+        if row.db_vals and row.db_vals.get("BulkIndexPct") is not None:
+            results.append(_core_from_db_row(row.db_vals))
+            continue
+        if row.tdms_path is None:
+            continue
+        try:
+            arr, ell = read_aty_signal(str(row.tdms_path))
+            mm_pp = read_step_mm_from_tdms(str(row.tdms_path))
+            if arr is None or len(arr) == 0:
+                continue
+            if mm_pp is None or mm_pp <= 0:
+                mm_pp = 0.25
+            results.append(_core_analyze_trial(arr, float(mm_pp), ellipticity_pct=ell))
+        except Exception as e:
+            print(f"[ATY Calibration] Fehler bei {row.tdms_path}: {e}")
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Scan-Worker (Hintergrund)
 # ---------------------------------------------------------------------------
@@ -306,17 +349,40 @@ class _ScanWorker(QRunnable):
 # ---------------------------------------------------------------------------
 def _save_aty_to_db(trial_id: int, db_vals: Dict[str, Any],
                     tdms_path: Optional[Path] = None) -> bool:
-    """Schreibt ATY-Analyse-Ergebnisse in tblLaborATYoMat (INSERT oder UPDATE)."""
+    """Schreibt ATY-Analyse-Ergebnisse in tblLaborATYoMat (INSERT oder UPDATE).
+
+    GlobalID identifiziert diese eine Zeile stabil ueber Merges hinweg
+    (Offline-Arbeit + spaeteres Zusammenfuehren zweier DBs), nicht den Trial
+    selbst (der hat sein eigenes GlobalID in tblTrial). Beim INSERT frisch
+    vergeben (new_global_id(), UUID); beim UPDATE per COALESCE nur dann
+    (neu) gesetzt, wenn die Zeile noch keins hat (z.B. Altzeilen von vor
+    2026-08-13) -- ein bestehendes GlobalID wird nie ueberschrieben, sonst
+    wuerde ein Merge-Schluessel unter der Zeile wegrutschen. UserID wird bei
+    jedem Speichern (INSERT wie UPDATE) auf den aktuell eingeloggten User
+    gesetzt.
+    """
 
     def _v(key):
         v = db_vals.get(key)
+        if key == "ParamsVersion":  # only non-numeric column -- keep as string
+            return str(v) if v is not None else None
         try:
-            return float(v) if v is not None else None
+            f = float(v) if v is not None else None
         except Exception:
             return None
+        # NaN/Inf reach here whenever a metric legitimately couldn't be
+        # computed (e.g. Bin1HeightMedianUm with zero Bin1 loops, or
+        # Ellipticity* on a trial with zero detected peaks) - mysql-connector
+        # renders a bare Python NaN as the unquoted SQL token `nan`, not a
+        # numeric literal, which MySQL then parses as a column reference
+        # ("Unknown column 'nan' in 'field list'"). Store NULL instead.
+        if f is not None and not np.isfinite(f):
+            return None
+        return f
 
     ts = _dt.now().strftime("%Y-%m-%d %H:%M:%S")
     params = [_v(c) for c in _ALL_DB_COLS]
+    user_id = (getattr(app_meta, "current_user", {}) or {}).get("id")
 
     try:
         exists = bool(fetch_all(
@@ -329,18 +395,19 @@ def _save_aty_to_db(trial_id: int, db_vals: Dict[str, Any],
         if exists:
             set_parts = [f"{c}=?" for c in _ALL_DB_COLS]
             sql = (
-                f"UPDATE tblLaborATYoMat SET {', '.join(set_parts)}, Timestamp=? "
-                f"WHERE TrialID=?"
+                f"UPDATE tblLaborATYoMat SET {', '.join(set_parts)}, "
+                f"Timestamp=?, UserID=?, GlobalID=COALESCE(GlobalID, ?) WHERE TrialID=?"
             )
-            execute(sql, params + [ts, trial_id])
+            execute(sql, params + [ts, user_id, new_global_id(), trial_id])
         else:
             cols_str = ", ".join(_ALL_DB_COLS)
             ph = ", ".join(["?"] * len(_ALL_DB_COLS))
             sql = (
-                f"INSERT INTO tblLaborATYoMat (TrialID, {cols_str}, Timestamp) "
-                f"VALUES (?, {ph}, ?)"
+                f"INSERT INTO tblLaborATYoMat "
+                f"(TrialID, GlobalID, {cols_str}, Timestamp, UserID) "
+                f"VALUES (?, ?, {ph}, ?, ?)"
             )
-            execute(sql, [trial_id] + params + [ts])
+            execute(sql, [trial_id, new_global_id()] + params + [ts, user_id])
         return True
     except Exception as e:
         print(f"[ATY Batch] DB-Fehler TrialID={trial_id}: {e}")
@@ -383,7 +450,7 @@ class _ATYTableModel(QAbstractTableModel):
             if row.status == ST_ERROR:
                 return QColor("#3a2020")
         if role == Qt.TextAlignmentRole:
-            if col in (_COL_TRIAL_NO, _COL_TRIAL_ID) or col >= _COL_TOTAL_LEN:
+            if col in (_COL_TRIAL_NO, _COL_TRIAL_ID) or col >= _COL_LENGTH_M:
                 return int(Qt.AlignRight | Qt.AlignVCenter)
             return int(Qt.AlignLeft | Qt.AlignVCenter)
         if role == Qt.FontRole:
@@ -404,15 +471,12 @@ class _ATYTableModel(QAbstractTableModel):
         if col == _COL_TRIAL_ID:  return str(row.trial_id) if row.trial_id else "?"
         if col == _COL_FILE:      return row.tdms_path.name if row.tdms_path else "—"
         if col == _COL_STATUS:    return row.status
-        if col == _COL_TOTAL_LEN: return _f(row.db_vals.get("TotalLen_m"), 1)
-        if col == _COL_N_B1:      return _f(row.db_vals.get("N_B1"), 1)
-        if col == _COL_N_B2:      return _f(row.db_vals.get("N_B2"), 1)
-        if col == _COL_AVG_LEN_B1:  return _f(row.db_vals.get("AvgLen_B1"), 2)
-        if col == _COL_AVG_LEN_B2:  return _f(row.db_vals.get("AvgLen_B2"), 2)
-        if col == _COL_AVG_HGT_B1:  return _f(row.db_vals.get("AvgHeight_B1"), 1)
-        if col == _COL_AVG_HGT_B2:  return _f(row.db_vals.get("AvgHeight_B2"), 1)
-        if col == _COL_AVG_AREA_B1: return _f(row.db_vals.get("AvgArea_B1"), 3)
-        if col == _COL_AVG_AREA_B2: return _f(row.db_vals.get("AvgArea_B2"), 3)
+        if col == _COL_LENGTH_M: return _f(row.db_vals.get("LengthM"), 1)
+        if col == _COL_CORE_UM:  return _f(row.db_vals.get("CoreMeanUm"), 1)
+        if col == _COL_BULK_PCT: return _f(row.db_vals.get("BulkIndexPct"), 1)
+        if col == _COL_DENSITY:  return _f(row.db_vals.get("DensityPerM"), 1)
+        if col == _COL_BIN1_PCT: return _f(row.db_vals.get("Bin1Pct"), 1)
+        if col == _COL_CORE_CV:  return _f(row.db_vals.get("CoreCVPct"), 2)
         return ""
 
     def _fg_color(self, row: ATYTrialRow):
@@ -449,7 +513,8 @@ class ATYBatchScreen(QWidget):
 
     def __init__(self, on_back_home=None, parent=None,
                  locked_series_id: int = None,
-                 locked_series_name: str = ""):
+                 locked_series_name: str = "",
+                 sidebar_callbacks: Optional[dict] = None):
         super().__init__(parent)
         self._on_back_home       = on_back_home
         self._locked_series_id   = locked_series_id
@@ -462,6 +527,8 @@ class ATYBatchScreen(QWidget):
         self._pool.setMaxThreadCount(min(8, max(2, os.cpu_count() or 4)))
         self._running  = False
         self._save_after = False
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
         self._build_ui()
 
     # ── UI-Aufbau ─────────────────────────────────────────────────────────
@@ -471,9 +538,9 @@ class ATYBatchScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        hdr = HeaderBar(title="YarnScope ATY – Batch-Auswertung", show_home=True)
-        hdr.connect_home(self._go_home)
-        root.addWidget(hdr)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         self._shortcut_insider = QShortcut(QKeySequence("Ctrl+Shift+J"), self)
         self._shortcut_insider.activated.connect(self._toggle_insider_mode)
@@ -620,8 +687,33 @@ class ATYBatchScreen(QWidget):
 
         body = QWidget()
         bl = QVBoxLayout(body); bl.setContentsMargins(0, 0, 0, 0)
+
+        # Rückweg zur aufrufenden ShowExperimentScreen-Instanz (2026-08-28,
+        # Nutzer-Bugreport: "beim batchauftrag in yarnscope komm ich nicht
+        # mehr zurück zu show experiment") - ging bis zur TopBar-Abschaffung
+        # (2026-08-27) über den HeaderBar-Home-Button, der hier nie durch
+        # ein Sidebar-Äquivalent ersetzt wurde; `_go_home()`/`_on_back_home`
+        # existierten unverändert weiter, hatten aber kein UI-Gegenstück mehr.
+        # Bewusst ein eigener sichtbarer Button statt eines Sidebar-Eintrags
+        # wie bei ShowExperimentScreen selbst (dort 2026-08-27 entfernt) -
+        # anders als dort führt "zurück" hier zu einer KONKRETEN, bereits
+        # geöffneten ShowExperimentScreen-Instanz mit Zustand (nicht nur
+        # generisch zu "All Experiments"), das braucht eine direkte Aktion.
+        back_row = QHBoxLayout()
+        back_row.setContentsMargins(8, 6, 8, 0)
+        self._btn_back = QPushButton("← Back to Show Experiment")
+        self._btn_back.setFixedHeight(26)
+        self._btn_back.setStyleSheet(
+            "QPushButton{background:#2a2a2a;color:#aaa;border-radius:3px;"
+            "font-size:11px;border:1px solid #444;padding:2px 10px;}"
+            "QPushButton:hover{background:#3a3a3a;color:#eee;}")
+        self._btn_back.clicked.connect(self._go_home)
+        back_row.addWidget(self._btn_back)
+        back_row.addStretch(1)
+        bl.addLayout(back_row)
+
         bl.addWidget(splitter, 1)
-        root.addWidget(body, 1)
+        content_layout.addWidget(body, 1)
         root.addWidget(FooterBar())
 
     # ── Series-Liste ──────────────────────────────────────────────────────
@@ -905,28 +997,17 @@ class ATYBatchScreen(QWidget):
             QApplication.processEvents()
 
             try:
-                from ui.yarnscope.dty_tdms_reader import (
-                    read_first_numeric_channel, read_step_mm_from_tdms,
-                )
-                from ui.yarnscope.thick_spot_analysis import (
-                    detect_thick_spots, compute_db_values,
-                )
+                from ui.yarnscope.dty_tdms_reader import read_aty_signal, read_step_mm_from_tdms
 
-                y     = read_first_numeric_channel(str(row.tdms_path))
+                arr, ell = read_aty_signal(str(row.tdms_path))
                 mm_pp = read_step_mm_from_tdms(str(row.tdms_path))
-                if y is None or len(y) == 0:
+                if arr is None or len(arr) == 0:
                     raise ValueError("Kein Signal im TDMS-File.")
                 if mm_pp is None or mm_pp <= 0:
                     mm_pp = 0.25
 
-                arr = np.asarray(y, dtype=float)
-                # mm-Normierung (wie in aty_yarnscope_tab)
-                if float(np.median(arr)) >= 10.0:
-                    arr = arr / 1000.0
-
-                total_mm = float(len(arr) * mm_pp)
-                spots    = detect_thick_spots(arr, float(mm_pp))
-                db_vals  = compute_db_values(spots, total_mm)
+                metrics = _core_analyze_trial(arr, float(mm_pp), ellipticity_pct=ell)
+                db_vals = _core_to_db_row(metrics)
 
                 row.db_vals = db_vals
 
@@ -980,6 +1061,20 @@ class ATYBatchScreen(QWidget):
         if callable(self._on_back_home):
             self._on_back_home()
 
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
     def showEvent(self, ev):
         super().showEvent(ev)
         QTimer.singleShot(100, self._init_series_state)
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass

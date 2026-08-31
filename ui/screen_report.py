@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget, QSizePolicy, QMessageBox,
+    QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget, QSizePolicy, QMessageBox, QFrame,
 )
 from PySide6.QtCore import QSize
 
@@ -38,8 +38,8 @@ from ui.report_pdf_layout import (
     _PDF_TEMPLATE_DEFAULTS,
     _meta_cell, _section_hdr, _infobox_table, _note_block, _load_pdf_template,
 )
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 import app_meta
 
 logger = logging.getLogger(__name__)
@@ -402,8 +402,13 @@ class _ReportBridge(QObject):
                     "overfeed":     _f(r.get("overfeed")),
                     "speed":        _f(r.get("speed")),
                     "jet_plate":    _f(r.get("jet_plate")),
-                    "air_cons":      _f(r.get("air_cons")),
-                    "air_cons_real": (_f(r.get("air_cons")) * (_f(r.get("air_pressure")) + 1))
+                    # Realer Luftverbrauch = Jet-Faktor * (gefahrener Betriebsdruck
+                    # dieses Trials + 1), nicht der reine Jet-Faktor.
+                    "air_cons":      round(_f(r.get("air_cons")) * (_f(r.get("air_pressure")) + 1), 2)
+                                     if _f(r.get("air_cons")) is not None and _f(r.get("air_pressure")) is not None
+                                     else None,
+                    # Separater Y-Achsen-Eintrag (tblSmartChartAxis ID 45, "air_cons_real").
+                    "air_cons_real": round(_f(r.get("air_cons")) * (_f(r.get("air_pressure")) + 1), 2)
                                      if _f(r.get("air_cons")) is not None and _f(r.get("air_pressure")) is not None
                                      else None,
                     "real_jet":     str(r.get("jet_name") or "Unknown"),
@@ -452,7 +457,7 @@ class _ReportBridge(QObject):
         """Save or update a SmartChart report with block-based structure."""
         try:
             import json as _json
-            from db.connection import fetch_all, execute
+            from db.connection import fetch_all, execute, execute_insert
             import app_meta
 
             data        = _json.loads(report_json)
@@ -468,6 +473,34 @@ class _ReportBridge(QObject):
             global_note = data.get("globalNote", "").strip()
             user_id     = (app_meta.current_user or {}).get("id")
 
+            # Nur der urspruengliche Autor (per UserID, NICHT dem frei
+            # editierbaren "Author"-Textfeld - das zeigt bei jedem geladenen
+            # Report erstmal den ORIGINAL-Autor an, siehe report_html_template.py
+            # openReport()/loadReport()) darf einen bestehenden Report
+            # ueberschreiben (2026-08-27, Nutzerwunsch: "so kann man nicht
+            # reports von jemand anderem zerstoeren"). Oeffnet ein ANDERER
+            # Nutzer einen fremden Report, aendert etwas und speichert, wird
+            # daraus automatisch eine neue, unabhaengige Kopie mit ihm selbst
+            # als Autor - der Original-Report bleibt unangetastet. Reports
+            # ohne UserID (aeltere Zeilen von vor dieser Spalte, aktuell auf
+            # dev_local nicht vorhanden, aber die Spalte ist nullable) haben
+            # keinen erkennbaren Besitzer und bleiben frei ueberschreibbar.
+            forked = False
+            if report_id:
+                owner_rows = fetch_all(
+                    "SELECT UserID FROM tblSmartChartReport WHERE ID=?", [report_id])
+                if not owner_rows:
+                    report_id = None  # Report existiert nicht mehr - wie neu behandeln
+                else:
+                    owner_id = owner_rows[0]["UserID"]
+                    if owner_id is not None and user_id is not None and int(owner_id) != int(user_id):
+                        forked = True
+                        report_id = None
+                        # Client-seitiges Author-Feld ignorieren (zeigt evtl.
+                        # noch den ORIGINAL-Autor) - die neue Kopie gehört
+                        # eindeutig dem aktuell eingeloggten Nutzer.
+                        author = str((app_meta.current_user or {}).get("username") or author)
+
             if report_id:
                 execute(
                     "UPDATE tblSmartChartReport SET Title=?, Author=?, SourceType=?, "
@@ -479,21 +512,24 @@ class _ReportBridge(QObject):
                 execute("DELETE FROM tblSmartChartBlock WHERE ReportID=? AND ID > 0", [report_id])
                 execute("DELETE FROM tblSmartChartNote WHERE ReportID=? AND ID > 0", [report_id])
             else:
-                execute(
+                # execute_insert() statt execute()+separatem fetch_all('SELECT
+                # LAST_INSERT_ID()'): Letzteres zieht sich unabhängig eine
+                # (nicht notwendigerweise dieselbe) Connection aus dem Pool,
+                # wodurch LAST_INSERT_ID() gelegentlich 0/NULL liefert, obwohl
+                # der Insert erfolgreich war - der bisherige "Title+Author,
+                # ORDER BY ID DESC"-Fallback direkt darunter war vermutlich
+                # genau dafür gedacht, ist aber selbst nicht robust (trifft bei
+                # gleichzeitig laufenden Speichervorgängen mit identischem
+                # Title/Author potenziell die falsche Zeile). execute_insert()
+                # liest die ID stattdessen über cur.lastrowid auf derselben
+                # Session wie der Insert selbst - siehe CLAUDE.md.
+                report_id = execute_insert(
                     "INSERT INTO tblSmartChartReport "
                     "(Title, Author, SourceType, SeriesPK, QueryConfigJSON, "
                     "ShowInfobox, InfoboxPosition, UserID) VALUES (?,?,?,?,?,?,?,?)",
                     [title, author, source_type, series_pk, query_cfg,
                      show_info, info_pos, user_id]
                 )
-                rows = fetch_all("SELECT LAST_INSERT_ID() AS new_id", [])
-                report_id = int(rows[0]["new_id"]) if rows and rows[0].get("new_id") else None
-                if not report_id:
-                    rows = fetch_all(
-                        "SELECT ID FROM tblSmartChartReport WHERE Title=? AND Author=? "
-                        "ORDER BY ID DESC LIMIT 1", [title, author]
-                    )
-                    report_id = int(rows[0]["ID"]) if rows else None
 
             if not report_id:
                 raise Exception("Could not determine report ID after save")
@@ -503,8 +539,9 @@ class _ReportBridge(QObject):
                 execute(
                     "INSERT INTO tblSmartChartBlock "
                     "(ReportID, BlockType, SortOrder, ChartIndex, XField, YKey, ZField, "
-                    "ChartMode, ImageData, ImageTitle, ImageWidth, NoteTitle, NoteText, NoteVisible) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "ChartMode, ImageData, ImageTitle, ImageWidth, NoteTitle, NoteText, NoteVisible, "
+                    "GridlinesY, GridlinesVisible) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     [
                         report_id,
                         b.get("blockType", "chart"),
@@ -520,6 +557,8 @@ class _ReportBridge(QObject):
                         b.get("noteTitle"),
                         b.get("noteText"),
                         int(b.get("noteVisible", True)),
+                        b.get("gridlinesY", ""),
+                        int(b.get("gridlinesVisible", False)),
                     ]
                 )
 
@@ -531,14 +570,18 @@ class _ReportBridge(QObject):
                     [report_id, "global", "Summary", global_note, 1]
                 )
 
-            js = f"receiveSaveResult({report_id}, true, 'Report saved successfully');"
+            msg = ("Report saved successfully" if not forked else
+                   "You are not the author of this report - your changes were "
+                   "saved as a new, independent report instead.")
+            js = ("receiveSaveResult(" + str(report_id) + ", true, "
+                  + _json.dumps(msg) + ", " + ("true" if forked else "false") + ");")
             if self._screen._web:
                 self._screen._web.page().runJavaScript(js)
 
         except Exception as e:
             logger.error("saveReport: %s", e)
             import json as _json2
-            js = "receiveSaveResult(null, false, " + _json2.dumps(str(e)) + ");"
+            js = "receiveSaveResult(null, false, " + _json2.dumps(str(e)) + ", false);"
             if self._screen._web:
                 self._screen._web.page().runJavaScript(js)
 
@@ -602,6 +645,8 @@ class _ReportBridge(QObject):
                     "noteTitle":  str(b["NoteTitle"] or ""),
                     "noteText":   str(b["NoteText"] or ""),
                     "noteVisible":bool(b["NoteVisible"]),
+                    "gridlinesY":       str(b.get("GridlinesY") or ""),
+                    "gridlinesVisible": bool(b.get("GridlinesVisible")),
                 })
 
             # Global note
@@ -1530,8 +1575,8 @@ class _ReportBridge(QObject):
             p = _json.loads(payload_json)
             tid = int(p["id"])
             rows = fetch_all("SELECT IsDefault FROM tblSmartChartTemplate WHERE ID = ?", [tid])
-            if rows and rows[0].get("IsDefault"):
-                if self._screen._web: self._screen._web.page().runJavaScript('receiveLayoutTemplateSaved(false,"Cannot overwrite default template");')
+            if rows and rows[0].get("IsDefault") and not app_meta.is_superuser_level():
+                if self._screen._web: self._screen._web.page().runJavaScript('receiveLayoutTemplateSaved(false,"Only superusers can edit the default template");')
                 return
             with get_connection() as cn:
                 cur = cn.cursor()
@@ -1603,21 +1648,44 @@ class _ReportBridge(QObject):
 
 class ReportScreen(QWidget):
 
-    def __init__(self, on_back=None, mode="series", parent=None):
+    def __init__(self, on_back=None, mode="series", parent=None, sidebar_callbacks: Optional[dict] = None):
         super().__init__(parent)
         self.on_back = on_back
         self.mode = mode  # "series" = from ShowExperiment | "visual" = from Home (Visual SQL)
         self._series_pk: Optional[int] = None
         self._experiment_request_id: Optional[Any] = None
         self._expreq_popup = None
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self._header = HeaderBar(title="Smart Chart", show_home=False, show_back=True)
-        self._header.connect_back(self._go_back)
-        root.addWidget(self._header)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring). Der frühere
+        # Header-Back-Button lebt als kontextueller Back-Chip weiter (gleiches
+        # Muster wie ShowExperimentScreen) - Label je nach `mode` ("Show
+        # Experiment" bzw. "Home").
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
+
+        tools = QFrame()
+        tl = QHBoxLayout(tools)
+        tl.setContentsMargins(24, 12, 24, 0)
+        tl.setSpacing(8)
+
+        back_label = "Show Experiment" if self.mode == "series" else "Home"
+        self.btn_back_chip = QPushButton(f"← {back_label}")
+        self.btn_back_chip.setCursor(Qt.PointingHandCursor)
+        self.btn_back_chip.setStyleSheet(
+            "QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
+            "border-radius:4px;padding:5px 10px;font-weight:600;}"
+            "QPushButton:hover{background:#e8f5e9;}"
+        )
+        self.btn_back_chip.clicked.connect(self._go_back)
+        self.btn_back_chip.setVisible(callable(self.on_back))
+        tl.addWidget(self.btn_back_chip)
+        tl.addStretch(1)
 
         # Experiment Request Button (analog zu screen_show_experiment)
         self.btn_experiment_request = QPushButton()
@@ -1649,11 +1717,8 @@ class ReportScreen(QWidget):
             self.btn_experiment_request.setText("ER")
         self.btn_experiment_request.setVisible(False)
         self.btn_experiment_request.clicked.connect(self._open_experiment_request_popup)
-        try:
-            hlay = self._header.layout()
-            hlay.insertWidget(hlay.count() - 1, self.btn_experiment_request, 0)
-        except Exception:
-            pass
+        tl.addWidget(self.btn_experiment_request)
+        content_layout.addWidget(tools)
 
         self.lbl_series = QLabel()  # kept for internal use, not shown
         self.lbl_status = QLabel()  # kept for internal use, not shown
@@ -1665,17 +1730,35 @@ class ReportScreen(QWidget):
             self._channel = QWebChannel()
             self._channel.registerObject("bridge", self._bridge)
             self._web.page().setWebChannel(self._channel)
-            root.addWidget(self._web)
+            content_layout.addWidget(self._web)
         else:
             fallback = QLabel("⚠️  PySide6-WebEngine nicht installiert.\npip install PySide6-WebEngine")
             fallback.setAlignment(Qt.AlignCenter)
             fallback.setStyleSheet("font-size:14px; color:#c0392b; padding:40px;")
-            root.addWidget(fallback)
+            content_layout.addWidget(fallback)
             self._web = None
 
         root.addWidget(FooterBar())
 
-    def load_series(self, series_pk: int) -> None:
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
+
+    def load_series(self, series_pk: int, initial_report_id: Optional[int] = None) -> None:
         self._series_pk = series_pk
         self.lbl_series.setText(f"TrialSeries: {series_pk}")
         self.lbl_status.setText("Loading data...")
@@ -1712,6 +1795,8 @@ class ReportScreen(QWidget):
                 .replace("{primary_series_pk}", str(series_pk))
                 .replace("{is_visual_mode}", "false")
                 .replace("{current_user_json}", json.dumps(str(getattr(__import__("app_meta"), "current_user", {}).get("username","") or "")))
+                .replace("{is_superuser_json}", "true" if app_meta.is_superuser_level() else "false")
+                .replace("{initial_report_id_json}", json.dumps(initial_report_id))
             )
             try:
                 import tempfile as _tmp, os as _os
@@ -1809,6 +1894,8 @@ class ReportScreen(QWidget):
                 .replace("{primary_series_pk}", "0")
                 .replace("{is_visual_mode}", "true")
                 .replace("{current_user_json}", json.dumps(str(getattr(__import__("app_meta"), "current_user", {}).get("username","") or "")))
+                .replace("{is_superuser_json}", "true" if app_meta.is_superuser_level() else "false")
+                .replace("{initial_report_id_json}", "null")
             )
             # DEBUG: HTML in Datei schreiben
             try:

@@ -6,7 +6,7 @@ import shutil
 import sys
 import threading
 import uuid
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 """DB-Zugriffsschicht (MySQL).
 
@@ -38,13 +38,23 @@ Fallback (Dev ohne secrets.enc): db_secrets.json wie bisher (Reihenfolge analog)
 #   MODE = "dev_local"  → tripplet_dev_local (localhost)
 #
 # In der gebauten .exe (PyInstaller, sys.frozen=True) ist der Modus IMMER
-# "prod" und kann nicht per Umgebungsvariable überschrieben werden.
+# "prod", mit EINER gezielten Ausnahme: TRIPPLET_MODE=offline wird auch dort
+# durchgelassen (siehe Offline-Sync-Feature, CLAUDE.md) - "dev"/"dev_local"
+# bleiben für die .exe weiterhin komplett blockiert, auch bei versehentlich
+# gesetzter Umgebungsvariable. Ausgelöst über einen separaten Shortcut/
+# Wrapper-Skript für die wenigen Superuser, die offline arbeiten dürfen
+# (Zugriff wird zusätzlich nach dem Login per AccessLevel geprüft, siehe
+# main.py._on_login_success - dieser Modus-Schalter ist nur der Trigger,
+# nicht die eigentliche Zugriffskontrolle).
 # Im Quellcode-Start (PyCharm/python main.py) fragt main.py den Modus ab
 # und setzt TRIPPLET_MODE entsprechend; ohne diese Variable ist "prod" der
 # sichere Default (z.B. beim direkten Ausführen von connection.py/Tests).
 # =====================================================================
 
-MODE = "prod" if getattr(sys, "frozen", False) else os.environ.get("TRIPPLET_MODE", "prod")
+if getattr(sys, "frozen", False):
+    MODE = "offline" if os.environ.get("TRIPPLET_MODE") == "offline" else "prod"
+else:
+    MODE = os.environ.get("TRIPPLET_MODE", "prod")
 
 
 # =====================================================================
@@ -151,11 +161,69 @@ _SECRETS = _load_secrets()
 
 _DEV_MODE: bool = False
 _DEV_LOCAL_MODE: bool = False
+_OFFLINE_MODE: bool = False
+
+
+def _offline_sqlite_path() -> pathlib.Path:
+    """Path to the local offline SQLite file.
+
+    TRIPPLET_OFFLINE_DB_PATH overrides the path (e.g. for tests/PoC scripts,
+    so they don't accidentally touch the "real" offline copy under
+    %LOCALAPPDATA%). Without an override, the file lives under
+    %LOCALAPPDATA%\\TrippleT, matching other Windows desktop apps.
+
+    Routed by MODE into one of two persisted files, automatically, on BOTH
+    sides of the workflow - no manual TRIPPLET_OFFLINE_DB_PATH juggling
+    needed to keep them apart:
+      - "prod", "offline", "offline_prod"           -> tripplet_offline_prod.sqlite
+      - "dev_local", "offline_dev_local"             -> tripplet_offline_dev_local.sqlite
+    "prod"/"dev_local" only matter here because this function is ALSO what
+    an online "Prepare/refresh" session (pull_snapshot(), via
+    get_offline_sqlite_path()) targets - preparing while running against
+    prod now lands in the same file that "offline"/"offline_prod" reads
+    later, with no extra step. "offline" (plain) is folded into the prod
+    file rather than kept as its own third file: the real, deployed field
+    flow (TrippleT_Launcher_Offline.bat, superusers) is only ever used
+    against prod in practice, so it's effectively just another spelling of
+    "offline_prod" - "offline_prod" is the explicit/preferred one for
+    source-run dev/testing (see main.py's startup dialog), "offline" is
+    what the deployed launcher's env var literally sets. Which exact
+    backend a given pull actually came from is still tracked precisely
+    inside the file itself regardless of its name (self-stamped by
+    pull_snapshot(), see db/offline_snapshot.py's get_snapshot_source_mode())
+    - merge relies on THAT, not on the filename.
+    """
+    env_path = os.environ.get("TRIPPLET_OFFLINE_DB_PATH")
+    if env_path:
+        p = pathlib.Path(env_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+    base = pathlib.Path(os.environ.get("LOCALAPPDATA") or str(pathlib.Path.home())) / "TrippleT"
+    base.mkdir(parents=True, exist_ok=True)
+    if MODE in ("prod", "offline", "offline_prod"):
+        return base / "tripplet_offline_prod.sqlite"
+    if MODE in ("dev_local", "offline_dev_local"):
+        return base / "tripplet_offline_dev_local.sqlite"
+    return base / "tripplet_offline.sqlite"
 
 
 def _resolve_db_config() -> Dict[str, Any]:
     """Ermittelt DB-Name und Verbindungsdaten anhand von MODE."""
-    global _DEV_MODE, _DEV_LOCAL_MODE
+    global _DEV_MODE, _DEV_LOCAL_MODE, _OFFLINE_MODE
+
+    if MODE in ("offline", "offline_prod", "offline_dev_local"):
+        # Offline (all three variants) counts as "safe to write" just like
+        # dev_local (local SQLite file, no network connection) - existing
+        # is_dev_mode() branches (local image paths etc.) apply unchanged.
+        # The two "_prod"/"_dev_local" variants only differ in WHICH file
+        # _offline_sqlite_path() resolves to - see that function's docstring.
+        _DEV_MODE = True
+        _DEV_LOCAL_MODE = True
+        _OFFLINE_MODE = True
+        path = _offline_sqlite_path()
+        return {"sqlite_path": str(path), "db": path.stem}
+
+    _OFFLINE_MODE = False
 
     if MODE not in _SECRETS:
         raise ValueError(
@@ -175,7 +243,10 @@ def _resolve_db_config() -> Dict[str, Any]:
         _DEV_MODE = True
         _DEV_LOCAL_MODE = True
     else:
-        raise ValueError(f"Unbekannter MODE: {MODE!r} (erlaubt: 'prod', 'dev', 'dev_local')")
+        raise ValueError(
+            f"Unbekannter MODE: {MODE!r} (erlaubt: 'prod', 'dev', 'dev_local', "
+            f"'offline', 'offline_prod', 'offline_dev_local')"
+        )
 
     return {
         "host":     cfg["host"],
@@ -191,13 +262,23 @@ DB_NAME = _DB_CFG["db"]
 
 
 def is_dev_mode() -> bool:
-    """True, wenn aktuell eine DEV-Datenbank verwendet wird (dev oder dev_local)."""
+    """True if a DEV database is currently in use (dev, dev_local, or offline)."""
     return _DEV_MODE
 
 
 def is_dev_local_mode() -> bool:
-    """True, wenn aktuell dev_local verwendet wird."""
+    """True if dev_local or offline is currently in use."""
     return _DEV_LOCAL_MODE
+
+
+def is_offline_mode() -> bool:
+    """True if the local SQLite offline copy is currently in use (no MySQL)."""
+    return _OFFLINE_MODE
+
+
+def get_offline_sqlite_path() -> str:
+    """Public accessor for the default offline SQLite file path (for UI display etc.)."""
+    return str(_offline_sqlite_path())
 
 
 def current_db_name() -> str:
@@ -208,6 +289,31 @@ def current_db_name() -> str:
 def new_global_id() -> str:
     """Erzeugt eine neue globale GUID als String (36 Zeichen)."""
     return str(uuid.uuid4())
+
+
+def raw_mysql_connect(mode: str):
+    """Opens a raw MySQL connection for an arbitrary mode, INDEPENDENT of the
+    currently active MODE (which is fixed per process, see above).
+
+    Only meant for cross-mode tools (offline schema introspection, snapshot
+    pull: the process runs with TRIPPLET_MODE=offline but briefly also needs
+    a MySQL source to read from). No pooling, no SQL translation - a
+    deliberately thin raw connection, meant only for read-only introspection/
+    snapshot purposes.
+    """
+    import mysql.connector
+    if mode not in _SECRETS:
+        raise ValueError(f"Mode '{mode}' not found in secrets. Available: {list(_SECRETS.keys())}")
+    cfg = _SECRETS[mode]
+    return mysql.connector.connect(
+        host=cfg["host"],
+        port=int(cfg.get("port", 3306)),
+        user=cfg["user"],
+        password=cfg["password"],
+        database=cfg["db"],
+        autocommit=True,
+        connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+    )
 
 
 _POOL = None
@@ -240,8 +346,113 @@ def _get_pool():
     return _POOL
 
 
+def _get_sqlite_connection(path: str | None = None):
+    """Opens a fresh connection to a local SQLite file (default: the offline copy).
+
+    No pooling like MySQL: SQLite is a local file, connecting doesn't cost a
+    network round-trip. Instead, a fresh connection is opened on every call -
+    this also sidesteps thread-affinity issues (sqlite3 connections are
+    otherwise bound to the thread that created them).
+    isolation_level=None = autocommit, matching autocommit=True on the MySQL pool.
+    """
+    import sqlite3
+    cn = sqlite3.connect(path or str(_offline_sqlite_path()), isolation_level=None, check_same_thread=False)
+    cn.execute("PRAGMA foreign_keys = ON")
+    # SQLite 3.34+ defaults recursive_triggers to ON, which would make the
+    # edit-tracking trigger (see offline_schema.generate_update_trigger_sql)
+    # re-fire on its own bookkeeping UPDATE and recurse. Off is what every
+    # SQLite version before 3.34 did anyway, so this is a deliberate pin, not
+    # a workaround for something fragile.
+    cn.execute("PRAGMA recursive_triggers = OFF")
+    return cn
+
+
+def raw_sqlite_connect(path: str | None = None) -> "_SQLiteConnWrapper":
+    """Opens a translating connection to a local SQLite file, INDEPENDENT of the
+    currently active MODE (default: the offline copy at _offline_sqlite_path()).
+
+    Mirrors raw_mysql_connect() on the other side: the offline schema/snapshot/
+    merge tools need to target the offline SQLite file regardless of whether
+    the process itself happens to be running online or offline - "prepare
+    offline copy" is clicked while online, and "merge changes back" runs in a
+    later online session, reading a file written by a separate offline
+    session. Neither operation can rely on is_offline_mode()/get_connection()
+    being wired to the right backend.
+    """
+    return _SQLiteConnWrapper(_get_sqlite_connection(path))
+
+
+class _SQLiteCursorWrapper:
+    """SQLite cursor wrapper that translates SQL before execute (same API as _CursorWrapper)."""
+
+    def __init__(self, cur):
+        self._cur = cur
+
+    @property
+    def description(self):
+        return self._cur.description
+
+    @property
+    def rowcount(self):
+        return getattr(self._cur, "rowcount", 0)
+
+    @property
+    def lastrowid(self):
+        return getattr(self._cur, "lastrowid", None)
+
+    def execute(self, sql: str, params: Iterable[Any] | None = None):
+        return self._cur.execute(_to_sqlite_sql(sql), tuple(params or ()))
+
+    def executemany(self, sql: str, seq_params: Iterable[Iterable[Any]]):
+        return self._cur.executemany(_to_sqlite_sql(sql), [tuple(p) for p in (seq_params or [])])
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    def close(self):
+        try:
+            self._cur.close()
+        except Exception:
+            pass
+
+
+class _SQLiteConnWrapper:
+    """Connection wrapper for the local offline SQLite file (same API as _ConnWrapper)."""
+
+    def __init__(self, cn):
+        self._cn = cn
+
+    def cursor(self, *args, **kwargs):
+        return _SQLiteCursorWrapper(self._cn.cursor())
+
+    def commit(self):
+        return self._cn.commit()
+
+    def rollback(self):
+        return self._cn.rollback()
+
+    def close(self):
+        return self._cn.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            self.close()
+        except Exception:
+            pass
+        return False
+
+
 def get_connection():
-    """Holt eine MySQL-Connection aus einem Pool (statt bei jedem Aufruf neu zu verbinden).
+    """Gets a connection - depending on MODE, either from the MySQL pool or as
+    a fresh local SQLite offline connection.
+
+    Holt eine MySQL-Connection aus einem Pool (statt bei jedem Aufruf neu zu verbinden).
 
     Vorher wurde für JEDEN einzelnen DB-Zugriff eine frische TCP-Verbindung
     aufgebaut und am Ende wieder geschlossen - Screens mit vielen
@@ -258,6 +469,9 @@ def get_connection():
 
     Hinweis: Damit sich bestehender Code wie bisher verhält, ist autocommit=True.
     """
+    if _OFFLINE_MODE:
+        return _SQLiteConnWrapper(_get_sqlite_connection())
+
     cn = _get_pool().get_connection()
     try:
         cn.ping(reconnect=True, attempts=1, delay=0)
@@ -343,14 +557,17 @@ _re_backtick_ident = re.compile(r"`([^`]+)`")
 _re_tbl_token = re.compile(r"\btbl[A-Za-z0-9_]+\b")
 
 
-def _to_mysql_sql(sql: str) -> str:
-    """Konvertiert "Access-ish" SQL zu MySQL.
+def _normalize_identifiers(sql: str) -> str:
+    """Converts "Access-ish" SQL identifiers/literals into a backend-neutral form.
 
-    Unterstützt u.a.:
-    - eckige Klammern → Backticks
+    Shared core for the MySQL and SQLite translation (placeholder handling is
+    the only thing that differs between the two backends - SQLite understands
+    square brackets, backticks AND '?' placeholders natively, MySQL doesn't):
+    - square brackets → backticks
     - True/False → 1/0
-    - Platzhalter '?' → '%s'
-    - tblXxx Tokens → lowercase (für Linux-MySQL case-sensitive setups)
+    - tblXxx tokens → lowercase (for case-sensitive Linux MySQL setups; a
+      no-op for SQLite, since identifier comparisons there are case-insensitive
+      anyway, but harmless)
     """
     if not sql:
         return sql
@@ -399,10 +616,47 @@ def _to_mysql_sql(sql: str) -> str:
     for src_tbl, dst_tbl in TABLE_MAP.items():
         s = re.sub(rf"\b{re.escape(src_tbl)}\b", dst_tbl, s, flags=re.IGNORECASE)
 
-    # Platzhalter
+    return s
+
+
+def _to_mysql_sql(sql: str) -> str:
+    """Converts "Access-ish" SQL to MySQL (identifier normalization + '?' → '%s')."""
+    if not sql:
+        return sql
+    s = _normalize_identifiers(sql)
     if "?" in s:
         s = s.replace("?", "%s")
+    return s
 
+
+_re_at_identity = re.compile(r"@@IDENTITY\b", re.IGNORECASE)
+_re_last_insert_id = re.compile(r"\bLAST_INSERT_ID\s*\(\s*\)", re.IGNORECASE)
+_re_now_func = re.compile(r"\bNOW\s*\(\s*\)", re.IGNORECASE)
+
+
+def _to_sqlite_sql(sql: str) -> str:
+    """Converts "Access-ish" SQL to SQLite.
+
+    SQLite understands '?' placeholders, square brackets AND backticks
+    natively (MS Access compatibility), so only the shared identifier/boolean
+    normalization is left here - no placeholder translation needed (unlike
+    MySQL).
+
+    Two real exceptions, both MySQL functions with no SQLite equivalent under
+    the same name, translated here so existing code stays unchanged:
+    - `SELECT @@IDENTITY` / `LAST_INSERT_ID()` - MySQL/Access-ODBC idiom for
+      "ID of the last insert statement on this connection" (~19 call sites
+      across 12 screens) -> SQLite's last_insert_rowid().
+    - `NOW()` - used for Timestamp columns in ~6 files (e.g. lab-table saves
+      in screen_show_experiment.py's save_dirty()) -> SQLite's datetime('now')
+      (returns 'YYYY-MM-DD HH:MM:SS', same shape MySQL's NOW() produces).
+    """
+    if not sql:
+        return sql
+    s = _normalize_identifiers(sql)
+    s = _re_at_identity.sub("last_insert_rowid()", s)
+    s = _re_last_insert_id.sub("last_insert_rowid()", s)
+    s = _re_now_func.sub("datetime('now')", s)
     return s
 
 
@@ -511,6 +765,36 @@ def execute(sql: str, params: Iterable[Any] | None = None) -> int:
         return getattr(cur, "rowcount", 0) or 0
 
 
+def execute_insert(sql: str, params: Iterable[Any] | None = None) -> Optional[int]:
+    """INSERT -> neue Auto-Increment-ID (oder None), zuverlässig auf EINER
+    Session/Connection ermittelt (`cur.lastrowid`).
+
+    Ersetzt das im Projekt bisher verbreitete Muster `execute(insert_sql, ...)`
+    gefolgt von einem separaten `fetch_all('SELECT @@IDENTITY AS NewID')` (bzw.
+    `LAST_INSERT_ID()`) - @@IDENTITY/LAST_INSERT_ID() sind reine
+    Session-State pro MySQL-Verbindung, execute()/fetch_all() ziehen sich aber
+    JEWEILS unabhängig eine (nicht notwendigerweise dieselbe) Verbindung aus
+    dem Pool (siehe get_connection() oben), wodurch die zweite Abfrage
+    gelegentlich auf einer frischen Connection landet und dort fälschlich 0
+    zurückgibt. Empirisch nachgewiesen (nicht nur vermutet) beim Bau von
+    quick_add_colour() in screen_manage_yarn.py, 2026-08-24 - ein Testlauf mit
+    mehreren schnell aufeinanderfolgenden execute()+fetch_all(@@IDENTITY)-Paaren
+    lieferte dabei reproduzierbar einmal 0 statt der echten neuen ID. Dieselbe
+    Funktion deckt beide Modi ab (MySQL pooled UND SQLite offline) - der
+    zugrundeliegende `_CursorWrapper.lastrowid` reicht in beiden Fällen bereits
+    korrekt durch."""
+    sql = _normalize_sql(sql)
+    with get_connection() as cn:
+        cur = cn.cursor()
+        cur.execute(sql, list(params or []))
+        try:
+            cn.commit()
+        except Exception:
+            pass
+        new_id = getattr(cur, "lastrowid", None)
+    return int(new_id) if new_id else None
+
+
 def executemany(sql: str, seq_params: Iterable[Iterable[Any]]) -> int:
     """executemany → rowcount (Treiberabhängig, mit commit)."""
     sql = _normalize_sql(sql)
@@ -522,26 +806,78 @@ def executemany(sql: str, seq_params: Iterable[Iterable[Any]]) -> int:
 
 # ---------- Schema-Helpers (MySQL) ----------
 
+# Process-lifetime caches for table_exists()/get_columns_map(), keyed on
+# (name, schema). Schema only ever changes via a deliberate DDL migration
+# (never through normal app usage), so a stale cache within one running
+# session isn't a realistic risk - matches the existing "MODE is fixed once
+# at process start" assumption elsewhere in this file. Profiled: opening a
+# single ShowExperimentScreen experiment hits these dozens of times (once
+# per lab tab builder, each an uncached information_schema round trip) -
+# see CLAUDE.md's offline-sync section for the same round-trip-count concern
+# over a real remote connection.
+_TABLE_EXISTS_CACHE: Dict[Tuple[str, str], bool] = {}
+_COLUMNS_MAP_CACHE: Dict[Tuple[str, str], Dict[str, str]] = {}
+
+
 def table_exists(name: str, schema: str | None = None) -> bool:
-    """True, wenn die Tabelle existiert."""
+    """True, wenn die Tabelle existiert. Siehe _TABLE_EXISTS_CACHE oben."""
     if not name:
         return False
-    schema = schema or current_db_name()
-    rows = fetch_all(
-        """
-        SELECT 1
-        FROM information_schema.tables
-        WHERE table_schema = %s AND table_name = %s
-        LIMIT 1
-        """,
-        (schema, _map_table_name(name).lower()),
-    )
-    return bool(rows)
+
+    cache_key = (name.lower(), schema or current_db_name())
+    cached = _TABLE_EXISTS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    if _OFFLINE_MODE:
+        rows = fetch_all(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND lower(name) = ? LIMIT 1",
+            (_map_table_name(name).lower(),),
+        )
+        result = bool(rows)
+    else:
+        schema_val = schema or current_db_name()
+        rows = fetch_all(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = %s AND table_name = %s
+            LIMIT 1
+            """,
+            (schema_val, _map_table_name(name).lower()),
+        )
+        result = bool(rows)
+
+    _TABLE_EXISTS_CACHE[cache_key] = result
+    return result
 
 
 def get_columns_map(table: str, schema: str | None = None) -> Dict[str, str]:
-    """{lower_name: real_name} für eine Tabelle."""
-    schema = schema or current_db_name()
+    """{lower_name: real_name} für eine Tabelle. Siehe _COLUMNS_MAP_CACHE oben.
+
+    Returns a fresh copy on every call (never the cached dict itself), so a
+    caller mutating the result can't corrupt the shared cache.
+    """
+    cache_key = (table.lower(), schema or current_db_name())
+    cached = _COLUMNS_MAP_CACHE.get(cache_key)
+    if cached is not None:
+        return dict(cached)
+
+    if _OFFLINE_MODE:
+        out: Dict[str, str] = {}
+        with get_connection() as cn:
+            cur = cn.cursor()
+            # PRAGMA doesn't support '?' placeholders for the table name.
+            safe_name = _map_table_name(table).replace('"', "")
+            cur.execute(f'PRAGMA table_info("{safe_name}")')
+            for r in cur.fetchall():
+                col = r[1]  # PRAGMA table_info: (cid, name, type, notnull, dflt_value, pk)
+                if col is not None:
+                    out[str(col).lower()] = str(col)
+        _COLUMNS_MAP_CACHE[cache_key] = out
+        return dict(out)
+
+    schema_val = schema or current_db_name()
     rows = fetch_all(
         """
         SELECT column_name
@@ -549,7 +885,7 @@ def get_columns_map(table: str, schema: str | None = None) -> Dict[str, str]:
         WHERE table_schema = %s AND table_name = %s
         ORDER BY ordinal_position
         """,
-        (schema, _map_table_name(table).lower()),
+        (schema_val, _map_table_name(table).lower()),
     )
     out: Dict[str, str] = {}
     for r in rows:
@@ -568,7 +904,8 @@ def get_columns_map(table: str, schema: str | None = None) -> Dict[str, str]:
             col = r[0]
         if col is not None:
             out[str(col).lower()] = str(col)
-    return out
+    _COLUMNS_MAP_CACHE[cache_key] = out
+    return dict(out)
 
 
 # ------------------------- Password hashing (Argon2) -------------------------

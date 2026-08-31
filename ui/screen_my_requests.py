@@ -35,17 +35,20 @@ from PySide6.QtWidgets import (
     QSpacerItem,
     QMessageBox,
     QComboBox,
+    QLineEdit,
     QMenu,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QInputDialog,
 )
 
 import app_meta
 import datetime
 from db.connection import get_connection
-from ui.widgets.header import HeaderBar
+from db import experiment_request_changes as request_changes
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 from ui.screen_create_experiment import table_exists, get_columns_map, resolve_field
 
 
@@ -71,13 +74,26 @@ class MyRequestsScreen(QWidget):
     uebergeben – ueber eine Methodensuche am Main Window.
     """
 
+    # Lange Freitext-Spalten, die standardmaessig ausgeblendet sind (Toggle
+    # "Show details", siehe _apply_detail_column_visibility()) - die Tabelle
+    # zeigt initial nur die "Kernspalten" (Titel/Status/Projekt/Owner/
+    # Wunschtermin/Experiment ID), Volltext bleibt weiterhin per Doppelklick
+    # (Edit-Screen) einsehbar.
+    _DETAIL_COLUMN_NAMES = {
+        "Versuchsgrund", "Aufgabe", "Versuchsumfang", "Beurteilungsparameter",
+        "Versuchsbedingungen", "Versuchsort", "Bemerkungen",
+    }
+
     def __init__(self, on_back_home=None, on_back_experiment_request=None,
-                 on_open_request: Optional[Callable[[Any], None]] = None, on_open_experiment=None):
+                 on_open_request: Optional[Callable[[Any], None]] = None, on_open_experiment=None,
+                 sidebar_callbacks: Optional[dict] = None):
         super().__init__()
         self.on_back_home = on_back_home
         self.on_back_experiment_request = on_back_experiment_request
         self.on_open_request = on_open_request
         self.on_open_experiment = on_open_experiment
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         self._table_name = "tblExperimentRequests"
         self._user_id: Optional[Any] = None
@@ -89,6 +105,24 @@ class MyRequestsScreen(QWidget):
         # Liste von (id, label)
         self._status_choices: List[Tuple[Any, str]] = []
         self._is_superuser: bool = False
+        # {OriginalRequestID: PendingCopyID} - siehe db/experiment_request_changes.py.
+        # Kopie-Zeilen selbst tauchen nie als eigene Tabellenzeile auf (refresh()
+        # filtert sie per ChangeOfRequestID IS NULL raus), sondern nur als
+        # Markierung auf ihrem Original.
+        self._pending_copy_map: dict = {}
+
+        # Filter-Leiste (siehe _build_filter_row()/_apply_filters()) - reines
+        # Client-Side-Filtern (setRowHidden) auf der bereits geladenen Tabelle,
+        # kein erneuter DB-Roundtrip pro Filteränderung.
+        self._filter_search: Optional[QLineEdit] = None
+        self._filter_status: Optional[QComboBox] = None
+        self._filter_project: Optional[QComboBox] = None
+        self._filter_owner: Optional[QComboBox] = None
+
+        # Detail-Spalten-Toggle (siehe _DETAIL_COLUMN_NAMES oben).
+        self._show_detail_columns: bool = False
+        self._detail_col_indices: List[int] = []
+        self._btn_toggle_details: Optional[QPushButton] = None
 
         self._build_ui()
 
@@ -118,20 +152,35 @@ class MyRequestsScreen(QWidget):
         except Exception:
             return []
 
-    def _update_request_status(self, request_id: Any, new_status_id: Any) -> bool:
+    def _update_request_status(
+        self, request_id: Any, new_status_id: Any, denial_reason: Optional[str] = None
+    ) -> bool:
         """Aktualisiert den Status eines Requests in der DB.
+
+        `denial_reason` wird nur geschrieben, wenn die Umgebung die Spalte
+        `DenialReason` bereits hat (additiv, siehe CLAUDE.md-Migrationshistorie
+        - bisher dev_local + prod). Ein Statuswechsel WEG von "Denied" löscht
+        einen evtl. vorhandenen alten Grund gleich mit (sonst würde ein später
+        erneut abgelehnter Request einen veralteten Grund stehen lassen, falls
+        der neue Deny-Dialog aus irgendeinem Grund uebersprungen wuerde).
 
         Returns:
             True bei Erfolg, False bei Fehler.
         """
-        """Schreibt tblRequestStatus.ID in tblExperimentRequests.RequestStatus."""
         try:
             with get_connection() as cn:
                 cur = cn.cursor()
-                cur.execute(
-                    "UPDATE [tblExperimentRequests] SET [RequestStatus]=? WHERE [ID]=?",
-                    [new_status_id, request_id],
-                )
+                has_denial_col = "denialreason" in get_columns_map("tblExperimentRequests")
+                if has_denial_col:
+                    cur.execute(
+                        "UPDATE [tblExperimentRequests] SET [RequestStatus]=?, [DenialReason]=? WHERE [ID]=?",
+                        [new_status_id, denial_reason, request_id],
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE [tblExperimentRequests] SET [RequestStatus]=? WHERE [ID]=?",
+                        [new_status_id, request_id],
+                    )
                 try:
                     cn.commit()
                 except Exception:
@@ -140,6 +189,48 @@ class MyRequestsScreen(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "DB Error", str(e))
             return False
+
+    def _notify_owner(self, owner_id: Optional[Any], request_id: Any, message: str) -> None:
+        """Benachrichtigt den Request-Besitzer (best-effort, siehe
+        ui/notifications.py). Keine Selbst-Benachrichtigung, falls der
+        Superuser sein eigenes Request bearbeitet."""
+        if owner_id in (None, ""):
+            return
+        try:
+            cu = getattr(app_meta, "current_user", {}) or {}
+            if str(owner_id) == str(cu.get("id")):
+                return
+            from ui.notifications import create_experiment_request_notification
+            create_experiment_request_notification(owner_id, request_id, message)
+        except Exception:
+            pass
+
+    def _notify_owner_status_changed(
+        self, owner_id: Optional[Any], request_id: Any, titel: str, new_status_label: str
+    ) -> None:
+        label = titel.strip() or f"#{request_id}"
+        self._notify_owner(owner_id, request_id, f"Request '{label}' status changed to {new_status_label}")
+
+    def _notify_owner_of_request(self, request_id: Any, message: str) -> None:
+        """Wie _notify_owner(), aber holt CreatedBy/Titel selbst per ID nach
+        (fuer Aufrufer, die nur die request_id kennen, z.B.
+        _assign_experiment_to_request()/_accept_pending_change()/
+        _reject_pending_change()). `message` ist bereits fertig formuliert."""
+        try:
+            with get_connection() as cn:
+                cur = cn.cursor()
+                cur.execute(
+                    "SELECT [CreatedBy], [Titel] FROM [tblExperimentRequests] WHERE [ID]=?",
+                    [request_id],
+                )
+                row = cur.fetchone()
+            if not row:
+                return
+            owner_id, titel = row[0], row[1]
+            label = str(titel or "").strip() or f"#{request_id}"
+            self._notify_owner(owner_id, request_id, f"Request '{label}': {message}")
+        except Exception:
+            pass
 
     def set_user(self, user_id: Optional[Any]):
         """Setzt die Benutzer-ID für die Filterung und lädt die Daten neu.
@@ -259,10 +350,21 @@ class MyRequestsScreen(QWidget):
                     "LEFT JOIN tblUser AS u ON er.[CreatedBy]=u.[ID]) "
                 )
 
+                # Aenderungs-Kopien (ChangeOfRequestID gesetzt) sind kein
+                # eigenstaendiger Request - sie erscheinen nie als eigene
+                # Zeile, sondern nur als Markierung auf ihrem Original.
+                # Spalte existiert bisher nur auf dev_local (siehe
+                # db/experiment_request_changes.py) - auf Umgebungen ohne die
+                # Spalte den Filter komplett weglassen statt "Unknown column".
                 params: List[Any] = []
+                where_clauses: List[str] = []
+                if request_changes.supports_change_tracking():
+                    where_clauses.append("er.[ChangeOfRequestID] IS NULL")
                 if not self._is_superuser:
-                    sql += "WHERE er.[CreatedBy]=? "
+                    where_clauses.append("er.[CreatedBy]=?")
                     params.append(uid)
+                if where_clauses:
+                    sql += "WHERE " + " AND ".join(where_clauses) + " "
 
                 sql += "ORDER BY er.[Timestamp] DESC"
                 cur.execute(sql, params)
@@ -275,7 +377,12 @@ class MyRequestsScreen(QWidget):
             self._tbl.setColumnCount(0)
             return
 
-        hidden_cols = {"CreatedBy", "Projekt", "ID", "Timestamp"}
+        self._rebuild_filter_options(rows, col_names)
+
+        # DenialReason wird nicht als eigene Spalte gezeigt (siehe Tooltip auf
+        # der Status-Combo weiter unten) - reine Moderations-Info, keine vom
+        # Nutzer bearbeitbare Tabellenspalte.
+        hidden_cols = {"CreatedBy", "Projekt", "ID", "Timestamp", "DenialReason"}
         if not self._is_superuser:
             hidden_cols.add("CreatedByUser")
 
@@ -300,17 +407,31 @@ class MyRequestsScreen(QWidget):
                 header_labels.append(name)
         header_labels.append("Experiment ID")
         self._tbl.setHorizontalHeaderLabels(header_labels)
+
+        self._detail_col_indices = [
+            i for i, lbl in enumerate(header_labels) if lbl in self._DETAIL_COLUMN_NAMES
+        ]
+        self._apply_detail_column_visibility()
         self._tbl.setRowCount(len(rows))
 
         # Indizes ermitteln
         id_idx: Optional[int] = None
         rs_idx: Optional[int] = None
+        cb_idx: Optional[int] = None
+        titel_idx: Optional[int] = None
+        dr_idx: Optional[int] = None
         for i, n in enumerate(col_names):
             ln = str(n).strip().lower()
             if ln == "id":
                 id_idx = i
             elif ln == "requeststatus":
                 rs_idx = i
+            elif ln == "createdby":
+                cb_idx = i
+            elif ln == "titel":
+                titel_idx = i
+            elif ln == "denialreason":
+                dr_idx = i
 
         # ExperimentIDs für Status=4 vorladen
         exp_map: dict = {}
@@ -324,25 +445,55 @@ class MyRequestsScreen(QWidget):
             except Exception:
                 exp_map = {}
 
+        # Offene Aenderungs-Kopien vorladen (Original-ID -> Kopie-ID), damit
+        # betroffene Zeilen unten markiert und im Kontextmenue akzeptiert/
+        # abgelehnt werden koennen. Siehe db/experiment_request_changes.py.
+        self._pending_copy_map = {}
+        if id_idx is not None:
+            try:
+                all_req_ids = [row[id_idx] for row in rows if row[id_idx] not in (None, "")]
+                self._pending_copy_map = request_changes.get_pending_change_ids(all_req_ids)
+            except Exception:
+                self._pending_copy_map = {}
+
+        pending_bg = QColor("#fff3cd")
+
         for r, row in enumerate(rows):
             req_id = row[id_idx] if id_idx is not None else None
             current_status_id = row[rs_idx] if rs_idx is not None else None
+            has_pending_change = req_id in self._pending_copy_map
+            owner_id = row[cb_idx] if cb_idx is not None else None
+            titel_val = str(row[titel_idx] or "") if titel_idx is not None else ""
+            denial_reason_val = row[dr_idx] if dr_idx is not None else None
 
             for c_vis, (c_src, _col_name) in enumerate(visible_cols):
                 # RequestStatus als Dropdown
                 if rs_idx is not None and c_src == rs_idx:
                     item = QTableWidgetItem("")
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if has_pending_change:
+                        item.setData(Qt.BackgroundRole, pending_bg)
                     if c_vis == 0:
                         item.setData(Qt.UserRole, req_id)
                     self._tbl.setItem(r, c_vis, item)
 
                     combo = NoScrollComboBox()
                     combo.setMinimumHeight(24)
+                    combo_border = "#e0a800" if has_pending_change else "#8fbf8f"
                     combo.setStyleSheet(
-                        "QComboBox { background: #ffffff; border: 1px solid #8fbf8f; padding: 2px 6px; }"
+                        f"QComboBox {{ background: #ffffff; border: 1px solid {combo_border}; padding: 2px 6px; }}"
                         "QComboBox QAbstractItemView { background: #ffffff; }"
                     )
+                    tooltip_parts: List[str] = []
+                    if has_pending_change:
+                        tooltip_parts.append(
+                            "Es liegt ein noch nicht freigegebener Änderungsvorschlag zu diesem "
+                            "Request vor (wartet auf Superuser-Prüfung)."
+                        )
+                    if current_status_id == 2 and denial_reason_val:
+                        tooltip_parts.append(f"Denial reason: {denial_reason_val}")
+                    if tooltip_parts:
+                        combo.setToolTip("\n".join(tooltip_parts))
                     # Superuser soll Status ändern dürfen, aber nicht auf "leer" und nicht auf "Experiment".
 
                     # Nicht-Superuser: Combo bleibt deaktiviert, darf aber den aktuellen Text anzeigen.
@@ -411,7 +562,10 @@ class MyRequestsScreen(QWidget):
                                 _cb.setCurrentIndex(_idx if _idx >= 0 else 0)
                             _cb.blockSignals(False)
 
-                        def _on_status_changed(_index: int, *, _req_id=req_id, _cb=combo):
+                        def _on_status_changed(
+                            _index: int, *, _req_id=req_id, _cb=combo,
+                            _owner_id=owner_id, _titel=titel_val,
+                        ):
                             new_id = _cb.currentData()
 
                             # Nicht erlaubt: leer / None
@@ -419,15 +573,54 @@ class MyRequestsScreen(QWidget):
                                 _set_combo_to_status_id(_state["old_id"], _cb=_cb)
                                 return
 
+                            new_label = _label_for_status_id(new_id).strip()
+
                             # Nicht erlaubt: Status "Experiment"
-                            if _label_for_status_id(new_id).strip().lower() == "experiment":
+                            if new_label.lower() == "experiment":
                                 _set_combo_to_status_id(_state["old_id"], _cb=_cb)
                                 return
 
-                            if self._update_request_status(_req_id, new_id):
+                            old_id = _state["old_id"]
+                            if new_id == old_id:
+                                return
+
+                            # "Fehlklick"-Schutz (2026-08-27, Nutzerwunsch: kein
+                            # ungefragtes Zuruecksetzen mehr): jeder Wechsel WEG
+                            # von "Denied" braucht einen Grund, jeder Wechsel
+                            # zurueck auf "Request" von einem bereits
+                            # geprueften Status (Approved/Experiment) eine
+                            # explizite Bestaetigung.
+                            denial_reason = None
+                            if new_label.lower() == "denied":
+                                text, ok = QInputDialog.getMultiLineText(
+                                    self,
+                                    "Deny request",
+                                    f"Reason for denying request #{_req_id} "
+                                    "(visible to the requester):",
+                                )
+                                if not ok or not text.strip():
+                                    _set_combo_to_status_id(old_id, _cb=_cb)
+                                    return
+                                denial_reason = text.strip()
+                            elif old_id in (3, 4) and new_label.lower() == "request":
+                                old_label = _label_for_status_id(old_id).strip()
+                                reply = QMessageBox.question(
+                                    self,
+                                    "Confirm status change",
+                                    f"Request #{_req_id} is currently '{old_label}'. "
+                                    "Really move it back to 'Request' (open)?",
+                                    QMessageBox.Yes | QMessageBox.No,
+                                    QMessageBox.No,
+                                )
+                                if reply != QMessageBox.Yes:
+                                    _set_combo_to_status_id(old_id, _cb=_cb)
+                                    return
+
+                            if self._update_request_status(_req_id, new_id, denial_reason=denial_reason):
                                 _state["old_id"] = new_id
+                                self._notify_owner_status_changed(_owner_id, _req_id, _titel, new_label)
                             else:
-                                _set_combo_to_status_id(_state["old_id"], _cb=_cb)
+                                _set_combo_to_status_id(old_id, _cb=_cb)
 
                         combo.currentIndexChanged.connect(_on_status_changed)
 
@@ -453,7 +646,10 @@ class MyRequestsScreen(QWidget):
                                     pass
                     except Exception:
                         pass
-                item = QTableWidgetItem("" if val is None else str(val))
+                display_val = "" if val is None else str(val)
+                if has_pending_change and str(_col_name).strip().lower() == "titel":
+                    display_val = "⏳ " + display_val
+                item = QTableWidgetItem(display_val)
 
                 # Titel-Spalte gruen + fett darstellen
                 if str(_col_name).strip().lower() == "titel":
@@ -462,6 +658,13 @@ class MyRequestsScreen(QWidget):
                     f = item.font()
                     f.setBold(True)
                     item.setFont(f)
+
+                if has_pending_change:
+                    item.setData(Qt.BackgroundRole, pending_bg)
+                    item.setToolTip(
+                        "Es liegt ein noch nicht freigegebener Änderungsvorschlag zu diesem "
+                        "Request vor (wartet auf Superuser-Prüfung)."
+                    )
 
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 if c_vis == 0:
@@ -492,6 +695,195 @@ class MyRequestsScreen(QWidget):
         else:
             self._lbl_info.setText(f"{len(rows)} Request(s) fuer {uname}")
 
+        self._apply_filters()
+
+    # ---------------- Filter ----------------
+
+    def _build_filter_row(self) -> QHBoxLayout:
+        """Baut die Filter-Toolbar (Suche/Status/Projekt/Owner) über der Tabelle.
+
+        Rein client-seitig (setRowHidden), siehe _apply_filters() - kein
+        erneuter DB-Roundtrip pro Filteränderung."""
+        row = QHBoxLayout()
+        row.setSpacing(8)
+
+        self._filter_search = QLineEdit()
+        self._filter_search.setPlaceholderText("Search…")
+        self._filter_search.setClearButtonEnabled(True)
+        self._filter_search.setMinimumWidth(200)
+        self._filter_search.textChanged.connect(self._apply_filters)
+        row.addWidget(self._filter_search, 1)
+
+        self._filter_status = NoScrollComboBox()
+        self._filter_status.setMinimumWidth(140)
+        self._filter_status.addItem("All statuses", None)
+        self._filter_status.currentIndexChanged.connect(self._apply_filters)
+        row.addWidget(self._filter_status, 0)
+
+        self._filter_project = NoScrollComboBox()
+        self._filter_project.setMinimumWidth(160)
+        self._filter_project.addItem("All projects", None)
+        self._filter_project.currentIndexChanged.connect(self._apply_filters)
+        row.addWidget(self._filter_project, 0)
+
+        self._filter_owner = NoScrollComboBox()
+        self._filter_owner.setMinimumWidth(140)
+        self._filter_owner.addItem("All owners", None)
+        self._filter_owner.currentIndexChanged.connect(self._apply_filters)
+        self._filter_owner.setVisible(False)  # nur fuer Superuser, siehe refresh()
+        row.addWidget(self._filter_owner, 0)
+
+        btn_reset = QPushButton("Reset filters")
+        btn_reset.setObjectName("GreyBtn")
+        btn_reset.clicked.connect(self._reset_filters)
+        row.addWidget(btn_reset, 0)
+
+        return row
+
+    def _reset_filters(self) -> None:
+        if self._filter_search is not None:
+            self._filter_search.blockSignals(True)
+            self._filter_search.clear()
+            self._filter_search.blockSignals(False)
+        for combo in (self._filter_status, self._filter_project, self._filter_owner):
+            if combo is not None:
+                combo.blockSignals(True)
+                combo.setCurrentIndex(0)
+                combo.blockSignals(False)
+        self._apply_filters()
+
+    def _rebuild_filter_options(self, rows: List[Any], col_names: List[str]) -> None:
+        """Fuellt Status-/Projekt-/Owner-Filter mit den in `rows` tatsaechlich
+        vorkommenden Werten, unter Beibehaltung der aktuellen Auswahl (falls
+        der Wert nach dem Reload noch vorkommt)."""
+
+        def _col_index(name: str) -> Optional[int]:
+            try:
+                return col_names.index(name)
+            except ValueError:
+                return None
+
+        # --- Status ---
+        if self._filter_status is not None:
+            prev_data = self._filter_status.currentData()
+            self._filter_status.blockSignals(True)
+            self._filter_status.clear()
+            self._filter_status.addItem("All statuses", None)
+            for _id, label in self._status_choices:
+                self._filter_status.addItem("" if label is None else str(label), _id)
+            idx = self._filter_status.findData(prev_data) if prev_data is not None else 0
+            self._filter_status.setCurrentIndex(idx if idx >= 0 else 0)
+            self._filter_status.blockSignals(False)
+
+        # --- Projekt ---
+        proj_idx = _col_index("ProjektText")
+        if self._filter_project is not None:
+            prev_text = self._filter_project.currentText()
+            values = set()
+            if proj_idx is not None:
+                for row in rows:
+                    v = row[proj_idx]
+                    if v not in (None, ""):
+                        values.add(str(v))
+            self._filter_project.blockSignals(True)
+            self._filter_project.clear()
+            self._filter_project.addItem("All projects", None)
+            for v in sorted(values):
+                self._filter_project.addItem(v, v)
+            new_idx = self._filter_project.findText(prev_text)
+            self._filter_project.setCurrentIndex(new_idx if new_idx >= 0 else 0)
+            self._filter_project.blockSignals(False)
+
+        # --- Owner (nur Superuser-Ansicht) ---
+        owner_idx = _col_index("CreatedByUser")
+        if self._filter_owner is not None:
+            self._filter_owner.setVisible(self._is_superuser)
+            prev_text = self._filter_owner.currentText()
+            values = set()
+            if owner_idx is not None:
+                for row in rows:
+                    v = row[owner_idx]
+                    if v not in (None, ""):
+                        values.add(str(v))
+            self._filter_owner.blockSignals(True)
+            self._filter_owner.clear()
+            self._filter_owner.addItem("All owners", None)
+            for v in sorted(values):
+                self._filter_owner.addItem(v, v)
+            new_idx = self._filter_owner.findText(prev_text)
+            self._filter_owner.setCurrentIndex(new_idx if new_idx >= 0 else 0)
+            self._filter_owner.blockSignals(False)
+
+    def _toggle_detail_columns(self) -> None:
+        self._show_detail_columns = not self._show_detail_columns
+        if self._btn_toggle_details is not None:
+            self._btn_toggle_details.setText(
+                "Hide details" if self._show_detail_columns else "Show details"
+            )
+        self._apply_detail_column_visibility()
+
+    def _apply_detail_column_visibility(self) -> None:
+        """Blendet die langen Freitext-Spalten (_DETAIL_COLUMN_NAMES) je nach
+        Toggle-Zustand ein/aus. Reine Spalten-Sichtbarkeit (setColumnHidden) -
+        Filter/Suche arbeiten weiterhin ueber alle Spalten, auch versteckte."""
+        if self._tbl is None:
+            return
+        for c in self._detail_col_indices:
+            self._tbl.setColumnHidden(c, not self._show_detail_columns)
+
+    def _apply_filters(self) -> None:
+        """Blendet Tabellenzeilen ein/aus, ohne die DB erneut zu befragen."""
+        if self._tbl is None:
+            return
+
+        search_text = self._filter_search.text().strip().lower() if self._filter_search else ""
+        status_id = self._filter_status.currentData() if self._filter_status else None
+        project_val = self._filter_project.currentData() if self._filter_project else None
+        owner_val = (
+            self._filter_owner.currentData()
+            if (self._filter_owner is not None and self._is_superuser)
+            else None
+        )
+
+        col_count = self._tbl.columnCount()
+        headers = [
+            self._tbl.horizontalHeaderItem(c).text() if self._tbl.horizontalHeaderItem(c) else ""
+            for c in range(col_count)
+        ]
+        status_col = headers.index("RequestStatus") if "RequestStatus" in headers else None
+        project_col = headers.index("Projekt") if "Projekt" in headers else None
+        owner_col = headers.index("Owner") if "Owner" in headers else None
+
+        for r in range(self._tbl.rowCount()):
+            visible = True
+
+            if search_text:
+                parts = []
+                for c in range(col_count):
+                    item = self._tbl.item(r, c)
+                    if item is not None and item.text():
+                        parts.append(item.text())
+                if search_text not in " ".join(parts).lower():
+                    visible = False
+
+            if visible and status_id is not None and status_col is not None:
+                widget = self._tbl.cellWidget(r, status_col)
+                current = widget.currentData() if isinstance(widget, QComboBox) else None
+                if current != status_id:
+                    visible = False
+
+            if visible and project_val is not None and project_col is not None:
+                item = self._tbl.item(r, project_col)
+                if item is None or item.text() != project_val:
+                    visible = False
+
+            if visible and owner_val is not None and owner_col is not None:
+                item = self._tbl.item(r, owner_col)
+                if item is None or item.text() != owner_val:
+                    visible = False
+
+            self._tbl.setRowHidden(r, not visible)
+
     # ---------------- UI ----------------
 
     def _build_ui(self):
@@ -500,10 +892,11 @@ class MyRequestsScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="My Requests", show_home=True, show_back=True)
-        header.connect_home(self._go_home)
-        header.connect_back(self._go_experiment_request)
-        root.addWidget(header, 0)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring). Der frühere
+        # Header-Back-Button lebt als kontextueller Back-Chip weiter (gleiches
+        # Muster wie ShowExperimentScreen), siehe top_row weiter unten.
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         center = QFrame()
         center_layout = QVBoxLayout(center)
@@ -517,16 +910,38 @@ class MyRequestsScreen(QWidget):
         card_layout.setSpacing(12)
 
         top_row = QHBoxLayout()
+
+        self.btn_back_chip = QPushButton("← Experiment Request")
+        self.btn_back_chip.setCursor(Qt.PointingHandCursor)
+        self.btn_back_chip.setStyleSheet(
+            "QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
+            "border-radius:4px;padding:5px 10px;font-weight:600;}"
+            "QPushButton:hover{background:#e8f5e9;}"
+        )
+        self.btn_back_chip.clicked.connect(self._go_experiment_request)
+        self.btn_back_chip.setVisible(callable(self.on_back_experiment_request))
+        top_row.addWidget(self.btn_back_chip, 0, Qt.AlignLeft)
+
         title = QLabel("Meine Experiment Requests")
         title.setStyleSheet("font-size: 18px; font-weight: 600;")
         top_row.addWidget(title, 0, Qt.AlignLeft)
         top_row.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
+
+        self._btn_toggle_details = QPushButton("Show details")
+        self._btn_toggle_details.setObjectName("GreyBtn")
+        self._btn_toggle_details.setToolTip(
+            "Show/hide the long free-text columns (Versuchsgrund, Aufgabe, …)."
+        )
+        self._btn_toggle_details.clicked.connect(self._toggle_detail_columns)
+        top_row.addWidget(self._btn_toggle_details, 0, Qt.AlignRight)
 
         btn_refresh = QPushButton("Refresh")
         btn_refresh.setObjectName("GreyBtn")
         btn_refresh.clicked.connect(self.refresh)
         top_row.addWidget(btn_refresh, 0, Qt.AlignRight)
         card_layout.addLayout(top_row)
+
+        card_layout.addLayout(self._build_filter_row())
 
         self._lbl_info = QLabel("")
         self._lbl_info.setStyleSheet("color: #666;")
@@ -555,9 +970,27 @@ class MyRequestsScreen(QWidget):
         card_layout.addWidget(self._tbl, 1)
 
         center_layout.addWidget(card, 1)
-        root.addWidget(center, 1)
+        content_layout.addWidget(center, 1)
 
         root.addWidget(FooterBar(), 0)
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
     # ---------------- Navigation ----------------
 
@@ -571,6 +1004,15 @@ class MyRequestsScreen(QWidget):
         req_id = None if item is None else item.data(Qt.UserRole)
         if req_id in (None, ""):
             return
+
+        # Normale Nutzer landen bei einer bereits offenen Aenderungs-Kopie
+        # direkt auf dieser (weiter editieren), nicht auf dem eingefrorenen
+        # Original - sonst wuerde ein zweites Speichern eine zweite Kopie
+        # anlegen statt die bereits wartende zu aktualisieren.
+        if not self._is_superuser:
+            pending_id = self._pending_copy_map.get(req_id)
+            if pending_id is not None:
+                req_id = pending_id
 
         # 1) Preferred: expliziter Navigator-Callback
         if callable(self.on_open_request):
@@ -677,14 +1119,82 @@ class MyRequestsScreen(QWidget):
                 current_status_id = widget.currentData()
                 break
 
-        if current_status_id != 3:
+        pending_copy_id = self._pending_copy_map.get(req_id)
+
+        if current_status_id != 3 and pending_copy_id is None:
             return
 
         menu = QMenu(self)
-        action = menu.addAction("Experiment zuordnen…")
+        action_assign = None
+        action_view = None
+        action_accept = None
+        action_reject = None
+
+        if current_status_id == 3:
+            action_assign = menu.addAction("Experiment zuordnen…")
+
+        if pending_copy_id is not None:
+            if action_assign is not None:
+                menu.addSeparator()
+            action_view = menu.addAction("Änderungsvorschlag ansehen/bearbeiten…")
+            action_accept = menu.addAction("Änderungsvorschlag akzeptieren")
+            action_reject = menu.addAction("Änderungsvorschlag ablehnen")
+
         chosen = menu.exec(self._tbl.viewport().mapToGlobal(pos))
-        if chosen is action:
+        if chosen is None:
+            return
+        if chosen is action_assign:
             self._assign_experiment_to_request(req_id)
+        elif chosen is action_view:
+            if callable(self.on_open_request):
+                self.on_open_request(pending_copy_id)
+        elif chosen is action_accept:
+            self._accept_pending_change(req_id, pending_copy_id)
+        elif chosen is action_reject:
+            self._reject_pending_change(req_id, pending_copy_id)
+
+    def _accept_pending_change(self, original_req_id: Any, copy_id: Any) -> None:
+        """Uebernimmt eine Aenderungs-Kopie ins Original (siehe db/experiment_request_changes.py)."""
+        reply = QMessageBox.question(
+            self,
+            "Änderung akzeptieren",
+            f"Änderungsvorschlag für Request #{original_req_id} ins Original übernehmen?\n\n"
+            "Status und eine evtl. bereits verknüpfte Experiment-Zuordnung des Originals "
+            "bleiben dabei unverändert erhalten.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            request_changes.accept_pending_change(copy_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Übernahme fehlgeschlagen:\n{e}")
+            return
+        self._notify_owner_of_request(original_req_id, "your proposed change was accepted")
+        QMessageBox.information(self, "Übernommen", "Der Änderungsvorschlag wurde übernommen.")
+        self.refresh()
+
+    def _reject_pending_change(self, original_req_id: Any, copy_id: Any) -> None:
+        """Verwirft eine Aenderungs-Kopie, ohne das Original anzufassen."""
+        reply = QMessageBox.question(
+            self,
+            "Änderung ablehnen",
+            f"Änderungsvorschlag für Request #{original_req_id} verwerfen?\n\n"
+            "Das Original bleibt dabei unverändert.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            request_changes.reject_pending_change(copy_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Ablehnen fehlgeschlagen:\n{e}")
+            return
+        self._notify_owner_of_request(original_req_id, "your proposed change was rejected")
+        QMessageBox.information(self, "Abgelehnt", "Der Änderungsvorschlag wurde verworfen.")
+        self.refresh()
 
     def _assign_experiment_to_request(self, req_id: Any):
         """Öffnet einen Dialog zur Auswahl eines Experiments (ohne bestehenden Request)
@@ -824,6 +1334,8 @@ class MyRequestsScreen(QWidget):
                 pass
             QMessageBox.critical(self, "Fehler", f"Zuordnung fehlgeschlagen:\n{e}")
             return
+
+        self._notify_owner_of_request(req_id, "status changed to Experiment")
 
         QMessageBox.information(
             self,

@@ -19,7 +19,7 @@ Zugriffsebenen (tblAccessRight.AccessLevel):
 """
 
 APP_NAME = "TrippleT"
-APP_VERSION = "4.5.23"          # <— hier künftig nur diese Zahl ändern
+APP_VERSION = "4.6.0"          # <— hier künftig nur diese Zahl ändern
 APP_COPYRIGHT = "© 2026 Heberlein Technology AG"
 
 # Callback zum Aktualisieren des Bell-Badges (wird von main.py gesetzt)
@@ -85,3 +85,9 @@ def is_superuser_level() -> bool:
 # Alle HeaderBars rufen ``open_quick_search()`` auf wenn der 🔍-Button geklickt wird.
 # None = Quick Search noch nicht registriert (Button im Header bleibt stumm).
 open_quick_search = None   # callable or None
+
+# Wird von MainWindow gesetzt sobald die Tab-Navigation (TabbedNavigator)
+# existiert - siehe ui/widgets/sidebar_nav.py::_wire_tab_capable_click().
+# None = noch nicht registriert (Sidebar behandelt dann jeden Klick normal,
+# kein Schutz gepinnter Vergleichs-Tabs vor App-Start).
+is_active_tab_pinned = None   # callable[[], bool] or None

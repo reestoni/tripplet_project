@@ -527,6 +527,22 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .btn-note { font-size:11px; padding:2px 7px; border:1px solid #c8c8c8; border-radius:3px; background:#fafafa; cursor:pointer; color:#888; outline:none; font-family:inherit; }
   .btn-note.active { border-color:#c8b000; background:#fffde0; color:#7a6000; }
   .btn-note:hover { border-color:#c8b000; color:#7a6000; }
+
+  /* Manual gridlines widget per chart */
+  .gridline-bar {
+    border-top:1px solid #f0f0f0; padding:6px 10px;
+    background:#fdf3f2; display:none; align-items:center; gap:6px; flex-shrink:0;
+  }
+  .gridline-bar.visible { display:flex; }
+  .gridline-bar label { font-size:10px; color:#888; white-space:nowrap; }
+  .gridline-bar input {
+    font-size:11px; padding:3px 7px; border:1px solid #e0a8a2;
+    border-radius:4px; outline:none; font-family:inherit; background:#fdf3f2; color:#333; flex:1;
+  }
+  .gridline-bar input:focus { border-color:#c85a4a; }
+  .btn-gridline { font-size:11px; font-weight:600; padding:2px 8px; border:1px solid #c8c8c8; border-radius:3px; background:#fafafa; cursor:pointer; color:#a03a2c; outline:none; font-family:inherit; white-space:nowrap; }
+  .btn-gridline.active { border-color:#c85a4a; background:#fdf0ee; color:#a03a2c; }
+  .btn-gridline:hover { border-color:#c85a4a; background:#fdf0ee; color:#a03a2c; }
 </style>
 </head>
 <body>
@@ -918,6 +934,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 window.onerror=function(msg,src,line,col){if(typeof _bridge!=='undefined')_bridge.jsError('L'+line+':C'+col+' '+msg);return false;};
 var DATA          = {data_json};
 var CURRENT_USER  = {current_user_json};
+var IS_SUPERUSER  = {is_superuser_json};
 var Y_AXES        = {y_axes_json};
 var X_AXES        = {x_axes_json};
 var G_AXES        = {g_axes_json};
@@ -925,6 +942,9 @@ var TBL_COLS      = {tbl_cols_json};
 var INFOBOX       = {infobox_json};
 var PRIMARY_PK    = {primary_series_pk};
 var IS_VISUAL     = {is_visual_mode};  // true = Visual SQL mode
+var INITIAL_REPORT_ID = {initial_report_id_json};  // gesetzt, wenn ueber das
+  // "Go!"-Dropdown in Show Experiment direkt ein bestimmter Report geoeffnet
+  // werden soll (siehe screen_show_experiment.py/screen_report.py::load_series())
 
 var PALETTE = ['#39A650','#565656','#1D6B32','#8C8C8C','#6DBF7E','#2E2E2E','#A8D5A2','#B0A070','#0A3D1F','#C8C8C8'];
 var SERIES_COLORS = ['#39A650','#39A650','#4A90D9','#D4A017','#8B2FC9','#C0392B'];
@@ -2305,6 +2325,202 @@ function getState(idx){
   if(!s.yKeys||!s.yKeys.length) s.yKeys=[s.yKey||(Y_DEFAULTS[idx]||Y_AXES[0].key)];
   return s;
 }
+// Parsed eine "5, 10, 15"-artige Eingabe zu einer Liste gültiger Zahlen
+// (nicht-numerische/leere Teile werden stillschweigend übersprungen, damit
+// man während des Tippens nicht ständig Fehler sieht).
+function _parseGridlineValues(raw){
+  if(!raw) return [];
+  return String(raw).split(',').map(function(v){return parseFloat(v.trim());}).filter(function(v){return !isNaN(v);});
+}
+function _buildGridlineShapes(vals){
+  return vals.map(function(v){
+    return{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:v,y1:v,
+      line:{color:'#c85a4a',width:1.5,dash:'dash'},_gl:true};
+  });
+}
+// Wertlabel links neben der y-Achse (ausserhalb des Plot-Bereichs, auf Hoehe
+// der Linie) - direkt neben den Achsen-Ticks, dadurch sofort lesbar ohne dem
+// eigentlichen Kurven-/Balkenbereich im Weg zu stehen.
+function _buildGridlineAnnotations(vals){
+  return vals.map(function(v){ return _oneGridlineAnnotation(v, false); });
+}
+function _oneGridlineAnnotation(v, preview){
+  return{xref:'paper',x:0,xanchor:'right',yref:'y',y:v,yanchor:'middle',xshift:-45,
+    text:String(Math.round(v*100)/100),showarrow:false,
+    font:{size:9,color:'#c85a4a'},opacity:preview?0.7:1,
+    bgcolor:'rgba(255,255,255,0.85)',borderpad:1,_gl:true};
+}
+// Andere, nicht von uns gesetzte shapes/annotations (z.B. die Drill-Down-
+// Breadcrumb-Annotation) unangetastet lassen, wenn während des Draggens per
+// Plotly.relayout nur die Gridline-Elemente ersetzt werden.
+function _nonGridline(arr){
+  return (arr||[]).filter(function(x){return !x || !x._gl;});
+}
+// Ermittelt einen festen y-Achsen-Bereich rein aus den Trace-Daten (inkl.
+// Fehlerbalken-Spitzen), damit eine manuelle Gitternetzlinie (die weit
+// ausserhalb der eigentlichen Daten liegen kann, z.B. y=100 bei Werten um 10)
+// die automatische Skalierung des restlichen Charts NICHT verändert - Plotly
+// bezieht Shapes sonst in die Autorange-Berechnung mit ein.
+function _computeDataYRange(traces, rangemode){
+  var vals=[];
+  traces.forEach(function(t){
+    (t.y||[]).forEach(function(v,i){
+      if(typeof v!=='number'||!isFinite(v)) return;
+      vals.push(v);
+      var ey=t.error_y;
+      if(ey&&ey.visible!==false){
+        var up=Array.isArray(ey.array)?ey.array[i]:null;
+        var dn=Array.isArray(ey.arrayminus)?ey.arrayminus[i]:up;
+        if(typeof up==='number'&&isFinite(up)) vals.push(v+up);
+        if(typeof dn==='number'&&isFinite(dn)) vals.push(v-dn);
+      }
+    });
+  });
+  if(!vals.length) return null;
+  var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+  if(rangemode==='tozero'){
+    mn=Math.min(0,mn);
+    var top=Math.max(mx,0.0001);
+    return [mn, top*1.08];
+  }
+  var span=mx-mn; if(span<=0) span=Math.abs(mx)||1;
+  var pad=span*0.08;
+  return [mn-pad, mx+pad];
+}
+// Macht manuelle Gitternetzlinien per Maus vertikal verschiebbar — bewusst
+// kein Plotlys eingebautes shapes[i].editable (das erlaubt auch Endpunkte
+// einzeln zu ziehen, wodurch aus der horizontalen Linie eine schräge würde,
+// und würde x0/x1 aus der paper-Vollbreite herausziehen). Stattdessen eigene
+// Pixel<->Wert-Umrechnung über die internen Plotly-Achsenfunktionen
+// (ax.d2p/p2d), die die einzige Möglichkeit sind, exakt eine y-Verschiebung
+// zuzulassen ohne den Rest des Charts (Zoom, Balken, Achsenbereich) anzufassen.
+function _exitGridlinePlacement(el){
+  el._gridlinePlacing = false;
+  el.style.cursor = '';
+  var card = el.closest('.chart-card');
+  var btn = card && card.querySelector('.btn-gridline');
+  if(btn) btn.classList.remove('active');
+}
+// Startet den "auf die Grafik klicken, um dort eine Linie zu setzen"-Modus
+// (vom "± Line"-Button ausgelöst) — Cursor wird zum Fadenkreuz, eine
+// gestrichelte Vorschaulinie folgt der Maus live mit, der nächste Klick auf
+// die Zeichenfläche committet den Wert. Ohne diesen Modus würde ein Klick auf
+// den Chart nur Plotlys eingebauten Zoom-Drag auslösen — genau das Problem,
+// das der Nutzer gemeldet hat ("ich kann nur reinzoomen").
+function _startGridlinePlacement(el, idx){
+  el._gridlinePlacing = true;
+  el.style.cursor = 'crosshair';
+  var card = el.closest('.chart-card');
+  var btn = card && card.querySelector('.btn-gridline');
+  if(btn) btn.classList.add('active');
+  var bar = document.getElementById('gridline_bar_'+idx);
+  if(bar) bar.classList.add('visible');
+}
+function _bindGridlineDrag(el, idx){
+  if(el._gridlineDragBound) return;
+  el._gridlineDragBound = true;
+  var TOL = 6; // px Fangradius um eine Linie
+  var dragging = null; // {i, vals}
+  function _yRelFromEvent(ev){
+    var fl = el._fullLayout; if(!fl || !fl.yaxis || !fl._size) return null;
+    var rect = el.getBoundingClientRect();
+    return {fl:fl, yRel: ev.clientY - rect.top - fl._size.t};
+  }
+  function _hitTest(clientY){
+    var fl = el._fullLayout; if(!fl || !fl.yaxis || !fl._size) return null;
+    var s = getState(idx);
+    var vals = _parseGridlineValues(s.gridlinesY);
+    if(!vals.length) return null;
+    var rect = el.getBoundingClientRect();
+    var yRel = clientY - rect.top - fl._size.t;
+    for(var i=0;i<vals.length;i++){
+      if(Math.abs(fl.yaxis.d2p(vals[i]) - yRel) <= TOL) return {i:i, vals:vals};
+    }
+    return null;
+  }
+  function _renderShapes(vals, previewVal){
+    var baseShapes = _nonGridline(el.layout && el.layout.shapes);
+    var baseAnnos  = _nonGridline(el.layout && el.layout.annotations);
+    var shapes = baseShapes.concat(_buildGridlineShapes(vals));
+    var annos  = baseAnnos.concat(_buildGridlineAnnotations(vals));
+    if(previewVal!=null){
+      var pShape=_buildGridlineShapes([previewVal])[0];
+      pShape.line={color:'#c85a4a',width:1,dash:'dot'};
+      shapes=shapes.concat([pShape]);
+      annos=annos.concat([_oneGridlineAnnotation(previewVal, true)]);
+    }
+    var update={shapes:shapes, annotations:annos};
+    // Auch fuer die Live-Vorschau der allerersten Linie (noch nichts committed,
+    // updateChart() hat den Rand deshalb noch nicht vergroessert) sicherstellen,
+    // dass links genug Platz fuer das Wertlabel ist - sonst wird die Zahl beim
+    // Platzieren abgeschnitten, bevor ueberhaupt eine Linie gesetzt wurde.
+    if((vals.length || previewVal!=null)){
+      var curL=(el.layout && el.layout.margin && el.layout.margin.l)||60;
+      if(curL<95) update['margin.l']=95;
+    }
+    Plotly.relayout(el, update);
+  }
+  el.addEventListener('mousedown', function(ev){
+    if(el._gridlinePlacing){
+      var info=_yRelFromEvent(ev); if(!info) return;
+      var newVal=Math.round(info.fl.yaxis.p2d(info.yRel)*100)/100;
+      var s=getState(idx);
+      var vals=_parseGridlineValues(s.gridlinesY);
+      vals.push(newVal);
+      s.gridlinesY=vals.join(', ');
+      s.gridlinesVisible=true;
+      chartStates[idx]=s;
+      var inp=document.getElementById('gridline_input_'+idx);
+      if(inp) inp.value=s.gridlinesY;
+      _exitGridlinePlacement(el);
+      updateChart(idx);
+      ev.preventDefault(); ev.stopPropagation();
+      return;
+    }
+    var hit = _hitTest(ev.clientY);
+    if(!hit) return;
+    dragging = hit;
+    el.style.cursor = 'ns-resize';
+    ev.preventDefault(); ev.stopPropagation();
+  }, true);
+  el.addEventListener('mousemove', function(ev){
+    if(dragging) return;
+    if(el._gridlinePlacing){
+      el.style.cursor='crosshair';
+      var info=_yRelFromEvent(ev); if(!info) return;
+      var previewVal=Math.round(info.fl.yaxis.p2d(info.yRel)*100)/100;
+      var s=getState(idx);
+      _renderShapes(_parseGridlineValues(s.gridlinesY), previewVal);
+      return;
+    }
+    var hit = _hitTest(ev.clientY);
+    el.style.cursor = hit ? 'ns-resize' : '';
+  });
+  document.addEventListener('keydown', function(ev){
+    if(ev.key==='Escape' && el._gridlinePlacing){
+      _exitGridlinePlacement(el);
+      _renderShapes(_parseGridlineValues(getState(idx).gridlinesY), null);
+    }
+  });
+  document.addEventListener('mousemove', function(ev){
+    if(!dragging) return;
+    var info=_yRelFromEvent(ev); if(!info) return;
+    dragging.vals[dragging.i] = info.fl.yaxis.p2d(info.yRel);
+    _renderShapes(dragging.vals, null);
+  });
+  document.addEventListener('mouseup', function(){
+    if(!dragging) return;
+    var finalVals = dragging.vals.map(function(v){ return Math.round(v*100)/100; });
+    dragging = null;
+    el.style.cursor = '';
+    var s = getState(idx);
+    s.gridlinesY = finalVals.join(', ');
+    chartStates[idx] = s;
+    var inp = document.getElementById('gridline_input_'+idx);
+    if(inp) inp.value = s.gridlinesY;
+    _renderShapes(finalVals, null);
+  });
+}
 function _updateSdButton(){
   var btn=document.getElementById('btn-sd');
   var btnMM=document.getElementById('btn-minmax');
@@ -2357,6 +2573,25 @@ function updateChart(idx){
       delete layout.xaxis.range;
     }
   }
+  // Manuelle Gitternetzlinien (y-Achse) zusätzlich zum automatischen Grid von
+  // Plotly einzeichnen — als feste Referenzlinien bei vom Nutzer eingegebenen
+  // Werten, nicht als Ersatz für die automatische Achsenskalierung. Sobald
+  // Shapes im Spiel sind, bezieht Plotly sie sonst in die Autorange-Berechnung
+  // mit ein (eine Linie bei y=100 würde den ganzen Chart neu skalieren, auch
+  // wenn die echten Daten z.B. nur bis 10 gehen) — deshalb Range explizit aus
+  // den reinen Trace-Daten fixieren, sobald mind. eine Gridline aktiv ist.
+  if(ct!=='3d' && ct!=='heat' && layout.yaxis){
+    var glVals=_parseGridlineValues(s.gridlinesY);
+    if(glVals.length){
+      var _fixedRange=_computeDataYRange(traces, layout.yaxis.rangemode);
+      if(_fixedRange){ layout.yaxis.range=_fixedRange; layout.yaxis.autorange=false; }
+      layout.shapes=(layout.shapes||[]).concat(_buildGridlineShapes(glVals));
+      layout.annotations=(layout.annotations||[]).concat(_buildGridlineAnnotations(glVals));
+      // Zusaetzlicher Platz links, damit die Wertlabel nicht mit den normalen
+      // y-Achsen-Ticks kollidieren.
+      layout.margin=layout.margin||{}; layout.margin.l=Math.max(layout.margin.l||60, 95);
+    }
+  }
   // Plotly.react ignoriert categoryarray beim allerersten Render eines DOM-Elements
   // (kein _fullLayout vorhanden) → newPlot für Erstrender, react für Updates
   var cfg={responsive:true,displayModeBar:dmb,displaylogo:false};
@@ -2370,6 +2605,7 @@ function updateChart(idx){
     Plotly.newPlot(el,traces,layout,cfg);
   }
   _updateSdButton();
+  if(ct!=='3d' && ct!=='heat') _bindGridlineDrag(el,idx);
   // Balken breiter machen, wenn eine Reihe (Legende) aus-/eingeblendet wird:
   // bargap/bargroupgap wurden oben anhand ALLER Jets berechnet, nicht nur der
   // aktuell sichtbaren. Beim Legend-Klick nur bei tatsächlicher Trace-Zahl neu
@@ -2761,6 +2997,7 @@ new QWebChannel(qt.webChannelTransport,function(channel){
   _bridge.getSeriesList();
   _bridge.getLayoutTemplates();
   if(IS_VISUAL)initBuilder();
+  if(INITIAL_REPORT_ID) _bridge.loadReport(String(INITIAL_REPORT_ID));
 });
 function receiveFreeFieldData(chartIdx,yKey,values){DATA.forEach(function(d){var v=values[d.trial_id];d[yKey]=(v!==undefined&&v!==null)?v:null;});updateChart(chartIdx);}
 
@@ -2826,9 +3063,11 @@ function receiveLayoutTemplates(templates){
       item.classList.add('selected');
       _selectedTemplateId = tpl.id;
       document.getElementById('btn-tpl-apply').disabled = false;
-      // Overwrite-Button: nur für nicht-default Templates
+      // Overwrite-Button: fuer nicht-default Templates immer, fuer das
+      // Standard-Template nur fuer Superuser (Backend erzwingt das ohnehin
+      // nochmal serverseitig, siehe overwriteLayoutTemplate).
       var owBtn=document.getElementById('btn-tpl-overwrite');
-      if(owBtn) owBtn.style.display=tpl.isDefault?'none':'';
+      if(owBtn) owBtn.style.display=(tpl.isDefault && !IS_SUPERUSER)?'none':'';
       // Name/Desc vorausfüllen
       var nameInp=document.getElementById('tpl-save-name');
       var descInp=document.getElementById('tpl-save-desc');
@@ -3913,6 +4152,13 @@ function rebuildGrid(){
       // Note toggle button
       var btnNote=document.createElement('button');
       btnNote.className='btn-note';btnNote.textContent='📝';btnNote.title='Toggle note';
+      // Manual gridlines toggle button — beschrifteter Text statt reines Icon
+      // (ein 14px-Symbol ging in der ohnehin vollen Toolbar unter, siehe
+      // Nutzer-Feedback "ich verstehe nicht wie ich eine Gitternetzlinie
+      // einfuegen kann" trotz technisch korrekt sichtbarem Button). Gleiches
+      // Muster wie der benachbarte "+ Y"-Button (btn-custom, kurzer Text).
+      var btnGrid=document.createElement('button');
+      btnGrid.className='btn-gridline';btnGrid.textContent='± Line';btnGrid.title='Click, then click on the chart to place a horizontal reference line (drag it afterwards to move it, Esc to cancel)';
       toolbar.appendChild(dragHandle);
 
       var _hasFqb = IS_VISUAL && _builderMode === 'free';
@@ -4125,7 +4371,7 @@ function rebuildGrid(){
           else { _expandChart(i); btn.textContent='✕'; btn.title='Close'; }
         });
       })(idx,btnExpand);
-      toolbar.appendChild(cBtnUp);toolbar.appendChild(cBtnDn);toolbar.appendChild(btnExpand);toolbar.appendChild(btnCopy);toolbar.appendChild(btnNote);
+      toolbar.appendChild(cBtnUp);toolbar.appendChild(cBtnDn);toolbar.appendChild(btnExpand);toolbar.appendChild(btnCopy);toolbar.appendChild(btnGrid);toolbar.appendChild(btnNote);
 
       var plotDiv=document.createElement('div');
       var hasSub = state.xField !== 'trial_nr';  // drillable wenn nicht bereits auf Trial-Ebene
@@ -4168,7 +4414,34 @@ function rebuildGrid(){
       });
       btnNote.addEventListener('click',function(e){e.stopPropagation();});
 
-      card.appendChild(toolbar);card.appendChild(pillsDiv||document.createElement('div'));card.appendChild(plotDiv);card.appendChild(noteBar);grid.appendChild(card);
+      // Gridline bar (manual reference lines on the y-axis)
+      var gridlineBar=document.createElement('div');gridlineBar.className='gridline-bar';gridlineBar.id='gridline_bar_'+idx;
+      var glLbl=document.createElement('label');glLbl.textContent='Gridlines (y):';
+      var glInp=document.createElement('input');glInp.type='text';glInp.placeholder='e.g. 5, 10, 15';glInp.id='gridline_input_'+idx;
+      gridlineBar.appendChild(glLbl);gridlineBar.appendChild(glInp);
+      if(state.gridlinesY) glInp.value=state.gridlinesY;
+      if(state.gridlinesVisible){
+        gridlineBar.classList.add('visible');
+        btnGrid.classList.add('active');
+      }
+      glInp.addEventListener('input',function(){
+        var s=getState(idx);s.gridlinesY=glInp.value;chartStates[idx]=s;
+        updateChart(idx);
+      });
+      btnGrid.addEventListener('mousedown',function(e){
+        e.preventDefault(); e.stopPropagation();
+        var chartEl=document.getElementById('chart_'+idx);
+        // Klick auf den Button startet direkt den "auf die Grafik klicken"-Modus
+        // (siehe _startGridlinePlacement) - ein zweiter Klick auf den Button
+        // waehrend des Modus bricht ihn ab, statt eine neue Linie zu platzieren.
+        if(chartEl && chartEl._gridlinePlacing){ _exitGridlinePlacement(chartEl); return; }
+        if(chartEl) _startGridlinePlacement(chartEl, idx);
+        gridlineBar.classList.add('visible');
+        var s=getState(idx);s.gridlinesVisible=true;chartStates[idx]=s;
+      });
+      btnGrid.addEventListener('click',function(e){e.stopPropagation();});
+
+      card.appendChild(toolbar);card.appendChild(pillsDiv||document.createElement('div'));card.appendChild(plotDiv);card.appendChild(noteBar);card.appendChild(gridlineBar);grid.appendChild(card);
       var _ct=state.chartType||'bar';
       var _yKeys=state.yKeys&&state.yKeys.length?state.yKeys:[state.yKey||Y_AXES[0].key];
       var _initTraces=buildTracesForKeys(_ct,state.xField,state.zField,_yKeys);
@@ -4184,7 +4457,27 @@ function rebuildGrid(){
         if(_allNumInit){ _initLayout.xaxis.autorange=true; delete _initLayout.xaxis.range; }
         else { delete _initLayout.xaxis.autorange; delete _initLayout.xaxis.range; }
       }
+      // Manuelle Gitternetzlinien (aus einem geladenen Report) müssen auch beim
+      // allerersten Rendern hier greifen, nicht erst nach der ersten Interaktion
+      // - sonst fehlen sie beim Öffnen eines gespeicherten Reports komplett bis
+      // irgendein anderer Toolbar-Klick updateChart() ausloest.
+      if(_ct!=='3d' && _ct!=='heat' && _initLayout.yaxis){
+        var _initGlVals=_parseGridlineValues(state.gridlinesY);
+        if(_initGlVals.length){
+          var _initFixedRange=_computeDataYRange(_initTraces, _initLayout.yaxis.rangemode);
+          if(_initFixedRange){ _initLayout.yaxis.range=_initFixedRange; _initLayout.yaxis.autorange=false; }
+          _initLayout.shapes=(_initLayout.shapes||[]).concat(_buildGridlineShapes(_initGlVals));
+          _initLayout.annotations=(_initLayout.annotations||[]).concat(_buildGridlineAnnotations(_initGlVals));
+          _initLayout.margin=_initLayout.margin||{}; _initLayout.margin.l=Math.max(_initLayout.margin.l||60, 95);
+        }
+      }
       Plotly.newPlot('chart_'+idx,_initTraces,_initLayout,{responsive:true,displayModeBar:_ct==='3d',displaylogo:false});
+      // Gridline-Klick/Drag-Bindung muss auch fuer den allerersten Chart-Render
+      // erfolgen - updateChart() (das dies sonst am Ende macht) wird erst bei
+      // der naechsten Interaktion aufgerufen, ohne diese Zeile bliebe der
+      // "± Line"-Button beim frisch geoeffneten Report komplett wirkungslos
+      // (Klick auf die Grafik loeste dann nur Plotlys normalen Zoom aus).
+      if(_ct!=='3d' && _ct!=='heat') _bindGridlineDrag(document.getElementById('chart_'+idx), idx);
       document.getElementById('chart_'+idx).on('plotly_click',function(evtData){
         if(!evtData||!evtData.points||!evtData.points.length)return;
         var cj=evtData.points[0].data.name,jetKey=getAllJetNames().find(function(j){return getLegendLabel(j)===cj;})||cj;
@@ -4704,6 +4997,8 @@ function getCurrentReportData() {
         noteTitle:   s.noteTitle  || '',
         noteText:    s.noteText   || '',
         noteVisible: !!s.noteVisible,
+        gridlinesY:      s.gridlinesY   || '',
+        gridlinesVisible:!!s.gridlinesVisible,
         fqbConfig:   _bfsCfg,
       });
     }
@@ -4805,7 +5100,7 @@ document.getElementById('modal-save-report').addEventListener('click',function(e
   if(e.target===this)this.classList.remove('open');
 });
 
-function receiveSaveResult(reportId, success, message){
+function receiveSaveResult(reportId, success, message, forked){
   if(success){
     _currentReportId    = reportId;
     _currentReportTitle = document.getElementById('save-title').value.trim();
@@ -4814,6 +5109,12 @@ function receiveSaveResult(reportId, success, message){
     var btn=document.getElementById('btn-save-report');
     btn.textContent='✓ Saved!';btn.classList.add('active');
     setTimeout(function(){btn.textContent='💾 Save';btn.classList.remove('active');},2000);
+    if(forked){
+      // Nicht der Autor des geladenen Reports - Backend hat automatisch eine
+      // neue, unabhaengige Kopie angelegt (siehe screen_report.py::saveReport()).
+      if(document.getElementById('save-author')) document.getElementById('save-author').value = CURRENT_USER;
+      alert(message);
+    }
   } else {
     alert('Save failed: ' + message);
   }
@@ -4968,6 +5269,8 @@ function receiveReport(report){
         noteTitle:   b.noteTitle || '',
         noteText:    b.noteText  || '',
         noteVisible: !!b.noteVisible,
+        gridlinesY:      b.gridlinesY   || '',
+        gridlinesVisible:!!b.gridlinesVisible,
       };
       // FQB Config wiederherstellen
       if(b.fqbConfig){

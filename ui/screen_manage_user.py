@@ -29,9 +29,9 @@ from PySide6.QtWidgets import (
 )
 
 from ui.widgets.footer import FooterBar
-from ui.widgets.header import HeaderBar
+from ui.widgets import sidebar_nav
 from ui.text_normalize import canon_simple as _canon
-from db.connection import fetch_all, execute
+from db.connection import fetch_all, execute, execute_insert, is_offline_mode
 
 
 def _load_master_key() -> Optional[bytes]:
@@ -416,9 +416,11 @@ class NameFilterProxy(QSortFilterProxyModel):
 
 # ---- Screen -----------------------------------------------------------------
 class ManageUserScreen(QWidget):
-    def __init__(self, on_back_home=None):
+    def __init__(self, on_back_home=None, sidebar_callbacks: Optional[dict] = None):
         super().__init__()
         self.on_back_home = on_back_home
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         self.table: Optional[QTableView] = None
         self.model: Optional[UsersTableModel] = None
@@ -447,8 +449,9 @@ class ManageUserScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title='Manage User', show_home=True)
-        header.connect_home(self._go_home)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # toolbar (search + actions)
         toolbar = QFrame()
@@ -516,10 +519,27 @@ class ManageUserScreen(QWidget):
             .replace("#B5D7B5", accent_gridline())
             .replace("#E9F6E9", accent_tint()))
 
-        root.addWidget(header)
-        root.addWidget(toolbar, 0)
-        root.addWidget(self.table, 1)
+        content_layout.addWidget(toolbar, 0)
+        content_layout.addWidget(self.table, 1)
         root.addWidget(FooterBar())
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
     def _on_search_changed(self, text: str):
         """Aktualisiert den Proxy-Filter bei Texteingabe im Suchfeld."""
@@ -728,25 +748,31 @@ class ManageUserScreen(QWidget):
                             existing_usernames.add(str(r.get(h)).strip().lower())
                         break
 
-            # Determine maximum allowed username length from information_schema (fallback: 32)
+            # Determine maximum allowed username length from information_schema
+            # (fallback: 32). information_schema is MySQL-only (no SQLite
+            # equivalent, unlike db.connection.table_exists()/get_columns_map()
+            # which have an explicit SQLite branch) - skip it outright in
+            # offline mode instead of relying on the query failing into the
+            # except below, which used to silently mask the real reason.
             max_len = 32
-            try:
-                rlen = fetch_all(
-                    """
-                    SELECT CHARACTER_MAXIMUM_LENGTH AS maxlen
-                    FROM information_schema.columns
-                    WHERE table_schema = DATABASE()
-                      AND table_name = 'tbluser'
-                      AND LOWER(column_name) = 'username'
-                    LIMIT 1
-                    """,
-                    [],
-                )
-                if rlen and (rlen[0].get('maxlen') is not None or rlen[0].get('MAXLEN') is not None):
-                    raw = rlen[0].get('maxlen') if rlen[0].get('maxlen') is not None else rlen[0].get('MAXLEN')
-                    max_len = int(raw)
-            except Exception:
-                pass
+            if not is_offline_mode():
+                try:
+                    rlen = fetch_all(
+                        """
+                        SELECT CHARACTER_MAXIMUM_LENGTH AS maxlen
+                        FROM information_schema.columns
+                        WHERE table_schema = DATABASE()
+                          AND table_name = 'tbluser'
+                          AND LOWER(column_name) = 'username'
+                        LIMIT 1
+                        """,
+                        [],
+                    )
+                    if rlen and (rlen[0].get('maxlen') is not None or rlen[0].get('MAXLEN') is not None):
+                        raw = rlen[0].get('maxlen') if rlen[0].get('maxlen') is not None else rlen[0].get('MAXLEN')
+                        max_len = int(raw)
+                except Exception:
+                    pass
 
             base = 'newuser'
             # Ensure base itself fits
@@ -856,10 +882,7 @@ class ManageUserScreen(QWidget):
             placeholders = ','.join(['?'] * len(cols))
             cols_sql = ', '.join([f'[{c}]' for c in cols])
             sql = f'INSERT INTO [tblUser] ({cols_sql}) VALUES ({placeholders})'
-            execute(sql, values)
-
-            row = fetch_all('SELECT @@IDENTITY AS NewID', [])
-            new_id = int(row[0]['NewID']) if row and 'NewID' in row[0] and row[0]['NewID'] is not None else None
+            new_id = execute_insert(sql, values)
 
             self.reload_data()
             if new_id is not None:

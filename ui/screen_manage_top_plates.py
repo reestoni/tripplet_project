@@ -29,9 +29,13 @@ from PySide6.QtGui import QPixmap, QColor, QKeySequence, QFont, QAction, QPainte
 from PySide6.QtWidgets import QApplication
 
 from ui.widgets.footer import FooterBar
-from ui.widgets.header import HeaderBar
+from ui.widgets import sidebar_nav
 from ui.pathutil import resource_path
 from ui.text_normalize import canon_with_id_strip as _canon
+
+# ColumnOrderDialog ist vollstaendig generisch (kein Jets-spezifischer State) -
+# wiederverwendet statt dupliziert, siehe ui/screen_manage_jets.py.
+from ui.screen_manage_jets import ColumnOrderDialog
 
 
 def _to_int_like(val):
@@ -376,8 +380,12 @@ class FrozenNColumnsTable(QWidget):
         self.left.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.left.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
+        # Left (frozen) columns stay fixed as an anchor; the right pane's columns
+        # can be dragged into any order the user wants (order is preserved
+        # across reload_data() calls, see setModel()) - same convention as
+        # screen_manage_jets.py's FrozenNColumnsTable.
         self._left_header.setSectionsMovable(False)
-        self._right_header.setSectionsMovable(False)
+        self._right_header.setSectionsMovable(True)
 
         self.setFocusProxy(self.right)
 
@@ -408,7 +416,14 @@ class FrozenNColumnsTable(QWidget):
         self._right_header.set_proxy(proxy)
 
     def setModel(self, model):
-        """Setzt dasselbe Model auf beide Ansichten und verbirgt/zeigt die richtigen Spalten."""
+        """Setzt dasselbe Model auf beide Ansichten und verbirgt/zeigt die richtigen Spalten.
+
+        Eine vom Nutzer per Drag&Drop gesetzte Spaltenreihenfolge (rechter Header)
+        übersteht dadurch ein reload_data() (neues Model-Objekt, gleiche Spalten) -
+        siehe screen_manage_jets.py's FrozenNColumnsTable.setModel() für dasselbe Muster.
+        """
+        prev_right_state = self._right_header.saveState() if self._model is not None else None
+
         self._model = model
         from PySide6.QtCore import QItemSelectionModel
         sel = QItemSelectionModel(model)
@@ -421,6 +436,9 @@ class FrozenNColumnsTable(QWidget):
 
         self.left.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.right.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+
+        if prev_right_state is not None:
+            self._right_header.restoreState(prev_right_state)
 
         self._update_left_width()
         self.left.horizontalHeader().sectionResized.connect(self._maybe_update_left_width)
@@ -658,7 +676,8 @@ class TopPlatesTableModel(QAbstractTableModel):
 
     def __init__(self, rows: List[Dict], headers: List[str], id_column: str = "ID",
                  fk_maps: Optional[Dict[str, Dict]] = None,
-                 bool_columns: Optional[Set[str]] = None):
+                 bool_columns: Optional[Set[str]] = None,
+                 read_only: bool = False):
         super().__init__()
         self._headers = headers[:]
         self._rows = rows[:]
@@ -666,10 +685,15 @@ class TopPlatesTableModel(QAbstractTableModel):
         self._dirty_cells: Set[tuple] = set()
         self._fk_maps = dict(fk_maps or {})
         self._bool_cols = set(bool_columns or set())
+        self._read_only = read_only
 
     def _is_bool_col(self, header: str) -> bool:
         """Gibt True zurück wenn die Spalte als Bool-Checkbox behandelt werden soll."""
         return _canon(header) in self._bool_cols
+
+    def set_read_only(self, read_only: bool):
+        """Schaltet die Editierbarkeit aller Zellen um (Ansicht muss danach neu gezeichnet werden)."""
+        self._read_only = read_only
 
     def rowCount(self, parent=QModelIndex()) -> int:
         """Gibt die Anzahl Zeilen zurück."""
@@ -740,7 +764,7 @@ class TopPlatesTableModel(QAbstractTableModel):
 
     def setData(self, index: QModelIndex, value, role=Qt.EditRole):
         """Setzt einen Zellwert und markiert die Zeile als dirty."""
-        if not index.isValid():
+        if not index.isValid() or self._read_only:
             return False
         header = self._headers[index.column()]
         key = _canon(header)
@@ -779,12 +803,15 @@ class TopPlatesTableModel(QAbstractTableModel):
         return True
 
     def flags(self, index: QModelIndex):
-        """ID-Spalte read-only; has_files read-only; Bool-Spalten checkable; andere editierbar."""
+        """ID-Spalte read-only; has_files read-only; Bool-Spalten checkable; andere editierbar
+        (ausser im Read-only-Modus: dann ist gar nichts editierbar)."""
         base = Qt.ItemIsSelectable | Qt.ItemIsEnabled
         if not index.isValid():
             return base
         header = self._headers[index.column()]
         if header.lower() == self._id_col.lower() or header == "__has_files__":
+            return base
+        if self._read_only:
             return base
         if self._is_bool_col(header):
             return base | Qt.ItemIsUserCheckable
@@ -942,6 +969,8 @@ class FKComboDelegate(QStyledItemDelegate):
 
 # ----------------- screen -----------------
 class ManageTopPlatesScreen(QWidget):
+    _SCREEN_KEY = "manage_top_plates"
+
     def __init__(self, on_back_home: Optional[Callable] = None,
                  loader: Optional[Callable[[], List[Dict]]] = None,
                  saver: Optional[Callable[[List[Dict]], int]] = None,
@@ -951,9 +980,12 @@ class ManageTopPlatesScreen(QWidget):
                  deleter: Optional[Callable[[List[int]], int]] = None,
                  on_open_new_top_plate: Optional[Callable[[], None]] = None,
                  on_copy_top_plate: Optional[Callable[[Dict], None]] = None,
-                on_edit_top_plate: Optional[Callable[[Dict], None]] = None):
+                on_edit_top_plate: Optional[Callable[[Dict], None]] = None,
+                sidebar_callbacks: Optional[dict] = None):
         super().__init__()
         self.on_back_home = on_back_home
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
         self._loader = loader
         self._saver = saver
         self._id_col = id_column
@@ -971,6 +1003,8 @@ class ManageTopPlatesScreen(QWidget):
         self.status_label: Optional[QLabel] = None
         self.search_edit: Optional[QLineEdit] = None
         self._fk_delegate: Optional[FKComboDelegate] = None
+        self._read_only = False
+        self._column_order_dialog: Optional[ColumnOrderDialog] = None
 
         self._build_ui()
         self.reload_data()
@@ -981,8 +1015,9 @@ class ManageTopPlatesScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="Manage Top Plates", show_home=True)
-        header.connect_home(self._go_home)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         toolbar = QFrame()
         tl = QHBoxLayout(toolbar)
@@ -1005,6 +1040,10 @@ class ManageTopPlatesScreen(QWidget):
         self.btn_edit_form = QPushButton("Edit in Form", objectName="GreyBtn")
         self.btn_edit_form.clicked.connect(self._on_edit_form)
 
+        self.btn_columns = QPushButton("Columns…", objectName="GreyBtn")
+        self.btn_columns.setToolTip("Reorder columns via a drag & drop list")
+        self.btn_columns.clicked.connect(self._on_columns_clicked)
+
         self.btn_delete = QPushButton("Delete", objectName="GreyBtn")
         self.btn_delete.clicked.connect(self._on_delete)
 
@@ -1018,6 +1057,7 @@ class ManageTopPlatesScreen(QWidget):
         tl.addWidget(self.btn_new, 0)
         tl.addWidget(self.btn_copy, 0)
         tl.addWidget(self.btn_edit_form, 0)
+        tl.addWidget(self.btn_columns, 0)
         tl.addWidget(self.btn_delete, 0)
         tl.addWidget(self.btn_save, 0)
         tl.addWidget(self.status_label, 0, Qt.AlignVCenter)
@@ -1048,10 +1088,27 @@ class ManageTopPlatesScreen(QWidget):
         self.table.right.doubleClicked.connect(self._on_row_double_clicked)
         self.table.left.doubleClicked.connect(self._on_row_double_clicked)
 
-        root.addWidget(header)
-        root.addWidget(toolbar, 0)
-        root.addWidget(self.table, 1)
+        content_layout.addWidget(toolbar, 0)
+        content_layout.addWidget(self.table, 1)
         root.addWidget(FooterBar())
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
     def reload_data(self, select_id: Optional[int] = None):
         """Lädt alle Top-Plate-Daten neu aus der DB (inkl. FK-Maps) und baut Modell neu auf.
@@ -1089,7 +1146,8 @@ class ManageTopPlatesScreen(QWidget):
 
         bool_cols: Set[str] = set()
         self.model = TopPlatesTableModel(rows=rows, headers=headers, id_column=self._id_col,
-                                    fk_maps=self._fk_maps_input, bool_columns=bool_cols)
+                                    fk_maps=self._fk_maps_input, bool_columns=bool_cols,
+                                    read_only=self._read_only)
 
         if self.proxy is None:
             self.proxy = MultiColumnFilterProxy(self)
@@ -1122,6 +1180,8 @@ class ManageTopPlatesScreen(QWidget):
 
         self._set_status("")
         self.table.resizeColumnsToContents()
+        self._restore_column_order()
+        self._apply_read_only_ui()
         self._on_search_changed(self.search_edit.text()
                                 if self.search_edit else "")
 
@@ -1186,9 +1246,97 @@ class ManageTopPlatesScreen(QWidget):
         except Exception:
             pass
 
+    # ---- column reordering (wie Manage Jets/Yarn/Material) ----
+    def _on_columns_clicked(self):
+        """Öffnet/hebt die Drag&Drop-Spaltenliste zum Umsortieren der rechten (nicht eingefrorenen) Spalten."""
+        if not self.model:
+            return
+        if self._column_order_dialog is None or not self._column_order_dialog.isVisible():
+            self._column_order_dialog = ColumnOrderDialog(
+                self.table._right_header, self.model, self.table._freeze,
+                on_save=self._save_column_order_now, parent=self)
+            self._column_order_dialog.show()
+        else:
+            self._column_order_dialog.raise_()
+            self._column_order_dialog.activateWindow()
+
+    def _save_column_order_now(self):
+        """Persistiert die AKTUELLE Spaltenreihenfolge für den eingeloggten User.
+
+        Nur explizit aufgerufen (Save-Button im Columns-Dialog) – Umsortieren
+        allein soll NICHT automatisch speichern, siehe Manage Jets für dieselbe
+        Konvention (kann auch nur einmalig/vorübergehend gemeint sein)."""
+        if not self.model:
+            return
+        freeze = self.table._freeze
+        hdr = self.table._right_header
+        headers = self.model.headers()
+        order = []
+        for v in range(hdr.count()):
+            logical = hdr.logicalIndex(v)
+            if logical >= freeze and logical < len(headers) and not hdr.isSectionHidden(logical):
+                order.append(headers[logical])
+        from db.user_column_order import save_column_order
+        save_column_order(self._SCREEN_KEY, order)
+
+    def _restore_column_order(self):
+        """Wendet die zuletzt für diesen User gespeicherte Spaltenreihenfolge an (falls vorhanden)."""
+        if not self.model:
+            return
+        from db.user_column_order import load_column_order
+        saved = load_column_order(self._SCREEN_KEY)
+        if not saved:
+            return
+        freeze = self.table._freeze
+        hdr = self.table._right_header
+        name_to_logical = {h: i for i, h in enumerate(self.model.headers())}
+
+        pos = freeze
+        for name in saved:
+            logical = name_to_logical.get(name)
+            if logical is None or logical < freeze:
+                continue
+            current_visual = hdr.visualIndex(logical)
+            if current_visual != pos:
+                hdr.moveSection(current_visual, pos)
+            pos += 1
+
+    def set_read_only(self, read_only: bool):
+        """Schaltet Schreibrechte um: Add/Copy/Delete/Save + Zell-Editing gesperrt,
+        Suche/Filter bleiben immer nutzbar. Von main.py bei jeder Navigation zu
+        diesem Screen mit dem aktuellen Permission-Stand aufgerufen."""
+        self._read_only = bool(read_only)
+        self._apply_read_only_ui()
+
+    def _apply_read_only_ui(self):
+        ro = self._read_only
+        if self.model is not None:
+            self.model.set_read_only(ro)
+            # dataChanged statt layoutChanged: reiner Repaint (read-only-Styling),
+            # keine echte Zeilen-/Spaltenumordnung. layoutChanged invalidiert
+            # persistente Model-Indizes/Selection-State - bei jedem erneuten
+            # Sichtbarwerden dieses Screens wiederholt aufgerufen, führte das in
+            # screen_manage_yarn.py nachweislich (Bisektion, faulthandler) zu
+            # einem Absturz (Windows access violation) im nächsten selectRow() -
+            # gleiches Muster hier, siehe CLAUDE.md.
+            rows = self.model.rowCount()
+            cols = self.model.columnCount()
+            if rows and cols:
+                self.model.dataChanged.emit(
+                    self.model.index(0, 0), self.model.index(rows - 1, cols - 1))
+        tooltip = "Read-only access – you don't have permission to edit this table." if ro else ""
+        for btn in (self.btn_new, self.btn_copy, self.btn_delete, self.btn_save):
+            btn.setEnabled(not ro)
+            btn.setToolTip(tooltip)
+        # Stays enabled read-only: viewing a single record in the form is often
+        # clearer than the pivot table, even with nothing editable in it.
+        self.btn_edit_form.setText("View in Form" if ro else "Edit in Form")
+        self.btn_edit_form.setToolTip(
+            "View this top plate's full record (read-only)" if ro else "")
+
     def save_changes(self):
         """Schreibt alle dirty Zeilen via UPDATE in die DB."""
-        if not self.model:
+        if not self.model or self._read_only:
             return
         dirty_rows = self.model.dirty_rows()
         if not dirty_rows:
@@ -1213,6 +1361,8 @@ class ManageTopPlatesScreen(QWidget):
     # -------- actions --------
     def _on_new(self):
         """Legt eine neue leere Top Plate in der DB an."""
+        if self._read_only:
+            return
         if callable(self._on_open_new_top_plate):
             self._on_open_new_top_plate()
             self._set_status("")
@@ -1225,6 +1375,8 @@ class ManageTopPlatesScreen(QWidget):
         Öffnet den NewTopPlate-Screen mit den Werten der selektierten Zeile,
         wobei das Feld 'Name' leer ist.
         """
+        if self._read_only:
+            return
         if not callable(self._on_copy_top_plate):
             self._set_status("Copy not available.", error=True)
             return
@@ -1251,7 +1403,9 @@ class ManageTopPlatesScreen(QWidget):
         self._on_edit_form()
 
     def _on_edit_form(self):
-        """Öffnet die selektierte Top Plate im bestehenden NewTopPlateScreen-Formular als Dialog."""
+        """Öffnet die selektierte Top Plate im bestehenden NewTopPlateScreen-Formular als Dialog.
+        Bleibt auch im Read-only-Modus verfügbar (übersichtlicher pro Datensatz),
+        NewTopPlateScreen selbst wird dabei strikt read-only geöffnet, siehe main.py."""
         sel = self.table.selectionModel()
         if not sel or not sel.hasSelection():
             self._set_status("No row selected.")
@@ -1271,6 +1425,8 @@ class ManageTopPlatesScreen(QWidget):
 
     def _on_delete(self):
         """Löscht die selektierten Top Plates nach Bestätigung aus der DB."""
+        if self._read_only:
+            return
         if not callable(self._deleter):
             self._set_status("Delete not available.", error=True)
             return

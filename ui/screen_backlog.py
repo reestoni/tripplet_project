@@ -42,16 +42,28 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLineEdit,
     QScrollArea,
+    QStackedWidget,
 )
 from PySide6.QtCore import Qt, QMimeData, QPoint, QSize, QRect, QRect
 from PySide6.QtGui import QDrag, QPixmap, QPainter, QFont, QColor, QPen, QIcon
 
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 from ui.pathutil import resource_path
 from ui.screen_create_experiment import table_exists, get_columns_map, resolve_field
 from ui.screen_show_experiment import _ExperimentRequestReadOnlyDialog
 from db.connection import fetch_all, execute, update_trialseries_name
+
+# 5%-Zufalls-Easter-Egg (schlafende Athena-Eule) - 2026-08-27 aus
+# ui/screen_home.py hierher umgezogen (Nutzerwunsch: "da wir nun quasi home
+# 'abgeschossen' haben" - Backlog ist seit 2026-08-26 der eigentliche
+# Post-Login-Landing-Screen, siehe CLAUDE.md), siehe BacklogScreen.showEvent().
+try:
+    from ui.athena_owl import AthenaOwl as _AthenaOwl
+    _ATHENA_AVAILABLE = True
+except ImportError:
+    _ATHENA_AVAILABLE = False
+from db.retest_flags import get_open_retest_flags_by_series, resolve_retest_flags_for_series
 import app_meta  # enthält current_user
 
 
@@ -72,11 +84,14 @@ ROLE_OWNER_COLOUR = Qt.UserRole + 20  # Hex-Farbe, z.B. #3F51B5
 ROLE_HAS_IMAGE = Qt.UserRole + 30
 ROLE_HAS_PDF = Qt.UserRole + 31
 ROLE_HAS_NOTES = Qt.UserRole + 32
+ROLE_HAS_RETEST_FLAG = Qt.UserRole + 33
+ROLE_HAS_REPORT = Qt.UserRole + 34
 ROLE_YEAR = Qt.UserRole + 40  # Jahresgruppe für Archived
 
 _ER_ICON_PIXMAP = None  # cached QPixmap
 _ATTACH_ICON_PIXMAP = None  # cached QPixmap
 _NOTES_ICON_PIXMAP = None  # cached QPixmap
+_REPORT_ICON_PIXMAP = None  # cached QPixmap
 
 
 def _get_attach_icon_pixmap() -> QPixmap | None:
@@ -160,6 +175,122 @@ def _get_notes_icon_pixmap() -> QPixmap | None:
     return None
 
 
+def _get_report_icon_pixmap() -> QPixmap | None:
+    """Lädt das Report-Icon (dasselbe wie der Smart-Chart-Button in Show
+    Experiment) als QPixmap (lazy, gecacht)."""
+    global _REPORT_ICON_PIXMAP
+    if _REPORT_ICON_PIXMAP is not None:
+        return _REPORT_ICON_PIXMAP
+    candidates = [
+        resource_path('assets/images/analytics.png'),
+        resource_path('analytics.png'),
+    ]
+    for p in candidates:
+        try:
+            if p and Path(p).exists():
+                pm = QPixmap(str(p))
+                if not pm.isNull():
+                    _REPORT_ICON_PIXMAP = pm.scaled(18, 18, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    return _REPORT_ICON_PIXMAP
+        except Exception:
+            continue
+    _REPORT_ICON_PIXMAP = None
+    return None
+
+
+def _report_icon_rect(item, card_rect: "QRect") -> "QRect | None":
+    """Berechnet die tatsächliche Position des Report-Icons auf einer
+    Backlog-Karte (siehe CardRowDelegate.paint(), wo es als letztes Icon in
+    der Kette Retest-Badge -> ER -> Attach -> Notes -> Report gezeichnet
+    wird). Läuft dieselbe Reihenfolge/Verschiebung nach, damit Hit-Test
+    (BacklogDnDTable.mousePressEvent()/mouseMoveEvent()) und tatsächliche
+    Zeichenposition immer übereinstimmen, unabhängig davon, welche der
+    anderen Icons für diese Karte aktiv sind. None, wenn kein Report-Icon
+    gezeichnet wird (keine gespeicherten Reports für diese Series)."""
+    if not bool(item.data(ROLE_HAS_REPORT)):
+        return None
+    right_x = card_rect.right() - 10
+    center_y = card_rect.top() + (card_rect.height() // 2)
+
+    if bool(item.data(ROLE_HAS_RETEST_FLAG)):
+        right_x -= 44 + 6
+
+    er_id = item.data(ROLE_ER_ID)
+    if er_id not in (None, "", 0, "0"):
+        pm_er = _get_er_icon_pixmap()
+        if pm_er is not None and not pm_er.isNull():
+            right_x -= pm_er.width() + 6
+
+    has_img = item.data(ROLE_HAS_IMAGE)
+    has_pdf = item.data(ROLE_HAS_PDF)
+    try:
+        has_attach = bool(int(has_img or 0)) or bool(int(has_pdf or 0))
+    except Exception:
+        has_attach = bool(has_img) or bool(has_pdf)
+    if has_attach:
+        pm_attach = _get_attach_icon_pixmap()
+        if pm_attach is not None and not pm_attach.isNull():
+            right_x -= pm_attach.width() + 6
+
+    if bool(item.data(ROLE_HAS_NOTES)):
+        pm_notes = _get_notes_icon_pixmap()
+        if pm_notes is not None and not pm_notes.isNull():
+            right_x -= pm_notes.width() + 6
+
+    pm = _get_report_icon_pixmap()
+    if pm is None or pm.isNull():
+        return None
+    iw, ih = pm.width(), pm.height()
+    ix = right_x - iw
+    iy = center_y - (ih // 2)
+    return QRect(ix, iy, iw, ih)
+
+
+class _ExpandIconButton(QPushButton):
+    """"Show fullscreen" icon button - loads assets/images/expand.png (24x24,
+    white on transparent, same convention as bell.png/notes.png/backlog.png)
+    and draws it centered, with a soft hover highlight behind it. Custom
+    paintEvent (mirrors BellButton in ui/widgets/header.py) instead of
+    setIcon()/setIconSize() so the hover background can be layered under it."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFlat(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("Show fullscreen")
+        self.setFixedSize(26, 26)
+        self.setStyleSheet("QPushButton { background: transparent; border: none; }")
+        self._hovered = False
+        self._icon_pm = QPixmap(resource_path("assets/images/expand.png"))
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        if self._hovered:
+            p.setBrush(QColor(255, 255, 255, 40))
+            p.setPen(Qt.NoPen)
+            p.drawRoundedRect(self.rect(), 4, 4)
+
+        if not self._icon_pm.isNull():
+            icon_size = 18
+            x = (self.width() - icon_size) // 2
+            y = (self.height() - icon_size) // 2
+            p.drawPixmap(x, y, self._icon_pm.scaled(
+                icon_size, icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        p.end()
+
+
 class CardRowDelegate(QStyledItemDelegate):
     """Custom-Delegate der jede Backlog-Zeile als visuell gestaltete Karte rendert.
 
@@ -191,6 +322,8 @@ class CardRowDelegate(QStyledItemDelegate):
         has_img = index.data(ROLE_HAS_IMAGE)
         has_pdf = index.data(ROLE_HAS_PDF)
         has_notes = index.data(ROLE_HAS_NOTES)
+        has_retest = bool(index.data(ROLE_HAS_RETEST_FLAG))
+        has_report = bool(index.data(ROLE_HAS_REPORT))
         has_attach = False
         try:
             has_attach = bool(int(has_img or 0)) or bool(int(has_pdf or 0))
@@ -280,8 +413,27 @@ class CardRowDelegate(QStyledItemDelegate):
         # Icons (right side)
         # - Experiment Request icon
         # - Attachment icon (image and/or pdf) – not clickable, purely visual
+        # - Report icon (clickable, ganz links in dieser Kette gezeichnet -
+        #   siehe BacklogDnDTable._report_icon_rect(), das dieselbe
+        #   Reihenfolge/Verschiebung nachrechnet, damit Hit-Test und
+        #   tatsächliche Position immer übereinstimmen)
         right_x = r.right() - 10
         center_y = r.top() + (r.height() // 2)
+
+        if has_retest:
+            badge_w, badge_h = 44, 16
+            ix = right_x - badge_w
+            iy = center_y - (badge_h // 2)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor("#C1621A"))
+            painter.drawRoundedRect(ix, iy, badge_w, badge_h, 4, 4)
+            badge_font = QFont(option.font)
+            badge_font.setPointSize(max(7, badge_font.pointSize() - 3))
+            badge_font.setBold(True)
+            painter.setFont(badge_font)
+            painter.setPen(QColor("#FFFFFF"))
+            painter.drawText(QRect(ix, iy, badge_w, badge_h), Qt.AlignCenter, "RETEST")
+            right_x = ix - 6
 
         er_id = index.data(ROLE_ER_ID)
         if er_id not in (None, "", 0, "0"):
@@ -310,6 +462,16 @@ class CardRowDelegate(QStyledItemDelegate):
             _has_notes = False
         if _has_notes:
             pm = _get_notes_icon_pixmap()
+            if pm is not None and not pm.isNull():
+                iw = pm.width()
+                ih = pm.height()
+                ix = right_x - iw
+                iy = center_y - (ih // 2)
+                painter.drawPixmap(ix, iy, pm)
+                right_x = ix - 6
+
+        if has_report:
+            pm = _get_report_icon_pixmap()
             if pm is not None and not pm.isNull():
                 iw = pm.width()
                 ih = pm.height()
@@ -385,12 +547,22 @@ class BacklogDnDTable(QTableWidget):
                 pos = event.pos()
                 item = self.itemAt(pos)
                 if item is not None:
+                    rect = self.visualItemRect(item)
+                    r = rect.adjusted(6, 4, -6, -4)
+
+                    report_rect = _report_icon_rect(item, r)
+                    if report_rect is not None and report_rect.contains(pos):
+                        series_id = item.data(ROLE_SERIES_ID)
+                        try:
+                            self._screen._open_report_icon_for_series(series_id)
+                        except Exception:
+                            pass
+                        return
+
                     er_id = item.data(ROLE_ER_ID)
                     if er_id not in (None, '', 0, '0'):
                         pm = _get_er_icon_pixmap()
                         if pm is not None and not pm.isNull():
-                            rect = self.visualItemRect(item)
-                            r = rect.adjusted(6, 4, -6, -4)
                             iw = pm.width()
                             ih = pm.height()
                             ix = r.right() - iw - 10
@@ -415,6 +587,13 @@ class BacklogDnDTable(QTableWidget):
             pos = event.pos()
             item = self.itemAt(pos)
             if item is not None:
+                rect_full = self.visualItemRect(item)
+                report_rect = _report_icon_rect(item, rect_full.adjusted(6, 4, -6, -4))
+                if report_rect is not None and report_rect.contains(pos):
+                    if self.cursor().shape() != Qt.PointingHandCursor:
+                        self.setCursor(Qt.PointingHandCursor)
+                    return super().mouseMoveEvent(event)
+
                 er_id = item.data(ROLE_ER_ID)
                 if er_id not in (None, '', 0, '0'):
                     pm = _get_er_icon_pixmap()
@@ -647,9 +826,13 @@ class BacklogDnDTable(QTableWidget):
         can_reassign = bool(lvl >= 4)
 
         menu = QMenu(self)
-        act_open_new = menu.addAction("↗  Open in New Window")
+        act_open_new = menu.addAction("↗  Open in New Tab")
         act_open_new.setEnabled(
             callable(getattr(getattr(self, "_screen", None), "on_open_in_new_window", None))
+        )
+        act_open_new_window = menu.addAction("🗗  Open in New Window")
+        act_open_new_window.setEnabled(
+            callable(getattr(getattr(self, "_screen", None), "on_open_in_new_os_window", None))
         )
         menu.addSeparator()
         act_prio = menu.addAction("Change priority…")
@@ -670,6 +853,16 @@ class BacklogDnDTable(QTableWidget):
             exp_id    = (it.data(ROLE_EXP_ID) or "").strip()
             scr       = getattr(self, "_screen", None)
             cb        = getattr(scr, "on_open_in_new_window", None)
+            if callable(cb) and series_id and exp_id:
+                try:
+                    cb(int(exp_pk), int(series_id), exp_id)
+                except Exception:
+                    pass
+        elif chosen == act_open_new_window:
+            exp_pk    = it.data(ROLE_EXP_PK)
+            exp_id    = (it.data(ROLE_EXP_ID) or "").strip()
+            scr       = getattr(self, "_screen", None)
+            cb        = getattr(scr, "on_open_in_new_os_window", None)
             if callable(cb) and series_id and exp_id:
                 try:
                     cb(int(exp_pk), int(series_id), exp_id)
@@ -958,7 +1151,11 @@ class BacklogDnDTable(QTableWidget):
 
         # ── Alle verfügbaren Garne laden ──────────────────────────────────
         try:
-            all_yarns = fetch_all("SELECT ID, Name FROM tblYarn ORDER BY Name", [])
+            # Halbfabrikat-"Schatten"-Garne (Multimaschinen-Ply-Verknüpfung)
+            # sollen hier nicht als Reassign-Ziel auftauchen.
+            src_col = resolve_field(['SourceTrialID'], get_columns_map('tblYarn'))
+            where = f" WHERE [{src_col}] IS NULL" if src_col else ""
+            all_yarns = fetch_all(f"SELECT ID, Name FROM tblYarn{where} ORDER BY Name", [])
         except Exception:
             all_yarns = []
 
@@ -1516,18 +1713,27 @@ class _ArchivedSeriesRow(QFrame):
             self._on_open(self._series_id, self._exp_pk, self._exp_id)
 
     def contextMenuEvent(self, event):
-        """Rechtsklick: 'Open in New Window' anbieten."""
+        """Rechtsklick: 'Open in New Tab'/'Open in New Window' anbieten."""
         from PySide6.QtWidgets import QMenu as _QMenu
         cb = getattr(getattr(self, "_screen", None), "on_open_in_new_window", None)
+        cb_os_window = getattr(getattr(self, "_screen", None), "on_open_in_new_os_window", None)
         menu = _QMenu(self)
-        act_open_new = menu.addAction("↗  Open in New Window")
+        act_open_new = menu.addAction("↗  Open in New Tab")
         act_open_new.setEnabled(callable(cb) and bool(self._series_id) and bool(self._exp_id))
+        act_open_new_window = menu.addAction("🗗  Open in New Window")
+        act_open_new_window.setEnabled(
+            callable(cb_os_window) and bool(self._series_id) and bool(self._exp_id))
         menu.addSeparator()
         act_open = menu.addAction("Open")
         chosen = menu.exec(event.globalPos())
         if chosen == act_open_new and callable(cb) and self._series_id and self._exp_id:
             try:
                 cb(int(self._exp_pk), int(self._series_id), self._exp_id)
+            except Exception:
+                pass
+        elif chosen == act_open_new_window and callable(cb_os_window) and self._series_id and self._exp_id:
+            try:
+                cb_os_window(int(self._exp_pk), int(self._series_id), self._exp_id)
             except Exception:
                 pass
         elif chosen == act_open:
@@ -1863,11 +2069,89 @@ class BacklogScreen(QWidget):
     """
     """Backlog-Screen mit fünf Spalten: Backlog, In Progress, Done, To Be Cleaned, Archived."""
 
-    def __init__(self, on_back_home=None, on_open_experiment=None, current_user_id=None, on_open_in_new_window=None):
+    def __init__(self, on_back_home=None, on_open_experiment=None, current_user_id=None, on_open_in_new_window=None,
+                 # Sidebar-Navigation (siehe ui/widgets/sidebar_nav.py) - dieselben
+                 # Callbacks wie HomeScreen bekommt, da Backlog seit 2026-08-26 der
+                 # Post-Login-Landing-Screen ist und daher dieselbe volle
+                 # Navigation braucht (Nutzerwunsch, siehe CLAUDE.md). Anders als
+                 # HomeScreen (pro Login neu gebaut) existiert BacklogScreen schon
+                 # VOR dem Login (main.py::MainWindow.__init__) - access_level ist
+                 # zum Konstruktionszeitpunkt daher noch nicht bekannt; die Sidebar
+                 # wird deshalb lazy in showEvent() (neu) aufgebaut, siehe dort.
+                 admin_box=False,
+                 on_all_experiments=None, on_create_experiment=None, on_create_experiment_legacy=None,
+                 on_add_series=None, on_add_lab_machines=None, on_open_experiment_request=None,
+                 on_create_experiment_request=None, on_open_my_requests=None,
+                 on_preview_requests=None, on_preview_open_requests=None,
+                 on_image_compare=None, on_canvas=None, on_nozzle_calculator=None, on_air_supply=None,
+                 on_requirement_hub=None, on_smartchart=None, on_yarn_stock=None, on_label_generator=None,
+                 on_tdms_inspector=None,
+                 on_add_jet=None, on_add_top_plate=None, on_add_yarn=None,
+                 on_manage_order_type=None, on_manage_product_groups=None, on_manage_material=None,
+                 on_add_user=None, on_usage_stats=None, on_statistics=None, on_offline_sync=None,
+                 on_lab_assistant=None,
+                 # Log-Out-Callback für die Sidebar-Account-Gruppe (Ersatz für
+                 # den früheren Header-Log-Out-Button, der nur auf Home
+                 # existierte - siehe screen_home.py::_build_ui()-Docstring).
+                 on_logout=None,
+                 # Ctrl+Klick "in neuem Tab öffnen" (siehe ui/widgets/tab_container.py)
+                 open_in_new_tab=None,
+                 # Rechtsklick "Open in New Window" (2026-08-27, Nutzerwunsch:
+                 # Ctrl-Logik bleibt unangetastet und öffnet weiterhin einen
+                 # Tab - dieser separate Menüpunkt öffnet stattdessen ein
+                 # echtes, eigenständiges OS-Fenster, siehe
+                 # main.py::open_experiment_in_new_window()).
+                 on_open_in_new_os_window=None,
+                 # Report-Symbol auf den Kanban-Karten (2026-08-27,
+                 # Nutzerwunsch) - öffnet den Smart-Chart-Report-Screen
+                 # direkt (mit Auswahl-Dialog bei mehreren Reports zur
+                 # selben TrialSeries), siehe
+                 # _open_report_icon_for_series()/ui/widgets/report_picker.py.
+                 on_open_report=None):
         super().__init__()
         self.on_back_home = on_back_home
         self.on_open_experiment = on_open_experiment
         self.on_open_in_new_window = on_open_in_new_window
+        self.on_open_in_new_os_window = on_open_in_new_os_window
+        self.on_open_report = on_open_report
+        self._series_report_map: dict = {}
+
+        self._admin_box = bool(admin_box)
+        self._sidebar_nav_callbacks = dict(
+            on_all_experiments=on_all_experiments,
+            on_create_experiment=on_create_experiment,
+            on_create_experiment_legacy=on_create_experiment_legacy,
+            on_add_series=on_add_series,
+            on_add_lab_machines=on_add_lab_machines,
+            on_open_experiment_request=on_open_experiment_request,
+            on_create_experiment_request=on_create_experiment_request,
+            on_open_my_requests=on_open_my_requests,
+            on_preview_requests=on_preview_requests,
+            on_preview_open_requests=on_preview_open_requests,
+            on_image_compare=on_image_compare,
+            on_canvas=on_canvas,
+            on_nozzle_calculator=on_nozzle_calculator,
+            on_air_supply=on_air_supply,
+            on_requirement_hub=on_requirement_hub,
+            on_smartchart=on_smartchart,
+            on_yarn_stock=on_yarn_stock,
+            on_label_generator=on_label_generator,
+            on_tdms_inspector=on_tdms_inspector,
+            on_add_jet=on_add_jet,
+            on_add_top_plate=on_add_top_plate,
+            on_add_yarn=on_add_yarn,
+            on_manage_order_type=on_manage_order_type,
+            on_manage_product_groups=on_manage_product_groups,
+            on_manage_material=on_manage_material,
+            on_add_user=on_add_user,
+            on_usage_stats=on_usage_stats,
+            on_statistics=on_statistics,
+            on_offline_sync=on_offline_sync,
+            on_lab_assistant=on_lab_assistant,
+            on_logout=on_logout,
+            open_in_new_tab=open_in_new_tab,
+        )
+        self._sidebar_built_for_level = None
 
         # AccessLevel global aus app_meta.current_user lesen
         try:
@@ -1901,10 +2185,51 @@ class BacklogScreen(QWidget):
         """Lädt den Backlog bei jedem Öffnen neu (damit Status-Änderungen sichtbar sind)."""
         """Wird aufgerufen, wenn der Screen angezeigt wird – Backlog immer neu laden."""
         try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        try:
             self.reload_all()
         except Exception:
             pass
+
+        # 5% Chance: Athena schläft still im rechten unteren Eck (siehe
+        # Moduldocstring-Kommentar bei _AthenaOwl-Import).
+        try:
+            import random as _random
+            if _ATHENA_AVAILABLE and _random.random() < 0.05:
+                self._spawn_sleeping_athena()
+        except Exception:
+            pass
+
         super().showEvent(event)
+
+    def _spawn_sleeping_athena(self):
+        """5%-Easter-Egg: still schlafende Athena unten rechts."""
+        if not _ATHENA_AVAILABLE:
+            return
+        try:
+            if getattr(self, "_backlog_athena", None) is not None:
+                return
+            self._backlog_athena = _AthenaOwl(self)
+            self._backlog_athena.place_sleeping()
+            self._backlog_athena.raise_()
+            self._backlog_athena.show()
+        except Exception:
+            pass
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat (z.B. Logout + Login als anderer
+        Nutzer - BacklogScreen existiert schon vor dem ersten Login, daher ist
+        der Level beim allerersten _build_ui()-Aufruf noch nicht bekannt,
+        siehe __init__). Aktualisiert sonst nur die Badges. Rumpf in
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar() ausgelagert
+        (2026-08-27, App-weiter Sidebar-Rollout) - geteilt mit jedem anderen
+        Sidebar-Screen; `hide_self_link="backlog"` unterdrückt den eigenen
+        "Backlog"-Sprungziel-Eintrag (kein Sprungziel auf sich selbst)."""
+        sidebar_nav.refresh_lazy_sidebar(
+            self, self._effective_access_level(), hide_self_link="backlog")
 
     # -------------------------------------------------
     # RECHTE
@@ -2001,16 +2326,34 @@ class BacklogScreen(QWidget):
         except Exception as e:
             QMessageBox.critical(self, 'Error', str(e))
 
+    def _open_report_icon_for_series(self, series_pk) -> None:
+        """Klick auf das Report-Icon einer Karte: bei genau einem
+        gespeicherten Report direkt öffnen, bei mehreren einen kleinen
+        Auswahl-Dialog zeigen (siehe ui/widgets/report_picker.py) - gleiche
+        Logik wie in screen_all_experiments.py."""
+        if not series_pk or not callable(self.on_open_report):
+            return
+        from ui.widgets.report_picker import choose_report_for_series
+        report_id = choose_report_for_series(self, series_pk)
+        if report_id is not None:
+            self.on_open_report(series_pk, report_id)
+
     # -------------------------------------------------
     # UI
     # -------------------------------------------------
     def _build_ui(self):
+        # Keine TopBar (HeaderBar) mehr (2026-08-26, siehe screen_home.py::
+        # _build_ui()-Docstring für die volle Begründung) - Glocke/Suche/
+        # Accent-Farbe/Log Out sitzen jetzt in der Sidebar-Account-Gruppe.
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        header = HeaderBar(title="Backlog", show_home=True)
-        header.connect_home(self._go_home)
-        root.addWidget(header)
+        # Sidebar-Navigation (siehe ui/widgets/sidebar.py + sidebar_nav.py,
+        # geteilt mit allen anderen Screens) - Inhalt bleibt hier leer, wird
+        # lazy beim ersten showEvent() befüllt (access_level ist zum
+        # Zeitpunkt dieses Konstruktoraufrufs noch nicht bekannt, siehe
+        # __init__-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         center = QFrame()
         c_lay = QVBoxLayout(center)
@@ -2056,12 +2399,17 @@ class BacklogScreen(QWidget):
         ah_lbl = QLabel("Archived")
         ah_lbl.setStyleSheet("color:white;font-weight:bold;font-size:14px;")
         ah_lay.addWidget(ah_lbl)
+        ah_lay.addStretch()
+        btn_archived_expand = self._expand_button()
+        ah_lay.addWidget(btn_archived_expand)
         ac_lay.addWidget(archived_head)
 
         self._archived_panel = ArchivedPanel(
             on_open_experiment=self._open_experiment_from_archived,
             screen=self)
         ac_lay.addWidget(self._archived_panel, 1)
+        btn_archived_expand.clicked.connect(
+            lambda: self._expand_card("Archived", self._archived_panel, ac_lay))
 
         right_col.addWidget(archived_card, 1)
         row2.addLayout(right_col, 1)
@@ -2077,7 +2425,40 @@ class BacklogScreen(QWidget):
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(center)
 
-        root.addWidget(scroll, 1)
+        # ── Expanded-card view ──────────────────────────────────────────
+        # Shown instead of the 5-column board when a card's fullscreen icon
+        # is clicked (see _expand_card()/_collapse_card()). Deliberately NOT
+        # a separate popup window - reuses this same window, so the header
+        # (title/Home button) and footer stay visible; only the center
+        # content swaps, with just a Close button to go back to the board.
+        self._expanded_view = QWidget()
+        exp_lay = QVBoxLayout(self._expanded_view)
+        exp_lay.setContentsMargins(24, 20, 24, 20)
+        exp_lay.setSpacing(12)
+
+        exp_top_row = QHBoxLayout()
+        self._expanded_title_lbl = QLabel("")
+        self._expanded_title_lbl.setStyleSheet("font-weight:bold;font-size:18px;")
+        exp_top_row.addWidget(self._expanded_title_lbl)
+        exp_top_row.addStretch()
+        btn_close_expanded = QPushButton("Close")
+        btn_close_expanded.clicked.connect(self._collapse_card)
+        exp_top_row.addWidget(btn_close_expanded)
+        exp_lay.addLayout(exp_top_row)
+
+        self._expanded_body_layout = QVBoxLayout()
+        self._expanded_body_layout.setContentsMargins(0, 0, 0, 0)
+        exp_lay.addLayout(self._expanded_body_layout, 1)
+
+        self._expand_source_widget = None
+        self._expand_source_layout = None
+
+        self._card_stack = QStackedWidget()
+        self._card_stack.addWidget(scroll)              # index 0: normal board
+        self._card_stack.addWidget(self._expanded_view)  # index 1: expanded card
+        self._card_stack.setCurrentIndex(0)
+
+        content_layout.addWidget(self._card_stack, 1)
         root.addWidget(FooterBar())
 
     def _open_experiment_request_popup_from_id(self, request_id):
@@ -2113,6 +2494,9 @@ class BacklogScreen(QWidget):
         lbl = QLabel(title)
         lbl.setStyleSheet("color:white;font-weight:bold;font-size:14px;")
         h_l.addWidget(lbl)
+        h_l.addStretch()
+        btn_expand = self._expand_button()
+        h_l.addWidget(btn_expand)
         layout.addWidget(head)
 
         body = QFrame()
@@ -2125,7 +2509,42 @@ class BacklogScreen(QWidget):
         b_l.addWidget(table)
         layout.addWidget(body)
 
+        btn_expand.clicked.connect(lambda: self._expand_card(title, table, b_l))
+
         return {"card": card, "table": table}
+
+    def _expand_button(self) -> QPushButton:
+        """Small, plain icon button added to every card header - opens that
+        card's table/panel fullscreen (see _expand_card()). Useful at lower
+        resolutions where e.g. the stacked Archived card gets very cramped."""
+        return _ExpandIconButton()
+
+    def _expand_card(self, title: str, body_widget, layout):
+        """Swaps the center content to show `body_widget` (a card's table or
+        panel) filling the whole window, instead of the 5-column board.
+
+        Moves the actual live widget into the expanded view rather than
+        duplicating it, so drag-and-drop, search fields, selections etc.
+        keep working unchanged - no separate synced copy to keep in sync.
+        Deliberately reuses this same window (see _build_ui) instead of a
+        popup dialog, so the header/footer stay visible and there's no
+        separate window to size/position.
+        """
+        self._expand_source_widget = body_widget
+        self._expand_source_layout = layout
+        self._expanded_title_lbl.setText(title)
+        self._expanded_body_layout.addWidget(body_widget, 1)
+        self._card_stack.setCurrentIndex(1)
+
+    def _collapse_card(self):
+        """Reverses _expand_card(): moves the widget back to its original
+        card and shows the normal 5-column board again."""
+        if self._expand_source_widget is not None and self._expand_source_layout is not None:
+            self._expand_source_layout.addWidget(self._expand_source_widget, 1)
+            self._expand_source_widget.setVisible(True)
+        self._expand_source_widget = None
+        self._expand_source_layout = None
+        self._card_stack.setCurrentIndex(0)
 
     def _create_table(self, status_id: int):
         tbl = BacklogDnDTable(self, status_id)
@@ -2145,6 +2564,21 @@ class BacklogScreen(QWidget):
     # -------------------------------------------------
     def reload_all(self):
         """Lädt alle fünf Status-Boxen neu."""
+        try:
+            self._retest_flags_map = get_open_retest_flags_by_series()
+        except Exception:
+            self._retest_flags_map = {}
+        # Bulk-Lookup: welche TrialSeries haben gespeicherte Smart-Chart-
+        # Reports (Report-Icon auf den Karten, 2026-08-27) - eine Abfrage
+        # statt einer pro Karte, gleiches Muster wie _retest_flags_map.
+        try:
+            _report_rows = fetch_all(
+                "SELECT SeriesPK, COUNT(*) AS n FROM tblSmartChartReport "
+                "WHERE IsTemplate=0 AND SeriesPK IS NOT NULL GROUP BY SeriesPK"
+            )
+            self._series_report_map = {int(r["SeriesPK"]): int(r["n"]) for r in _report_rows}
+        except Exception:
+            self._series_report_map = {}
         self._load_status_into(self.tbl_backlog["table"], 1)
         self._load_status_into(self.tbl_inprogress["table"], 2)
         self._load_status_into(self.tbl_done["table"], 3)
@@ -2316,7 +2750,19 @@ class BacklogScreen(QWidget):
             item.setData(ROLE_HAS_IMAGE, row.get("HasImage", 0) or 0)
             item.setData(ROLE_HAS_PDF, row.get("HasPDF", 0) or 0)
             item.setData(ROLE_HAS_NOTES, row.get("HasNotes", 0) or 0)
+            has_report = bool(getattr(self, "_series_report_map", {}).get(int(series_id))) if series_id else False
+            item.setData(ROLE_HAS_REPORT, has_report)
 
+            open_flags = getattr(self, "_retest_flags_map", {}).get(int(series_id), []) if series_id else []
+            if open_flags:
+                item.setData(ROLE_HAS_RETEST_FLAG, True)
+                labels = []
+                for f in open_flags:
+                    vno = f.get("Versuchsnummer")
+                    v_label = f"V{vno}" if vno not in (None, "") else "?"
+                    labels.append(f"{v_label} · {f.get('LabSource') or ''}"
+                                  + (f" — {f.get('Note')}" if f.get("Note") else ""))
+                item.setToolTip("Open retest flag:\n" + "\n".join(labels))
 
             item.setData(ROLE_EXP_PK, row.get("ExperimentPK"))
             # Owner-Farbe: nur ausserhalb Backlog anzeigen
@@ -2467,8 +2913,12 @@ class BacklogScreen(QWidget):
                 )
                 return
 
-        # Done (3) → To Be Cleaned (4): nur Superuser
-        if new_status_id == 4 and old_status_id == 3 and not is_super:
+        # -> To Be Cleaned (4): always superuser-only, regardless of the old status.
+        # Important for retest flags (db/retest_flags.py): a flagged series lands
+        # in "Backlog" (1); the old rule only checked old==3 here and let a direct
+        # jump 1 -> 4 slip through under the "Backlog" exception above - exactly
+        # the checkpoint where open flags get resolved must stay superuser-exclusive.
+        if new_status_id == 4 and old_status_id != 4 and not is_super:
             QMessageBox.warning(
                 self,
                 "No permission",
@@ -2498,6 +2948,15 @@ class BacklogScreen(QWidget):
 
         self._update_backlog_status(
             series_id, new_status_id, old_status_id, user_id, new_machine_id)
+
+        if new_status_id == 4:
+            # "To Be Cleaned" is already superuser-exclusive (see check above) -
+            # this step counts as sign-off on any open retest flags of this series.
+            try:
+                resolve_retest_flags_for_series(series_id, user_id)
+            except Exception:
+                pass
+
         self.reload_all()
 
     def _series_has_joker_machine(self, series_id) -> bool:
@@ -2578,11 +3037,31 @@ class BacklogScreen(QWidget):
 
         execute(sql, params)
 
-        # Notifications erstellen wenn Status → Archived (ID 5)
-        if new_status == 5 and old_status != 5:
+        # Timestamp-Fallback beim Erreichen von "Done": tblTrial.Timestamp wird
+        # eigentlich beim Editieren des jeweils letzten Tension-Feldes gestempelt
+        # (siehe screen_show_experiment.py::_save_all(), YarnTensionAfterJet/
+        # W3Tension) - Trials, bei denen das nie passiert ist, bleiben sonst
+        # dauerhaft NULL und fallen aus jeder zeitbasierten Auswertung (Stats
+        # Suite etc.) heraus. Nur NULL-Zeilen heilen, ein bereits gesetzter
+        # (echter) Tension-Timestamp wird nie überschrieben. (2026-08-20,
+        # explizite Nutzeranfrage)
+        if new_status == 3 and old_status != 3:
             try:
-                from ui.notifications import create_archived_notifications
-                n = create_archived_notifications(
+                execute(
+                    "UPDATE tblTrial SET [Timestamp] = NOW() "
+                    "WHERE [TrialSeriesID] = ? AND [Timestamp] IS NULL;",
+                    [series_id],
+                )
+            except Exception as e:
+                import traceback
+                print(f"[Timestamp-Fallback] Fehler fuer series_id={series_id}: {e}")
+                traceback.print_exc()
+
+        # Notifications erstellen wenn Status → Done (ID 3)
+        if new_status == 3 and old_status != 3:
+            try:
+                from ui.notifications import create_done_notifications
+                n = create_done_notifications(
                     series_id=series_id,
                     sender_user_id=user_id,
                 )

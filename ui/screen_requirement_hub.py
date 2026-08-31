@@ -18,20 +18,40 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap, QIcon
 
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 import app_meta
 
 
 class RequirementHubScreen(QWidget):
     def __init__(self,
                  on_back_home=None,
-                 on_quick_scan=None):
+                 on_quick_scan=None,
+                 sidebar_callbacks=None):
         super().__init__()
         self._on_back_home  = on_back_home
         self._on_quick_scan = on_quick_scan
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         self._build_ui()
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
     # ------------------------------------------------------------------
     # Helpers (analog screen_home.py)
@@ -124,14 +144,9 @@ class RequirementHubScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header
-        header = HeaderBar(
-            title="Requirement Hub",
-            show_home=True,
-        )
-        if callable(self._on_back_home):
-            header.connect_home(self._on_back_home)
-        root.addWidget(header)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # Scrollbarer Center-Bereich
         center = QFrame()
@@ -143,5 +158,5 @@ class RequirementHubScreen(QWidget):
         center_layout.addWidget(req_card, 0, Qt.AlignHCenter | Qt.AlignTop)
         center_layout.addStretch()
 
-        root.addWidget(center, 1)
+        content_layout.addWidget(center, 1)
         root.addWidget(FooterBar())

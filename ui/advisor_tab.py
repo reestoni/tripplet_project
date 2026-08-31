@@ -300,7 +300,8 @@ def _save_advisor_report(self, is_new: bool) -> None:
     try:
         # Lazy import (vermeidet Zirkularimport, screen_show_experiment
         # importiert dieses Modul selbst) - dieselben DB-Wrapper wie vorher.
-        from ui.screen_show_experiment import table_exists, fetch_all, execute_non_query
+        from ui.screen_show_experiment import table_exists, execute_non_query
+        from db.connection import execute_insert
         if not table_exists("tblAdvisorReport"):
             return
         now = datetime.datetime.now()
@@ -312,14 +313,12 @@ def _save_advisor_report(self, is_new: bool) -> None:
             user_id = None
 
         if is_new or not getattr(self, "_advisor_current_report_id", None):
-            execute_non_query(
+            self._advisor_current_report_id = execute_insert(
                 "INSERT INTO [tblAdvisorReport] "
                 "([TrialSeriesID],[UserID],[CreatedAt],[UpdatedAt],[ReportMarkdown],[GlobalID]) "
                 "VALUES (?,?,?,?,?,?)",
                 [self._series_pk, user_id, now, now, self._advisor_output_md, new_global_id()],
             )
-            rows = fetch_all("SELECT @@IDENTITY AS NewID", [])
-            self._advisor_current_report_id = int(rows[0]["NewID"]) if rows else None
         else:
             execute_non_query(
                 "UPDATE [tblAdvisorReport] SET [ReportMarkdown] = ?, [UpdatedAt] = ? WHERE [ID] = ?",

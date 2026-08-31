@@ -34,19 +34,19 @@ from PySide6.QtCore import (
     QPoint, QPointF, QRectF, Qt, Signal, QTimer, QObject, QRunnable, QThreadPool,
 )
 from PySide6.QtGui import (
-    QColor, QFont, QGuiApplication, QPainter, QPen, QPixmap,
+    QColor, QFont, QFontMetrics, QGuiApplication, QPainter, QPen, QPixmap,
 )
 from PySide6.QtWidgets import (
-    QColorDialog, QFileDialog, QFrame, QGraphicsItem, QGraphicsObject,
+    QColorDialog, QDialog, QFileDialog, QFrame, QGraphicsItem, QGraphicsObject,
     QGraphicsScene, QGraphicsView, QHBoxLayout,
-    QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton, QScrollArea,
+    QInputDialog, QLabel, QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
     QSizePolicy, QSpinBox, QSplitter, QVBoxLayout, QWidget,
     QTreeWidget, QTreeWidgetItem
 )
 
 from db.connection import get_connection
 from ui.widgets.footer import FooterBar
-from ui.widgets.header import HeaderBar
+from ui.widgets import sidebar_nav
 
 # ---------------------------------------------------------------------------
 # VK4 file support (Keyence laser profilometer)
@@ -614,6 +614,30 @@ class Annotation:
     size:   int = 2
 
 
+def _get_multiline_text(parent, title: str, label: str) -> Tuple[str, bool]:
+    """QInputDialog.getMultiLineText(), but with the input field's colors
+    forced explicitly instead of relying purely on the app-wide stylesheet.
+
+    Reported bug: the built-in dialog's QPlainTextEdit rendered as (nearly)
+    unreadable dark-on-dark for the user despite theme.py's app-wide
+    QPlainTextEdit/QTextEdit QSS rule resolving correctly to white/dark in
+    a direct palette check here - some Windows/Qt combination apparently
+    doesn't fully propagate that app-wide rule to this specific widget.
+    Setting the stylesheet directly on the instance sidesteps that, since a
+    widget's own stylesheet always wins over an inherited one. Same helper
+    duplicated in screen_image_compare.py (no shared canvas-utils module).
+    """
+    dlg = QInputDialog(parent)
+    dlg.setInputMode(QInputDialog.TextInput)
+    dlg.setOption(QInputDialog.UsePlainTextEditForTextInput, True)
+    dlg.setWindowTitle(title)
+    dlg.setLabelText(label)
+    for edit in dlg.findChildren(QPlainTextEdit):
+        edit.setStyleSheet("QPlainTextEdit { background-color: #ffffff; color: #2b2b2b; }")
+    ok = dlg.exec() == QDialog.Accepted
+    return dlg.textValue(), ok
+
+
 def _fetch_series_groups() -> List[Dict]:
     """Lädt alle Serien mit Bildern oder PDFs aus der DB."""
     """Holt Serien die Bilder ODER PDFs enthalten, mit has_images/has_pdfs Flags."""
@@ -1024,7 +1048,10 @@ class AnnotationLayer(QGraphicsItem):
         elif anno.tool == TOOL_TEXT and pts:
             p.setPen(color)
             f = QFont(); f.setPointSize(8+pw*2); f.setBold(True); p.setFont(f)
-            p.drawText(pts[0], anno.text)
+            fm = p.fontMetrics()
+            x, y = pts[0].x(), pts[0].y()
+            for i, line in enumerate(anno.text.split("\n")):
+                p.drawText(QPoint(x, y + i * fm.lineSpacing()), line)
         elif anno.tool == TOOL_MARKER and pts:
             p.setPen(color)
             f = QFont(); f.setPointSize(10+pw*2); f.setBold(True); p.setFont(f)
@@ -1077,6 +1104,22 @@ class AnnotationLayer(QGraphicsItem):
         if len(new) != len(self._annotations):
             self._annotations = new; self.update()
 
+    def _text_bounding_rect(self, anno):
+        """Bounding rect of a (possibly multi-line) TOOL_TEXT annotation,
+        mirroring the font/layout used in _draw() so find_anno_at() covers
+        every line, not just the anchor point - otherwise only line 1 of a
+        multi-line label could be grabbed with the Move tool."""
+        if anno.tool != TOOL_TEXT or not anno.points:
+            return None
+        x0, y0 = anno.points[0]
+        pw = anno.size
+        f = QFont(); f.setPointSize(8 + pw * 2); f.setBold(True)
+        fm = QFontMetrics(f)
+        lines = anno.text.split("\n")
+        width = max((fm.horizontalAdvance(line) for line in lines), default=0)
+        height = (len(lines) - 1) * fm.lineSpacing() + fm.height()
+        return QRectF(x0, y0 - fm.ascent(), width, height)
+
     def find_anno_at(self, pos):
         """Findet die oberste Annotation nahe pos (für Move-Tool)."""
         HIT = float(_ERASER_RADIUS)
@@ -1088,6 +1131,10 @@ class AnnotationLayer(QGraphicsItem):
                 cx = sum(pp.x() for pp in pts)/len(pts)
                 cy = sum(pp.y() for pp in pts)/len(pts)
                 if math.hypot(cx-pos.x(), cy-pos.y()) <= HIT: return anno
+            if anno.tool == TOOL_TEXT:
+                rect = self._text_bounding_rect(anno)
+                if rect is not None and rect.adjusted(-HIT, -HIT, HIT, HIT).contains(pos):
+                    return anno
         return None
 
     def move_anno(self, anno, dx, dy):
@@ -1437,7 +1484,7 @@ class CanvasView(QGraphicsView):
                     self._move_last = sp
                 return
             if self._active_tool == TOOL_TEXT:
-                text, ok = QInputDialog.getText(self, "Text", "Text eingeben:")
+                text, ok = _get_multiline_text(self, "Text", "Text eingeben:")
                 if ok and text.strip():
                     self.push_undo()
                     a = Annotation(TOOL_TEXT, self._active_color,
@@ -2106,22 +2153,24 @@ class CanvasScreen(QWidget):
 
     Enthält _ImageListPanel (links), Toolbar (oben), CanvasView (rechts).
     """
-    def __init__(self, on_back_home=None, parent=None):
+    def __init__(self, on_back_home=None, parent=None, sidebar_callbacks: Optional[dict] = None):
         super().__init__(parent)
         self._on_back_home = on_back_home
         self._active_tool  = TOOL_PAN
         self._active_color = "red"
         self._active_size  = 2
         self._sigs_list    = []
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
         self._build_ui()
 
     def _build_ui(self):
-        """Erstellt Header, Toolbar, Splitter (Liste | Canvas) und Footer."""
+        """Erstellt Sidebar, Toolbar, Splitter (Liste | Canvas) und Footer."""
         root = QVBoxLayout(self)
         root.setContentsMargins(0,0,0,0); root.setSpacing(0)
-        hdr = HeaderBar(title="Canvas", show_home=True)
-        hdr.connect_home(self._go_home)
-        root.addWidget(hdr)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         splitter = QSplitter(Qt.Horizontal); splitter.setHandleWidth(5)
         self._panel = _ImageListPanel()
@@ -2137,10 +2186,10 @@ class CanvasScreen(QWidget):
         splitter.setStretchFactor(0, 0); splitter.setStretchFactor(1, 1)
         splitter.setSizes([260, 900])
 
-        root.addWidget(self._build_toolbar())
+        content_layout.addWidget(self._build_toolbar())
         # VK4-Toolbar aktualisieren wenn Selektion wechselt
         self._scene.selectionChanged.connect(self._update_vk4_toolbar)
-        root.addWidget(splitter, 1)
+        content_layout.addWidget(splitter, 1)
         root.addWidget(FooterBar())
 
     def _sep(self):
@@ -2566,9 +2615,24 @@ class CanvasScreen(QWidget):
         """Navigiert zurück zum Home-Screen."""
         if callable(self._on_back_home): self._on_back_home()
 
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
     def showEvent(self, ev):
         """Lädt die Bildliste beim ersten Öffnen des Screens."""
         super().showEvent(ev)
         try:
             QTimer.singleShot(150, self._panel.load_images)
         except Exception: pass
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass

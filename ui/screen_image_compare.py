@@ -28,17 +28,17 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from PySide6.QtCore import QMimeData, QPoint, QPointF, QRect, Qt, Signal, QTimer, QObject, QRunnable, QThreadPool
-from PySide6.QtGui import QColor, QDrag, QFont, QGuiApplication, QPainter, QPen, QPixmap, QTransform
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, Qt, Signal, QTimer, QObject, QRunnable, QThreadPool
+from PySide6.QtGui import QColor, QDrag, QFont, QGuiApplication, QPainter, QPen, QPixmap, QPolygonF, QTransform
 from PySide6.QtWidgets import (
-    QFileDialog, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
-    QMenu, QPushButton, QSizePolicy, QSpinBox, QSplitter, QVBoxLayout,
+    QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+    QMenu, QPlainTextEdit, QPushButton, QSizePolicy, QSpinBox, QSplitter, QVBoxLayout,
     QWidget, QTreeWidget, QTreeWidgetItem,
 )
 
 from db.connection import get_connection
 from ui.widgets.footer import FooterBar
-from ui.widgets.header import HeaderBar
+from ui.widgets import sidebar_nav
 
 
 # ---------------------------------------------------------------------------
@@ -540,6 +540,57 @@ def _fetch_images_for_series(series_id: int) -> List[Dict]:
     return rows
 
 
+def _fetch_aty_radar_for_image(meta: Dict) -> Optional[Dict]:
+    """Resolves a DB image (Garnspiegel wrap-test photo) to the ATY radar
+    scores of the trial it was taken for, if that data exists.
+
+    Chain: OriginalFilename "V<n>..." (same lab convention already gated on
+    in ui/yarnscope/garnspiegel_analysis.py) -> Versuchsnummer -> tblTrial row
+    for that TrialSeriesID -> its saved tblLaborATYoMat row (must have real
+    values, not just a Timestamp - see CLAUDE.md's note on legacy NULL rows)
+    -> aty_core_analysis.compute_radar_scores(). Returns None at any step
+    that doesn't resolve (local file, non-Garnspiegel filename, no matching
+    trial, no saved ATY analysis) - callers should treat that as "nothing to
+    show", not an error.
+    """
+    if not isinstance(meta, dict) or meta.get("_local"):
+        return None
+    series_id = meta.get("TrialSeriesID")
+    if not series_id:
+        return None
+    try:
+        from ui.yarnscope.garnspiegel_analysis import parse_versuchsnummer
+        vno = parse_versuchsnummer(meta.get("OriginalFilename") or "")
+        if vno is None:
+            return None
+        with get_connection() as cn:
+            cur = cn.cursor()
+            cur.execute(
+                "SELECT ID FROM tblTrial WHERE TrialSeriesID = ? AND Versuchsnummer = ?",
+                (series_id, vno),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            trial_id = row[0]
+            cur.execute(
+                "SELECT * FROM tblLaborATYoMat WHERE TrialID = ? AND BulkIndexPct IS NOT NULL "
+                "ORDER BY Timestamp DESC",
+                (trial_id,),
+            )
+            cols = [d[0] for d in (cur.description or [])]
+            data_row = cur.fetchone()
+            if not data_row:
+                return None
+            row_dict = dict(zip(cols, data_row))
+        from ui.yarnscope.aty_core_analysis import from_db_row, compute_radar_scores
+        stats = from_db_row(row_dict)
+        scores = compute_radar_scores(stats)
+        return {"vno": vno, "trial_id": trial_id, "scores": scores}
+    except Exception:
+        return None
+
+
 def _build_full_path(row: Dict) -> str:
     """Baut den vollständigen Dateipfad aus einem Bild-Dict (RelativePath + StoredFilename)."""
     if row.get("_local"):
@@ -601,6 +652,25 @@ class _PixmapLoader(QRunnable):
 
 _pool = QThreadPool.globalInstance()
 _pool.setMaxThreadCount(4)
+
+
+class _RadarLookupSignals(QObject):
+    """Qt-Signale für den asynchronen ATY-Radar-Lookup."""
+    done = Signal(object, object)   # (result_dict|None, request_meta)
+
+
+class _RadarLookupWorker(QRunnable):
+    """Hintergrund-Worker: löst ein Garnspiegel-Bild auf ATY-Radar-Scores auf (DB-Query)."""
+    def __init__(self, meta: dict, request_meta: dict, signals: "_RadarLookupSignals"):
+        super().__init__()
+        self._meta    = meta
+        self._rmeta   = request_meta
+        self._signals = signals
+        self.setAutoDelete(True)
+
+    def run(self):
+        result = _fetch_aty_radar_for_image(self._meta)
+        self._signals.done.emit(result, self._rmeta)
 
 
 class _RenderSignals(QObject):
@@ -1035,6 +1105,29 @@ class _CellSnapshot:
     annotations: List[dict] = field(default_factory=list)
 
 
+def _get_multiline_text(parent, title: str, label: str) -> Tuple[str, bool]:
+    """QInputDialog.getMultiLineText(), but with the input field's colors
+    forced explicitly instead of relying purely on the app-wide stylesheet.
+
+    Reported bug: the built-in dialog's QPlainTextEdit rendered as (nearly)
+    unreadable dark-on-dark for the user despite theme.py's app-wide
+    QPlainTextEdit/QTextEdit QSS rule resolving correctly to white/dark in
+    a direct palette check here - some Windows/Qt combination apparently
+    doesn't fully propagate that app-wide rule to this specific widget.
+    Setting the stylesheet directly on the instance sidesteps that, since a
+    widget's own stylesheet always wins over an inherited one.
+    """
+    dlg = QInputDialog(parent)
+    dlg.setInputMode(QInputDialog.TextInput)
+    dlg.setOption(QInputDialog.UsePlainTextEditForTextInput, True)
+    dlg.setWindowTitle(title)
+    dlg.setLabelText(label)
+    for edit in dlg.findChildren(QPlainTextEdit):
+        edit.setStyleSheet("QPlainTextEdit { background-color: #ffffff; color: #2b2b2b; }")
+    ok = dlg.exec() == QDialog.Accepted
+    return dlg.textValue(), ok
+
+
 # ---------------------------------------------------------------------------
 # Frame cell – with annotation support + per-cell undo stack
 # ---------------------------------------------------------------------------
@@ -1066,6 +1159,27 @@ class _FrameCell(QFrame):
         self._whiteboard:   bool                  = False
         self._load_token:   int                   = 0
         self._vk4_channel:  str                   = ""
+
+        # ATY radar overlay (for Garnspiegel wrap-test photos, see
+        # _fetch_aty_radar_for_image()) - _radar_scores is None until the
+        # background lookup resolves (or confirms there's nothing to show).
+        self._radar_scores: Optional[Dict[str, float]] = None
+        self._radar_vno:    Optional[int]          = None
+        self._radar_visible: bool                  = False
+
+        # Radar panel position/size - deliberately cell-level, not
+        # per-image: once someone drags/resizes it in a given frame, that's
+        # almost always because that frame's layout needs it there (e.g.
+        # bottom-left instead of bottom-right for a side-by-side arrangement),
+        # not a preference tied to that one photo. So this survives
+        # set_image()/set_whiteboard(), and is only reset by _reset_all() /
+        # a fresh cell. _radar_rel holds fractions of the widget size
+        # (0..1) so the panel scales sensibly if the cell itself is resized.
+        self._radar_custom: bool                   = False
+        self._radar_rel:    Dict[str, float]        = {}
+        self._radar_drag_mode:   Optional[str]      = None   # "move" | "resize" | None
+        self._radar_drag_anchor: Optional[QPoint]   = None
+        self._radar_drag_rect0:  Optional[QRect]    = None
 
         # Annotations
         self._annotations:  List[Annotation]      = []
@@ -1183,6 +1297,9 @@ class _FrameCell(QFrame):
         self._undo_stack.clear()
         self._pan_offset  = QPoint(0, 0)
         self._zoom        = 1.0
+        self._radar_scores  = None
+        self._radar_vno     = None
+        self._radar_visible = False
         self.update()
 
     def set_image(self, meta: Optional[Dict]):
@@ -1199,6 +1316,9 @@ class _FrameCell(QFrame):
         self._annotations.clear()
         self._current_anno = None
         self._undo_stack.clear()
+        self._radar_scores  = None
+        self._radar_vno     = None
+        self._radar_visible = False
         if meta:
             path = _build_full_path(meta)
             self._loading = True
@@ -1226,6 +1346,26 @@ class _FrameCell(QFrame):
                 self._sigs = sigs
                 sigs.done.connect(self._on_path_verified)
                 _pool.start(_PixmapLoader(path, request_meta, sigs))
+
+            if not is_doc and not meta.get("_local") and not _is_vk4(path):
+                from ui.yarnscope.garnspiegel_analysis import looks_like_garnspiegel_filename
+                if looks_like_garnspiegel_filename(meta.get("OriginalFilename") or ""):
+                    rsigs2 = _RadarLookupSignals()
+                    self._radar_sigs = rsigs2
+                    rsigs2.done.connect(self._on_radar_lookup_done)
+                    _pool.start(_RadarLookupWorker(meta, request_meta, rsigs2))
+        self.update()
+
+    def _on_radar_lookup_done(self, result: Optional[dict], request_meta: Optional[dict]):
+        """Callback wenn _RadarLookupWorker fertig ist (ATY-Radar-DB-Lookup)."""
+        request_meta = request_meta or {}
+        if request_meta.get("load_token") != self._load_token:
+            return
+        meta = request_meta.get("meta")
+        if meta is not self._meta:
+            return
+        self._radar_scores = (result or {}).get("scores")
+        self._radar_vno    = (result or {}).get("vno")
         self.update()
 
     def _on_render_done(self, pm, err: Optional[str], request_meta: Optional[dict]):
@@ -1332,6 +1472,28 @@ class _FrameCell(QFrame):
             self._annotations = new_list
             self.update()
 
+    def _text_bounding_rect(self, anno: Annotation) -> Optional[QRect]:
+        """Screen-space bounding rect of a (possibly multi-line) TOOL_TEXT
+        annotation, mirroring the font/layout used by _draw_annotation() so
+        hit-testing actually covers every line, not just the anchor point -
+        otherwise only line 1 of a multi-line label could be clicked/dragged."""
+        if anno.tool != TOOL_TEXT or not anno.points:
+            return None
+        from PySide6.QtGui import QFontMetrics
+
+        sp = self._to_screen(*anno.points[0])
+        sx, sy = sp.x(), sp.y()
+        pen_w = getattr(anno, "size", 2)
+        font = QFont()
+        font.setPointSize(8 + pen_w * 2)
+        font.setBold(True)
+        fm = QFontMetrics(font)
+
+        lines = anno.text.split("\n")
+        width = max((fm.horizontalAdvance(line) for line in lines), default=0)
+        height = (len(lines) - 1) * fm.lineSpacing() + fm.height()
+        return QRect(sx, sy - fm.ascent(), width, height)
+
     def _find_anno_at(self, pos: QPoint) -> Optional[Annotation]:
         """Return the topmost annotation within hit radius of pos, or None."""
         import math
@@ -1350,6 +1512,10 @@ class _FrameCell(QFrame):
                 cx = sum(xs) / len(xs)
                 cy = sum(ys) / len(ys)
                 if math.hypot(cx - pos.x(), cy - pos.y()) <= HIT:
+                    return True
+            if anno.tool == TOOL_TEXT:
+                rect = self._text_bounding_rect(anno)
+                if rect is not None and rect.adjusted(-HIT, -HIT, HIT, HIT).contains(pos):
                     return True
             return False
 
@@ -1451,10 +1617,16 @@ class _FrameCell(QFrame):
             p.setPen(QColor(255, 80, 80))
             p.drawText(QRect(w - 22, 2, 18, 16), Qt.AlignCenter, "\u2715")
 
+            if self._radar_scores is not None:
+                self._draw_radar_toggle_icon(p, w)
+
             # Draw annotations
             all_annos = self._annotations + ([self._current_anno] if self._current_anno else [])
             for anno in all_annos:
                 self._draw_annotation(p, anno)
+
+            if self._radar_visible and self._radar_scores is not None:
+                self._draw_radar_overlay(p, r)
 
         elif self._whiteboard:
             p.fillRect(r, QColor(255, 255, 255))
@@ -1558,7 +1730,10 @@ class _FrameCell(QFrame):
             font.setPointSize(8 + pen_w * 2)
             font.setBold(True)
             p.setFont(font)
-            p.drawText(pts[0], anno.text)
+            fm = p.fontMetrics()
+            x, y = pts[0].x(), pts[0].y()
+            for i, line in enumerate(anno.text.split("\n")):
+                p.drawText(QPoint(x, y + i * fm.lineSpacing()), line)
 
         elif anno.tool == TOOL_MARKER and pts:
             p.setPen(color)
@@ -1567,6 +1742,188 @@ class _FrameCell(QFrame):
             font.setBold(True)
             p.setFont(font)
             p.drawText(pts[0], anno.text)
+
+        p.restore()
+
+    # ---- ATY radar overlay (Garnspiegel photos) ----
+    def _radar_toggle_rect(self, w: int) -> QRect:
+        """Hit-area of the small radar-toggle icon in the top bar, just left
+        of the ✕ close button."""
+        return QRect(w - 46, 2, 20, 16)
+
+    def _pentagon_points(self, cx: float, cy: float, radius: float, frac: float = 1.0) -> List[QPointF]:
+        import math
+        n = 5
+        pts = []
+        for i in range(n):
+            angle = -math.pi / 2 + i * 2 * math.pi / n
+            pts.append(QPointF(cx + radius * frac * math.cos(angle),
+                                cy + radius * frac * math.sin(angle)))
+        return pts
+
+    def _draw_radar_toggle_icon(self, p: QPainter, w: int):
+        """Small pentagon glyph (custom-drawn, not a Unicode char - see
+        CLAUDE.md's Backlog-expand-icon note about glyphs silently rendering
+        blank on some Windows font fallbacks) toggling the radar overlay."""
+        rect = self._radar_toggle_rect(w)
+        active = self._radar_visible
+        color = QColor(self._C_ACTIVE) if active else QColor(180, 180, 180)
+        p.save()
+        p.setRenderHint(QPainter.Antialiasing, True)
+        cx, cy = rect.center().x(), rect.center().y()
+        pts = self._pentagon_points(cx, cy, 6.5)
+        poly = QPolygonF(pts)
+        p.setPen(QPen(color, 1.4))
+        p.setBrush(color if active else Qt.NoBrush)
+        p.drawPolygon(poly)
+        p.restore()
+
+    # ---- radar panel geometry (draggable + resizable) ----
+    _RADAR_MIN_SIZE = 70
+    _RADAR_HANDLE   = 14
+    # One-letter axis codes, same order as aty_core_analysis.RADAR_AXES
+    # (Volume/Frequency/Character/Evenness/Outliers) - used both as the
+    # vertex labels around the pentagon and in the compact "V56:F66:..."
+    # line, since the full names ("Frequency", "Character", ...) don't fit
+    # legibly at the panel sizes this overlay is typically shown at (they
+    # were getting clipped against the panel/cell edge before).
+    _RADAR_CODES = "VFCEO"
+
+    def _radar_default_rect(self, r: QRect) -> QRect:
+        box = min(130, max(90, r.width() // 3), max(90, r.height() // 2))
+        margin = 6
+        return QRect(r.width() - box - margin, r.height() - box - margin, box, box)
+
+    def _radar_panel_rect(self, r: QRect) -> QRect:
+        """Current on-screen rect of the radar panel - either the user's
+        dragged/resized rect (stored as fractions of the cell size in
+        self._radar_rel, so it scales if the cell itself is resized) or the
+        auto bottom-right default."""
+        if not self._radar_custom or not self._radar_rel:
+            return self._radar_default_rect(r)
+        rel = self._radar_rel
+        w = max(self._RADAR_MIN_SIZE, min(int(rel["w"] * r.width()), r.width()))
+        h = max(self._RADAR_MIN_SIZE, min(int(rel["h"] * r.height()), r.height()))
+        x = max(0, min(int(rel["x"] * r.width()), r.width() - w))
+        y = max(0, min(int(rel["y"] * r.height()), r.height() - h))
+        return QRect(x, y, w, h)
+
+    def _radar_handle_rect(self, panel: QRect) -> QRect:
+        """Bottom-right resize grip of the radar panel."""
+        s = self._RADAR_HANDLE
+        return QRect(panel.right() - s, panel.bottom() - s, s, s)
+
+    def _radar_store_rect(self, rect: QRect, r: QRect):
+        """Persists an on-screen radar rect as size-independent fractions."""
+        if r.width() <= 0 or r.height() <= 0:
+            return
+        self._radar_custom = True
+        self._radar_rel = {
+            "x": rect.x() / r.width(),
+            "y": rect.y() / r.height(),
+            "w": rect.width() / r.width(),
+            "h": rect.height() / r.height(),
+        }
+
+    def _draw_radar_overlay(self, p: QPainter, r: QRect):
+        """Small ATY-radar 'fingerprint' (see aty_core_analysis.RADAR_AXES)
+        for the trial the current Garnspiegel photo was taken for. Position
+        and size are draggable/resizable (see mousePressEvent/mouseMoveEvent)
+        - defaults to bottom-right so it doesn't cover the annotation area
+        most people draw in near the top/center."""
+        from ui.yarnscope.aty_core_analysis import RADAR_AXES
+        scores = self._radar_scores or {}
+        panel = self._radar_panel_rect(r)
+        box = min(panel.width(), panel.height())
+
+        p.save()
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setBrush(QColor(0, 0, 0, 175))
+        p.setPen(QPen(QColor(255, 255, 255, 60), 1))
+        p.drawRoundedRect(panel, 6, 6)
+
+        label_pt = max(7, min(12, box // 13))
+        title_pt = max(7, min(13, box // 16))
+        label_half = 9
+
+        # Reserve horizontal strips for the title (top) and the compact
+        # score line (bottom) *before* placing the pentagon, then fit the
+        # pentagon + its label ring into what's left in the middle - this is
+        # what keeps the top ("V") label from overlapping "ATY V001" above
+        # it (previously the pentagon was centered on the whole panel,
+        # ignoring that the title needed room too).
+        title_zone_h = title_pt + 10
+        score_zone_h = label_pt + 12
+        mid_h = panel.height() - title_zone_h - score_zone_h
+
+        cx = float(panel.center().x())
+        cy = float(panel.top() + title_zone_h + mid_h / 2.0)
+        radius = max(11.0, min(
+            (mid_h / 2.0 - label_half) / 1.24,
+            (panel.width() / 2.0 - 4 - label_half) / 1.24,
+        ))
+
+        grid_pen = QPen(QColor(255, 255, 255, 55), 1)
+        p.setPen(grid_pen)
+        p.setBrush(Qt.NoBrush)
+        for frac in (0.5, 1.0):
+            p.drawPolygon(QPolygonF(self._pentagon_points(cx, cy, radius, frac)))
+        for pt in self._pentagon_points(cx, cy, radius, 1.0):
+            p.drawLine(QPointF(cx, cy), pt)
+
+        data_pts = []
+        for i, axis in enumerate(RADAR_AXES):
+            v = scores.get(axis)
+            import math as _math
+            frac = 0.0 if v is None or not _math.isfinite(v) else max(0.0, min(1.0, v / 100.0))
+            data_pts.append(self._pentagon_points(cx, cy, radius, frac)[i])
+        fill = QColor(self._C_ACTIVE); fill.setAlpha(110)
+        p.setBrush(fill)
+        p.setPen(QPen(QColor(self._C_ACTIVE), 2))
+        p.drawPolygon(QPolygonF(data_pts))
+
+        # Vertex labels: single-letter codes (V/F/C/E/O), not the full axis
+        # names - those don't fit legibly at typical panel sizes (were
+        # getting clipped against the panel/cell edge). Position clamped to
+        # stay inside the panel regardless of its (draggable/resizable)
+        # aspect ratio, so a label never runs off the edge, and the radius
+        # above was already sized to keep the ring clear of the title/score
+        # zones so e.g. the top "V" label doesn't collide with "ATY V001".
+        p.setPen(QColor(230, 230, 230))
+        f = QFont(); f.setPointSize(label_pt); f.setBold(True); p.setFont(f)
+        for i, axis in enumerate(RADAR_AXES):
+            lp = self._pentagon_points(cx, cy, radius, 1.24)[i]
+            lx = max(panel.left() + label_half, min(lp.x(), panel.right() - label_half))
+            ly = max(panel.top() + label_half, min(lp.y(), panel.bottom() - label_half))
+            p.drawText(QRect(int(lx - label_half), int(ly - label_half), label_half * 2, label_half * 2),
+                       Qt.AlignCenter, self._RADAR_CODES[i])
+
+        p.setPen(QColor(160, 220, 170))
+        f2 = QFont(); f2.setPointSize(title_pt); f2.setBold(True); p.setFont(f2)
+        title = f"ATY V{self._radar_vno:03d}" if self._radar_vno else "ATY"
+        p.drawText(QRect(panel.x(), panel.y() + 2, panel.width(), 12), Qt.AlignCenter, title)
+
+        # Compact normalized-score line (e.g. "V56:F66:C87:E33:O58") - same
+        # 0-100 scores as the axes themselves, one-letter axis codes matching
+        # RADAR_AXES order (Volume/Frequency/Character/Evenness/Outliers),
+        # mirroring the normalized values shown next to the radar in
+        # ShowExperimentScreen's ATY Compare tab (see _aty_render_radar()).
+        import math as _math2
+        compact = ":".join(
+            f"{self._RADAR_CODES[i]}{(f'{scores.get(axis):.0f}' if isinstance(scores.get(axis), (int, float)) and _math2.isfinite(scores.get(axis)) else '-')}"
+            for i, axis in enumerate(RADAR_AXES)
+        )
+        p.setPen(QColor(180, 200, 185))
+        f3 = QFont(); f3.setPointSize(label_pt); p.setFont(f3)
+        p.drawText(QRect(panel.x(), panel.bottom() - label_pt - 12, panel.width(), label_pt + 8),
+                   Qt.AlignCenter, compact)
+
+        # Resize grip (diagonal lines, bottom-right corner - standard OS affordance)
+        handle = self._radar_handle_rect(panel)
+        grip_pen = QPen(QColor(255, 255, 255, 150), 1.3)
+        p.setPen(grip_pen)
+        for off in (3, 7, 11):
+            p.drawLine(handle.right() - off, handle.bottom(), handle.right(), handle.bottom() - off)
 
         p.restore()
 
@@ -1609,6 +1966,31 @@ class _FrameCell(QFrame):
                         self.clear_image()
                     return
 
+            # check radar-toggle icon
+            if self._pixmap and self._radar_scores is not None:
+                if self._radar_toggle_rect(self.rect().width()).contains(ev.pos()):
+                    self._radar_visible = not self._radar_visible
+                    self.update()
+                    return
+
+            # check radar panel drag/resize (takes priority over the active
+            # annotation tool while the panel is showing, same as the ✕ /
+            # toggle-icon checks above - otherwise dragging the panel would
+            # also draw an annotation underneath it)
+            if self._pixmap and self._radar_visible and self._radar_scores is not None:
+                r = self.rect()
+                panel = self._radar_panel_rect(r)
+                if self._radar_handle_rect(panel).contains(ev.pos()):
+                    self._radar_drag_mode   = "resize"
+                    self._radar_drag_anchor = ev.pos()
+                    self._radar_drag_rect0  = QRect(panel)
+                    return
+                if panel.contains(ev.pos()):
+                    self._radar_drag_mode   = "move"
+                    self._radar_drag_anchor = ev.pos()
+                    self._radar_drag_rect0  = QRect(panel)
+                    return
+
             self.clicked.emit(self._index)
 
             if self.active_tool == TOOL_PAN:
@@ -1617,7 +1999,7 @@ class _FrameCell(QFrame):
                 self._pan_snap   = QPoint(self._pan_offset)
 
             elif self.active_tool == TOOL_TEXT:
-                text, ok = QInputDialog.getText(self, "Annotation", "Text:")
+                text, ok = _get_multiline_text(self, "Annotation", "Text:")
                 if ok and text.strip():
                     self.push_undo()
                     rx, ry = self._to_rel(ev.pos())
@@ -1668,6 +2050,34 @@ class _FrameCell(QFrame):
         super().mousePressEvent(ev)
 
     def mouseMoveEvent(self, ev):
+        if self._radar_drag_mode and (ev.buttons() & Qt.LeftButton):
+            r = self.rect()
+            delta = ev.pos() - self._radar_drag_anchor
+            rect0 = self._radar_drag_rect0
+            if self._radar_drag_mode == "resize":
+                w = max(self._RADAR_MIN_SIZE, min(rect0.width() + delta.x(), r.width() - rect0.x()))
+                h = max(self._RADAR_MIN_SIZE, min(rect0.height() + delta.y(), r.height() - rect0.y()))
+                new_rect = QRect(rect0.x(), rect0.y(), w, h)
+            else:  # "move"
+                new_rect = QRect(rect0).translated(delta)
+                x = max(0, min(new_rect.x(), r.width()  - new_rect.width()))
+                y = max(0, min(new_rect.y(), r.height() - new_rect.height()))
+                new_rect.moveTo(x, y)
+            self._radar_store_rect(new_rect, r)
+            self.update()
+            return
+
+        if not (ev.buttons() & Qt.LeftButton):
+            if self._pixmap and self._radar_visible and self._radar_scores is not None:
+                r = self.rect()
+                panel = self._radar_panel_rect(r)
+                if self._radar_handle_rect(panel).contains(ev.pos()):
+                    self.setCursor(Qt.SizeFDiagCursor)
+                    return
+                if panel.contains(ev.pos()):
+                    self.setCursor(Qt.SizeAllCursor)
+                    return
+
         if self.active_tool == TOOL_MOVE and not (ev.buttons() & Qt.LeftButton):
             hit = self._find_anno_at(ev.pos())
             self.setCursor(Qt.SizeAllCursor if hit else Qt.ArrowCursor)
@@ -1738,6 +2148,9 @@ class _FrameCell(QFrame):
         self._drag_start = None
         self._move_anno  = None
         self._move_start = None
+        self._radar_drag_mode   = None
+        self._radar_drag_anchor = None
+        self._radar_drag_rect0  = None
         super().mouseReleaseEvent(ev)
 
     def mouseDoubleClickEvent(self, ev):
@@ -1783,6 +2196,17 @@ class _FrameCell(QFrame):
     def event(self, ev):
         if ev.type() == ev.Type.Gesture:
             return self._handle_gesture(ev)
+        if ev.type() == QEvent.ToolTip:
+            if (self._pixmap and self._radar_visible and self._radar_scores is not None
+                    and self._radar_panel_rect(self.rect()).contains(ev.pos())):
+                from PySide6.QtWidgets import QToolTip
+                QToolTip.showText(
+                    ev.globalPos(),
+                    "ATY radar (0-100 normalized): V=Volume, F=Frequency, "
+                    "C=Character, E=Evenness, O=Outliers",
+                    self,
+                )
+                return True
         return super().event(ev)
 
     def _handle_gesture(self, ev):
@@ -2013,6 +2437,9 @@ class _CompareGrid(QWidget):
                 "vk4_channel": getattr(cell, "_vk4_channel", ""),
                 "annotations": annos,
                 "undo_stack":  cell._undo_stack_to_list(),
+                "radar_visible": cell._radar_visible,
+                "radar_custom":  cell._radar_custom,
+                "radar_rel":     cell._radar_rel,
             })
         project = {
             "version": 2,
@@ -2075,6 +2502,14 @@ class _CompareGrid(QWidget):
             # Undo-Stack wiederherstellen (version 2; Fallback auf leeren Stack)
             cell._undo_stack_from_list(fd.get("undo_stack", []))
 
+            # ATY-Radar-Panel-Position/-Größe (falls vom Nutzer verschoben/
+            # skaliert) - nach set_image, das setzt radar_custom/rel nicht
+            # zurück (siehe _FrameCell.__init__), nur radar_visible/_scores.
+            cell._radar_custom  = bool(fd.get("radar_custom", False))
+            cell._radar_rel     = dict(fd.get("radar_rel") or {})
+            cell._radar_visible = bool(fd.get("radar_visible", False))
+            cell.update()
+
         return missing
 
     def render_all_to_pixmap(self) -> Optional[QPixmap]:
@@ -2122,25 +2557,27 @@ class ImageCompareScreen(QWidget):
     Enthält Bild-Liste (links), Annotations-Toolbar (oben), Vergleichsraster (rechts)
     und VK4-Kanal-Toggle-Toolbar.
     """
-    def __init__(self, on_back_home=None, parent: QWidget | None = None):
+    def __init__(self, on_back_home=None, parent: QWidget | None = None, sidebar_callbacks: Optional[dict] = None):
         super().__init__(parent)
         self._on_back_home = on_back_home
         self._active_tool  = TOOL_PAN
         self._active_color = "red"
         self._active_size  = 2
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
         self._build_ui()
 
     def _build_ui(self):
-        """Erstellt Header, Toolbar, Splitter (Liste | Grid) und Footer."""
+        """Erstellt Sidebar, Toolbar, Splitter (Liste | Grid) und Footer."""
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="Image Compare", show_home=True)
-        header.connect_home(self._go_home)
-        root.addWidget(header)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
-        root.addWidget(self._build_toolbar())
+        content_layout.addWidget(self._build_toolbar())
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(5)
@@ -2161,7 +2598,7 @@ class ImageCompareScreen(QWidget):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([260, 900])
 
-        root.addWidget(splitter, 1)
+        content_layout.addWidget(splitter, 1)
         root.addWidget(FooterBar())
         self._update_active_label()
 
@@ -2660,11 +3097,26 @@ class ImageCompareScreen(QWidget):
         if callable(self._on_back_home):
             self._on_back_home()
 
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
     def showEvent(self, ev):
         """Lädt die Bildliste beim ersten Öffnen des Screens."""
         super().showEvent(ev)
         try:
             if not self._panel._series_groups:
                 QTimer.singleShot(150, self._panel.load_images)
+        except Exception:
+            pass
+        try:
+            self._refresh_sidebar()
         except Exception:
             pass

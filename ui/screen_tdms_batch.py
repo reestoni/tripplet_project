@@ -56,10 +56,10 @@ from PySide6.QtWidgets import (
 )
 
 from db.connection import fetch_all, execute, get_connection
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 from ui.yarnscope.dty_analysis import analyze_series, full_extract_vals, run_stab_models
-from ui.yarnscope.dty_tdms_reader import read_first_numeric_channel, read_step_mm_from_tdms
+from ui.yarnscope.dty_tdms_reader import read_dty_signal, read_step_mm_from_tdms
 
 import app_meta
 
@@ -668,7 +668,7 @@ class _AnalysisWorker(QRunnable):
         Kein full_extract_vals im Main-Thread → kein UI-Freeze.
         """
         try:
-            y     = read_first_numeric_channel(str(self._path))
+            y     = read_dty_signal(str(self._path))
             dx_mm = read_step_mm_from_tdms(str(self._path))
             if y is None or len(y) == 0:
                 self._signals.finished.emit(self._idx, {}, "Kein Signal im TDMS-File.")
@@ -922,9 +922,12 @@ class TDMSBatchScreen(QWidget):
 
     def __init__(self, on_back_home=None, parent=None,
                  locked_series_id: int = None,
-                 locked_series_name: str = ""):
+                 locked_series_name: str = "",
+                 sidebar_callbacks=None):
         super().__init__(parent)
         self._on_back_home       = on_back_home
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
         self._locked_series_id   = locked_series_id
         self._locked_series_name = locked_series_name
         self._insider_mode       = False
@@ -947,9 +950,9 @@ class TDMSBatchScreen(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0); root.setSpacing(0)
 
-        hdr = HeaderBar(title="YarnScope – Batch-Auswertung", show_home=True)
-        hdr.connect_home(self._go_home)
-        root.addWidget(hdr)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # ── Shortcut Ctrl+Shift+J ─────────────────────────────────────────
         self._shortcut_insider = QShortcut(QKeySequence("Ctrl+Shift+J"), self)
@@ -1097,8 +1100,33 @@ class TDMSBatchScreen(QWidget):
 
         body = QWidget()
         bl = QVBoxLayout(body); bl.setContentsMargins(0,0,0,0)
+
+        # Rückweg zur aufrufenden ShowExperimentScreen-Instanz (2026-08-28,
+        # Nutzer-Bugreport: "beim batchauftrag in yarnscope komm ich nicht
+        # mehr zurück zu show experiment") - ging bis zur TopBar-Abschaffung
+        # (2026-08-27) über den HeaderBar-Home-Button, der hier nie durch
+        # ein Sidebar-Äquivalent ersetzt wurde; `_go_home()`/`_on_back_home`
+        # existierten unverändert weiter, hatten aber kein UI-Gegenstück mehr.
+        # Bewusst ein eigener sichtbarer Button statt eines Sidebar-Eintrags
+        # wie bei ShowExperimentScreen selbst (dort 2026-08-27 entfernt) -
+        # anders als dort führt "zurück" hier zu einer KONKRETEN, bereits
+        # geöffneten ShowExperimentScreen-Instanz mit Zustand (nicht nur
+        # generisch zu "All Experiments"), das braucht eine direkte Aktion.
+        back_row = QHBoxLayout()
+        back_row.setContentsMargins(8, 6, 8, 0)
+        self._btn_back = QPushButton("← Back to Show Experiment")
+        self._btn_back.setFixedHeight(26)
+        self._btn_back.setStyleSheet(
+            "QPushButton{background:#2a2a2a;color:#aaa;border-radius:3px;"
+            "font-size:11px;border:1px solid #444;padding:2px 10px;}"
+            "QPushButton:hover{background:#3a3a3a;color:#eee;}")
+        self._btn_back.clicked.connect(self._go_home)
+        back_row.addWidget(self._btn_back)
+        back_row.addStretch(1)
+        bl.addLayout(back_row)
+
         bl.addWidget(splitter, 1)
-        root.addWidget(body, 1)
+        content_layout.addWidget(body, 1)
         root.addWidget(FooterBar())
 
     # ── Series-Liste ──────────────────────────────────────────────────────
@@ -1391,7 +1419,7 @@ class TDMSBatchScreen(QWidget):
 
             # Analyse + Speichern
             try:
-                y     = read_first_numeric_channel(str(row.tdms_path))
+                y     = read_dty_signal(str(row.tdms_path))
                 dx_mm = read_step_mm_from_tdms(str(row.tdms_path))
                 if y is None or len(y) == 0:
                     raise ValueError("Kein Signal im TDMS-File.")
@@ -1492,6 +1520,20 @@ class TDMSBatchScreen(QWidget):
         if callable(self._on_back_home):
             self._on_back_home()
 
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
     def showEvent(self, ev):
         super().showEvent(ev)
         QTimer.singleShot(100, self._init_series_state)
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass

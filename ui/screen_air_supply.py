@@ -38,8 +38,8 @@ from PySide6.QtWidgets import (
     QTextEdit, QVBoxLayout, QWidget,
 )
 
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 from ui.theme import get_accent, DARK, LIGHT_BG, CARD_BG, TEXT
 
 # ---------------------------------------------------------------------------
@@ -2586,6 +2586,7 @@ class AirSupplyScreen(QWidget):
         jets_loader:  Optional[Callable[[], List[Dict]]] = None,
         username:     str = "",
         parent: Optional[QWidget] = None,
+        sidebar_callbacks: Optional[dict] = None,
     ):
         super().__init__(parent)
         self._on_back_home = on_back_home
@@ -2594,6 +2595,8 @@ class AirSupplyScreen(QWidget):
         self._jets: List[Dict]      = []
         self._jets_by_id: Dict[int,Dict] = {}
         self._undo_stack: List[str] = []   # JSON snapshots, max 10
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         # Multi-tab: each tab has its own graph, canvas, results table
         # _tabs = list of dicts: {graph, canvas, results_tbl, net_id, net_name}
@@ -2613,9 +2616,9 @@ class AirSupplyScreen(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0,0,0,0); root.setSpacing(0)
 
-        hdr = HeaderBar(title="Air Supply Network Calculator", show_home=True)
-        hdr.connect_home(self._go_home)
-        root.addWidget(hdr, 0)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring).
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # Toolbar
         tb = QFrame(); tb.setFixedHeight(42)
@@ -2668,7 +2671,7 @@ class AirSupplyScreen(QWidget):
         self._lbl_net.setStyleSheet("color:#666;font-size:11px;font-style:italic;")
         tl.addWidget(self._lbl_net)
         tl.addWidget(_btn("Recalculate", self._recalculate, accent))
-        root.addWidget(tb, 0)
+        content_layout.addWidget(tb, 0)
 
         # Tab bar for multiple networks
         self._tab_widget = QTabWidget()
@@ -2708,8 +2711,9 @@ class AirSupplyScreen(QWidget):
         tab_splitter.setStretchFactor(0, 1)
         tab_splitter.setStretchFactor(1, 0)
 
-        root.addWidget(tab_splitter, 1)
+        content_layout.addWidget(tab_splitter, 1)
         root.addWidget(FooterBar(), 0)
+
 
     # ── tab management ────────────────────────────────────────────────
     @property
@@ -3070,9 +3074,24 @@ class AirSupplyScreen(QWidget):
     def _go_home(self):
         if callable(self._on_back_home): self._on_back_home()
 
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
     def showEvent(self, event):
         super().showEvent(event)
         self._load_jets()
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------

@@ -20,21 +20,64 @@ Navigationsfluss:
 """
 import sys
 import os
+import datetime
 from typing import List, Dict, Tuple, Optional
+
+# --- Crash-Log: als allererstes installiert, noch vor allen weiteren
+# Imports/Modul-Top-Level-Code, damit auch Fehler beim Import selbst
+# (z.B. fehlendes gebundeltes Modul/Asset in der .exe) sichtbar werden.
+# In der gebauten .exe (console=False) geht sonst jede unbehandelte
+# Exception spurlos verloren - kein Fenster, kein Fehler, nichts.
+def _crash_log_path() -> str:
+    try:
+        base = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base, "crash_log.txt")
+    except Exception:
+        return "crash_log.txt"
+
+
+def _log_crash(exc_type, exc_value, exc_tb) -> None:
+    import traceback
+    try:
+        msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        with open(_crash_log_path(), "a", encoding="utf-8") as f:
+            f.write(f"\n--- {datetime.datetime.now().isoformat()} ---\n")
+            f.write(msg)
+    except Exception:
+        pass
+    try:
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+    except Exception:
+        pass
+
+
+sys.excepthook = _log_crash
+
 from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget, QMessageBox, QVBoxLayout, QWidget, QInputDialog
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 
 # --- DB-Modus wählen (nur im Quellcode-Start, NICHT in der gebauten .exe) ---
 # Muss vor jedem Import passieren, der db.connection lädt (u.a. ui.theme, ui.screen_login).
-# In der gefrorenen .exe (PyInstaller) läuft TrippleT immer im prod-Modus, siehe db/connection.py.
+# In der gefrorenen .exe (PyInstaller) läuft TrippleT immer im prod-Modus, mit
+# einer gezielten Ausnahme für TRIPPLET_MODE=offline (siehe db/connection.py) -
+# ausgelöst über einen separaten Shortcut/Wrapper-Skript für die Superuser,
+# die offline arbeiten dürfen (echte Zugriffskontrolle ist der AccessLevel-
+# Check nach dem Login, siehe _on_login_success() unten, nicht dieser Trigger).
+# offline_prod/offline_dev_local (dev/testing only, source-run only - see
+# db/connection.py._offline_sqlite_path()) replace the plain "offline" entry
+# here: each keeps its own persisted local snapshot (one sourced from prod,
+# one from dev_local), so switching which backend you're testing offline
+# against doesn't silently overwrite the other. The real, deployed field
+# flow (TrippleT_Launcher_Offline.bat) still uses plain TRIPPLET_MODE=offline
+# directly - unaffected, this dialog only runs for source starts.
 if not getattr(sys, "frozen", False) and not os.environ.get("TRIPPLET_MODE"):
     _mode_app = QApplication.instance() or QApplication(sys.argv)
     _mode, _ok = QInputDialog.getItem(
         None,
         "TrippleT – DB-Modus",
         "Gegen welche Datenbank soll gestartet werden?",
-        ["prod", "dev", "dev_local"],
+        ["prod", "dev", "dev_local", "offline_prod", "offline_dev_local"],
         0,
         False,
     )
@@ -42,7 +85,58 @@ if not getattr(sys, "frozen", False) and not os.environ.get("TRIPPLET_MODE"):
         sys.exit(0)
     os.environ["TRIPPLET_MODE"] = _mode
 
+_OFFLINE_MODES = {"offline", "offline_prod", "offline_dev_local"}
+
+# Welcher Modus tatsächlich aktiv sein wird - spiegelt db/connection.py's
+# eigene frozen-Gate-Logik, damit der "Kopie vorbereitet?"-Check unten sowohl
+# über den Source-Dialog oben als auch über eine gefrorene .exe greift, die
+# via Offline-Shortcut mit TRIPPLET_MODE=offline gestartet wurde. Die Dev-
+# Varianten (offline_prod/offline_dev_local) sind für die .exe nicht erlaubt
+# (siehe db/connection.py) - fallen dort auf prod zurück wie jeder andere
+# unerlaubte Wert auch.
+_resolved_mode = os.environ.get("TRIPPLET_MODE", "prod")
+if getattr(sys, "frozen", False) and _resolved_mode != "offline":
+    _resolved_mode = "prod"
+
+if _resolved_mode in _OFFLINE_MODES:
+    # Offline braucht eine bereits vorbereitete Kopie (kann sich nicht selbst
+    # erzeugen - dafür fehlt ja gerade die MySQL-Quelle). Siehe
+    # ui/screen_offline_sync.py ("1. Prepare/refresh") für den Vorbereitungsschritt.
+    _mode_app = QApplication.instance() or QApplication(sys.argv)
+    from db.connection import get_offline_sqlite_path
+    _offline_path = get_offline_sqlite_path()
+    if not os.path.exists(_offline_path):
+        # Which online mode actually fills THIS file (see
+        # db/connection.py._offline_sqlite_path()) - "offline"/"offline_prod"
+        # both read the prod-sourced file, so both point back at prod here.
+        _prep_mode = "dev_local" if _resolved_mode == "offline_dev_local" else "prod"
+        QMessageBox.critical(
+            None,
+            "TrippleT – Offline-Modus",
+            "Es wurde noch keine Offline-Kopie vorbereitet.\n\n"
+            f"Bitte zuerst online starten ({_prep_mode}) und unter "
+            "Home → Offline Sync eine Kopie vorbereiten.\n\n"
+            f"Erwarteter Pfad:\n{_offline_path}",
+        )
+        sys.exit(0)
+    QMessageBox.information(
+        None,
+        "TrippleT – Offline-Modus",
+        "Der Offline-Modus ist aktuell nur für einen Teil der App getestet:\n"
+        "• Neues Trial anlegen\n"
+        "• Neues Garn / neue Düse anlegen\n"
+        "• Laborergebnisse anlegen/bearbeiten (ATY, Titer, Statimat, EKB, "
+        "ITEMAT, DTYoMat, Rapid600, Jet Air Consumption, Schrumpf-Tabs, Waterbath)\n\n"
+        "Andere Bereiche (Backlog, Notifications, Reports, Requirement Hub, "
+        "Smart Chart, ...) sind noch nicht offline getestet und können "
+        "Fehler zeigen, weil die zugehörigen Tabellen nicht Teil der "
+        "Offline-Kopie sind.\n\n"
+        "Offline-Modus ist aktuell nur für Superuser freigeschaltet - das "
+        "wird nach dem Login geprüft.",
+    )
+
 from ui.theme import APP_QSS, build_qss, set_accent
+from ui.widgets.tab_container import TabbedNavigator, _StackFacade
 from ui.screen_login import LoginScreen
 from ui.screen_home import HomeScreen
 from ui.screen_change_pw import ChangePasswordScreen
@@ -56,6 +150,11 @@ from ui.screen_manage_order_types import ManageOrderTypeScreen
 from ui.screen_manage_product_groups import ManageProductGroupsScreen
 from ui.screen_manage_material import ManageMaterialScreen
 from ui.screen_usage_stats import UsageStatsScreen
+from ui.screen_stats_suite import StatsSuiteScreen
+from ui.screen_offline_sync import OfflineSyncScreen
+from ui.screen_lab_assistant import LabAssistantScreen
+from ui.screen_tdms_inspector import TdmsInspectorScreen
+from ui.offline_autosnapshot import IdleSnapshotManager
 from ui.screen_my_requests import MyRequestsScreen
 from ui.screen_new_jet import NewJetScreen
 from ui.screen_new_top_plate import NewTopPlateScreen
@@ -106,6 +205,12 @@ except Exception as _nozzle_err:
     NozzleCalculatorScreen = None
 
 try:
+    from ui.screen_label_generator import LabelGeneratorScreen
+except Exception as _label_gen_err:
+    print(f"[LabelGenerator] Import fehler: {_label_gen_err}")
+    LabelGeneratorScreen = None
+
+try:
     from ui.screen_air_supply import AirSupplyScreen
 except Exception as _air_err:
     print(f"[AirSupply] Import fehler: {_air_err}")
@@ -113,15 +218,24 @@ except Exception as _air_err:
 
 from ui.screen_quick_search import QuickSearchDialog
 try:
-    from ui.screen_manage_yarn import ManageYarnScreen
+    from ui.screen_manage_yarn import (
+        ManageYarnScreen, load_garntyp_map, load_material_map, load_yarngroup_map, load_colour_map,
+        quick_add_colour, find_duplicate_yarn, confirm_save_despite_duplicate,
+    )
 except Exception:
     ManageYarnScreen = None
+    load_garntyp_map = load_material_map = load_yarngroup_map = load_colour_map = quick_add_colour = None
+    find_duplicate_yarn = confirm_save_despite_duplicate = None
+try:
+    from ui.screen_new_yarn import NewYarnScreen
+except Exception:
+    NewYarnScreen = None
 try:
     from ui.screen_yarn_stock import YarnStockScreen
 except Exception:
     YarnStockScreen = None
 
-from db.connection import fetch_all, execute, new_global_id
+from db.connection import fetch_all, execute, execute_insert, new_global_id, is_offline_mode
 from ui.pathutil import resource_path
 import app_meta
 
@@ -129,6 +243,17 @@ import app_meta
 def _canon(s: str) -> str:
     """Normalisiert Spaltennamen für tolerante Vergleiche."""
     return str(s).strip().strip("[]`").replace(" ", "").lower()
+
+
+def _require_admin_box_write():
+    """Defense-in-depth guard for Admin-card write paths (Jets/Top Plates/Yarn/
+    Order Type/Product Groups/Material). The screens themselves already disable
+    their New/Copy/Delete/Save UI for read-only users (AdminBox=0, AccessLevel<3)
+    — this catches any write call that reaches here despite that, e.g. via a
+    stale/bypassed UI state."""
+    if not app_meta.can_use_admin_box():
+        raise PermissionError(
+            "Read-only access: you don't have permission to modify this table.")
 
 
 def _infer_id_col(rows: List[Dict]) -> str:
@@ -143,6 +268,106 @@ def _infer_id_col(rows: List[Dict]) -> str:
 
 
 class MainWindow(QMainWindow):
+    def setWindowTitle(self, title: str) -> None:
+        """Überschrieben, damit JEDER Titel-Aufruf synchron an die Tabs-
+        Logik gemeldet wird (siehe ui/widgets/tab_container.py::
+        TabbedNavigator.notify_title_set()) - das ist die Grundlage dafür,
+        dass ein Tab-Titel korrekt zugeordnet wird, egal ob eine
+        `_go_X()`-Methode setWindowTitle() vor oder nach dem Stack-/Tab-
+        Wechsel aufruft (z.B. ShowExperimentScreen.load_record() setzt ihn
+        NACH dem Wechsel). `getattr(..., None)`-Guard, da `self.setWindowTitle(...)`
+        bereits vor `self._tabs`-Konstruktion aufgerufen wird (initialer
+        Login-Titel)."""
+        super().setWindowTitle(title)
+        tabs = getattr(self, "_tabs", None)
+        if tabs is not None:
+            tabs.notify_title_set(title)
+
+    # -->-->-->- Shared sidebar-navigation callback wiring -->-->-->-
+    def _sidebar_nav_kwargs(self, include_all_experiments: bool = True, include_logout: bool = True,
+                             include_open_backlog: bool = True) -> dict:
+        """Baut das Callback-Kwargs-Dict für die Sidebar-Navigation
+        (ui/widgets/sidebar_nav.py), identisch zu dem, was `self.backlog =
+        BacklogScreen(...)` schon inline übergibt - als gemeinsamer Helper,
+        damit jeder Sidebar-Screen (seit 2026-08-27 App-weit ausgerollt,
+        siehe CLAUDE.md) dieselbe Verdrahtung nicht einzeln duplizieren muss.
+
+        `include_all_experiments=False` für AllExperimentsScreen selbst -
+        der Screen setzt seinen eigenen "All Experiments"-Sidebar-Eintrag
+        intern fest auf None (kein Sprungziel auf sich selbst, siehe
+        screen_all_experiments.py::_refresh_sidebar()) und nimmt daher gar
+        keinen on_all_experiments-Konstruktorparameter entgegen.
+
+        `include_open_backlog=False` analog für BacklogScreen selbst (auch
+        dessen eigener "Backlog"-Sidebar-Eintrag wird intern per
+        hide_self_link="backlog" unterdrückt statt über ein
+        Konstruktor-Kwarg - BacklogScreen.__init__() kennt `on_open_backlog`
+        daher gar nicht, siehe _open_backlog_in_new_tab()).
+
+        `include_logout=False` für Fälle, in denen kein Log-Out-Zugriff
+        gewollt ist.
+
+        Für Screens mit exploded-benannten Konstruktor-Kwargs (Home/Backlog/
+        AllExperiments/ShowExperiment, historisch zuerst gebaut) wird dieses
+        Dict per `**` entpackt; neuere Screens nehmen es stattdessen direkt
+        als ein einzelnes `sidebar_callbacks: dict`-Argument entgegen (siehe
+        z.B. screen_manage_jets.py) - beide Konstruktor-Stile lesen letztlich
+        dieselben Keys, nur der Übergabeweg unterscheidet sich.
+        """
+        kwargs = dict(
+            on_create_experiment=lambda: self._go_create_experiment("create"),
+            on_create_experiment_legacy=lambda: self._go_create_experiment("legacy"),
+            on_add_series=lambda: self._go_create_experiment("addseries"),
+            on_add_lab_machines=lambda: self._go_create_experiment("addlabmachines"),
+            on_open_experiment_request=self._go_experiment_request,
+            on_create_experiment_request=self._go_create_experiment_request,
+            on_open_my_requests=self._go_my_requests,
+            on_preview_requests=self._show_request_preview_dialog,
+            on_preview_open_requests=lambda: self._show_request_preview_dialog(
+                status=1, title="Open Experiment Requests"),
+            on_image_compare=self._go_image_compare,
+            on_canvas=self._go_canvas,
+            on_nozzle_calculator=self._go_nozzle_calculator,
+            on_air_supply=self._go_air_supply,
+            on_requirement_hub=self._go_requirement_hub,
+            on_smartchart=self._go_smartchart,
+            on_yarn_stock=self._go_yarn_stock,
+            on_label_generator=self._go_label_generator,
+            on_tdms_inspector=self._go_tdms_inspector,
+            on_add_jet=self._go_add_jet,
+            on_add_top_plate=self._go_add_top_plate,
+            on_add_yarn=self._go_add_yarn,
+            on_manage_order_type=self._go_manage_order_type,
+            on_manage_product_groups=self._go_manage_product_groups,
+            on_manage_material=self._go_manage_material,
+            on_add_user=self._go_add_user,
+            on_usage_stats=self._go_usage_stats,
+            on_statistics=self._go_statistics,
+            on_offline_sync=self._go_offline_sync,
+            on_lab_assistant=self._go_lab_assistant,
+        )
+        if include_all_experiments:
+            kwargs["on_all_experiments"] = self._go_all_experiments
+        if include_open_backlog:
+            kwargs["on_open_backlog"] = self._go_backlog
+        if include_logout:
+            kwargs["on_logout"] = self._logout
+        kwargs["open_in_new_tab"] = self._open_in_new_tab_dispatch
+        return kwargs
+
+    def _open_in_new_tab_dispatch(self, on_click):
+        """Ctrl+Klick auf einen Sidebar-Eintrag (siehe ui/widgets/
+        sidebar_nav.py::_wire_tab_capable_click()): für Backlog/All
+        Experiments (die einzigen Sidebar-Ziele, die tatsächlich mehrfach
+        unabhängig offen sein sollen, siehe _fresh_tab_targets) eine
+        FRISCHE Instanz bauen statt der generischen Fokus-statt-Duplikat-
+        Logik von TabbedNavigator.open_in_new_tab()."""
+        fresh = self._fresh_tab_targets.get(on_click)
+        if fresh is not None:
+            fresh()
+        else:
+            self._tabs.open_in_new_tab(on_click)
+
     # -->-->-->- Multi-window "last window" close guard -->-->-->-
     def _open_window_count(self, exclude=None) -> int:
         """Counts currently visible top-level TrippleT windows (main window +
@@ -160,50 +385,58 @@ class MainWindow(QMainWindow):
                 continue
         return count
 
-    def _confirm_quit_dialog(self, parent) -> bool:
-        """Shows the 'last window' confirmation dialog. Returns True if the
-        user confirmed they want to close (and thus quit TrippleT)."""
+    def _confirm_quit_dialog(self, parent, tab_count: int = 1) -> bool:
+        """Shows the quit-confirmation dialog. Returns True if the user
+        confirmed they want to close (and thus quit TrippleT). Tab-aware
+        (Nutzervorgabe 2026-08-27: "wenn ich das tool schliesse und es sind
+        mehr als eine registerkarte offen, bekomm ich eine warnung, sonst
+        nicht mehr") - with more than one tab open, the message warns about
+        losing those tabs; otherwise it falls back to the original "last
+        window" wording (still relevant for detached windows, if any)."""
+        if tab_count > 1:
+            message = (
+                f"You have {tab_count} tabs open.\n"
+                "Closing this window will close all of them.\n\n"
+                "Do you really want to quit?"
+            )
+        else:
+            message = (
+                "This is the last open TrippleT window.\n"
+                "Closing it will exit the application.\n\n"
+                "Do you really want to quit?"
+            )
         reply = QMessageBox.question(
             parent,
             "Close TrippleT",
-            "This is the last open TrippleT window.\n"
-            "Closing it will exit the application.\n\n"
-            "Do you really want to quit?",
+            message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         return reply == QMessageBox.StandardButton.Yes
 
-    def _make_detached_close_guard(self, win):
-        """Builds a closeEvent handler for a detached (plain) QMainWindow
-        instance that asks for confirmation if it is the last open window."""
-        original_close_event = win.closeEvent
-
-        def guarded_close_event(event):
-            if self._open_window_count(exclude=win) == 0:
-                if not self._confirm_quit_dialog(win):
-                    event.ignore()
-                    return
-            try:
-                original_close_event(event)
-            except Exception:
-                event.accept()
-
-        return guarded_close_event
-
     def closeEvent(self, event):
-        """Asks for confirmation before closing the main window if it is the
-        last open TrippleT window (i.e. closing it would exit the app)."""
-        if self._open_window_count(exclude=self) == 0:
-            if not self._confirm_quit_dialog(self):
+        """Fragt vor dem Schliessen des Hauptfensters nach Bestätigung, falls
+        entweder mehr als ein Tab offen ist oder es das letzte offene
+        TrippleT-Fenster wäre (beides würde beim Schliessen stillschweigend
+        verloren gehen/die App beenden). Genau ein Tab und keine losgelösten
+        Fenster → keine Nachfrage mehr."""
+        tab_count = self._tabs.count() if getattr(self, "_tabs", None) is not None else 1
+        other_windows_open = self._open_window_count(exclude=self) > 0
+        if tab_count > 1 or other_windows_open:
+            if not self._confirm_quit_dialog(self, tab_count=tab_count):
                 event.ignore()
                 return
         super().closeEvent(event)
 
-    def _set_create_experiment_request_screen(self, request_id=None):
+    def _set_create_experiment_request_screen(self, request_id=None, on_back=None):
         """Erstellt oder ersetzt den CreateExperimentRequest-Screen (lazy init).
 
         Wird neu erstellt wenn der Screen noch nicht existiert oder request_id sich geändert hat.
+
+        `on_back`: wohin der "←"-Chip zurückführt - Default ist der
+        Experiment-Request-Hub (Neuanlage-Fall), `_go_edit_experiment_request()`
+        übergibt hier `_go_my_requests` (Bearbeiten kommt immer von dort,
+        siehe dortiger Aufrufer-Kommentar).
         """
         """Create/replace the CreateExperimentRequestScreen.
 
@@ -225,8 +458,9 @@ class MainWindow(QMainWindow):
 
         self.create_experiment_request = CreateExperimentRequestScreen(
             on_back_home=self._go_home,
-            on_back_experiment_request=self._go_experiment_request,
+            on_back_experiment_request=on_back or self._go_experiment_request,
             request_id=request_id,
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
         self.stack.addWidget(self.create_experiment_request)
 
@@ -246,7 +480,12 @@ class MainWindow(QMainWindow):
     def _go_edit_experiment_request(self, request_id):
         """Öffnet den Experiment-Request-Screen im Bearbeitungsmodus für eine bestehende Request-ID."""
         """Opens an existing Experiment Request for editing."""
-        self._set_create_experiment_request_screen(request_id=request_id)
+        # Bearbeiten wird ausschliesslich von "My Requests" aus geoeffnet
+        # (siehe on_open_request=self._go_edit_experiment_request oben) - der
+        # "←"-Chip soll deshalb dorthin zurueckfuehren, nicht auf den Hub
+        # (Nutzerwunsch 2026-08-27: "sollte mich zurück zu my requests
+        # bringen, nicht auf die neue übersicht").
+        self._set_create_experiment_request_screen(request_id=request_id, on_back=self._go_my_requests)
         self.setWindowTitle("TrippleT – Edit Experiment Request")
         self.stack.setCurrentWidget(self.create_experiment_request)
 
@@ -278,28 +517,61 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("TrippleT – Log In")
         self.setMinimumSize(1100, 700)
 
-        self.stack = QStackedWidget()
-        self.setCentralWidget(self.stack)
+        # Browser-artige Tabs (gebaut 2026-08-27, Nutzerwunsch: "wenn ich aus
+        # dem sidepanel etwas anklicke mit gehaltener ctrl taste, wird eine
+        # neue registerkarte mit dem screen geöffnet"; reaktiviert 2026-08-27
+        # morgens, mit Backlog/All Experiments zusätzlich zu Show Experiment
+        # als "echt mehrfach offen"-fähige Screens - siehe
+        # _open_backlog_in_new_tab()/_open_all_experiments_in_new_tab()).
+        # `self.stack` ist eine `_StackFacade`, die live auf den Stack des
+        # jeweils AKTIVEN Tabs zeigt (siehe ui/widgets/tab_container.py) -
+        # dadurch bleiben die ~100 bestehenden `self.stack.X(...)`-
+        # Aufrufstellen unverändert.
+        self._tabs = TabbedNavigator()
+        self._tabs.set_title_provider(self.windowTitle, self.setWindowTitle)
+        self.setCentralWidget(self._tabs)
+        self.stack = _StackFacade(self._tabs)
+        # Siehe ui/widgets/sidebar_nav.py::_wire_tab_capable_click() - liest
+        # das beim normalen (nicht Strg-)Klick auf einen Sidebar-Eintrag, um
+        # einen gepinnten Vergleichs-Tab (siehe TabbedNavigator.
+        # is_current_tab_pinned()) vor versehentlichem Ueberschreiben zu
+        # schuetzen. Gleiches Registrierungs-Muster wie app_meta.
+        # open_quick_search/refresh_bell.
+        app_meta.is_active_tab_pinned = self._tabs.is_current_tab_pinned
 
         self.current_user = None
         self.home = None
         self.aty_batch = None
 
+        # Sidebar-Ziele, die beim Ctrl+Klick eine FRISCHE, unabhängige
+        # Instanz statt der generischen Fokus-statt-Duplikat-Singleton-
+        # Logik bekommen (siehe _open_in_new_tab_dispatch()). Bound methods
+        # sind über __self__/__func__ vergleich- und hashbar, ein
+        # Dict-Lookup über spätere `self._go_backlog`-Referenzen funktioniert
+        # daher zuverlässig.
+        self._fresh_tab_targets = {
+            self._go_backlog: self._open_backlog_in_new_tab,
+            self._go_all_experiments: self._open_all_experiments_in_new_tab,
+        }
+
         self.change_pw = ChangePasswordScreen(on_dismiss=self._back_to_login)
         self.all_experiments = AllExperimentsScreen(
             on_back_home=self._go_home,
             on_open_experiment=self._open_experiment_from_all,
-            on_open_in_new_window=self.open_experiment_in_new_window,
+            on_open_in_new_window=self._open_experiment_from_all_in_new_tab,
+            on_open_in_new_os_window=self.open_experiment_in_new_window,
             on_copy_trialseries=self._go_copy_trialseries,
+            on_open_report=self._go_report,
             can_review=False,
+            **self._sidebar_nav_kwargs(include_all_experiments=False),
         )
         self.show_experiment = ShowExperimentScreen(
             on_back_home=self._go_home,
-            on_back_all_experiments=self._go_all_experiments,
             on_add_trials=self._go_addtrials_from_experiment,
+            **self._sidebar_nav_kwargs(),
         )
-        self.report_screen    = ReportScreen(on_back=self._go_back_to_show_experiment, mode="series") if ReportScreen else None
-        self.smartchart_screen = ReportScreen(on_back=self._go_home, mode="visual") if ReportScreen else None
+        self.report_screen    = ReportScreen(on_back=self._go_back_to_show_experiment, mode="series", sidebar_callbacks=self._sidebar_nav_kwargs()) if ReportScreen else None
+        self.smartchart_screen = ReportScreen(on_back=self._go_home, mode="visual", sidebar_callbacks=self._sidebar_nav_kwargs()) if ReportScreen else None
 
         # Prepare Manage Jets
         preview = self._load_jets_data(limit=1)
@@ -327,6 +599,7 @@ class MainWindow(QMainWindow):
             on_created=self._on_new_jet_created,
             check_jet_name=self._is_jet_name_available,
             on_quick_add_fk_value=self._quick_add_fk_value,
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
 
         self.manage_jets = ManageJetsScreen(
@@ -340,6 +613,8 @@ class MainWindow(QMainWindow):
             on_open_new_jet=self._go_new_jet,
             on_copy_jet=self._go_copy_new_jet,
             on_edit_jet=self._go_edit_jet_form,
+            on_open_experiment=self._open_experiment_from_jets,
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
 
         # Prepare Manage Top Plates
@@ -367,6 +642,7 @@ class MainWindow(QMainWindow):
             on_save=self._insert_top_plate_full,
             on_created=self._on_new_top_plate_created,
             check_top_plate_name=self._is_top_plate_name_available,
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
 
         self.manage_top_plates = ManageTopPlatesScreen(
@@ -380,39 +656,98 @@ class MainWindow(QMainWindow):
             on_open_new_top_plate=self._go_new_top_plate,
             on_copy_top_plate=self._go_copy_new_top_plate,
             on_edit_top_plate=self._go_edit_top_plate_form,
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
 
         # Screens ohne spezielle Loader
-        self.manage_user = ManageUserScreen(on_back_home=self._go_home)
+        self.manage_user = ManageUserScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
         self.manage_order_type = ManageOrderTypeScreen(
-            on_back_home=self._go_home)
+            on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
         self.manage_product_groups = ManageProductGroupsScreen(
-            on_back_home=self._go_home)
-        self.manage_material = ManageMaterialScreen(on_back_home=self._go_home)
-        self.usage_stats = UsageStatsScreen(on_back_home=self._go_home)
+            on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
+        self.manage_material = ManageMaterialScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
+        self.usage_stats = UsageStatsScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
+        # stats_suite/offline_sync: lazy (built on first navigation, not here).
+        # Beide sind ohnehin nur fuer Superuser erreichbar (_go_statistics/
+        # _go_offline_sync), und stats_suite baut eagerly ein QWebEngineView
+        # (Chromium-Subprozess) - das eager in MainWindow.__init__ zu tun heisst,
+        # JEDER Login zahlt diesen Startaufwand, nicht nur die paar Superuser,
+        # die den Screen je oeffnen.
+        self.stats_suite = None
+        self.offline_sync = None
+        self.lab_assistant = None
+        # TDMS Inspector: lazy too - builds several matplotlib canvases
+        # (DTY + ATY YarnScope tabs), no reason to pay that at every login.
+        self.tdms_inspector = None
 
-        # Backlog-Screen
+        # Backlog-Screen - seit 2026-08-26 der Post-Login-Landing-Screen
+        # (siehe _on_login_success()), bekommt daher dieselbe volle
+        # Sidebar-Navigation wie HomeScreen (siehe ui/widgets/sidebar_nav.py
+        # und CLAUDE.md). Die _go_X-Callbacks existieren als Methoden bereits
+        # jetzt (Python bindet sie unabhängig vom Login-Status), auch wenn
+        # der Nutzer sich erst später einloggt - genau wie on_back_home
+        # hier schon immer eager übergeben wurde.
         self.backlog = BacklogScreen(
             on_back_home=self._go_home,
             on_open_experiment=self._open_experiment_from_backlog,
-            on_open_in_new_window=self.open_experiment_in_new_window,
+            on_open_in_new_window=self._open_experiment_from_backlog_in_new_tab,
+            on_open_in_new_os_window=self.open_experiment_in_new_window,
+            on_open_report=self._go_report,
+            open_in_new_tab=self._open_in_new_tab_dispatch,
+            on_all_experiments=self._go_all_experiments,
+            on_create_experiment=lambda: self._go_create_experiment("create"),
+            on_create_experiment_legacy=lambda: self._go_create_experiment("legacy"),
+            on_add_series=lambda: self._go_create_experiment("addseries"),
+            on_add_lab_machines=lambda: self._go_create_experiment("addlabmachines"),
+            on_open_experiment_request=self._go_experiment_request,
+            on_create_experiment_request=self._go_create_experiment_request,
+            on_open_my_requests=self._go_my_requests,
+            on_preview_requests=self._show_request_preview_dialog,
+            on_preview_open_requests=lambda: self._show_request_preview_dialog(
+                status=1, title="Open Experiment Requests"),
+            on_image_compare=self._go_image_compare,
+            on_canvas=self._go_canvas,
+            on_nozzle_calculator=self._go_nozzle_calculator,
+            on_air_supply=self._go_air_supply,
+            on_requirement_hub=self._go_requirement_hub,
+            on_smartchart=self._go_smartchart,
+            on_yarn_stock=self._go_yarn_stock,
+            on_label_generator=self._go_label_generator,
+            on_tdms_inspector=self._go_tdms_inspector,
+            on_add_jet=self._go_add_jet,
+            on_add_top_plate=self._go_add_top_plate,
+            on_add_yarn=self._go_add_yarn,
+            on_manage_order_type=self._go_manage_order_type,
+            on_manage_product_groups=self._go_manage_product_groups,
+            on_manage_material=self._go_manage_material,
+            on_add_user=self._go_add_user,
+            on_usage_stats=self._go_usage_stats,
+            on_statistics=self._go_statistics,
+            on_offline_sync=self._go_offline_sync,
+            on_lab_assistant=self._go_lab_assistant,
+            on_logout=self._logout,
         )
 
         # Experiment Request
         self.create_experiment_request = CreateExperimentRequestScreen(
-            on_back_home=self._go_home
+            on_back_home=self._go_home,
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
         self.my_requests = MyRequestsScreen(
             on_back_home=self._go_home,
             on_back_experiment_request=self._go_experiment_request,
             on_open_request=self._go_edit_experiment_request,
-            on_open_experiment=self._go_show_experiment,
+            on_open_experiment=lambda exp_pk, series_pk, experiment_id: self._go_show_experiment(
+                exp_pk, series_pk, experiment_id,
+                back_label="My Requests", back_callback=self._go_my_requests),
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
 
         self.experiment_request = ExperimentRequestScreen(
             on_back_home=self._go_home,
             on_create_experiment_request=self._go_create_experiment_request,
             on_open_my_requests=self._go_my_requests,
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
 
         self.login = LoginScreen(
@@ -420,27 +755,17 @@ class MainWindow(QMainWindow):
             on_change_pw=self._go_change_pw
         )
 
-        self.stack.addWidget(self.login)
-        self.stack.addWidget(self.change_pw)
-        self.stack.addWidget(self.all_experiments)
-        self.stack.addWidget(self.show_experiment)
-        if self.report_screen is not None:
-            self.stack.addWidget(self.report_screen)
-        if self.smartchart_screen is not None:
-            self.stack.addWidget(self.smartchart_screen)
-        self.stack.addWidget(self.manage_jets)
-        self.stack.addWidget(self.manage_top_plates)
-        self.stack.addWidget(self.manage_user)
-        self.stack.addWidget(self.manage_order_type)
-        self.stack.addWidget(self.manage_product_groups)
-        self.stack.addWidget(self.manage_material)
-        self.stack.addWidget(self.usage_stats)
-        self.stack.addWidget(self.new_jet)
-        self.stack.addWidget(self.new_top_plate)
-        self.stack.addWidget(self.backlog)
-        self.stack.addWidget(self.create_experiment_request)
-        self.stack.addWidget(self.my_requests)
-        self.stack.addWidget(self.experiment_request)
+        for _screen in (
+            self.change_pw, self.all_experiments, self.show_experiment,
+            self.report_screen, self.smartchart_screen, self.new_jet,
+            self.manage_jets, self.new_top_plate, self.manage_top_plates,
+            self.manage_user, self.manage_order_type, self.manage_product_groups,
+            self.manage_material, self.usage_stats, self.backlog,
+            self.create_experiment_request, self.my_requests,
+            self.experiment_request, self.login,
+        ):
+            if _screen is not None:
+                self.stack.addWidget(_screen)
 
         self.image_compare: Optional[ImageCompareScreen] = None
         self.canvas: Optional[CanvasScreen] = None
@@ -449,24 +774,42 @@ class MainWindow(QMainWindow):
         self.quick_scan: Optional["QuickScanScreen"] = None
         self.nozzle_calculator: Optional["NozzleCalculatorScreen"] = None
         self.air_supply: Optional["AirSupplyScreen"] = None
+        self.label_generator: Optional["LabelGeneratorScreen"] = None
         self._search_dlg: Optional[QuickSearchDialog] = None
 
         self._create_screen_ref: Optional[CreateExperimentScreen] = None
 
         # Nutzungs-Tracking: jeder Screen-Wechsel im Stack wird geloggt
         # (best-effort, siehe db/usage_log.py). Ein einziger zentraler Hook
-        # ueber Qt's currentChanged-Signal statt Instrumentierung jeder
-        # einzelnen _go_XXX()-Methode.
-        self.stack.currentChanged.connect(self._log_screen_open)
+        # statt Instrumentierung jeder einzelnen _go_XXX()-Methode.
+        # `_StackFacade` hat kein `currentChanged` mehr - `TabbedNavigator.
+        # screenChanged` feuert stattdessen bei jedem sichtbaren Screen-
+        # Wechsel, egal in welchem Tab (siehe ui/widgets/tab_container.py).
+        self._tabs.screenChanged.connect(lambda: self._log_screen_open())
+
+        # Idle-triggered offline-snapshot auto-refresh (superusers only for
+        # now, see ui/offline_autosnapshot.py). One instance for the whole
+        # process; eligibility is re-checked live on every tick, so it's a
+        # no-op before login and adapts automatically to whoever is logged
+        # in - best-effort, must never block startup.
+        try:
+            self._idle_snapshot_mgr = IdleSnapshotManager(QApplication.instance())
+            self._idle_snapshot_mgr.start()
+        except Exception:
+            pass
 
         self.stack.setCurrentWidget(self.login)
 
     # --- Data functions for Manage Jets --------------------------------------
     def _load_jets_data(self, limit: Optional[int] = None) -> List[Dict]:
-        """Lädt Jet-Daten aus tblJet mit has_files-Flag (0/1)."""
+        """Lädt Jet-Daten aus tblJet mit has_files-Flag (0/1) und UsedInTrial
+        (rein berechnet, kein echtes tblDTYJets-Feld - ob dieser Jet in
+        mindestens einem Trial verwendet wurde, siehe tbltrial.JetID)."""
         sql = """
             SELECT j.*,
-                   CASE WHEN COUNT(f.ID) > 0 THEN 1 ELSE 0 END AS has_files
+                   CASE WHEN COUNT(f.ID) > 0 THEN 1 ELSE 0 END AS has_files,
+                   CASE WHEN EXISTS (SELECT 1 FROM tbltrial t WHERE t.JetID = j.ID)
+                        THEN 1 ELSE 0 END AS UsedInTrial
             FROM tblDTYJets j
             LEFT JOIN tblJetFile f ON f.JetID = j.ID
             GROUP BY j.ID
@@ -475,7 +818,11 @@ class MainWindow(QMainWindow):
             return fetch_all(sql, [])
         except Exception:
             # Fallback wenn tblJetFile noch nicht existiert
-            return fetch_all("SELECT * FROM [tblDTYJets]", [])
+            return fetch_all(
+                "SELECT j.*, "
+                "CASE WHEN EXISTS (SELECT 1 FROM tbltrial t WHERE t.JetID = j.ID) "
+                "THEN 1 ELSE 0 END AS UsedInTrial "
+                "FROM tblDTYJets j", [])
 
     FK_DEF = [
         # FK-Key (kanonisch), FK-Spalte in tblDTYJets, Mastertabelle, ID-Feld, Anzeigefeld
@@ -599,6 +946,14 @@ class MainWindow(QMainWindow):
             if alt_key != key:
                 maps[alt_key] = maps[key]
 
+        # "Created by" - who/when a jet was added (superuser-only visibility,
+        # never editable - see ManageJetsScreen/JetsTableModel's _AUDIT_COLS).
+        try:
+            from db.user_directory import load_user_id_to_name
+            maps["createdby"] = {"id_to_name": load_user_id_to_name(), "name_to_id": {}}
+        except Exception:
+            pass
+
         return maps
 
     def _quick_add_fk_value(self, col: str, name: str) -> Optional[int]:
@@ -635,11 +990,12 @@ class MainWindow(QMainWindow):
         Returns:
             Anzahl erfolgreich aktualisierter Zeilen.
         """
+        _require_admin_box_write()
         if not rows:
             return 0
         id_col = self._jets_id_col or "ID"
         total = 0
-        _SYNTHETIC = {"__has_files__", "has_files"}
+        _SYNTHETIC = {"__has_files__", "has_files", "UsedInTrial"}
         for r in rows:
             if id_col not in r:
                 raise ValueError(f"Row has no '{id_col}' field; cannot save.")
@@ -674,10 +1030,22 @@ class MainWindow(QMainWindow):
 
     def _create_jet(self) -> int:
         """Legt einen neuen Jet mit Default-Werten in der DB an und gibt die neue ID zurück."""
-        cols = ["Jet", "Gebogener Kanal", "GlobalID"]
-        vals = ["Neuer Jet", 0, new_global_id()]
+        _require_admin_box_write()
+        # "GebogenerKanal"/"YarnChannelShape" (ohne Leerzeichen) sind die
+        # echten Spaltennamen (SHOW COLUMNS gegen dev_local/prod verifiziert) -
+        # die Leerzeichen hier waren ein eigenständiger, vom @@IDENTITY-Audit
+        # unabhängiger Bug: `c` wird unten direkt als SQL-Identifier in `cols`
+        # übernommen - `_first_fk_default(c)` normalisiert `c` zwar intern via
+        # _canon() für den reinen dict-Lookup, das ändert aber nichts an `c`
+        # selbst. Ein "New Jet"-Klick schlug dadurch bisher immer mit "Unknown
+        # column" fehl, aufgedeckt beim End-to-End-Test des execute_insert()-
+        # Umbaus (erst bei GebogenerKanal, nach dessen Fix hier bei
+        # YarnChannelShape erneut).
+        cols = ["Jet", "GebogenerKanal", "GlobalID", "CreatedBy", "CreationDate"]
+        vals = ["Neuer Jet", 0, new_global_id(),
+                (app_meta.current_user or {}).get("id"), datetime.datetime.now()]
         fk_candidates = ["Hersteller", "Serie", "Luftkanalform",
-                         "Yarn Channel Shape", "Wirbelkammer", "Werkstoff"]
+                         "YarnChannelShape", "Wirbelkammer", "Werkstoff"]
         for c in fk_candidates:
             d = self._first_fk_default(c)
             if d is not None:
@@ -687,20 +1055,17 @@ class MainWindow(QMainWindow):
         placeholders = ",".join(["?"] * len(cols))
         cols_sql = ", ".join([f"[{c}]" for c in cols])
         sql = f"INSERT INTO [tblDTYJets] ({cols_sql}) VALUES ({placeholders})"
-        execute(sql, vals)
-
-        row = fetch_all("SELECT @@IDENTITY AS NewID", [])
-        new_id = int(row[0]["NewID"]) if row and "NewID" in row[0] else None
-        return new_id
+        return execute_insert(sql, vals)
 
     def _insert_jet_full(self, data: Dict) -> int:
         """Fügt einen neuen Jet mit vollständigen Daten (Kopie) in die DB ein.
 
         Returns:
-            Neue Jet-ID (@@IDENTITY).
+            Neue Jet-ID (execute_insert()/lastrowid).
         """
+        _require_admin_box_write()
         id_col = self._jets_id_col or "ID"
-        _SYNTHETIC = {"__has_files__", "has_files"}
+        _SYNTHETIC = {"__has_files__", "has_files", "UsedInTrial"}
 
         if id_col in data:
             data = {k: v for k, v in data.items() if k.lower() !=
@@ -716,6 +1081,12 @@ class MainWindow(QMainWindow):
         if not has_global:
             data["GlobalID"] = new_global_id()
 
+        # Wer/wann angelegt wurde - immer frisch gesetzt, nie aus einer Kopiervorlage
+        # übernommen (NewJetScreen zeigt diese Felder gar nicht erst an, siehe
+        # screen_new_jet._HIDDEN_COLS, data enthält sie deshalb ohnehin nicht).
+        data["CreatedBy"] = (app_meta.current_user or {}).get("id")
+        data["CreationDate"] = datetime.datetime.now()
+
         if not data:
             raise ValueError("Keine Daten zum Speichern übergeben.")
 
@@ -724,10 +1095,7 @@ class MainWindow(QMainWindow):
         cols_sql = ", ".join(f"[{c}]" for c in cols)
         placeholders = ", ".join("?" for _ in cols)
         sql = f"INSERT INTO [tblDTYJets] ({cols_sql}) VALUES ({placeholders})"
-        execute(sql, vals)
-
-        row = fetch_all("SELECT @@IDENTITY AS NewID", [])
-        new_id = int(row[0]["NewID"]) if row and "NewID" in row[0] else None
+        new_id = execute_insert(sql, vals)
         if new_id is None:
             raise RuntimeError("Konnte neue ID nach Insert nicht bestimmen.")
         return new_id
@@ -738,6 +1106,7 @@ class MainWindow(QMainWindow):
         Returns:
             Anzahl gelöschter Zeilen.
         """
+        _require_admin_box_write()
         if not ids:
             return 0
         placeholders = ",".join(["?"] * len(ids))
@@ -791,6 +1160,7 @@ class MainWindow(QMainWindow):
         Returns:
             Anzahl erfolgreich aktualisierter Zeilen.
         """
+        _require_admin_box_write()
         if not rows:
             return 0
         id_col = self._top_plates_id_col or "ID"
@@ -811,24 +1181,22 @@ class MainWindow(QMainWindow):
 
     def _create_top_plate(self) -> int:
         """Legt eine neue Top Plate mit Default-Werten in der DB an und gibt die neue ID zurück."""
+        _require_admin_box_write()
         cols = ["Name", "GlobalID"]
         vals = ["New Top Plate", new_global_id()]
 
         placeholders = ",".join(["?"] * len(cols))
         cols_sql = ", ".join([f"[{c}]" for c in cols])
         sql = f"INSERT INTO [tblTopPlates] ({cols_sql}) VALUES ({placeholders})"
-        execute(sql, vals)
-
-        row = fetch_all("SELECT @@IDENTITY AS NewID", [])
-        new_id = int(row[0]["NewID"]) if row and "NewID" in row[0] else None
-        return new_id
+        return execute_insert(sql, vals)
 
     def _insert_top_plate_full(self, data: Dict) -> int:
         """Fügt eine neue Top Plate mit vollständigen Daten (Kopie) in die DB ein.
 
         Returns:
-            Neue Top-Plate-ID (@@IDENTITY).
+            Neue Top-Plate-ID (execute_insert()/lastrowid).
         """
+        _require_admin_box_write()
         id_col = self._top_plates_id_col or "ID"
         _SYNTHETIC = {"__has_files__", "has_files"}
 
@@ -854,10 +1222,7 @@ class MainWindow(QMainWindow):
         cols_sql = ", ".join(f"[{c}]" for c in cols)
         placeholders = ", ".join("?" for _ in cols)
         sql = f"INSERT INTO [tblTopPlates] ({cols_sql}) VALUES ({placeholders})"
-        execute(sql, vals)
-
-        row = fetch_all("SELECT @@IDENTITY AS NewID", [])
-        new_id = int(row[0]["NewID"]) if row and "NewID" in row[0] else None
+        new_id = execute_insert(sql, vals)
         if new_id is None:
             raise RuntimeError("Konnte neue ID nach Insert nicht bestimmen.")
         return new_id
@@ -868,6 +1233,7 @@ class MainWindow(QMainWindow):
         Returns:
             Anzahl gelöschter Zeilen.
         """
+        _require_admin_box_write()
         if not ids:
             return 0
         placeholders = ",".join(["?"] * len(ids))
@@ -909,6 +1275,27 @@ class MainWindow(QMainWindow):
             user: Dict mit id, username, first_name, last_name, access_level,
                   access_right, admin_box, accent_colour.
         """
+        try:
+            access_level = int(user.get("access_level") or 0)
+        except Exception:
+            access_level = 0
+
+        # Offline-Modus ist vorerst nur für Superuser (AccessLevel >= 4)
+        # freigeschaltet - das ist erst NACH dem Login bekannt (der Trigger,
+        # ob offline überhaupt versucht wird, ist der separate Shortcut/
+        # TRIPPLET_MODE=offline, siehe main.py-Kopf und db/connection.py).
+        # Zurück zum Login statt zu Home, ohne current_user zu setzen.
+        if is_offline_mode() and access_level < 4:
+            QMessageBox.warning(
+                self,
+                "TrippleT – Offline-Modus",
+                "Der Offline-Modus ist aktuell nur für Superuser freigeschaltet.",
+            )
+            self.login.reset_login_fields()
+            self.stack.setCurrentWidget(self.login)
+            self.setWindowTitle("TrippleT – Log In")
+            return
+
         # Merge Login-Daten in das globale current_user-Objekt,
         # damit Flags wie is_superuser erhalten bleiben.
         try:
@@ -917,7 +1304,7 @@ class MainWindow(QMainWindow):
             app_meta.current_user = user
         # Ab hier immer mit dem globalen Objekt weiterarbeiten
         self.current_user = app_meta.current_user
-        self.setWindowTitle("TrippleT – Home")
+        self.setWindowTitle("TrippleT – Backlog")
 
         # Akzentfarbe anwenden
         try:
@@ -925,11 +1312,6 @@ class MainWindow(QMainWindow):
             QApplication.instance().setStyleSheet(build_qss())
         except Exception:
             pass
-
-        try:
-            access_level = int(user.get("access_level") or 0)
-        except Exception:
-            access_level = 0
         # Zusätzliches Recht: AdminBox (tblUser.AdminBox)
         try:
             admin_box = bool(user.get("admin_box"))
@@ -950,15 +1332,18 @@ class MainWindow(QMainWindow):
             on_all_experiments=self._go_all_experiments,
             on_create_experiment=lambda: self._go_create_experiment("create"),
             on_preview_requests=self._show_request_preview_dialog,
+            on_preview_open_requests=lambda: self._show_request_preview_dialog(
+                status=1, title="Open Experiment Requests"),
             on_create_experiment_legacy=lambda: self._go_create_experiment("legacy"),
             on_add_series=lambda: self._go_create_experiment("addseries"),
             on_add_trials=lambda: self._go_create_experiment("addtrials"),
             on_open_backlog=self._go_backlog,
             on_open_experiment_request=self._go_experiment_request,
+            on_create_experiment_request=self._go_create_experiment_request,
+            on_open_my_requests=self._go_my_requests,
             on_image_compare=self._go_image_compare,
             on_canvas=self._go_canvas,
             # on_tdms_batch=self._go_tdms_batch,  # TODO: in screen_home.py eintragen
-            on_search=self._open_quick_search,
             access_level=access_level,
             admin_box=admin_box,
             on_add_yarn=self._go_add_yarn,
@@ -977,9 +1362,19 @@ class MainWindow(QMainWindow):
             on_nozzle_calculator=self._go_nozzle_calculator,
             on_air_supply=self._go_air_supply,
             on_usage_stats=self._go_usage_stats,
+            on_statistics=self._go_statistics,
+            on_label_generator=self._go_label_generator,
+            on_offline_sync=self._go_offline_sync,
+            on_lab_assistant=self._go_lab_assistant,
+            on_tdms_inspector=self._go_tdms_inspector,
+            open_in_new_tab=self._open_in_new_tab_dispatch,
         )
         self.stack.addWidget(self.home)
-        self.stack.setCurrentWidget(self.home)
+        # Post-Login-Landing: Backlog statt Home (Nutzerwunsch, 2026-08-26,
+        # siehe CLAUDE.md) - Home bleibt über den Header-"Home"-Button
+        # weiterhin erreichbar (_go_home()), ist aber nicht mehr der
+        # Einstiegspunkt, da die Sidebar jetzt die Navigation übernimmt.
+        self.stack.setCurrentWidget(self.backlog)
 
         # ── Notification Bell einrichten ──────────────────────────────────
         try:
@@ -992,6 +1387,7 @@ class MainWindow(QMainWindow):
                 # Signal ist jetzt (exp_pk: int, series_pk: int, experiment_id: str)
                 self._notif_panel.notification_clicked.connect(self._go_show_experiment)
                 self._notif_panel.yarn_stock_clicked.connect(self._go_yarn_stock_from_notification)
+                self._notif_panel.experiment_request_clicked.connect(self._go_my_requests_from_notification)
                 self._notif_panel.all_read.connect(self._on_bell_mark_all_read)
 
             def _refresh_bell():
@@ -1001,20 +1397,33 @@ class MainWindow(QMainWindow):
                 try:
                     unread = get_unread_count(int(uid))
                     total  = get_total_count(int(uid))
-                    # Bell immer sichtbar sobald Eintraege vorhanden (gelesen oder ungelesen)
                     w = self.stack.currentWidget()
                     if w and hasattr(w, "_header") and hasattr(w._header, "set_bell_count"):
+                        # Screens mit klassischer TopBar (HeaderBar) - Bell
+                        # immer sichtbar sobald Eintraege vorhanden (gelesen
+                        # oder ungelesen).
                         w._header.set_bell_count(unread, total)
                         if not hasattr(w._header, "_bell_connected") or not w._header._bell_connected:
                             w._header.connect_bell(self._on_bell_clicked)
                             w._header._bell_connected = True
+                    elif w and getattr(w, "_bell_button", None) is not None:
+                        # Sidebar-Screens (Home/Backlog/AllExperiments/
+                        # ShowExperiment, seit 2026-08-26 ohne TopBar) - Bell
+                        # sitzt in der Sidebar-Account-Gruppe (siehe
+                        # ui/widgets/sidebar_nav.py::build_utility_group()),
+                        # dort immer sichtbar, Badge nur bei unread>0.
+                        from ui.widgets import sidebar_nav as _sidebar_nav
+                        _sidebar_nav.refresh_badge(getattr(w, "_bell_badge", None), unread)
+                        bell_btn = w._bell_button
+                        if not getattr(bell_btn, "_bell_connected", False):
+                            bell_btn.clicked.connect(self._on_bell_clicked)
+                            bell_btn._bell_connected = True
                 except Exception:
                     pass
 
             _am.refresh_bell = _refresh_bell
 
             # Timer: alle 60s pruefen
-            from PySide6.QtCore import QTimer
             if not hasattr(self, "_bell_timer"):
                 self._bell_timer = QTimer(self)
                 self._bell_timer.timeout.connect(_refresh_bell)
@@ -1037,11 +1446,16 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _log_screen_open(self, index: int) -> None:
-        """Loggt jeden Screen-Wechsel im Stack fuer den Admin-Stats-Screen (best-effort)."""
+    def _log_screen_open(self) -> None:
+        """Loggt jeden sichtbaren Screen-Wechsel fuer den Admin-Stats-Screen
+        (best-effort) - an TabbedNavigator.screenChanged gehängt (siehe
+        __init__), das ohne Argumente feuert; der gerade sichtbare Screen
+        wird daher frisch über self.stack.currentWidget() aufgelöst statt
+        über einen Index (der hätte sich je nach Tab unterschiedlich
+        auflösen müssen, siehe ui/widgets/tab_container.py)."""
         try:
             from db.usage_log import log_usage_event
-            widget = self.stack.widget(index)
+            widget = self.stack.currentWidget()
             if widget is not None:
                 log_usage_event("screen_open", type(widget).__name__)
         except Exception:
@@ -1072,8 +1486,12 @@ class MainWindow(QMainWindow):
             self._notif_panel.load_notifications(notifs)
             # Panel unter dem Bell-Button positionieren
             w = self.stack.currentWidget()
+            bell = None
             if w and hasattr(w, "_header"):
                 bell = w._header._btn_bell
+            elif w and getattr(w, "_bell_button", None) is not None:
+                bell = w._bell_button
+            if bell is not None:
                 pos = bell.mapToGlobal(bell.rect().bottomLeft())
                 self._notif_panel.move(pos)
             self._notif_panel.show()
@@ -1106,7 +1524,7 @@ class MainWindow(QMainWindow):
     def _go_image_compare(self):
         """Navigiert zum ImageCompare-Screen."""
         if self.image_compare is None:
-            self.image_compare = ImageCompareScreen(on_back_home=self._go_home)
+            self.image_compare = ImageCompareScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
             self.stack.addWidget(self.image_compare)
         self.setWindowTitle("TrippleT – Image Compare")
         self.stack.setCurrentWidget(self.image_compare)
@@ -1121,6 +1539,7 @@ class MainWindow(QMainWindow):
             self.requirement_hub = RequirementHubScreen(
                 on_back_home=self._go_home,
                 on_quick_scan=self._go_quick_scan,
+                sidebar_callbacks=self._sidebar_nav_kwargs(),
             )
             self.stack.addWidget(self.requirement_hub)
         self.setWindowTitle("TrippleT – Requirement Hub")
@@ -1135,6 +1554,7 @@ class MainWindow(QMainWindow):
         if self.quick_scan is None:
             self.quick_scan = QuickScanScreen(
                 on_back_hub=self._go_requirement_hub,
+                sidebar_callbacks=self._sidebar_nav_kwargs(),
             )
             self.stack.addWidget(self.quick_scan)
         self.setWindowTitle("TrippleT – Quick Scan")
@@ -1147,7 +1567,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Canvas", "Canvas nicht verfügbar – Import fehlgeschlagen.")
             return
         if self.canvas is None:
-            self.canvas = CanvasScreen(on_back_home=self._go_home)
+            self.canvas = CanvasScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
             self.stack.addWidget(self.canvas)
         self.setWindowTitle("TrippleT – Canvas")
         self.stack.setCurrentWidget(self.canvas)
@@ -1159,7 +1579,7 @@ class MainWindow(QMainWindow):
                                 "YarnScope Batch nicht verfügbar – Import fehlgeschlagen.")
             return
         if self.tdms_batch is None:
-            self.tdms_batch = TDMSBatchScreen(on_back_home=self._go_home)
+            self.tdms_batch = TDMSBatchScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
             self.stack.addWidget(self.tdms_batch)
         self.setWindowTitle("TrippleT – YarnScope Batch")
         self.stack.setCurrentWidget(self.tdms_batch)
@@ -1174,10 +1594,23 @@ class MainWindow(QMainWindow):
             self.nozzle_calculator = NozzleCalculatorScreen(
                 on_back_home=self._go_home,
                 jets_loader=self._load_jets_data,
+                sidebar_callbacks=self._sidebar_nav_kwargs(),
             )
             self.stack.addWidget(self.nozzle_calculator)
         self.setWindowTitle("TrippleT – Jet ROI Calculator")
         self.stack.setCurrentWidget(self.nozzle_calculator)
+
+    def _go_label_generator(self):
+        """Navigiert zum Label Generator."""
+        if LabelGeneratorScreen is None:
+            QMessageBox.warning(self, "Label Generator",
+                                "Label Generator nicht verfügbar – Import fehlgeschlagen.")
+            return
+        if self.label_generator is None:
+            self.label_generator = LabelGeneratorScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.label_generator)
+        self.setWindowTitle("TrippleT – Label Generator")
+        self.stack.setCurrentWidget(self.label_generator)
 
     def _go_air_supply(self):
         """Navigiert zum Air Supply Network Calculator."""
@@ -1194,6 +1627,7 @@ class MainWindow(QMainWindow):
                 on_back_home=self._go_home,
                 jets_loader=self._load_jets_data,
                 username=username,
+                sidebar_callbacks=self._sidebar_nav_kwargs(),
             )
             self.stack.addWidget(self.air_supply)
         self.setWindowTitle("TrippleT – Air Supply Network Calculator")
@@ -1271,29 +1705,47 @@ class MainWindow(QMainWindow):
             finally:
                 self._create_screen_ref = None
 
-    def _show_request_preview_dialog(self):
-        """Öffnet den Request-Preview-Dialog mit Navigation und «Create Experiment»-Button."""
+    def _show_request_preview_dialog(self, status: int = 3, title: str = "Pending Experiment Requests"):
+        """Öffnet den Request-Preview-Dialog mit Navigation und «Create Experiment»-Button.
+
+        Ursprünglich fix auf genehmigte Requests (RequestStatus=3, der Badge auf
+        "Create New Experiment"). Auf Nutzerwunsch ("wenn ich auf den roten
+        Punkt bei Experiment Request klicke, will ich die offenen Requests so
+        sehen wie wenn ich auf den roten Punkt bei Create New Experiment
+        klicke") um `status`/`title` erweitert - der Badge auf "Experiment
+        Request" (offene Requests, RequestStatus=1) nutzt jetzt denselben
+        Dialog, nur mit anderem Filter/Titel statt einer eigenen Kopie. Der
+        "Create Experiment"-Button bleibt bewusst für beide Status verfügbar -
+        `_go_create_experiment(..., preset_request_id=...)` ist nicht an einen
+        bestimmten RequestStatus gebunden, ein Superuser (einzige Zielgruppe
+        dieses Badges) darf auch aus einem noch nicht offiziell genehmigten
+        Request heraus direkt ein Experiment anlegen."""
         from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
                                         QPushButton, QLabel, QFrame, QScrollArea,
-                                        QSizePolicy, QWidget)
+                                        QSizePolicy, QWidget, QMessageBox)
         from PySide6.QtCore import Qt
         from db.connection import fetch_all
 
-        # ── Lade alle genehmigten Requests ──────────────────────────────
         try:
             rows = fetch_all(
-                "SELECT * FROM [tblExperimentRequests] WHERE [RequestStatus] = 3 ORDER BY [ID] DESC",
-                []
+                "SELECT * FROM [tblExperimentRequests] WHERE [RequestStatus] = ? ORDER BY [ID] DESC",
+                [status]
             )
         except Exception:
             rows = []
 
         if not rows:
-            self._go_create_experiment("create")
+            if status == 3:
+                # Bestehendes Verhalten für den "Create New Experiment"-Badge
+                # unangetastet: keine genehmigten Requests -> direkt zum
+                # normalen "Create Experiment"-Formular.
+                self._go_create_experiment("create")
+            else:
+                QMessageBox.information(self, title, "No experiment requests found.")
             return
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("Pending Experiment Requests")
+        dlg.setWindowTitle(title)
         dlg.setModal(True)
         dlg.setMinimumWidth(820)
         dlg.setMinimumHeight(440)
@@ -1533,6 +1985,7 @@ class MainWindow(QMainWindow):
             on_open_experiment=self._go_show_experiment,
             mode=mode,
             existing_experiment_id=existing_experiment_id,
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
         self.stack.addWidget(screen)
         self.stack.setCurrentWidget(screen)
@@ -1558,6 +2011,7 @@ class MainWindow(QMainWindow):
             on_back_experiment=_back_to_experiment,
             on_open_experiment=self._go_show_experiment,
             mode="addtrials",
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
         self.stack.addWidget(screen)
         self.stack.setCurrentWidget(screen)
@@ -1567,17 +2021,60 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _go_show_experiment(self, exp_pk: int, series_pk: int, experiment_id: str):
+    def _find_open_show_experiment_for_series(self, series_pk: int):
+        """Sucht über ALLE Tabs (Singleton self.show_experiment UND per
+        Ctrl+Klick geöffnete tab-lokale Instanzen, siehe
+        _make_local_experiment_opener()/_open_show_experiment_in_new_tab())
+        nach einer ShowExperimentScreen-Instanz, die GENAU diese TrialSeries
+        bereits anzeigt. Von _go_show_experiment() genutzt, damit z.B. ein
+        Klick aus Manage Yarn/Manage Jets' "Used in Trial"-Popup einen
+        bereits offenen Tab fokussiert, statt ihn zu ignorieren und
+        stattdessen den (ggf. in einem GANZ ANDEREN Tab sichtbaren)
+        Singleton umzubiegen (Bugreport 2026-08-27: "wenn ich nun eine
+        trialseries aus Manage Yarn ... öffne, öffnet es nicht in der
+        existierenden tab, wenn es mehrere tabs gibt")."""
+        tabs = getattr(self, "_tabs", None)
+        if tabs is None:
+            return None
+        for i in range(tabs.count()):
+            stack = tabs.widget(i)
+            widget = stack.currentWidget() if isinstance(stack, QStackedWidget) else None
+            if isinstance(widget, ShowExperimentScreen) and getattr(widget, "_series_pk", None) == series_pk:
+                return widget
+        return None
+
+    def _go_show_experiment(self, exp_pk: int, series_pk: int, experiment_id: str,
+                             back_label: Optional[str] = None, back_callback=None):
         """Navigiert zum ShowExperiment-Screen für ein bestimmtes Experiment.
 
         Args:
             exp_pk:        Primärschlüssel in tblExperimente.
             series_pk:     Primärschlüssel in tblTrialSeries.
             experiment_id: Lesbare ID (z.B. "2024-PG-001") für den Titel.
+            back_label:    Beschriftung für den kontextuellen Back-Chip in der
+                           Tools-Leiste (z.B. "Backlog", "All Experiments") -
+                           siehe ShowExperimentScreen.set_back_target(). Ohne
+                           Angabe bleibt der Chip unsichtbar (kein bekannter
+                           Rücksprung-Kontext, z.B. beim Öffnen direkt nach
+                           dem Anlegen eines neuen Experiments).
+            back_callback: Zugehöriger Rücksprung-Callback.
         """
+        # Ist diese TrialSeries bereits in irgendeinem Tab offen (Singleton
+        # ODER ein per Ctrl+Klick geöffneter Vergleichs-Tab) - einfach dorthin
+        # wechseln (Fokus statt Duplikat/Umbiegen), statt sie ggf. blind in
+        # den Singleton woanders zu laden.
+        existing = self._find_open_show_experiment_for_series(series_pk)
+        if existing is not None:
+            self.setWindowTitle(f"TrippleT – Show Experiment {experiment_id}")
+            self.stack.setCurrentWidget(existing)
+            existing.set_back_target(back_label, back_callback)
+            existing.on_open_report = self._go_report
+            return
+
         # Erst Screen aktivieren, dann laden – so bleibt Navigation auch bei Fehlern nachvollziehbar.
         self.setWindowTitle(f"TrippleT – Show Experiment {experiment_id}")
         self.stack.setCurrentWidget(self.show_experiment)
+        self.show_experiment.set_back_target(back_label, back_callback)
 
         # Report-Callback verdrahten
         self.show_experiment.on_open_report = self._go_report
@@ -1597,8 +2094,127 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-    def _go_report(self, series_pk: int) -> None:
-        """Öffnet den Report-Screen für eine TrialSeries."""
+    def _build_dedicated_show_experiment_screen(self, back_label: Optional[str] = None, back_callback=None):
+        """Baut eine frische, eigenständige ShowExperimentScreen-Instanz mit
+        voller Sidebar und eigener Add-Trials-Verdrahtung, die GENAU DIESE
+        Instanz zum Ziel hat statt des geteilten Singletons
+        (self.show_experiment) - gemeinsamer Baustein für alle Kontexte, in
+        denen ein Experiment unabhängig vom Singleton betrachtet werden soll:
+        ein per Ctrl+Klick geöffneter eigener Vergleichs-Tab (siehe
+        _open_show_experiment_in_new_tab()) ODER ein normaler Doppelklick
+        INNERHALB eines bereits unabhängigen (per Ctrl+Klick geöffneten)
+        Backlog-/All-Experiments-Tabs (siehe _make_local_experiment_opener(),
+        Bugreport 2026-08-27: "praktisch habe ich aber nur eine trialseries
+        offen in show experiment und im anderen tab das backlog" - der
+        normale Doppelklick in einem frischen Backlog-Tab delegierte bisher
+        an den Singleton, der aber ggf. gerade in einem GANZ ANDEREN Tab
+        sichtbar war und dadurch dessen Inhalt überschrieb)."""
+        screen_ref: dict = {}
+
+        def _on_add_trials(a_exp_pk: int, a_series_pk: int, a_experiment_id: str):
+            self._dispose_old_create_screen()
+            self.setWindowTitle("TrippleT – Add Trials")
+
+            def _back_to_this_experiment():
+                self._dispose_old_create_screen()
+                self.setWindowTitle(f"TrippleT – Show Experiment {a_experiment_id}")
+                self.stack.setCurrentWidget(screen_ref["screen"])
+
+            create_screen = CreateExperimentScreen(
+                on_back_home=self._go_home,
+                on_back_experiment=_back_to_this_experiment,
+                on_open_experiment=self._go_show_experiment,
+                mode="addtrials",
+                sidebar_callbacks=self._sidebar_nav_kwargs(),
+            )
+            self.stack.addWidget(create_screen)
+            self.stack.setCurrentWidget(create_screen)
+            self._create_screen_ref = create_screen
+            try:
+                create_screen.open_addtrials_prefill(a_exp_pk, a_series_pk)
+            except Exception:
+                pass
+
+        screen = ShowExperimentScreen(
+            on_back_home=self._go_home,
+            on_add_trials=_on_add_trials,
+            **self._sidebar_nav_kwargs(),
+        )
+        screen_ref["screen"] = screen
+        screen.on_open_report = self._go_report
+        screen.set_back_target(back_label, back_callback)
+        return screen
+
+    def _load_record_safely(self, screen, exp_pk: int, series_pk: int, experiment_id: str) -> None:
+        try:
+            screen.load_record(exp_pk, series_pk, experiment_id)
+        except Exception as e:
+            try:
+                QMessageBox.critical(
+                    self,
+                    "Fehler beim Öffnen",
+                    f"Experiment konnte nicht geöffnet werden.\n\n"
+                    f"ExperimentID: {experiment_id}\n"
+                    f"ExpPK: {exp_pk} / SeriesPK: {series_pk}\n\n"
+                    f"{e}",
+                )
+            except Exception:
+                pass
+
+    def _open_show_experiment_in_new_tab(self, exp_pk: int, series_pk: int, experiment_id: str,
+                                          back_label: Optional[str] = None, back_callback=None) -> None:
+        """Öffnet ein Experiment in einer FRISCHEN, eigenständigen
+        ShowExperimentScreen-Instanz in einem neuen Tab - im Gegensatz zu
+        allen anderen Screens bleibt Show Experiment beim normalen Ctrl+Klick
+        (self._go_show_experiment()) NICHT beim geteilten Singleton
+        (self.show_experiment), weil zwei unterschiedliche Experimente
+        gleichzeitig vergleichen zu können der eigentliche Sinn dieses Ctrl+
+        Klick-Pfads ist. Gemeinsamer Kern für BEIDE Ctrl-Auslöser: sowohl
+        _go_show_experiment() (Manage Yarn/Jets-Popups) als auch
+        _open_experiment_from_backlog_in_new_tab()/_open_experiment_from_all_in_new_tab()
+        (Backlog/All Experiments' eigene Ctrl-Erkennung) landen hier."""
+        def _populate():
+            screen = self._build_dedicated_show_experiment_screen(back_label, back_callback)
+            self.setWindowTitle(f"TrippleT – Show Experiment {experiment_id}")
+            self.stack.addWidget(screen)
+            self.stack.setCurrentWidget(screen)
+            self._load_record_safely(screen, exp_pk, series_pk, experiment_id)
+
+        self._tabs.open_in_new_tab(_populate)
+
+    def _make_local_experiment_opener(self, back_label: str, back_callback):
+        """Baut einen on_open_experiment-Handler für eine FRISCHE (per
+        Ctrl+Klick unabhängig geöffnete) Backlog-/All-Experiments-Instanz:
+        ein normaler (nicht Ctrl-)Doppelklick auf eine TrialSeries dort soll
+        INNERHALB DESSELBEN Tabs angezeigt werden (genau wie beim
+        Original-Backlog in Tab 0, das dafür den globalen Singleton
+        self.show_experiment wiederverwendet) - OHNE dabei versehentlich
+        diesen globalen Singleton zu benutzen, der gerade in einem GANZ
+        ANDEREN Tab sichtbar sein könnte (Bugreport 2026-08-27: "praktisch
+        habe ich aber nur eine trialseries offen in show experiment und im
+        anderen tab das backlog"). Baut dafür lazy GENAU EINE eigene,
+        tab-lokale ShowExperimentScreen-Instanz beim ersten Aufruf und nutzt
+        sie für alle weiteren Klicks innerhalb desselben Tabs wieder -
+        Ctrl+Doppelklick (on_open_in_new_window) bleibt davon unberührt und
+        öffnet weiterhin einen echten, zusätzlichen neuen Tab."""
+        local: dict = {"screen": None}
+
+        def _open(exp_pk: int, series_pk: int, experiment_id: str):
+            if local["screen"] is None:
+                local["screen"] = self._build_dedicated_show_experiment_screen(back_label, back_callback)
+            screen = local["screen"]
+            self.setWindowTitle(f"TrippleT – Show Experiment {experiment_id}")
+            self.stack.addWidget(screen)
+            self.stack.setCurrentWidget(screen)
+            self._load_record_safely(screen, exp_pk, series_pk, experiment_id)
+
+        return _open
+
+    def _go_report(self, series_pk: int, report_id: Optional[int] = None) -> None:
+        """Öffnet den Report-Screen für eine TrialSeries. `report_id` (siehe
+        ShowExperimentScreen's "Saved Reports"-Dropdown+Go-Button) lädt
+        direkt einen bestimmten gespeicherten Report, statt der leeren
+        Standardansicht."""
         if self.report_screen is None:
             QMessageBox.warning(
                 self, "Report",
@@ -1607,7 +2223,7 @@ class MainWindow(QMainWindow):
             )
             return
         self.setWindowTitle("TrippleT – Smart Chart")
-        self.report_screen.load_series(series_pk)
+        self.report_screen.load_series(series_pk, initial_report_id=report_id)
         self.stack.setCurrentWidget(self.report_screen)
 
     def _go_back_to_show_experiment(self) -> None:
@@ -1627,40 +2243,46 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.smartchart_screen)
 
     def _open_experiment_from_all(self, exp_pk: int, series_pk: int, experiment_id: str):
-        """Öffnet ein Experiment aus dem AllExperiments-Screen heraus."""
-        """
-        Öffnet ShowExperimentScreen aus dem AllExperiments-Screen.
-        Der Zurück-Button geht danach wieder auf AllExperiments.
-        """
-        # Ziel für den Back-Button setzen
-        try:
-            self.show_experiment.on_back_all_experiments = self._go_all_experiments
-        except Exception:
-            pass
-        self._go_show_experiment(exp_pk, series_pk, experiment_id)
+        """Öffnet ShowExperimentScreen aus dem AllExperiments-Screen. Der
+        Back-Chip zeigt danach wieder zurück auf All Experiments."""
+        self._go_show_experiment(exp_pk, series_pk, experiment_id,
+                                  back_label="All Experiments", back_callback=self._go_all_experiments)
 
     def _open_experiment_from_backlog(self, exp_pk: int, series_pk: int, experiment_id: str):
-        """Öffnet ein Experiment aus dem Backlog-Screen heraus."""
-        """
-        Öffnet ShowExperimentScreen aus dem Backlog-Screen.
-        Der Zurück-Button geht danach wieder auf den Backlog.
-        """
-        try:
-            self.show_experiment.on_back_all_experiments = self._go_backlog
-        except Exception:
-            pass
-        self._go_show_experiment(exp_pk, series_pk, experiment_id)
+        """Öffnet ShowExperimentScreen aus dem Backlog-Screen. Der Back-Chip
+        zeigt danach wieder zurück auf den Backlog."""
+        self._go_show_experiment(exp_pk, series_pk, experiment_id,
+                                  back_label="Backlog", back_callback=self._go_backlog)
+
+    def _open_experiment_from_yarn(self, exp_pk: int, series_pk: int, experiment_id: str):
+        """Öffnet ein Experiment aus dem "Used in Trial Series"-Popup in Manage
+        Yarn heraus. Der Back-Chip zeigt danach wieder zurück auf Manage Yarn."""
+        self._go_show_experiment(exp_pk, series_pk, experiment_id,
+                                  back_label="Manage Yarn", back_callback=self._go_add_yarn)
+
+    def _open_experiment_from_jets(self, exp_pk: int, series_pk: int, experiment_id: str):
+        """Öffnet ein Experiment aus dem "Used in Trial Series"-Popup in Manage
+        Jets heraus. Der Back-Chip zeigt danach wieder zurück auf Manage Jets."""
+        self._go_show_experiment(exp_pk, series_pk, experiment_id,
+                                  back_label="Manage Jets", back_callback=self._go_back_manage_jets)
 
     def open_experiment_in_new_window(self, exp_pk: int, series_pk: int, experiment_id: str) -> None:
-        """Öffnet ShowExperimentScreen in einem eigenständigen neuen Fenster (kein Stack)."""
+        """Öffnet ShowExperimentScreen in einem eigenständigen neuen Fenster
+        (kein Stack) - Ctrl+Doppelklick/Kontextmenü "Open in New Window" aus
+        Backlog/All Experiments heraus."""
         win = QMainWindow()
-        win.setWindowTitle(f"TrippleT \u2013 {experiment_id}")
+        win.setWindowTitle(f"TrippleT – {experiment_id}")
         win.setMinimumSize(1100, 700)
 
         screen_widget = ShowExperimentScreen(
             on_back_home=win.close,
-            on_back_all_experiments=win.close,
         )
+        # Kein "on_logout"/keine Sidebar-Nav-Callbacks hier (dieses Fenster
+        # ist vom Haupt-Stack losgelöst - siehe open_experiment_in_new_window()-
+        # Docstring weiter oben zur Begründung, wieso die Nav-Gruppe hier
+        # unverdrahtet/deaktiviert bleibt) - nur der Back-Chip bekommt ein
+        # sinnvolles Ziel: dieses eigenständige Fenster schliessen.
+        screen_widget.set_back_target("Close window", win.close)
         screen_widget.on_open_report = lambda sp: self._go_report_in_new_window(sp, win)
 
         win.setCentralWidget(screen_widget)
@@ -1700,7 +2322,7 @@ class MainWindow(QMainWindow):
                 "Report nicht verfügbar – PySide6-WebEngine nicht installiert.")
             return
         win = QMainWindow()
-        win.setWindowTitle("TrippleT \u2013 Smart Chart")
+        win.setWindowTitle("TrippleT – Smart Chart")
         win.setMinimumSize(1100, 700)
         try:
             win.setStyleSheet(self.styleSheet())
@@ -1718,6 +2340,129 @@ class MainWindow(QMainWindow):
                               if win in self._detached_windows else None)
         win.closeEvent = self._make_detached_close_guard(win)
 
+    def _make_detached_close_guard(self, win):
+        """Builds a closeEvent handler for a detached (plain) QMainWindow
+        instance that asks for confirmation if it is the last open window."""
+        original_close_event = win.closeEvent
+
+        def guarded_close_event(event):
+            if self._open_window_count(exclude=win) == 0:
+                if not self._confirm_quit_dialog(win):
+                    event.ignore()
+                    return
+            try:
+                original_close_event(event)
+            except Exception:
+                event.accept()
+
+        return guarded_close_event
+
+    # -->-->-->- Fresh-Instance-Tabs: Show Experiment / Backlog / All Experiments -->-->-->-
+    # Die folgenden Methoden bauen eine frische, unabhängige Screen-Instanz
+    # in einem eigenen Tab statt des geteilten Singletons - für diese drei
+    # Screens ist "mehrfach gleichzeitig offen" ein echtes Bedürfnis
+    # (Experimente vergleichen, zwei Backlog-/All-Experiments-Ansichten
+    # nebeneinander), anders als bei allen übrigen Sidebar-Zielen (siehe
+    # _fresh_tab_targets/_open_in_new_tab_dispatch()).
+    def _open_experiment_from_all_in_new_tab(self, exp_pk: int, series_pk: int, experiment_id: str):
+        """Öffnet ein Experiment in einer frischen ShowExperimentScreen-Instanz
+        in einem neuen Tab, mit funktionierendem Back-Chip ("All Experiments")
+        - Ctrl+Doppelklick/Kontextmenü "Open in New Tab" aus All Experiments
+        heraus (abgelöst aus einem früheren "in neuem Fenster öffnen"-
+        Feature, siehe _open_show_experiment_in_new_tab()). Ohne eigenen
+        Back-Chip-Callback pro Aufrufer hätte der frische Tab keinen
+        sinnvollen Rücksprung (beide Aufrufer teilen sich sonst denselben
+        generischen Callback und könnten nicht zwischen "zurück zu Backlog"
+        und "zurück zu All Experiments" unterscheiden)."""
+        self._open_show_experiment_in_new_tab(
+            exp_pk, series_pk, experiment_id,
+            back_label="All Experiments", back_callback=self._go_all_experiments)
+
+    def _open_experiment_from_backlog_in_new_tab(self, exp_pk: int, series_pk: int, experiment_id: str):
+        """Wie _open_experiment_from_all_in_new_tab(), aber mit Back-Chip
+        ("Backlog") - Ctrl+Doppelklick/Kontextmenü "Open in New Tab" aus
+        Backlog heraus."""
+        self._open_show_experiment_in_new_tab(
+            exp_pk, series_pk, experiment_id,
+            back_label="Backlog", back_callback=self._go_backlog)
+
+    def _open_backlog_in_new_tab(self):
+        """Ctrl+Klick auf den 'Backlog'-Sidebar-Eintrag: baut eine frische,
+        unabhängige BacklogScreen-Instanz in einem neuen Tab (siehe
+        _fresh_tab_targets/_open_in_new_tab_dispatch()) statt zum
+        geteilten Singleton (self.backlog) zu wechseln - genau dasselbe
+        Fresh-Instance-Muster wie _open_show_experiment_in_new_tab().
+
+        `on_open_experiment` (normaler Doppelklick) nutzt einen tab-lokalen
+        Experiment-Opener (siehe _make_local_experiment_opener()) statt
+        _open_experiment_from_backlog() (welches den globalen Singleton
+        self.show_experiment verwendet hätte) - sonst würde ein normaler
+        Doppelklick in DIESEM frischen Tab den Singleton woanders (z.B. Tab 0)
+        überschreiben statt innerhalb dieses Tabs zu öffnen."""
+        backlog_ref: dict = {}
+
+        def _back_to_this_backlog():
+            self.setWindowTitle("TrippleT – Backlog")
+            self.stack.setCurrentWidget(backlog_ref["screen"])
+
+        open_experiment_locally = self._make_local_experiment_opener("Backlog", _back_to_this_backlog)
+
+        def _populate():
+            screen = BacklogScreen(
+                on_back_home=self._go_home,
+                on_open_experiment=open_experiment_locally,
+                on_open_in_new_window=self._open_experiment_from_backlog_in_new_tab,
+                on_open_in_new_os_window=self.open_experiment_in_new_window,
+                on_open_report=self._go_report,
+                **self._sidebar_nav_kwargs(include_open_backlog=False),
+            )
+            backlog_ref["screen"] = screen
+            self.setWindowTitle("TrippleT – Backlog")
+            self.stack.addWidget(screen)
+            self.stack.setCurrentWidget(screen)
+        self._tabs.open_in_new_tab(_populate)
+
+    def _open_all_experiments_in_new_tab(self):
+        """Wie _open_backlog_in_new_tab(), für 'All Experiments'. `can_review`
+        wird hier - anders als beim Singleton self.all_experiments, dessen
+        can_review erst nachträglich in _on_login_success() per
+        set_can_review() gesetzt wird, weil access_level zum
+        Konstruktionszeitpunkt in __init__ noch nicht bekannt ist - direkt
+        korrekt aus dem inzwischen bekannten access_level abgeleitet (dieser
+        Pfad ist nur nach erfolgtem Login über die Sidebar erreichbar)."""
+        try:
+            access_level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            access_level = 0
+        can_review = access_level >= 4  # gleiche Regel wie _on_login_success()
+
+        # Wie bei _open_backlog_in_new_tab(): normaler Doppelklick bleibt
+        # innerhalb DIESES Tabs (tab-lokaler Experiment-Opener), statt den
+        # globalen Singleton self.show_experiment zu benutzen.
+        all_exp_ref: dict = {}
+
+        def _back_to_this_all_experiments():
+            self.setWindowTitle("TrippleT – All Experiments")
+            self.stack.setCurrentWidget(all_exp_ref["screen"])
+
+        open_experiment_locally = self._make_local_experiment_opener("All Experiments", _back_to_this_all_experiments)
+
+        def _populate():
+            screen = AllExperimentsScreen(
+                on_back_home=self._go_home,
+                on_open_experiment=open_experiment_locally,
+                on_open_in_new_window=self._open_experiment_from_all_in_new_tab,
+                on_open_in_new_os_window=self.open_experiment_in_new_window,
+                on_copy_trialseries=self._go_copy_trialseries,
+                on_open_report=self._go_report,
+                can_review=can_review,
+                **self._sidebar_nav_kwargs(include_all_experiments=False),
+            )
+            all_exp_ref["screen"] = screen
+            self.setWindowTitle("TrippleT – All Experiments")
+            self.stack.addWidget(screen)
+            self.stack.setCurrentWidget(screen)
+        self._tabs.open_in_new_tab(_populate)
 
     def _go_copy_trialseries(self, exp_pk: int, series_pk: int, experiment_id: str):
         """Öffnet den Erstellen-Screen im Copy-Modus für eine bestehende TrialSeries."""
@@ -1751,13 +2496,199 @@ class MainWindow(QMainWindow):
             return
         try:
             if not hasattr(self, 'manage_yarn') or self.manage_yarn is None:
-                self.manage_yarn = Screen(on_back_home=self._go_home)
+                self.manage_yarn = Screen(on_back_home=self._go_home,
+                                          on_edit_yarn=self._go_edit_yarn_form,
+                                          on_new_yarn=self._go_new_yarn_form,
+                                          on_open_experiment=self._open_experiment_from_yarn,
+                                          sidebar_callbacks=self._sidebar_nav_kwargs())
                 self.stack.addWidget(self.manage_yarn)
             self.setWindowTitle("TrippleT – Manage Yarn")
+            full = app_meta.can_use_admin_box()
+            self.manage_yarn.set_permissions(can_delete=full, can_edit_minstock=full)
             self.stack.setCurrentWidget(self.manage_yarn)
         except Exception as e:
             QMessageBox.critical(self, "Manage Yarn",
                                  f"Fehler beim Öffnen: {e}")
+
+    def _go_back_manage_yarn(self):
+        self.setWindowTitle("TrippleT – Manage Yarn")
+        if hasattr(self, 'manage_yarn') and self.manage_yarn is not None:
+            full = app_meta.can_use_admin_box()
+            self.manage_yarn.set_permissions(can_delete=full, can_edit_minstock=full)
+            self.stack.setCurrentWidget(self.manage_yarn)
+        else:
+            self._go_add_yarn()
+
+    def _ensure_new_yarn_screen(self) -> bool:
+        """Baut `self.new_yarn` (NewYarnScreen) lazy, genau einmal pro
+        Prozesslaufzeit - wiederverwendet von `_go_edit_yarn_form()` (bestehenden
+        Datensatz bearbeiten) UND `_go_new_yarn_form()` (neuen Datensatz
+        anlegen, siehe dort). Gibt False zurück, falls NewYarnScreen nicht
+        verfügbar ist (Import fehlgeschlagen)."""
+        if NewYarnScreen is None:
+            return False
+        if hasattr(self, 'new_yarn') and self.new_yarn is not None:
+            return True
+        fk_maps = {}
+        try:
+            g_id2name, g_name2id = load_garntyp_map()
+            fk_maps['garntyp'] = {'id_to_name': g_id2name, 'name_to_id': g_name2id}
+            m_id2name, m_name2id = load_material_map()
+            fk_maps['material'] = {'id_to_name': m_id2name, 'name_to_id': m_name2id}
+            yg_id2name, yg_name2id = load_yarngroup_map()
+            fk_maps['yarngroupid'] = {'id_to_name': yg_id2name, 'name_to_id': yg_name2id}
+        except Exception:
+            pass
+        try:
+            # eigener try/except: tblColour existiert (Stand 2026-08-24) nur auf
+            # dev_local/prod, nicht auf dev - darf Garntyp/Material/YarnGroup
+            # oben nicht mit reissen, falls die Tabelle hier fehlt.
+            c_id2name, c_name2id = load_colour_map()
+            fk_maps['colourid'] = {'id_to_name': c_id2name, 'name_to_id': c_name2id}
+        except Exception:
+            pass
+        try:
+            from db.user_directory import load_user_id_to_name
+            fk_maps['createdby'] = {'id_to_name': load_user_id_to_name(), 'name_to_id': {}}
+        except Exception:
+            pass
+        # IMMER die volle Spaltenliste (inkl. CreatedBy/CreationDate) nehmen -
+        # der Screen wird nur einmal lazy gebaut und wiederverwendet; wäre der
+        # erste Aufrufer kein Superuser, gäbe es diese Spalten sonst gar nicht
+        # und ein späterer Superuser würde sie nie zu sehen bekommen
+        # (set_audit_fields_visible steuert nur die Sichtbarkeit, nicht ob die
+        # Felder überhaupt existieren).
+        all_cols_sample = fetch_all('SELECT * FROM [tblYarn] LIMIT 1', [])
+        all_columns = list(all_cols_sample[0].keys()) if all_cols_sample else ['ID', 'Name']
+        self.new_yarn = NewYarnScreen(
+            columns=all_columns, fk_maps=fk_maps, id_column='ID',
+            on_back_home=self._go_back_manage_yarn,
+            on_quick_add_colour=quick_add_colour,
+            sidebar_callbacks=self._sidebar_nav_kwargs(),
+        )
+        self.stack.addWidget(self.new_yarn)
+        return True
+
+    def _go_new_yarn_form(self):
+        """Öffnet den NewYarnScreen leer für einen NEUEN Yarn-Datensatz
+        (Nutzerwunsch: "direkt das Formular öffnen und den Eintrag erst
+        wirklich in die DB speichern, wenn ich da auf Speichern klicke" - löst
+        das bisherige Verhalten von ManageYarnScreen.btn_new ab, das sofort
+        einen leeren "New Yarn"-Datensatz einfügte, noch bevor irgendwelche
+        Werte erfasst waren. Cancel schreibt jetzt dadurch strukturell nichts
+        mehr - es gibt schlicht keinen halb angelegten Datensatz mehr
+        aufzuräumen, siehe CLAUDE.md)."""
+        if not self._ensure_new_yarn_screen():
+            QMessageBox.information(
+                self, "Yarn", "'New Yarn' ist derzeit nicht verfügbar.")
+            return
+
+        def _create_save(data: Dict) -> Optional[int]:
+            if not app_meta.can_use_admin_box():
+                data = {k: v for k, v in data.items() if k.lower() != "minstock"}
+            # Gleicher Duplicate-Check wie beim Bearbeiten (exclude_id=None,
+            # da der Datensatz noch gar nicht existiert).
+            if find_duplicate_yarn is not None:
+                match = find_duplicate_yarn(data, exclude_id=None)
+                if match and not confirm_save_despite_duplicate(self.new_yarn, *match):
+                    return None
+            data = dict(data)
+            if not data.get("Name"):
+                data["Name"] = "New Yarn"
+            data["GlobalID"] = new_global_id()
+            data["CreatedBy"] = (app_meta.current_user or {}).get("id")
+            data["CreationDate"] = datetime.datetime.now()
+            cols = list(data.keys())
+            cols_sql = ", ".join(f"[{c}]" for c in cols)
+            placeholders = ", ".join(["?"] * len(cols))
+            sql = f"INSERT INTO [tblYarn] ({cols_sql}) VALUES ({placeholders})"
+            # EINE Connection für Insert + lastrowid statt execute()+fetch_all(
+            # 'SELECT @@IDENTITY') - Letzteres ziehen sich unabhängig eine
+            # (nicht notwendigerweise dieselbe) Verbindung aus dem Pool, siehe
+            # quick_add_colour()'s Docstring in screen_manage_yarn.py für den
+            # empirisch nachgewiesenen Bug dahinter.
+            from db.connection import get_connection
+            with get_connection() as cn:
+                cur = cn.cursor()
+                cur.execute(sql, [data[c] for c in cols])
+                cn.commit()
+                new_id = cur.lastrowid
+            return int(new_id) if new_id else None
+
+        def _on_created(new_id):
+            try:
+                if hasattr(self, 'manage_yarn') and self.manage_yarn is not None:
+                    self.manage_yarn.reload_data()
+                    if new_id is not None:
+                        self.manage_yarn._select_row_by_id(new_id)
+            except Exception:
+                pass
+            self._go_back_manage_yarn()
+
+        try:
+            self.new_yarn._on_save = _create_save
+            self.new_yarn._on_created = _on_created
+            self.new_yarn.load_from_row({})  # alle Felder auf blank/leer zuruecksetzen
+            self.new_yarn.set_minstock_locked(not app_meta.can_use_admin_box())
+            self.new_yarn.set_audit_fields_visible(app_meta.is_superuser_level())
+        except Exception:
+            pass
+
+        self.setWindowTitle("TrippleT – New Yarn")
+        self.stack.setCurrentWidget(self.new_yarn)
+
+    def _go_edit_yarn_form(self, row: Dict):
+        """Öffnet den NewYarnScreen für einen bestehenden Yarn-Datensatz (Formular-
+        Ansicht statt Pivot-Tabelle). MinStock bleibt für AdminBox=0-User gesperrt,
+        alles andere ist editierbar - siehe screen_new_yarn.NewYarnScreen."""
+        if not self._ensure_new_yarn_screen():
+            QMessageBox.information(
+                self, "Yarn", "'Edit in Form' ist derzeit nicht verfügbar.")
+            return
+        id_col = 'ID'
+        yarn_id = row.get(id_col)
+
+        def _update_save(data: Dict) -> Optional[int]:
+            # Defense-in-depth: NewYarnScreen already strips MinStock from data
+            # when locked, but re-check live here too rather than trust the
+            # form's cached lock state alone.
+            if not app_meta.can_use_admin_box():
+                data = {k: v for k, v in data.items() if k.lower() != "minstock"}
+            # Duplicate-Check vor dem Schreiben (Nutzerwunsch: "bei jedem
+            # speichern/aktualisieren geprüft werden") - None signalisiert
+            # NewYarnScreen._on_click_save(), bei "No" auf dem Formular zu
+            # bleiben statt (fälschlich) Erfolg/Navigation auszulösen.
+            if find_duplicate_yarn is not None:
+                match = find_duplicate_yarn(data, exclude_id=yarn_id)
+                if match and not confirm_save_despite_duplicate(self.new_yarn, *match):
+                    return None
+            cols = list(data.keys())
+            if not cols:
+                return yarn_id
+            set_sql = ", ".join(f"[{c}] = ?" for c in cols)
+            sql = f"UPDATE [tblYarn] SET {set_sql} WHERE [ID] = ?"
+            execute(sql, [data[c] for c in cols] + [yarn_id])
+            return yarn_id
+
+        def _on_saved(_new_id=None):
+            try:
+                self.manage_yarn.reload_data()
+                self.manage_yarn._select_row_by_id(yarn_id)
+            except Exception:
+                pass
+            self._go_back_manage_yarn()
+
+        try:
+            self.new_yarn._on_save = _update_save
+            self.new_yarn._on_created = _on_saved
+            self.new_yarn.load_from_row(row)
+            self.new_yarn.set_minstock_locked(not app_meta.can_use_admin_box())
+            self.new_yarn.set_audit_fields_visible(app_meta.is_superuser_level())
+        except Exception:
+            pass
+
+        self.setWindowTitle("TrippleT – Edit Yarn")
+        self.stack.setCurrentWidget(self.new_yarn)
 
     def _go_yarn_stock(self):
         """Navigiert zum Yarn-Stock-Screen (Garnlager)."""
@@ -1772,7 +2703,7 @@ class MainWindow(QMainWindow):
             return
         try:
             if not hasattr(self, 'yarn_stock') or self.yarn_stock is None:
-                self.yarn_stock = Screen(on_back_home=self._go_home)
+                self.yarn_stock = Screen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
                 self.stack.addWidget(self.yarn_stock)
             else:
                 self.yarn_stock.reload_data()
@@ -1798,6 +2729,15 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Yarn Stock", f"Fehler beim Springen: {e}")
 
+    def _go_my_requests_from_notification(self, request_id: int):
+        """Von einer Experiment-Request-Notification aus (Statuswechsel,
+        Aenderung akzeptiert/abgelehnt) zu 'My Requests' navigieren.
+
+        Springt bewusst nicht direkt in den Bearbeiten-Screen (request_id
+        koennte inzwischen geloescht sein, z.B. eine bereits akzeptierte/
+        abgelehnte Kopie) - die Liste ist immer ein gueltiges Ziel."""
+        self._go_my_requests()
+
     def _go_add_user(self):
         self.setWindowTitle("TrippleT – Manage User")
         self.stack.setCurrentWidget(self.manage_user)
@@ -1805,15 +2745,18 @@ class MainWindow(QMainWindow):
     def _go_add_jet(self):
         self.setWindowTitle("TrippleT – Manage Jets")
         self.manage_jets.reload_data()
+        self.manage_jets.set_read_only(not app_meta.can_use_admin_box())
         self.stack.setCurrentWidget(self.manage_jets)
 
     def _go_add_top_plate(self):
         self.setWindowTitle("TrippleT – Manage Top Plates")
         self.manage_top_plates.reload_data()
+        self.manage_top_plates.set_read_only(not app_meta.can_use_admin_box())
         self.stack.setCurrentWidget(self.manage_top_plates)
 
     def _go_manage_order_type(self):
         self.setWindowTitle("TrippleT – Manage Order Type")
+        self.manage_order_type.set_read_only(not app_meta.can_use_admin_box())
         self.stack.setCurrentWidget(self.manage_order_type)
 
     def _go_usage_stats(self):
@@ -1823,16 +2766,57 @@ class MainWindow(QMainWindow):
         self.usage_stats.reload_data()
         self.stack.setCurrentWidget(self.usage_stats)
 
+    def _go_statistics(self):
+        if not app_meta.is_superuser_level():
+            return
+        if self.stats_suite is None:
+            self.stats_suite = StatsSuiteScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.stats_suite)
+        self.setWindowTitle("TrippleT – Statistics")
+        self.stats_suite.reload_data()
+        self.stack.setCurrentWidget(self.stats_suite)
+
+    def _go_offline_sync(self):
+        if not app_meta.is_superuser_level():
+            return
+        if self.offline_sync is None:
+            self.offline_sync = OfflineSyncScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.offline_sync)
+        self.setWindowTitle("TrippleT – Offline Sync")
+        self.stack.setCurrentWidget(self.offline_sync)
+
+    def _go_tdms_inspector(self):
+        # No is_superuser_level()/offline gate on purpose: this screen never
+        # touches the database (see ui/screen_tdms_inspector.py docstring),
+        # so it works for every logged-in user, including in offline mode.
+        if self.tdms_inspector is None:
+            self.tdms_inspector = TdmsInspectorScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.tdms_inspector)
+        self.setWindowTitle("TrippleT – TDMS Inspector")
+        self.stack.setCurrentWidget(self.tdms_inspector)
+
+    def _go_lab_assistant(self):
+        if not app_meta.is_superuser_level():
+            return
+        if self.lab_assistant is None:
+            self.lab_assistant = LabAssistantScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.lab_assistant)
+        self.setWindowTitle("TrippleT – Lab Assistant")
+        self.stack.setCurrentWidget(self.lab_assistant)
+
     def _go_manage_product_groups(self):
         self.setWindowTitle("TrippleT – Manage Product Groups")
+        self.manage_product_groups.set_read_only(not app_meta.can_use_admin_box())
         self.stack.setCurrentWidget(self.manage_product_groups)
 
     def _go_manage_material(self):
         self.setWindowTitle("TrippleT – Manage Material")
+        self.manage_material.set_read_only(not app_meta.can_use_admin_box())
         self.stack.setCurrentWidget(self.manage_material)
 
     def _go_back_manage_jets(self):
         self.setWindowTitle("TrippleT – Manage Jets")
+        self.manage_jets.set_read_only(not app_meta.can_use_admin_box())
         self.stack.setCurrentWidget(self.manage_jets)
 
     def _go_new_jet(self):
@@ -1845,6 +2829,12 @@ class MainWindow(QMainWindow):
             self.new_jet._check_jet_name = self._is_jet_name_available
             self.new_jet.btn_save.setText("Save Jet")
             self.new_jet.reset_form()
+            # This screen instance is shared with the read-only "View in Form"
+            # path below - a previous visit there may have left it disabled/
+            # showing the audit fields (which make no sense for a not-yet-
+            # existing record).
+            self.new_jet.set_read_only(False)
+            self.new_jet.set_audit_fields_visible(False)
         except Exception:
             pass
         self.setWindowTitle("TrippleT – New Jet")
@@ -1857,6 +2847,8 @@ class MainWindow(QMainWindow):
             self.new_jet._check_jet_name = self._is_jet_name_available
             self.new_jet.btn_save.setText("Save Jet")
             self.new_jet.load_from_row(row, clear_jet=True)
+            self.new_jet.set_read_only(False)
+            self.new_jet.set_audit_fields_visible(False)
         except Exception:
             try:
                 self.new_jet.reset_form()
@@ -1866,9 +2858,13 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.new_jet)
 
     def _go_edit_jet_form(self, row: Dict):
-        """Öffnet den NewJetScreen zum Bearbeiten eines bestehenden Jets (wie Copy, aber clear_jet=False und UPDATE)."""
+        """Öffnet den NewJetScreen für einen bestehenden Jet: Save/Copy-User
+        bearbeiten (UPDATE), read-only User sehen dasselbe Formular nur zur
+        Ansicht (übersichtlicher pro Datensatz als die Pivot-Tabelle) - siehe
+        NewJetScreen.set_read_only()."""
         id_col = self._jets_id_col or "ID"
         jet_id = row.get(id_col)
+        read_only = not app_meta.can_use_admin_box()
 
         def _update_save(data: Dict) -> int:
             data[id_col] = jet_id
@@ -1887,6 +2883,8 @@ class MainWindow(QMainWindow):
             self.new_jet._on_created = _on_saved
             self.new_jet._check_jet_name = None
             self.new_jet.load_from_row(row, clear_jet=False)
+            self.new_jet.set_read_only(read_only)
+            self.new_jet.set_audit_fields_visible(app_meta.is_superuser_level())
         except Exception:
             pass
 
@@ -1896,7 +2894,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        self.setWindowTitle(f"TrippleT – Edit Jet")
+        self.setWindowTitle("TrippleT – View Jet" if read_only else "TrippleT – Edit Jet")
         self.stack.setCurrentWidget(self.new_jet)
 
     def _on_new_jet_created(self, new_id: int):
@@ -1908,6 +2906,7 @@ class MainWindow(QMainWindow):
 
     def _go_back_manage_top_plates(self):
         self.setWindowTitle("TrippleT – Manage Top Plates")
+        self.manage_top_plates.set_read_only(not app_meta.can_use_admin_box())
         self.stack.setCurrentWidget(self.manage_top_plates)
 
     def _go_new_top_plate(self):
@@ -1920,6 +2919,9 @@ class MainWindow(QMainWindow):
             self.new_top_plate._check_top_plate_name = self._is_top_plate_name_available
             self.new_top_plate.btn_save.setText("Save Top Plate")
             self.new_top_plate.reset_form()
+            # This screen instance is shared with the read-only "View in Form"
+            # path below - a previous visit there may have left it disabled.
+            self.new_top_plate.set_read_only(False)
         except Exception:
             pass
         self.setWindowTitle("TrippleT – New Top Plate")
@@ -1932,6 +2934,7 @@ class MainWindow(QMainWindow):
             self.new_top_plate._check_top_plate_name = self._is_top_plate_name_available
             self.new_top_plate.btn_save.setText("Save Top Plate")
             self.new_top_plate.load_from_row(row, clear_name=True)
+            self.new_top_plate.set_read_only(False)
         except Exception:
             try:
                 self.new_top_plate.reset_form()
@@ -1941,9 +2944,12 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.new_top_plate)
 
     def _go_edit_top_plate_form(self, row: Dict):
-        """Öffnet den NewTopPlateScreen zum Bearbeiten einer bestehenden Top Plate (wie Copy, aber clear_name=False und UPDATE)."""
+        """Öffnet den NewTopPlateScreen für eine bestehende Top Plate: Save/Copy-
+        User bearbeiten (UPDATE), read-only User sehen dasselbe Formular nur zur
+        Ansicht - siehe NewTopPlateScreen.set_read_only()."""
         id_col = self._top_plates_id_col or "ID"
         top_plate_id = row.get(id_col)
+        read_only = not app_meta.can_use_admin_box()
 
         def _update_save(data: Dict) -> int:
             data[id_col] = top_plate_id
@@ -1962,6 +2968,7 @@ class MainWindow(QMainWindow):
             self.new_top_plate._on_created = _on_saved
             self.new_top_plate._check_top_plate_name = None
             self.new_top_plate.load_from_row(row, clear_name=False)
+            self.new_top_plate.set_read_only(read_only)
         except Exception:
             pass
 
@@ -1971,7 +2978,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        self.setWindowTitle(f"TrippleT – Edit Top Plate")
+        self.setWindowTitle("TrippleT – View Top Plate" if read_only else "TrippleT – Edit Top Plate")
         self.stack.setCurrentWidget(self.new_top_plate)
 
     def _on_new_top_plate_created(self, new_id: int):
@@ -1982,6 +2989,11 @@ class MainWindow(QMainWindow):
         self._go_back_manage_top_plates()
 
     def _logout(self):
+        # Tabs der vorherigen Session einsammeln, damit die nächste Anmeldung
+        # nicht mit fremden, stehengebliebenen Tabs startet (Nutzerwunsch-
+        # Ableitung, siehe closeEvent()-Docstring zur Tabs-Warnung).
+        if getattr(self, "_tabs", None) is not None:
+            self._tabs.close_all_but_first()
         # Reset global user context
         app_meta.current_user = {
             "id": None,

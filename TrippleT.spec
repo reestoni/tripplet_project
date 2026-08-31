@@ -62,6 +62,12 @@ except Exception:
 # --- cryptography (Fernet encryption fuer API Keys in tbluser)
 cryptography_datas, cryptography_binaries, cryptography_hidden = collect_all("cryptography")
 
+# --- scipy
+# scipy laedt einige Untermodule (u.a. scipy.*.array_api_compat.numpy.fft) dynamisch
+# zur Laufzeit -- PyInstaller erkennt das nicht ueber einzelne hiddenimports.
+# collect_all() wie bei den anderen ML-Paketen vermeidet "No module named ..."-Crashes.
+scipy_datas, scipy_binaries, scipy_hidden = collect_all("scipy")
+
 # Project assets (copied next to the EXE in onedir)
 project_assets = [
     ("assets", "assets"),
@@ -82,6 +88,7 @@ a = Analysis(
         + cryptography_binaries
         + joblib_binaries + pandas_binaries + xgboost_binaries
         + sklearn_binaries + lgbm_binaries
+        + scipy_binaries
     ),
     datas=(
         pyside6_datas + pyodbc_datas + mysql_datas + project_assets
@@ -91,6 +98,7 @@ a = Analysis(
         + cryptography_datas
         + joblib_datas + pandas_datas + xgboost_datas
         + sklearn_datas + lgbm_datas
+        + scipy_datas
     ),
     hiddenimports=(
         pyside6_hidden + pyodbc_hidden + mysql_hidden
@@ -98,6 +106,7 @@ a = Analysis(
         + fitz_hidden + pymupdf_hidden
         + pdfplumber_hidden + pdfminer_hidden
         + cryptography_hidden
+        + scipy_hidden
         + [
             # onnxruntime loads its C-extension dynamically — must be explicit
             "onnxruntime.capi._pybind_state",

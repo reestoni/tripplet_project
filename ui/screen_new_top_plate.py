@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QPixmap
 
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 from ui.text_normalize import canon_simple as _canon
 
 
@@ -65,6 +65,7 @@ class NewTopPlateScreen(QWidget):
         on_save: Optional[Callable[[Dict], int]] = None,
         on_created: Optional[Callable[[int], None]] = None,
         check_top_plate_name: Optional[Callable[[str], bool]] = None,
+        sidebar_callbacks: Optional[dict] = None,
     ):
         super().__init__()
         self.columns = columns or []
@@ -75,10 +76,13 @@ class NewTopPlateScreen(QWidget):
         self._on_save = on_save
         self._on_created = on_created
         self._check_top_plate_name = check_top_plate_name
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
 
         # Spaltenname -> Editor-Widget
         self._editors: Dict[str, QWidget] = {}
         self._current_top_plate_id: Optional[int] = None
+        self._read_only = False
 
         self._build_ui()
 
@@ -87,9 +91,12 @@ class NewTopPlateScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="New Top Plate", show_home=True)
-        header.connect_home(self._go_home)
-        root.addWidget(header, 0)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring). Die frühere
+        # "kein Home-Button"-Begründung betraf nur den TopBar-Home-Button -
+        # Cancel/Save bleiben weiterhin der primäre Navigationsweg aus diesem
+        # Formular heraus.
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # ── Tab-Widget ────────────────────────────────────────────────────
         self._tabs = QTabWidget()
@@ -170,18 +177,18 @@ class NewTopPlateScreen(QWidget):
         list_lay.addWidget(self._file_list, 1)
 
         file_btn_row = QHBoxLayout()
-        btn_upload = QPushButton("Upload File…")
-        btn_upload.setObjectName("GreenBtn")
-        btn_upload.clicked.connect(self._upload_file)
+        self.btn_upload_file = QPushButton("Upload File…")
+        self.btn_upload_file.setObjectName("GreenBtn")
+        self.btn_upload_file.clicked.connect(self._upload_file)
         btn_open = QPushButton("Open")
         btn_open.setObjectName("GreyBtn")
         btn_open.clicked.connect(lambda: self._open_file(self._file_list.currentItem()))
-        btn_del_file = QPushButton("Delete")
-        btn_del_file.setObjectName("GreyBtn")
-        btn_del_file.clicked.connect(self._delete_file)
-        file_btn_row.addWidget(btn_upload)
+        self.btn_delete_file = QPushButton("Delete")
+        self.btn_delete_file.setObjectName("GreyBtn")
+        self.btn_delete_file.clicked.connect(self._delete_file)
+        file_btn_row.addWidget(self.btn_upload_file)
         file_btn_row.addWidget(btn_open)
-        file_btn_row.addWidget(btn_del_file)
+        file_btn_row.addWidget(self.btn_delete_file)
         file_btn_row.addStretch()
         list_lay.addLayout(file_btn_row)
         splitter.addWidget(list_widget)
@@ -213,7 +220,7 @@ class NewTopPlateScreen(QWidget):
         self._tabs.addTab(files_widget, "Files")
         self._tabs.tabBar().setTabEnabled(1, False)   # aktiviert erst wenn top_plate_id bekannt
 
-        root.addWidget(self._tabs, 1)
+        content_layout.addWidget(self._tabs, 1)
 
         # ── Buttons ───────────────────────────────────────────────────────
         btn_frame = QFrame()
@@ -228,8 +235,26 @@ class NewTopPlateScreen(QWidget):
         self.btn_save.clicked.connect(self._on_click_save)
         btn_layout.addWidget(self.btn_save)
 
-        root.addWidget(btn_frame, 0)
+        content_layout.addWidget(btn_frame, 0)
         root.addWidget(FooterBar(), 0)
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
     def _create_editor_for_column(self, col: str) -> QWidget:
         key = _canon(col)
@@ -409,6 +434,8 @@ class NewTopPlateScreen(QWidget):
 
     def _upload_file(self):
         """Öffnet Dateiauswahl, kopiert Datei in TopPlateFiles-Ordner, schreibt DB."""
+        if self._read_only:
+            return
         if not self._current_top_plate_id:
             QMessageBox.information(self, "Upload", "Please save the top plate first.")
             return
@@ -474,6 +501,8 @@ class NewTopPlateScreen(QWidget):
 
     def _delete_file(self):
         """Löscht den DB-Eintrag (Datei auf Disk bleibt erhalten)."""
+        if self._read_only:
+            return
         item = self._file_list.currentItem()
         if not item:
             return
@@ -497,6 +526,23 @@ class NewTopPlateScreen(QWidget):
         self._load_files()
 
     # ---- Aktionen ----
+    def set_read_only(self, read_only: bool):
+        """Schaltet das komplette Formular auf reine Ansicht um: alle Felder
+        sowie Upload/Delete im Files-Tab werden gesperrt (Speichern eingeschlossen).
+        "Open" (Datei ansehen) und "Cancel" bleiben bewusst immer nutzbar. Wird
+        bei jeder Navigation zu diesem (wiederverwendeten) Screen von main.py neu
+        gesetzt, da New/Copy/Edit sich dieselbe Instanz teilen."""
+        self._read_only = bool(read_only)
+        for widget in self._editors.values():
+            widget.setEnabled(not self._read_only)
+        self.btn_upload_file.setEnabled(not self._read_only)
+        self.btn_delete_file.setEnabled(not self._read_only)
+        tooltip = "Read-only access – you don't have permission to edit this record." if self._read_only else ""
+        self.btn_save.setEnabled(not self._read_only)
+        self.btn_save.setToolTip(tooltip)
+        self.btn_upload_file.setToolTip(tooltip)
+        self.btn_delete_file.setToolTip(tooltip)
+
     def _go_home(self):
         if callable(self.on_back_home):
             self.on_back_home()
@@ -544,6 +590,8 @@ class NewTopPlateScreen(QWidget):
         return data
 
     def _on_click_save(self):
+        if self._read_only:
+            return
         if not callable(self._on_save):
             QMessageBox.warning(
                 self, "New Top Plate", "No save callback configured.")

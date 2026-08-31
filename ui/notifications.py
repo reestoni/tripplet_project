@@ -2,7 +2,7 @@ from __future__ import annotations
 # ui/notifications.py
 """Zentrale Notification-Logik für TrippleT.
 
-Wird aufgerufen wenn eine TrialSeries auf 'Archived' gesetzt wird.
+Wird aufgerufen wenn eine TrialSeries auf 'Done' gesetzt wird.
 Erstellt Notifications für:
   1. Alle ProcessOwner des Prozesses der Maschine dieser Series
   2. Den Ersteller des verknüpften ExperimentRequests (falls vorhanden)
@@ -22,7 +22,7 @@ from db.connection import fetch_all, execute as _execute, table_exists, get_colu
 
 def _tables_ready() -> bool:
     """Gibt True zurück wenn die Kern-Notification-Tabelle existiert.
-    tblProcessOwner wird nur fuer create_archived_notifications() gebraucht
+    tblProcessOwner wird nur fuer create_done_notifications() gebraucht
     (dort separat via _get_process_owners abgefragt, mit eigenem Fallback) -
     Lesen/Zaehlen/Anzeigen von Notifications soll davon nicht abhaengen."""
     return table_exists("tblnotification")
@@ -72,11 +72,11 @@ def _get_experiment_request_creator(series_id: int) -> Optional[int]:
     return None
 
 
-def create_archived_notifications(
+def create_done_notifications(
     series_id: int,
     sender_user_id: Optional[int] = None,
 ) -> int:
-    """Erstellt Notifications für alle Empfänger wenn eine Series archiviert wird.
+    """Erstellt Notifications für alle Empfänger wenn eine Series auf 'Done' gesetzt wird.
 
     Returns:
         Anzahl erstellter Notifications.
@@ -137,9 +137,23 @@ def get_superuser_ids() -> List[int]:
 
 def create_yarn_stock_notifications(warnings: List[dict]) -> int:
     """Erstellt fuer jeden Superuser eine Notification pro Garn/Batch mit
-    Status 'Low' oder 'Empty' - aber nur, wenn dafuer noch keine ungelesene
-    Notification mit derselben Message existiert (verhindert Spam bei jedem
-    Reload des Yarn-Stock-Screens).
+    Status 'Low' oder 'Empty' - aber nur, wenn dafuer noch KEINE Notification
+    (gelesen ODER ungelesen) mit derselben Message existiert.
+
+    Bewusst NICHT mehr "nur ungelesene" (frueherer Bug, siehe CLAUDE.md,
+    Nutzerbericht "low stock messages bleiben in meiner glocke, auch wenn ich
+    sie als gelesen markiere"): reload_data() in screen_yarn_stock.py ruft
+    diese Funktion bei JEDEM Öffnen/Reload des Screens auf - solange das
+    Garn/Batch weiter unter dem Schwellwert bleibt, erzeugte die alte "nur
+    ungelesene"-Pruefung nach dem Lesen sofort beim naechsten Screen-Besuch
+    eine inhaltsgleiche NEUE Notification, die Glocke wurde also nie
+    tatsaechlich leer. Ein gelesenes "Low stock"/"Empty stock" gilt jetzt als
+    endgueltig erledigt fuer genau diesen Zustand - erst wenn das Garn/Batch
+    zwischenzeitlich wieder auf 'OK' war (siehe
+    expire_recovered_yarn_stock_notifications(), von reload_data() fuer genau
+    diesen Zweck zusaetzlich aufgerufen) UND danach erneut unter den
+    Schwellwert faellt, kann wieder eine neue Notification mit derselben
+    Message entstehen (die alte, "OK"-ueberholte wurde dann bereits geloescht).
 
     `warnings`: Liste von Dicts mit 'YarnID', 'YarnName', 'Charge', 'Status'.
     YarnID/Charge werden zusaetzlich strukturiert gespeichert (PayloadYarnID/
@@ -164,11 +178,11 @@ def create_yarn_stock_notifications(warnings: List[dict]) -> int:
             try:
                 existing = fetch_all(
                     "SELECT ID FROM tblNotification WHERE RecipientUserID = ? "
-                    "AND NotificationType = 'yarn_stock' AND Message = ? AND ReadAt IS NULL",
+                    "AND NotificationType = 'yarn_stock' AND Message = ?",
                     [uid, message],
                 )
                 if existing:
-                    continue  # bereits eine ungelesene Warnung fuer genau dieses Garn/Batch
+                    continue  # gibt's fuer diesen User/Garn/Batch/Zustand schon (gelesen oder nicht)
                 if has_payload_cols:
                     _execute(
                         "INSERT INTO tblNotification "
@@ -188,6 +202,82 @@ def create_yarn_stock_notifications(warnings: List[dict]) -> int:
             except Exception as e:
                 print(f"[Notification] Yarn-Stock-Insert fehlgeschlagen fuer uid={uid}: {e}")
     return n
+
+
+def expire_recovered_yarn_stock_notifications(ok_pairs: List[dict]) -> int:
+    """Löscht bestehende yarn_stock-Notifications für Garn/Batch-Kombinationen,
+    die inzwischen wieder auf Status 'OK' sind.
+
+    Gegenstück zu create_yarn_stock_notifications()'s "Message existiert schon
+    (gelesen oder nicht) -> nicht nochmal anlegen"-Dedup: ohne dieses Aufräumen
+    würde ein Garn/Batch, das sich erholt und danach ERNEUT unter den
+    Schwellwert fällt, nie wieder eine neue Notification auslösen - die alte,
+    inzwischen inhaltlich überholte Zeile mit identischer Message würde die
+    Dedup-Prüfung fälschlich weiter blockieren. Von screen_yarn_stock.py's
+    reload_data() direkt neben create_yarn_stock_notifications() aufgerufen.
+
+    `ok_pairs`: Liste von Dicts mit 'YarnID'/'Charge'. Braucht die Payload-
+    Spalten (siehe create_yarn_stock_notifications()) um ein Garn/Batch
+    eindeutig einer Notification zuzuordnen - no-opt still, falls diese auf
+    der jeweiligen Umgebung (noch) fehlen.
+    """
+    if not ok_pairs or not table_exists("tblnotification"):
+        return 0
+    if "payloadyarnid" not in _columns_map("tblnotification"):
+        return 0
+    n = 0
+    for pair in ok_pairs:
+        yarn_id = pair.get("YarnID")
+        if yarn_id is None:
+            continue
+        charge = pair.get("Charge")
+        try:
+            n += _execute(
+                "DELETE FROM tblNotification WHERE NotificationType = 'yarn_stock' "
+                "AND PayloadYarnID = ? "
+                "AND (PayloadCharge = ? OR (PayloadCharge IS NULL AND ? IS NULL))",
+                [yarn_id, charge, charge],
+            ) or 0
+        except Exception as e:
+            print(f"[Notification] Yarn-Stock-Expire fehlgeschlagen fuer yarn={yarn_id}: {e}")
+    return n
+
+
+def create_experiment_request_notification(recipient_user_id: Any, request_id: Any, message: str) -> bool:
+    """Legt eine 'experiment_request'-Notification an (Statuswechsel eines
+    Requests, oder Aenderungskopie akzeptiert/abgelehnt - siehe
+    ui/screen_my_requests.py). Klick navigiert ueber PayloadExperimentRequestID
+    zu 'My Requests'.
+
+    Payload-Spalte existiert bisher nur auf Umgebungen mit dem
+    Aenderungs-Review-Feature (dev_local/prod, siehe
+    db/experiment_request_changes.py) - fehlt sie, wird die Notification ohne
+    Payload angelegt (Klick geht dann einfach nicht zur richtigen Zeile,
+    kein Fehler).
+    """
+    if not _tables_ready() or recipient_user_id in (None, ""):
+        return False
+    has_payload_col = "payloadexperimentrequestid" in _columns_map("tblnotification")
+    try:
+        if has_payload_col:
+            _execute(
+                "INSERT INTO tblNotification "
+                "(RecipientUserID, TrialSeriesID, CreatedAt, ReadAt, Message, "
+                "NotificationType, PayloadExperimentRequestID) "
+                "VALUES (?, NULL, NOW(), NULL, ?, 'experiment_request', ?)",
+                [recipient_user_id, message, request_id],
+            )
+        else:
+            _execute(
+                "INSERT INTO tblNotification "
+                "(RecipientUserID, TrialSeriesID, CreatedAt, ReadAt, Message, NotificationType) "
+                "VALUES (?, NULL, NOW(), NULL, ?, 'experiment_request')",
+                [recipient_user_id, message],
+            )
+        return True
+    except Exception as e:
+        print(f"[Notification] ExperimentRequest-Insert fehlgeschlagen fuer uid={recipient_user_id}: {e}")
+        return False
 
 
 def get_unread_count(user_id: int) -> int:
@@ -258,10 +348,16 @@ def get_notifications(user_id: int, limit: int = 50) -> List[dict]:
     """
     if not _tables_ready():
         return []
+    notif_cols = _columns_map("tblnotification")
     payload_cols = (
         "n.PayloadYarnID, n.PayloadCharge,"
-        if "payloadyarnid" in _columns_map("tblnotification")
+        if "payloadyarnid" in notif_cols
         else "NULL AS PayloadYarnID, NULL AS PayloadCharge,"
+    )
+    payload_cols += (
+        "n.PayloadExperimentRequestID,"
+        if "payloadexperimentrequestid" in notif_cols
+        else "NULL AS PayloadExperimentRequestID,"
     )
     try:
         return fetch_all(
@@ -280,7 +376,7 @@ def get_notifications(user_id: int, limit: int = 50) -> List[dict]:
             LEFT JOIN tblTrialSeries ts ON ts.ID = n.TrialSeriesID
             LEFT JOIN tblExperimente e ON e.ID = ts.ExperimentID
             WHERE n.RecipientUserID = ?
-            ORDER BY n.ReadAt IS NULL DESC, n.CreatedAt DESC
+            ORDER BY n.ReadAt IS NULL DESC, n.CreatedAt DESC, n.ID DESC
             LIMIT ?
             """,
             [user_id, limit],

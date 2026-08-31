@@ -63,7 +63,7 @@ class ChangePasswordScreen(QWidget):
         root.setSpacing(0)
 
         # --- Standard Header (ohne Home, da vor Login-Kontext) ---
-        header = HeaderBar(title="Change Password", show_home=False)
+        header = HeaderBar(title="Change Password", show_home=False, show_search=False)
         root.addWidget(header)
 
         # --- Center Card ---

@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QPixmap
 
-from ui.widgets.header import HeaderBar
 from ui.widgets.footer import FooterBar
+from ui.widgets import sidebar_nav
 from ui.text_normalize import canon_simple as _canon
 
 
@@ -66,8 +66,11 @@ class NewJetScreen(QWidget):
         on_created: Optional[Callable[[int], None]] = None,
         check_jet_name: Optional[Callable[[str], bool]] = None,
         on_quick_add_fk_value: Optional[Callable[[str, str], Optional[int]]] = None,
+        sidebar_callbacks: Optional[dict] = None,
     ):
         super().__init__()
+        self._sidebar_nav_callbacks = sidebar_callbacks or {}
+        self._sidebar_built_for_level = None
         self.columns = columns or []
         self.fk_maps = fk_maps or {}
         self.bool_columns = set(bool_columns or set())
@@ -78,9 +81,18 @@ class NewJetScreen(QWidget):
         self._check_jet_name = check_jet_name
         self._on_quick_add_fk_value = on_quick_add_fk_value
 
-        # Spaltenname -> Editor-Widget
+        # Spaltenname -> Editor-Widget (createdby/creationdate sind NICHT
+        # enthalten, siehe unten - reine Anzeige-Labels, nie im Save-Payload)
         self._editors: Dict[str, QWidget] = {}
         self._current_jet_id: Optional[int] = None
+        self._quick_add_buttons: List[QPushButton] = []
+        self._read_only = False
+        self._createdby_col: Optional[str] = None
+        self._creationdate_col: Optional[str] = None
+        self._createdby_label: Optional[QLabel] = None
+        self._creationdate_label: Optional[QLabel] = None
+        # (title_label, value_label) pairs, toggled together by set_audit_fields_visible()
+        self._audit_rows: List[tuple] = []
 
         self._build_ui()
 
@@ -89,9 +101,13 @@ class NewJetScreen(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = HeaderBar(title="New Jet", show_home=True)
-        header.connect_home(self._go_home)
-        root.addWidget(header, 0)
+        # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
+        # Rollout - siehe screen_home.py::_build_ui()-Docstring). Die frühere
+        # "kein Home-Button" Begründung (Crash beim Klicken aus dem
+        # Edit-Formular heraus) betraf nur den TopBar-Home-Button - Cancel/
+        # Save bleiben weiterhin der primäre Navigationsweg aus diesem
+        # Formular heraus.
+        self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         # ── Tab-Widget ────────────────────────────────────────────────────
         self._tabs = QTabWidget()
@@ -120,7 +136,9 @@ class NewJetScreen(QWidget):
         main_layout.addWidget(left_widget, 1)
         main_layout.addWidget(right_widget, 1)
 
-        visible_cols = [col for col in self.columns if col.lower() != "globalid"]
+        _HIDDEN_COLS = {"globalid", "usedintrial"}
+        _AUDIT_COLS = {"createdby", "creationdate"}
+        visible_cols = [col for col in self.columns if col.lower() not in _HIDDEN_COLS]
         total = len(visible_cols)
         split = (total + 1) // 2
 
@@ -130,6 +148,22 @@ class NewJetScreen(QWidget):
                 lbl = QLabel("Wird automatisch vergeben")
                 lbl.setStyleSheet("color: #666666; font-style: italic;")
                 target_form.addRow(QLabel(col + ":"), lbl)
+                continue
+            if _canon(col) in _AUDIT_COLS:
+                # Wer/wann angelegt wurde: reine Anzeige, nie editierbar, nie im
+                # Save-Payload. Zeile nur für Superuser sichtbar (per Default
+                # versteckt, siehe set_audit_fields_visible()/main.py).
+                value_lbl = QLabel("")
+                value_lbl.setStyleSheet("color: #666666; font-style: italic;")
+                title_lbl = QLabel(col + ":")
+                target_form.addRow(title_lbl, value_lbl)
+                self._audit_rows.append((title_lbl, value_lbl))
+                if _canon(col) == "createdby":
+                    self._createdby_col = col
+                    self._createdby_label = value_lbl
+                else:
+                    self._creationdate_col = col
+                    self._creationdate_label = value_lbl
                 continue
             widget = self._create_editor_for_column(col)
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -146,10 +180,15 @@ class NewJetScreen(QWidget):
                     "QPushButton#GreenBtn { font-size: 18px; font-weight: 700; padding: 0px; }")
                 btn_add.setToolTip(f"Add new {col}…")
                 btn_add.clicked.connect(lambda _checked, c=col, cb=widget: self._on_quick_add_fk(c, cb))
+                self._quick_add_buttons.append(btn_add)
                 row_lay.addWidget(btn_add)
                 target_form.addRow(QLabel(col + ":"), row_widget)
             else:
                 target_form.addRow(QLabel(col + ":"), widget)
+
+        # Per Default versteckt - main.py blendet sie für Superuser gezielt
+        # wieder ein (set_audit_fields_visible), siehe _go_edit_jet_form.
+        self.set_audit_fields_visible(False)
 
         scroll.setWidget(center)
         fields_widget = QWidget()
@@ -186,18 +225,18 @@ class NewJetScreen(QWidget):
         list_lay.addWidget(self._file_list, 1)
 
         file_btn_row = QHBoxLayout()
-        btn_upload = QPushButton("Upload File…")
-        btn_upload.setObjectName("GreenBtn")
-        btn_upload.clicked.connect(self._upload_file)
+        self.btn_upload_file = QPushButton("Upload File…")
+        self.btn_upload_file.setObjectName("GreenBtn")
+        self.btn_upload_file.clicked.connect(self._upload_file)
         btn_open = QPushButton("Open")
         btn_open.setObjectName("GreyBtn")
         btn_open.clicked.connect(lambda: self._open_file(self._file_list.currentItem()))
-        btn_del_file = QPushButton("Delete")
-        btn_del_file.setObjectName("GreyBtn")
-        btn_del_file.clicked.connect(self._delete_file)
-        file_btn_row.addWidget(btn_upload)
+        self.btn_delete_file = QPushButton("Delete")
+        self.btn_delete_file.setObjectName("GreyBtn")
+        self.btn_delete_file.clicked.connect(self._delete_file)
+        file_btn_row.addWidget(self.btn_upload_file)
         file_btn_row.addWidget(btn_open)
-        file_btn_row.addWidget(btn_del_file)
+        file_btn_row.addWidget(self.btn_delete_file)
         file_btn_row.addStretch()
         list_lay.addLayout(file_btn_row)
         splitter.addWidget(list_widget)
@@ -229,7 +268,7 @@ class NewJetScreen(QWidget):
         self._tabs.addTab(files_widget, "Files")
         self._tabs.tabBar().setTabEnabled(1, False)   # aktiviert erst wenn jet_id bekannt
 
-        root.addWidget(self._tabs, 1)
+        content_layout.addWidget(self._tabs, 1)
 
         # ── Buttons ───────────────────────────────────────────────────────
         btn_frame = QFrame()
@@ -244,8 +283,26 @@ class NewJetScreen(QWidget):
         self.btn_save.clicked.connect(self._on_click_save)
         btn_layout.addWidget(self.btn_save)
 
-        root.addWidget(btn_frame, 0)
+        content_layout.addWidget(btn_frame, 0)
         root.addWidget(FooterBar(), 0)
+
+    def _refresh_sidebar(self):
+        """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
+        seit dem letzten Aufbau geändert hat, sonst nur die Badges (siehe
+        ui/widgets/sidebar_nav.py::refresh_lazy_sidebar())."""
+        import app_meta
+        try:
+            level = int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            level = 0
+        sidebar_nav.refresh_lazy_sidebar(self, level)
+
+    def showEvent(self, event):
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
+        super().showEvent(event)
 
     def _create_editor_for_column(self, col: str) -> QWidget:
         key = _canon(col)
@@ -378,6 +435,17 @@ class NewJetScreen(QWidget):
             elif isinstance(widget, QLineEdit):
                 widget.setText("" if value is None else str(value))
 
+        if self._createdby_label is not None and self._createdby_col:
+            val = row.get(self._createdby_col)
+            fk = self.fk_maps.get("createdby", {})
+            name = fk.get("id_to_name", {}).get(val)
+            if name is None and val is not None:
+                name = fk.get("id_to_name", {}).get(str(val))
+            self._createdby_label.setText("" if name is None else str(name))
+        if self._creationdate_label is not None and self._creationdate_col:
+            val = row.get(self._creationdate_col)
+            self._creationdate_label.setText("" if val is None else str(val))
+
         # Wenn ID in row vorhanden → bestehender Jet → Files-Tab aktivieren
         jet_id_val = row.get(self.id_column)
         if jet_id_val is not None:
@@ -386,6 +454,15 @@ class NewJetScreen(QWidget):
                 self._load_files()
             except Exception:
                 pass
+
+    def set_audit_fields_visible(self, visible: bool):
+        """Zeigt/versteckt die "Created by"/"Creation date"-Zeilen - nur für
+        Superuser gedacht (per explizitem Nutzerwunsch), reine Anzeige, nie
+        editierbar. Von main.py bei jeder Navigation zu diesem Screen mit dem
+        aktuellen Permission-Stand aufgerufen."""
+        for title_lbl, value_lbl in self._audit_rows:
+            title_lbl.setVisible(visible)
+            value_lbl.setVisible(visible)
 
     # ── Files tab helpers ────────────────────────────────────────────────────
     def _on_file_selected(self, item: Optional[QListWidgetItem]):
@@ -454,6 +531,8 @@ class NewJetScreen(QWidget):
 
     def _upload_file(self):
         """Öffnet Dateiauswahl, kopiert Datei in JetFiles-Ordner, schreibt DB."""
+        if self._read_only:
+            return
         if not self._current_jet_id:
             QMessageBox.information(self, "Upload", "Please save the jet first.")
             return
@@ -519,6 +598,8 @@ class NewJetScreen(QWidget):
 
     def _delete_file(self):
         """Löscht den DB-Eintrag (Datei auf Disk bleibt erhalten)."""
+        if self._read_only:
+            return
         item = self._file_list.currentItem()
         if not item:
             return
@@ -542,6 +623,26 @@ class NewJetScreen(QWidget):
         self._load_files()
 
     # ---- Aktionen ----
+    def set_read_only(self, read_only: bool):
+        """Schaltet das komplette Formular auf reine Ansicht um: alle Felder,
+        die "+"-Quick-Add-Buttons neben FK-Dropdowns sowie Upload/Delete im
+        Files-Tab werden gesperrt (Speichern eingeschlossen). "Open" (Datei
+        ansehen) und "Cancel" bleiben bewusst immer nutzbar – reine Lesezugriffe.
+        Wird bei jeder Navigation zu diesem (wiederverwendeten) Screen von
+        main.py neu gesetzt, da New/Copy/Edit sich dieselbe Instanz teilen."""
+        self._read_only = bool(read_only)
+        for widget in self._editors.values():
+            widget.setEnabled(not self._read_only)
+        for btn in self._quick_add_buttons:
+            btn.setEnabled(not self._read_only)
+        self.btn_upload_file.setEnabled(not self._read_only)
+        self.btn_delete_file.setEnabled(not self._read_only)
+        tooltip = "Read-only access – you don't have permission to edit this record." if self._read_only else ""
+        self.btn_save.setEnabled(not self._read_only)
+        self.btn_save.setToolTip(tooltip)
+        self.btn_upload_file.setToolTip(tooltip)
+        self.btn_delete_file.setToolTip(tooltip)
+
     def _go_home(self):
         if callable(self.on_back_home):
             self.on_back_home()
@@ -589,6 +690,8 @@ class NewJetScreen(QWidget):
         return data
 
     def _on_click_save(self):
+        if self._read_only:
+            return
         if not callable(self._on_save):
             QMessageBox.warning(
                 self, "New Jet", "No save callback configured.")
