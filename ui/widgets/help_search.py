@@ -291,7 +291,8 @@ UI = {
            "needs_series": "Open a trial series first (e.g. from the Backlog or All Experiments).",
            "areas": "Numbers like (1) refer to the screen sketch in the full help.",
            "ask": "Ask AI", "ask_tip": "Let the AI answer in your own words (uses your AI token quota).",
-           "asking": "Asking the AI…", "ai_label": "AI answer", "ai_none": "The help does not cover this question yet."},
+           "asking": "Asking the AI…", "ai_label": "AI answer", "ai_none": "The help does not cover this question yet.",
+           "fb_q": "Did this help?", "fb_up": "Helpful", "fb_down": "Not helpful", "fb_thanks": "Thanks for the feedback!"},
     "de": {"title": "Hilfe – wo finde ich…?", "placeholder": "Was suchst du? z. B. alle Aufträge einer Maschine",
            "go": "Hinführen", "full": "Ganze Hilfe öffnen", "none": "Keine passende Hilfe gefunden. Versuch es mit "
            "anderen Worten – z. B. dem Namen eines Bildschirms, eines Buttons oder was du tun willst.",
@@ -299,7 +300,8 @@ UI = {
            "needs_series": "Zuerst eine Versuchsserie öffnen (z. B. aus dem Backlog oder All Experiments).",
            "areas": "Nummern wie (1) verweisen auf die Bildschirm-Skizze in der ganzen Hilfe.",
            "ask": "KI fragen", "ask_tip": "Die KI antwortet in eigenen Worten (verbraucht dein KI-Kontingent).",
-           "asking": "Die KI wird gefragt…", "ai_label": "KI-Antwort", "ai_none": "Die Hilfe deckt diese Frage noch nicht ab."},
+           "asking": "Die KI wird gefragt…", "ai_label": "KI-Antwort", "ai_none": "Die Hilfe deckt diese Frage noch nicht ab.",
+           "fb_q": "Hat das geholfen?", "fb_up": "Hilfreich", "fb_down": "Nicht hilfreich", "fb_thanks": "Danke für die Rückmeldung!"},
     "es": {"title": "Ayuda – ¿dónde encuentro…?", "placeholder": "¿Qué buscas? p. ej. todos los pedidos de una máquina",
            "go": "Llévame allí", "full": "Abrir la ayuda completa", "none": "No se encontró ayuda. Prueba con "
            "otras palabras – p. ej. el nombre de una pantalla, de un botón o lo que quieres hacer.",
@@ -307,7 +309,8 @@ UI = {
            "needs_series": "Primero abre una serie de ensayos (p. ej. desde el Backlog o All Experiments).",
            "areas": "Los números como (1) se refieren al esquema de la pantalla en la ayuda completa.",
            "ask": "Preguntar a la IA", "ask_tip": "La IA responde con sus palabras (usa tu cuota de tokens de IA).",
-           "asking": "Preguntando a la IA…", "ai_label": "Respuesta de la IA", "ai_none": "La ayuda aún no cubre esta pregunta."},
+           "asking": "Preguntando a la IA…", "ai_label": "Respuesta de la IA", "ai_none": "La ayuda aún no cubre esta pregunta.",
+           "fb_q": "¿Te ha ayudado?", "fb_up": "Útil", "fb_down": "No útil", "fb_thanks": "¡Gracias por tu opinión!"},
 }
 
 # Screens, die eine geoeffnete Serie brauchen - "Take me there" fuehrt dann zu All Experiments.
@@ -384,6 +387,17 @@ class HelpSearchDialog(QDialog):
         scroll.setWidget(self.detail)
         rl.addWidget(scroll, 1)
         btns = QHBoxLayout()
+        # Etappe 3: Rueckmeldung pro angezeigter Antwort (-> Usage Stats, Tab "Help")
+        self.lbl_fb = QLabel()
+        self.lbl_fb.setStyleSheet("color:#565656;")
+        self.btn_fb_up = QPushButton(objectName="GreyBtn")
+        self.btn_fb_down = QPushButton(objectName="GreyBtn")
+        self.btn_fb_up.clicked.connect(lambda: self._on_feedback(True))
+        self.btn_fb_down.clicked.connect(lambda: self._on_feedback(False))
+        self._fb_given: set = set()
+        btns.addWidget(self.lbl_fb)
+        btns.addWidget(self.btn_fb_up)
+        btns.addWidget(self.btn_fb_down)
         btns.addStretch(1)
         self.btn_full = QPushButton(objectName="GreyBtn")
         self.btn_full.clicked.connect(self._on_full_help)
@@ -425,6 +439,9 @@ class HelpSearchDialog(QDialog):
         self.btn_full.setText(u["full"])
         self.btn_ai.setText(u["ask"])
         self.btn_ai.setToolTip(u["ask_tip"])
+        self.btn_fb_up.setText(u["fb_up"])
+        self.btn_fb_down.setText(u["fb_down"])
+        self._update_feedback_ui()
         for code, btn in self._flags.items():
             btn.setChecked(code == self._lang)
 
@@ -459,6 +476,8 @@ class HelpSearchDialog(QDialog):
         else:
             self.lbl_hint.setText("")
         has = bool(self._hits)
+        if not has:
+            self._update_feedback_ui()
         self.btn_go.setEnabled(has)
         self.btn_full.setEnabled(has)
         if has:
@@ -490,6 +509,7 @@ class HelpSearchDialog(QDialog):
         self.detail.setText(
             f"{ai}<p style='color:#2b7a3d;font-weight:600'>{u['screen']}: {SCREEN_NAMES.get(h.screen, h.screen)}</p>"
             f"<h3>{e.question}</h3><ol>{steps}</ol>{extra}{warn}{areas}")
+        self._update_feedback_ui()
 
     # ── Aktionen ──
     def _log(self, event: str, detail: str) -> None:
@@ -537,6 +557,30 @@ class HelpSearchDialog(QDialog):
         self._hits = [hit] + [h for h in self._hits if h.key != key]
         self._opened_key = None
         self._render_list()
+
+    def _feedback_id(self) -> Optional[str]:
+        h = self._current_hit()
+        q = self.txt.text().strip()
+        if h is None or not q:
+            return None
+        return f"{q} -> {h.key}{' (AI)' if h.ai_answer else ''}"
+
+    def _update_feedback_ui(self) -> None:
+        u = UI[self._lang]
+        fid = self._feedback_id()
+        visible = fid is not None
+        given = visible and fid in self._fb_given
+        self.lbl_fb.setText(u["fb_thanks"] if given else (u["fb_q"] if visible else ""))
+        self.btn_fb_up.setVisible(visible and not given)
+        self.btn_fb_down.setVisible(visible and not given)
+
+    def _on_feedback(self, helpful: bool) -> None:
+        fid = self._feedback_id()
+        if fid is None or fid in self._fb_given:
+            return
+        self._fb_given.add(fid)
+        self._log("help_feedback_up" if helpful else "help_feedback_down", fid)
+        self._update_feedback_ui()
 
     def _on_go(self) -> None:
         h = self._current_hit()

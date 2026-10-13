@@ -43,3 +43,20 @@ def test_empty_and_stopword_queries():
 
 def test_normalize_folds_umlauts_and_accents():
     assert normalize("Düse Größe máquina") == "duse grosse maquina"
+
+
+def test_usage_stats_help_summary_orders_by_need():
+    from datetime import datetime
+    from ui.screen_usage_stats import summarize_help_events
+    t = datetime(2026, 10, 13, 12, 0)
+    ev = [
+        {"EventName": "help_search_open", "Detail": "Etiketten drucken -> yarn_stock:tasks_change:1", "Username": "a", "EventTime": t},
+        {"EventName": "help_search_noresult", "Detail": "Wo ist der Kaffee | hits=0", "Username": "a", "EventTime": t},
+        {"EventName": "help_search_noresult", "Detail": "wo ist der kaffee | hits=0", "Username": "b", "EventTime": t},
+        {"EventName": "help_feedback_down", "Detail": "spule suchen -> yarn_stock:tasks_find:2 (AI)", "Username": "a", "EventTime": t},
+        {"EventName": "screen_open", "Detail": "", "Username": "a", "EventTime": t},
+    ]
+    rows, summary = summarize_help_events(ev)
+    assert [r["Kind"] for r in rows] == ["No result", "Not helpful", "Opened"]
+    assert rows[0]["Count"] == 2 and rows[0]["Users"] == 2 and rows[0]["Question"] == "wo ist der kaffee"
+    assert "No result: 2" in summary

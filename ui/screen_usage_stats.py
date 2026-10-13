@@ -147,6 +147,73 @@ class LoginTimelineChart(FigureCanvas):
         self.draw()
 
 
+HELP_COLUMNS = ["Kind", "Question", "Result", "Count", "Users", "LastUsed"]
+
+# Reihenfolge = Handlungsbedarf (oben, was in Hilfe/Synonymen fehlt)
+HELP_KINDS = [
+    ("help_search_noresult", "No result"),
+    ("help_feedback_down", "Not helpful"),
+    ("help_ai_error", "AI error"),
+    ("help_search_noclick", "Searched, nothing opened"),
+    ("help_ai_ask", "Asked AI"),
+    ("help_search_open", "Opened"),
+    ("help_feedback_up", "Helpful"),
+]
+
+
+def _readable_help_result(result: str) -> str:
+    """'show_experiment:tasks:11 (AI)' -> 'Show Experiment: Print labels ... (AI)'."""
+    import re
+    m = re.match(r"^([a-z_]+:[a-z_]+:\d+)(.*)$", result or "")
+    if not m:
+        return result
+    try:
+        from ui.widgets.help_search import hit_for_key, SCREEN_NAMES, normalize_display
+        h = hit_for_key(m.group(1))
+        if h is None:
+            return result
+        e = h.by_lang.get("en") or next(iter(h.by_lang.values()))
+        return f"{SCREEN_NAMES.get(h.screen, h.screen)}: {normalize_display(e.question)}{m.group(2)}"
+    except Exception:
+        return result
+
+
+def summarize_help_events(events):
+    """Fasst help_*-Events zu Zeilen (Art, Frage, Ergebnis) zusammen.
+    Detail-Formate (help_search.py/help_ai.py): "frage -> key[ (AI)]",
+    "frage | hits=n", "frage | fehlertext"."""
+    order = {name: i for i, (name, _l) in enumerate(HELP_KINDS)}
+    labels = dict(HELP_KINDS)
+    groups = {}
+    totals = {}
+    for ev in events:
+        name = ev.get("EventName") or ""
+        if name not in order:
+            continue
+        detail = str(ev.get("Detail") or "")
+        if " -> " in detail:
+            question, result = detail.split(" -> ", 1)
+        elif " | " in detail:
+            question, result = detail.split(" | ", 1)
+        else:
+            question, result = detail, ""
+        question = question.strip().lower()
+        key = (name, question, result.strip())
+        g = groups.setdefault(key, {"count": 0, "users": set(), "last": None})
+        g["count"] += 1
+        g["users"].add(ev.get("Username") or "")
+        t = ev.get("EventTime")
+        if t is not None and (g["last"] is None or t > g["last"]):
+            g["last"] = t
+        totals[name] = totals.get(name, 0) + 1
+    rows = [{"Kind": labels[n], "Question": q, "Result": _readable_help_result(r), "Count": g["count"],
+             "Users": len(g["users"]), "LastUsed": g["last"]}
+            for (n, q, r), g in groups.items()]
+    rows.sort(key=lambda r: (order[[n for n, l in HELP_KINDS if l == r["Kind"]][0]], -r["Count"]))
+    summary = " · ".join(f"{labels[n]}: {totals.get(n, 0)}" for n, _l in HELP_KINDS)
+    return rows, ("Help search – " + summary) if events else "No help searches recorded yet."
+
+
 class UsageStatsScreen(QWidget):
     def __init__(self, on_back_home=None, sidebar_callbacks=None):
         super().__init__()
@@ -159,6 +226,10 @@ class UsageStatsScreen(QWidget):
         self.tbl_logins = _make_table(["Username", "Logins", "LastLogin"])
         self.tbl_screens = _make_table(["Screen", "Opens", "Users", "LastUsed"])
         self.tbl_features = _make_table(["Feature", "Detail", "Uses", "Users", "LastUsed"])
+        # Hilfe-Suche (2026-10-13): was wird gesucht, was fehlt? (ui/widgets/help_search.py)
+        self.tbl_help = _make_table(HELP_COLUMNS)
+        self.lbl_help = QLabel("")
+        self.lbl_help.setWordWrap(True)
 
         self._build_ui()
         self.reload_data()
@@ -192,6 +263,11 @@ class UsageStatsScreen(QWidget):
         tabs.addTab(self.tbl_logins, "Logins")
         tabs.addTab(self.tbl_screens, "Screens")
         tabs.addTab(self.tbl_features, "Features")
+        help_tab = QWidget()
+        help_lay = QVBoxLayout(help_tab)
+        help_lay.addWidget(self.lbl_help, 0)
+        help_lay.addWidget(self.tbl_help, 1)
+        tabs.addTab(help_tab, "Help")
 
         content_layout.addWidget(toolbar_frame, 0)
         content_layout.addWidget(tabs, 1)
@@ -249,6 +325,10 @@ class UsageStatsScreen(QWidget):
                 "AND EventTime >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) "
                 "GROUP BY DATE(EventTime) ORDER BY Day ASC"
             )
+            help_events = fetch_all(
+                "SELECT EventName, Detail, Username, EventTime "
+                "FROM tblUsageLog WHERE EventType = 'feature' AND EventName LIKE 'help\\_%'"
+            )
         except Exception as e:
             QMessageBox.critical(self, "Fehler", f"Konnte Nutzungsstatistiken nicht laden:\n{e}")
             return
@@ -259,7 +339,10 @@ class UsageStatsScreen(QWidget):
         self.tbl_logins.setModel(ReadOnlyTableModel(logins, ["Username", "Logins", "LastLogin"]))
         self.tbl_screens.setModel(ReadOnlyTableModel(screens, ["Screen", "Opens", "Users", "LastUsed"]))
         self.tbl_features.setModel(ReadOnlyTableModel(features, ["Feature", "Detail", "Uses", "Users", "LastUsed"]))
-        for t in (self.tbl_logins, self.tbl_screens, self.tbl_features):
+        help_rows, help_summary = summarize_help_events(help_events)
+        self.tbl_help.setModel(ReadOnlyTableModel(help_rows, HELP_COLUMNS))
+        self.lbl_help.setText(help_summary)
+        for t in (self.tbl_logins, self.tbl_screens, self.tbl_features, self.tbl_help):
             t.resizeColumnsToContents()
 
         self.status_label.setText(
