@@ -412,6 +412,16 @@ class HomeScreen(QWidget):
 
         sidebar = SidebarPanel(width=316)
 
+        # Notifications-Glocke, ganz oben angepinnt (2026-09-02, siehe
+        # sidebar_nav.build_pinned_bell()) - HomeScreen baut seine Sidebar
+        # manuell statt ueber install_full_sidebar() (Legacy, siehe
+        # CLAUDE.md: HomeScreen ist nicht mehr der Post-Login-Landing-
+        # Screen), daher hier derselbe Aufruf separat statt automatisch
+        # ueber dessen zentralen Rumpf.
+        bell_refs = sidebar_nav.build_pinned_bell(sidebar)
+        self._bell_button = bell_refs["bell_button"]
+        self._bell_badge = bell_refs["bell_badge"]
+
         # --- Navigation-Gruppe (vormals "Experiments"-Karte) ---
         # Der frühere Rechtsklick-Träger für Snake/Athena/LFC (_exp_title_label
         # + eigens dafür gebautes Icon-Paar) ist 2026-08-27 in FooterBar
@@ -511,10 +521,8 @@ class HomeScreen(QWidget):
         # nach dem add_stretch() oben, damit sie unten in der Sidebar
         # angepinnt bleibt. Bell-Refs werden für main.py's zentrale
         # _refresh_bell()-Logik gebraucht (siehe dort).
-        utility_refs = sidebar_nav.build_utility_group(
+        sidebar_nav.build_utility_group(
             sidebar, on_logout=(self._on_logout if callable(self._on_logout) else None))
-        self._bell_button = utility_refs["bell_button"]
-        self._bell_badge = utility_refs["bell_badge"]
 
         # Wendet einen ggf. bereits woanders (z.B. Backlog) eingeklappten,
         # geteilten Collapse-Zustand auf die gerade erst gebauten Items an -

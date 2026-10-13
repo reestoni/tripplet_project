@@ -29,7 +29,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QKeyEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QDialog, QFrame, QGraphicsDropShadowEffect, QGridLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QMenu, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from db.connection import get_connection
@@ -286,14 +286,23 @@ class _ResultRow(QFrame):
 
     Zeigt Experiment-ID, Serienname, Maschine und Treffergrund an.
     Wird bei Klick oder Enter markiert (aktiv) und löst on_click aus.
+
+    Ctrl+click or the right-click context menu ("Open in New Tab"/"Open in
+    New Window") open the same result in a new tab or a standalone OS
+    window instead - same pattern as the existing one in
+    ui/screen_all_experiments.py (there: Ctrl+double-click + context menu).
     """
     clicked = Signal(object)
+    open_new_tab = Signal(object)
+    open_new_window = Signal(object)
 
     def __init__(self, data: Dict, subtitle: str = "", parent: QWidget | None = None):
         super().__init__(parent)
         self._data = data
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedHeight(52)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._on_context_menu)
         accent = get_accent()
         self._style_normal = (
             f"QFrame {{ background: {CARD_BG}; border: none; border-left: 3px solid transparent;"
@@ -333,10 +342,27 @@ class _ResultRow(QFrame):
         self.setStyleSheet(self._style_active if active else self._style_normal)
 
     def mousePressEvent(self, ev):
-        """Löst den on_click-Callback mit den Zeilendaten aus."""
+        """Löst den on_click-Callback mit den Zeilendaten aus.
+
+        Ctrl+click opens the result in a new tab instead (same pattern as
+        Ctrl+double-click in ui/screen_all_experiments.py)."""
         if ev.button() == Qt.LeftButton:
-            self.clicked.emit(self._data)
+            if ev.modifiers() & Qt.ControlModifier:
+                self.open_new_tab.emit(self._data)
+            else:
+                self.clicked.emit(self._data)
         super().mousePressEvent(ev)
+
+    def _on_context_menu(self, pos):
+        """Right-click context menu: "Open in New Tab" / "Open in New Window"."""
+        menu = QMenu(self)
+        act_new_tab = menu.addAction("↗  Open in New Tab")
+        act_new_window = menu.addAction("🗗  Open in New Window")
+        chosen = menu.exec(self.mapToGlobal(pos))
+        if chosen == act_new_tab:
+            self.open_new_tab.emit(self._data)
+        elif chosen == act_new_window:
+            self.open_new_window.emit(self._data)
 
 
 # ---------------------------------------------------------------------------
@@ -416,6 +442,8 @@ class QuickSearchDialog(QDialog):
     Der on_open-Callback (gesetzt in main.py) öffnet das gewählte Experiment.
     """
     open_experiment = Signal(int, int, str)   # exp_pk, series_pk, exp_id
+    open_experiment_in_new_tab = Signal(int, int, str)     # Ctrl+click / context menu
+    open_experiment_in_new_window = Signal(int, int, str)  # context menu "Open in New Window"
 
     # Bausteine für die dynamische Fensterhöhe (siehe _show_hint()/_populate()) -
     # als Konstanten statt wiederholter Magic Numbers, seit der Modernisierung
@@ -638,6 +666,8 @@ class QuickSearchDialog(QDialog):
             r["_display"] = display
             row = _ResultRow(r, sub)
             row.clicked.connect(self._on_row_clicked)
+            row.open_new_tab.connect(self._on_row_open_new_tab)
+            row.open_new_window.connect(self._on_row_open_new_window)
             self._results_lay.insertWidget(ins, row)
             self._rows.append(row)
             self._all_widgets.append(row)
@@ -687,4 +717,22 @@ class QuickSearchDialog(QDialog):
         series_pk  = int(data["series_pk"])
         exp_id     = data["exp_id"]
         QTimer.singleShot(0, lambda: self.open_experiment.emit(exp_pk, series_pk, exp_id))
+        QTimer.singleShot(50, self.close)
+
+    def _on_row_open_new_tab(self, data: Dict):
+        """Ctrl+click or the "Open in New Tab" context-menu action on a result row."""
+        self.hide()
+        exp_pk    = int(data["exp_pk"])
+        series_pk = int(data["series_pk"])
+        exp_id    = data["exp_id"]
+        QTimer.singleShot(0, lambda: self.open_experiment_in_new_tab.emit(exp_pk, series_pk, exp_id))
+        QTimer.singleShot(50, self.close)
+
+    def _on_row_open_new_window(self, data: Dict):
+        """The "Open in New Window" context-menu action on a result row."""
+        self.hide()
+        exp_pk    = int(data["exp_pk"])
+        series_pk = int(data["series_pk"])
+        exp_id    = data["exp_id"]
+        QTimer.singleShot(0, lambda: self.open_experiment_in_new_window.emit(exp_pk, series_pk, exp_id))
         QTimer.singleShot(50, self.close)

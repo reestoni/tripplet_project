@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import QUrl, Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget, QSizePolicy, QMessageBox, QFrame,
@@ -1757,6 +1757,20 @@ class ReportScreen(QWidget):
         except Exception:
             pass
         super().showEvent(event)
+        # Bugreport 2026-09-02: with a SECOND ReportScreen (own QWebEngineView)
+        # opened in its own new tab while a FIRST one already exists elsewhere
+        # (see main.py::_open_report_in_new_tab(), 2026-09-01), the new tab's
+        # QWebEngineView sometimes never actually paints - the tab title/stack
+        # switch to it correctly, but the previously visible screen (e.g. Show
+        # Experiment) stays on screen underneath, because this view's native
+        # render surface got set up at 0x0 geometry (new tab, layout not yet
+        # settled) before it was ever shown. A no-op resize-to-current-size
+        # AFTER the event loop has settled the real geometry nudges Chromium's
+        # compositor into actually painting - same class of QtWebEngine/
+        # QStackedWidget gotcha as the well-known "webview stays blank until
+        # resized" issue.
+        if self._web is not None:
+            QTimer.singleShot(0, lambda w=self._web: w.resize(w.size()))
 
     def load_series(self, series_pk: int, initial_report_id: Optional[int] = None) -> None:
         self._series_pk = series_pk

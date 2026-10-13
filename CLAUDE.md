@@ -2,6 +2,11 @@
 
 Desktop-App (PySide6) für Textil-/Garnlabor-Tests (Heberlein). MySQL-Backend, historisch aus Access/ODBC migriert.
 
+## Sprache
+
+- Die Zusammenarbeit mit dem Nutzer erfolgt auf **Deutsch**.
+- Sämtliche sichtbaren Texte in der Anwendung (Beschriftungen, Tooltips, Meldungen, Tabellenüberschriften usw.) werden auf **Englisch** formuliert.
+
 ## Setup & Ausführen
 
 - **Python-Interpreter**: `C:\Users\soj\AppData\Local\Programs\Python\Python312\python.exe` (nicht `.venv/`, das ist eine andere/unvollständige Umgebung ohne `pytest`).
@@ -51,7 +56,7 @@ Kurzfassung von Entscheidungen/Konstanten aus `HISTORY.md`, die für laufende Ar
 - `RADAR_BOUNDS` in `ui/yarnscope/aty_core_analysis.py` sind eine feste, von Hand kalibrierte v1 (n=38) – nie automatisch neu berechnen, nur nach expliziter Rekalibrierung von Hand anpassen.
 - Bei Qt-Tabellenmodellen (`ManageYarnScreen` & analoge Manage-Screens) **nie** `model.layoutChanged.emit()` für reine Style-/Permission-Updates verwenden (Absturzrisiko bei wiederholtem Aufruf, reproduzierter Bug) – `dataChanged.emit(...)` verwenden.
 - Duplicate-Yarn-Check (Garntyp/Material/Titer/Endtiter/NumberOfFilaments/Colour) läuft bei jedem Yarn-Save (`screen_manage_yarn.py`) – bei neuen Yarn-Schreibpfaden mitziehen.
-- `ui/widgets/tab_container.py` (Browser-Tabs-Feature) ist fertig gebaut, aber **bewusst nicht verdrahtet** (Nutzerwunsch nach dem 2026-08-27-Rückbau) – nicht ungefragt wieder aktivieren, "in neuem Fenster öffnen" ist der aktuelle Weg für parallele Screens.
+- `ui/widgets/tab_container.py` (Browser-Tabs-Feature, `TabbedNavigator`/`_StackFacade`) ist **verdrahtet und aktiv** – `MainWindow.stack` ist eine `_StackFacade` über eine echte `TabbedNavigator` (`main.py`). Strg+Klick auf einen Sidebar-Eintrag öffnet einen neuen Tab (`ui/widgets/sidebar_nav.py::_wire_tab_capable_click()`). Drei Screens sind bewusst "fresh-instance"-fähig (mehrfach gleichzeitig als eigenständige Instanz offen: Show Experiment, Backlog, All Experiments, siehe `main.py::_open_show_experiment_in_new_tab()`/`_open_backlog_in_new_tab()`/`_open_all_experiments_in_new_tab()`) – alle übrigen Screens bleiben App-weite Singletons mit Fokus-statt-Duplikat-Verhalten. Jeder per `open_in_new_tab()` erzeugte Tab wird automatisch "gepinnt" (`TabbedNavigator._pinned_stacks`); ein normaler (nicht Strg-)Klick aus einem gepinnten Tab heraus wird automatisch wie Strg+Klick behandelt, damit ein Vergleichs-Tab nicht versehentlich überschrieben wird. `open_experiment_in_new_window()` (echtes, separates OS-Fenster statt Tab) existiert weiterhin parallel als Alternative. Volle Entstehungsgeschichte (inkl. des Rückbaus vom 2026-08-27 und der seither erfolgten Reaktivierung+Erweiterung) siehe `HISTORY.md`.
 - Lab Assistant (`ui/lab_assistant_worker.py`) hat keinen separaten read-only DB-User – SQL-Absicherung ist rein anwendungsseitig (`validate_readonly_sql()`), `tbluser` ist dort komplett gesperrt.
 - Sidebar-Navigation (`ui/widgets/sidebar.py`/`sidebar_nav.py`) ist seit 2026-08-26/27 der App-weite Standard (ersetzt die alte Topbar/Karten-Optik), `BacklogScreen` ist der Post-Login-Landing-Screen (nicht mehr `HomeScreen`).
 

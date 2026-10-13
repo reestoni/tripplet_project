@@ -60,6 +60,7 @@ from db import experiment_request_changes as request_changes
 from ui.pathutil import resource_path
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
+from ui.widgets.experiment_request_help_dialog import show_experiment_request_help
 
 import datetime
 import shutil
@@ -67,13 +68,14 @@ import shutil
 
 # Felder, die im Formular nicht angezeigt werden sollen
 # (werden teils automatisch beim Speichern gesetzt)
-# ChangeOfRequestID ist reine Kopie-Metadaten (siehe db/experiment_request_changes.py),
-# nie ein vom Nutzer editierbares Feld. DenialReason wird ausschliesslich ueber
-# den Status-Wechsel "Denied" in screen_my_requests.py gesetzt (dort per
-# eigenem Dialog abgefragt) - hier nur lesend als Banner angezeigt, siehe
-# load_request()/_lbl_denial_banner.
+# ChangeOfRequestID/PriorVersionOfID sind reine Kopie-/Versions-Metadaten
+# (siehe db/experiment_request_changes.py), nie vom Nutzer editierbare Felder.
+# DenialReason wird ausschliesslich ueber den Status-Wechsel "Denied" in
+# screen_my_requests.py gesetzt (dort per eigenem Dialog abgefragt) - hier
+# nur lesend als Banner angezeigt, siehe load_request()/_lbl_denial_banner.
 EXCLUDE_FIELDS = {
-    "ID", "Timestamp", "CreatedBy", "RequestStatus", "ChangeOfRequestID", "DenialReason",
+    "ID", "Timestamp", "CreatedBy", "RequestStatus", "ChangeOfRequestID",
+    "PriorVersionOfID", "DenialReason",
 }
 
 # Basisordner fuer Experiment-Request-Bilder
@@ -179,6 +181,15 @@ class ExperimentRequestImagesDialog(QDialog):
         self._table_name = table_name
         self._fk_field = fk_field
         self._fk_value = fk_value
+
+        # UserID -> short username (e.g. "soj"), for the owner badge next to
+        # each filename in the list. Best-effort - a missing/failed lookup
+        # just means no badge, never breaks the viewer.
+        try:
+            from db.user_directory import load_user_id_to_username
+            self._owner_names = load_user_id_to_username()
+        except Exception:
+            self._owner_names = {}
 
         # Zoom state (image preview)
         self._zoom: float = 1.0
@@ -310,6 +321,41 @@ class ExperimentRequestImagesDialog(QDialog):
             return ""
         return os.path.splitext(filename)[0]
 
+    def _make_owner_row_widget(
+        self, display_name: str, img: Dict[str, Any], item: QListWidgetItem
+    ) -> QWidget:
+        """Row widget for the file list: filename + a small owner badge
+        (short username, e.g. "soj") right-aligned, if CreatedBy is known.
+
+        WA_TransparentForMouseEvents is needed because setItemWidget()
+        would otherwise intercept clicks on the row before they trigger
+        normal item selection (currentItemChanged/itemSelectionChanged) -
+        this keeps the row clickable like a normal list item."""
+        w = QWidget()
+        w.setAttribute(Qt.WA_TransparentForMouseEvents)
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(4, 2, 6, 2)
+        lay.setSpacing(6)
+
+        lbl = QLabel(display_name)
+        lbl.setTextFormat(Qt.PlainText)
+        lay.addWidget(lbl, 1)
+
+        owner_id = img.get("CreatedBy")
+        owner_name = None
+        if owner_id not in (None, ""):
+            owner_name = self._owner_names.get(owner_id) or self._owner_names.get(str(owner_id))
+        if owner_name:
+            badge = QLabel(owner_name)
+            badge.setStyleSheet(
+                "background: #55606e; color: #f0f2f5; border-radius: 8px; "
+                "padding: 1px 7px; font-size: 10px; font-weight: 600;"
+            )
+            lay.addWidget(badge, 0, Qt.AlignVCenter)
+            item.setToolTip(f"Uploaded by {owner_name}")
+
+        return w
+
 
     def _rotate_current(self, angle: int) -> None:
         """Rotiert das aktuell ausgewählte Bild um angle Grad und speichert es."""
@@ -356,6 +402,9 @@ class ExperimentRequestImagesDialog(QDialog):
                 item = QListWidgetItem(disp)
                 item.setData(Qt.UserRole, img)
                 self.lst.addItem(item)
+                row_widget = self._make_owner_row_widget(disp, img, item)
+                item.setSizeHint(row_widget.sizeHint())
+                self.lst.setItemWidget(item, row_widget)
 
                 if select_full_path and str(img.get("FullPath") or "") == str(select_full_path):
                     selected_item = item
@@ -373,14 +422,41 @@ class ExperimentRequestImagesDialog(QDialog):
 
     # ---------------- Context menu: rename OriginalFilename ----------------
 
+    def _current_access_level(self) -> int:
+        try:
+            return int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            return 0
+
+    def _current_user_id(self) -> Any | None:
+        try:
+            return (app_meta.current_user or {}).get("id")
+        except Exception:
+            return None
+
+    def _can_delete(self, img: Dict[str, Any]) -> bool:
+        """Only the owner (CreatedBy) or a superuser (AccessLevel >= 4) may delete."""
+        if self._current_access_level() >= 4:
+            return True
+        owner_id = img.get("CreatedBy")
+        uid = self._current_user_id()
+        return owner_id not in (None, "") and uid not in (None, "") and str(owner_id) == str(uid)
+
     def _update_delete_button(self) -> None:
-        """Aktiviert/deaktiviert den Löschen-Button je nach Selektion."""
-        """Enable/disable delete button based on selection."""
+        """Enable/disable delete button based on selection and delete permission."""
         try:
             btn = getattr(self, "btn_delete", None)
             if not btn:
                 return
-            btn.setEnabled(len(self.lst.selectedItems()) > 0)
+            selected = self.lst.selectedItems()
+            can_delete_all = bool(selected) and all(
+                self._can_delete(it.data(Qt.UserRole) or {}) for it in selected
+            )
+            btn.setEnabled(can_delete_all)
+            if selected and not can_delete_all:
+                btn.setToolTip("You can only delete your own uploads (or need superuser rights).")
+            else:
+                btn.setToolTip("")
         except Exception:
             # Never crash the viewer due to UI state.
             pass
@@ -518,11 +594,29 @@ class ExperimentRequestImagesDialog(QDialog):
             )
             return
 
+        # Only the owner or a superuser (AccessLevel >= 4) may delete - also
+        # reachable via the Delete key (keyPressEvent), not just the button,
+        # hence checked here instead of only in _update_delete_button.
+        denied = [it for it in items if not self._can_delete(it.data(Qt.UserRole) or {})]
+        items = [it for it in items if self._can_delete(it.data(Qt.UserRole) or {})]
+        if not items:
+            QMessageBox.warning(
+                self,
+                "Delete",
+                "You can only delete your own uploads (or need superuser rights).",
+            )
+            return
+
         if not self._confirm_delete(len(items)):
             return
 
         deleted_dirs: set[str] = set()
         errors: List[str] = []
+        if denied:
+            errors.append(
+                f"{len(denied)} file(s) skipped: you can only delete your own uploads "
+                "(or need superuser rights)."
+            )
 
         # Delete in reverse row order so indices remain valid
         for item in sorted(items, key=lambda it: self.lst.row(it), reverse=True):
@@ -1105,6 +1199,41 @@ class ExperimentRequestPdfsDialog(QDialog):
                 out.append(part.lower())
         return out
 
+    def _make_owner_row_widget(
+        self, display_name: str, d: Dict[str, Any], item: QListWidgetItem
+    ) -> QWidget:
+        """Row widget for the file list: filename + a small owner badge
+        (short username, e.g. "soj") right-aligned, if CreatedBy is known.
+
+        WA_TransparentForMouseEvents is needed because setItemWidget()
+        would otherwise intercept clicks on the row before they trigger
+        normal item selection (currentItemChanged/itemSelectionChanged) -
+        this keeps the row clickable like a normal list item."""
+        w = QWidget()
+        w.setAttribute(Qt.WA_TransparentForMouseEvents)
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(4, 2, 6, 2)
+        lay.setSpacing(6)
+
+        lbl = QLabel(display_name)
+        lbl.setTextFormat(Qt.PlainText)
+        lay.addWidget(lbl, 1)
+
+        owner_id = d.get("CreatedBy")
+        owner_name = None
+        if owner_id not in (None, ""):
+            owner_name = self._owner_names.get(owner_id) or self._owner_names.get(str(owner_id))
+        if owner_name:
+            badge = QLabel(owner_name)
+            badge.setStyleSheet(
+                "background: #55606e; color: #f0f2f5; border-radius: 8px; "
+                "padding: 1px 7px; font-size: 10px; font-weight: 600;"
+            )
+            lay.addWidget(badge, 0, Qt.AlignVCenter)
+            item.setToolTip(f"Uploaded by {owner_name}")
+
+        return w
+
     def __init__(
         self,
         parent: QWidget,
@@ -1133,6 +1262,15 @@ class ExperimentRequestPdfsDialog(QDialog):
         self._table_name = table_name
         self._fk_field = fk_field
         self._fk_value = fk_value
+
+        # UserID -> short username (e.g. "soj"), for the owner badge next to
+        # each filename in the list. Best-effort - a missing/failed lookup
+        # just means no badge, never breaks the viewer.
+        try:
+            from db.user_directory import load_user_id_to_username
+            self._owner_names = load_user_id_to_username()
+        except Exception:
+            self._owner_names = {}
 
         # Zoom state (image preview)
         self._zoom: float = 1.0
@@ -1314,6 +1452,9 @@ class ExperimentRequestPdfsDialog(QDialog):
                 item = QListWidgetItem(name)
                 item.setData(Qt.UserRole, d)
                 self.lst.addItem(item)
+                row_widget = self._make_owner_row_widget(name, d, item)
+                item.setSizeHint(row_widget.sizeHint())
+                self.lst.setItemWidget(item, row_widget)
                 if select_full_path and str(d.get("FullPath") or "") == select_full_path:
                     sel_row = i
         finally:
@@ -1322,8 +1463,36 @@ class ExperimentRequestPdfsDialog(QDialog):
         if self.lst.count() > 0:
             self.lst.setCurrentRow(min(sel_row, self.lst.count() - 1))
 
+    def _current_access_level(self) -> int:
+        try:
+            return int((app_meta.current_user or {}).get("access_level") or 0)
+        except Exception:
+            return 0
+
+    def _current_user_id(self) -> Any | None:
+        try:
+            return (app_meta.current_user or {}).get("id")
+        except Exception:
+            return None
+
+    def _can_delete(self, d: Dict[str, Any]) -> bool:
+        """Only the owner (CreatedBy) or a superuser (AccessLevel >= 4) may delete."""
+        if self._current_access_level() >= 4:
+            return True
+        owner_id = d.get("CreatedBy")
+        uid = self._current_user_id()
+        return owner_id not in (None, "") and uid not in (None, "") and str(owner_id) == str(uid)
+
     def _update_delete_button(self) -> None:
-        self.btn_delete.setEnabled(self.lst.selectedItems() != [])
+        selected = self.lst.selectedItems()
+        can_delete_all = bool(selected) and all(
+            self._can_delete(it.data(Qt.UserRole) or {}) for it in selected
+        )
+        self.btn_delete.setEnabled(can_delete_all)
+        if selected and not can_delete_all:
+            self.btn_delete.setToolTip("You can only delete your own uploads (or need superuser rights).")
+        else:
+            self.btn_delete.setToolTip("")
 
     def _on_list_context_menu(self, pos: QPoint):
         item = self.lst.itemAt(pos)
@@ -1685,6 +1854,18 @@ class ExperimentRequestPdfsDialog(QDialog):
         if not items:
             return
 
+        # Only the owner or a superuser (AccessLevel >= 4) may delete - also
+        # reachable via the Delete key, not just the button.
+        denied = [it for it in items if not self._can_delete(it.data(Qt.UserRole) or {})]
+        items = [it for it in items if self._can_delete(it.data(Qt.UserRole) or {})]
+        if not items:
+            QMessageBox.warning(
+                self,
+                "Delete",
+                "You can only delete your own uploads (or need superuser rights).",
+            )
+            return
+
         if QMessageBox.question(
             self,
             "Delete",
@@ -1695,6 +1876,11 @@ class ExperimentRequestPdfsDialog(QDialog):
             return
 
         errors: List[str] = []
+        if denied:
+            errors.append(
+                f"{len(denied)} file(s) skipped: you can only delete your own uploads "
+                "(or need superuser rights)."
+            )
         deleted_dirs: set[str] = set()
         deleted_doc_ids: set[str] = set()
         deleted_keys: set[tuple[str, str]] = set()  # (RelativePath, StoredFilename)
@@ -2209,13 +2395,11 @@ class CreateExperimentRequestScreen(QWidget):
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(8)
 
-        # Bearbeiten (request_id gesetzt) kommt immer von "My Requests" her,
-        # Neuanlage vom Experiment-Request-Hub - Chip-Text spiegelt das
-        # tatsaechliche Rueckziel (siehe main.py::_go_edit_experiment_request()).
-        back_chip_label = (
-            "← My Requests" if self._edit_request_id not in (None, "") else "← Experiment Request"
-        )
-        self.btn_back_chip = QPushButton(back_chip_label)
+        # Sowohl Bearbeiten als auch Neuanlage fuehren zurueck zu "My
+        # Requests" - der Experiment-Request-Hub ist seit 2026-09-04 nirgends
+        # mehr verlinkt (siehe main.py::_go_edit_experiment_request()/
+        # _go_create_experiment_request()).
+        self.btn_back_chip = QPushButton("← My Requests")
         self.btn_back_chip.setCursor(Qt.PointingHandCursor)
         self.btn_back_chip.setStyleSheet(
             "QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
@@ -2229,6 +2413,46 @@ class CreateExperimentRequestScreen(QWidget):
         title = QLabel(title_text)
         title.setStyleSheet("font-size: 18px; font-weight: 600;")
         title_row.addWidget(title, 0, Qt.AlignVCenter)
+
+        # Kontext-Hilfe (Lebenszyklus-Diagramm), Nutzerwunsch 2026-08-31:
+        # nicht dauerhaft sichtbar, nur ein kleiner Trigger daneben. Icon
+        # statt "?"-Text seit 2026-09-04 (Nutzerwunsch: schlicht, aber gut
+        # erkennbar - Fallback auf "?" falls die PNG mal fehlt).
+        self.btn_help = QPushButton()
+        self.btn_help.setCursor(Qt.PointingHandCursor)
+        self.btn_help.setFixedSize(26, 26)
+        self.btn_help.setToolTip("Wie funktionieren Experiment Requests?")
+        self.btn_help.setStyleSheet(
+            "QPushButton{background:transparent;border:1px solid #39a650;"
+            "border-radius:13px;padding:0;}"
+            "QPushButton:hover{background:#e8f5e9;}"
+        )
+        help_icon = QIcon(resource_path("assets/images/help_tour.png"))
+        if not help_icon.isNull():
+            self.btn_help.setIcon(help_icon)
+            self.btn_help.setIconSize(QSize(16, 16))
+        else:
+            self.btn_help.setText("?")
+            self.btn_help.setStyleSheet(
+                self.btn_help.styleSheet() + "QPushButton{color:#39a650;font-size:14px;font-weight:700;}"
+            )
+        self.btn_help.clicked.connect(self._open_help)
+        title_row.addWidget(self.btn_help, 0, Qt.AlignVCenter)
+
+        # Version-Historie direkt im Formular oeffenbar (Nutzerwunsch
+        # 2026-09-04), nicht nur ueber das Kontextmenu in "My Requests" -
+        # gleiche Logik/Dialog (ui/widgets/experiment_request_version_history.py).
+        # Nur sichtbar wenn tatsaechlich Versionen existieren, siehe load_request().
+        self.btn_history = QPushButton("History…")
+        self.btn_history.setCursor(Qt.PointingHandCursor)
+        self.btn_history.setStyleSheet(
+            "QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
+            "border-radius:4px;padding:5px 10px;font-weight:600;}"
+            "QPushButton:hover{background:#e8f5e9;}"
+        )
+        self.btn_history.clicked.connect(self._open_version_history)
+        self.btn_history.setVisible(False)
+        title_row.addWidget(self.btn_history, 0, Qt.AlignVCenter)
 
         title_row.addStretch(1)
 
@@ -2346,13 +2570,13 @@ class CreateExperimentRequestScreen(QWidget):
         with get_connection() as cn:
             cur = cn.cursor()
             cur.execute(
-                "SELECT [ID], [RelativePath], [StoredFilename], [OriginalFilename] "
+                "SELECT [ID], [RelativePath], [StoredFilename], [OriginalFilename], [CreatedBy] "
                 "FROM [tblExperimentRequestImage] "
                 "WHERE [ExperimentRequestID]=? "
                 "ORDER BY [ID] DESC",
                 [request_id],
             )
-            for img_id, rel_path, stored, orig_name in cur.fetchall() or []:
+            for img_id, rel_path, stored, orig_name, created_by in cur.fetchall() or []:
                 rel_path = str(rel_path or "")
                 stored = str(stored or "")
                 orig_name = str(orig_name or "")
@@ -2364,6 +2588,7 @@ class CreateExperimentRequestScreen(QWidget):
                         "StoredFilename": stored,
                         "OriginalFilename": orig_name,
                         "FullPath": full,
+                        "CreatedBy": created_by,
                     }
                 )
         return rows
@@ -2639,6 +2864,11 @@ class CreateExperimentRequestScreen(QWidget):
         self._loaded_values = self._collect_values(for_insert=False)
         self._check_required_fields()
         self._update_images_icon()
+
+        try:
+            self.btn_history.setVisible(request_changes.has_versions(request_id))
+        except Exception:
+            self.btn_history.setVisible(False)
 
         denial_reason = values.get("DenialReason")
         if values.get("RequestStatus") == 2 and denial_reason:
@@ -3242,6 +3472,20 @@ class CreateExperimentRequestScreen(QWidget):
                         QMessageBox.warning(self, "Hinweis", "Keine Werte zum Speichern.")
                         return
 
+                    # A superuser directly editing a LIVE row (no copy
+                    # detour, see above) still overwrites it immediately -
+                    # archive its prior state first (user request 2026-09-01:
+                    # version history should be traceable for the user too).
+                    # If this row is itself already an open pending change
+                    # (self._change_of_id set), it's not "live" - no archive
+                    # needed. Best-effort: a failure here must not block the
+                    # actual save.
+                    if self._change_of_id is None:
+                        try:
+                            request_changes.archive_current_version(self._edit_request_id)
+                        except Exception:
+                            pass
+
                     set_clause = ",".join([f"[{c}]=?" for c in cols])
                     sql = f"UPDATE [{self._table}] SET {set_clause} WHERE [ID]=?"
                     params = [values.get(c) for c in cols] + [self._edit_request_id]
@@ -3286,6 +3530,15 @@ class CreateExperimentRequestScreen(QWidget):
         elif callable(self.on_back_home):
             # Fallback
             self.on_back_home()
+
+    def _open_help(self):
+        show_experiment_request_help(self)
+
+    def _open_version_history(self):
+        if self._edit_request_id in (None, ""):
+            return
+        from ui.widgets.experiment_request_version_history import show_version_history
+        show_version_history(self, self._edit_request_id)
 
     def _go_home(self):
         if callable(self.on_back_home):

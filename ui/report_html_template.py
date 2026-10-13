@@ -1461,7 +1461,11 @@ function populateBuilderSeriesList(list){
 }
 
 // ── Slicer ────────────────────────────────────────────────────────────────────
-var slicerState = {air_pressure:[],overfeed:[],speed:[],jet_name:[],yarn_name:[],machine_name:[]};
+var slicerState = {air_pressure:[],overfeed:[],speed:[],jet_plate:[],jet_name:[],yarn_name:[],machine_name:[]};
+function jetPlateKey(d){
+  if(d.jet_plate===null||d.jet_plate===undefined||d.jet_plate==='')return null;
+  return (d.real_jet||d.jet_name||'Unknown')+'::'+d.jet_plate;
+}
 function slicerMatch(d){
   var fields=['air_pressure','overfeed','speed'];
   for(var i=0;i<fields.length;i++){
@@ -1469,6 +1473,7 @@ function slicerMatch(d){
     if(sel.length===0)continue;
     if(sel.indexOf(String(d[f]))===-1)return false;
   }
+  if(slicerState.jet_plate.length>0&&slicerState.jet_plate.indexOf(jetPlateKey(d))===-1)return false;
   if(slicerState.jet_name.length>0&&slicerState.jet_name.indexOf(d.real_jet||d.jet_name||'Unknown')===-1)return false;
   if(slicerState.yarn_name.length>0&&slicerState.yarn_name.indexOf(d.yarn_name||'Unknown')===-1)return false;
   if(slicerState.machine_name.length>0&&slicerState.machine_name.indexOf(d.machine_name||'')===-1)return false;
@@ -2940,6 +2945,10 @@ function buildInfobox(){
   }
   function mergeVals(field){var all=[];SERIES_REGISTRY.forEach(function(s){s.data.forEach(function(d){var v=d[field];if(v!==null&&v!==undefined&&v!==0&&all.indexOf(v)===-1)all.push(v);});});return all.sort(function(a,b){return a-b;});}
   function mergeJets(){var all=[];SERIES_REGISTRY.forEach(function(s){s.data.forEach(function(d){var j=d.real_jet||d.jet_name||'Unknown';if(all.indexOf(j)===-1)all.push(j);});});return all.sort();}
+  // Plate-Nummern sind nur innerhalb desselben Jet-Typs eindeutig (Plate 1 von
+  // Jet A != Plate 1 von Jet B) - daher Composite-Key "<jet>::<plate>", nie
+  // bloss die Plate-Nummer allein.
+  function mergeJetPlates(){var all=[];SERIES_REGISTRY.forEach(function(s){s.data.forEach(function(d){var k=jetPlateKey(d);if(k!==null&&all.indexOf(k)===-1)all.push(k);});});return all.sort(function(a,b){var pa=a.split('::'),pb=b.split('::');if(pa[0]!==pb[0])return pa[0]<pb[0]?-1:1;return Number(pa[1])-Number(pb[1]);});}
   function mergeYarns(){var all=[];SERIES_REGISTRY.forEach(function(s){s.data.forEach(function(d){if(!d.yarn_name)return;var y=d.yarn_name;if(all.indexOf(y)===-1)all.push(y);});});return all.sort();}
 
   var box=el_('div','infobox');
@@ -2961,6 +2970,7 @@ function buildInfobox(){
   if((g=makeSlicerGroup('Speed',mergeVals('speed'),'speed',function(v){return v+' m/min';})))dims.appendChild(g);
   if((g=makeSlicerGroup('Machine',mergeMachines(),'machine_name',null)))dims.appendChild(g);
   if((g=makeSlicerGroup('Jet',  mergeJets(),  'jet_name',  null))) dims.appendChild(g);
+  if((g=makeSlicerGroup('Jet Plate', mergeJetPlates(), 'jet_plate', function(v){var p=String(v).split('::'),n=Number(p[1]);return p[0]+' · Plate '+(n%1===0?n:p[1]);}))) dims.appendChild(g);
   if((g=makeSlicerGroup('Yarn', mergeYarns(), 'yarn_name', null))) dims.appendChild(g);
   box.appendChild(dims);
   // Total trials

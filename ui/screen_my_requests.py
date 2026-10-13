@@ -49,6 +49,7 @@ from db.connection import get_connection
 from db import experiment_request_changes as request_changes
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
+from ui.widgets.experiment_request_help_dialog import show_experiment_request_help
 from ui.screen_create_experiment import table_exists, get_columns_map, resolve_field
 
 
@@ -84,12 +85,11 @@ class MyRequestsScreen(QWidget):
         "Versuchsbedingungen", "Versuchsort", "Bemerkungen",
     }
 
-    def __init__(self, on_back_home=None, on_back_experiment_request=None,
+    def __init__(self, on_back_home=None,
                  on_open_request: Optional[Callable[[Any], None]] = None, on_open_experiment=None,
                  sidebar_callbacks: Optional[dict] = None):
         super().__init__()
         self.on_back_home = on_back_home
-        self.on_back_experiment_request = on_back_experiment_request
         self.on_open_request = on_open_request
         self.on_open_experiment = on_open_experiment
         self._sidebar_nav_callbacks = sidebar_callbacks or {}
@@ -214,8 +214,8 @@ class MyRequestsScreen(QWidget):
     def _notify_owner_of_request(self, request_id: Any, message: str) -> None:
         """Wie _notify_owner(), aber holt CreatedBy/Titel selbst per ID nach
         (fuer Aufrufer, die nur die request_id kennen, z.B.
-        _assign_experiment_to_request()/_accept_pending_change()/
-        _reject_pending_change()). `message` ist bereits fertig formuliert."""
+        _assign_experiment_to_request()/_review_pending_change()).
+        `message` ist bereits fertig formuliert."""
         try:
             with get_connection() as cn:
                 cur = cn.cursor()
@@ -353,13 +353,19 @@ class MyRequestsScreen(QWidget):
                 # Aenderungs-Kopien (ChangeOfRequestID gesetzt) sind kein
                 # eigenstaendiger Request - sie erscheinen nie als eigene
                 # Zeile, sondern nur als Markierung auf ihrem Original.
-                # Spalte existiert bisher nur auf dev_local (siehe
-                # db/experiment_request_changes.py) - auf Umgebungen ohne die
-                # Spalte den Filter komplett weglassen statt "Unknown column".
+                # Archived prior versions (PriorVersionOfID set, see
+                # db/experiment_request_changes.py) are likewise not a
+                # standalone row - pure read-only snapshots, visible only
+                # through the version history dialog. Both columns don't
+                # exist on every environment yet (dev is still pending as of
+                # 2026-09-02) - drop the respective filter entirely on
+                # environments without it, instead of "Unknown column".
                 params: List[Any] = []
                 where_clauses: List[str] = []
                 if request_changes.supports_change_tracking():
                     where_clauses.append("er.[ChangeOfRequestID] IS NULL")
+                if request_changes.supports_versioning():
+                    where_clauses.append("er.[PriorVersionOfID] IS NULL")
                 if not self._is_superuser:
                     where_clauses.append("er.[CreatedBy]=?")
                     params.append(uid)
@@ -457,11 +463,20 @@ class MyRequestsScreen(QWidget):
                 self._pending_copy_map = {}
 
         pending_bg = QColor("#fff3cd")
+        # Brandneue, noch nie geprueften Requests (Status "Request", keine
+        # Aenderungs-Kopie) bekommen ihre eigene Hervorhebung (Nutzerwunsch
+        # 2026-09-08: sowohl neue Requests als auch offene Aenderungen sollen
+        # im Badge zaehlen UND in der Tabelle sichtbar sein - mit
+        # unterschiedlichem Symbol/Farbe, damit man beide Faelle auseinanderhalten
+        # kann. "⏳" (Aenderung wartet) bleibt unveraendert, neue Requests
+        # bekommen "🆕" + eigene Hintergrundfarbe).
+        new_bg = QColor("#dceeff")
 
         for r, row in enumerate(rows):
             req_id = row[id_idx] if id_idx is not None else None
             current_status_id = row[rs_idx] if rs_idx is not None else None
             has_pending_change = req_id in self._pending_copy_map
+            is_new_unreviewed = current_status_id == 1 and not has_pending_change
             owner_id = row[cb_idx] if cb_idx is not None else None
             titel_val = str(row[titel_idx] or "") if titel_idx is not None else ""
             denial_reason_val = row[dr_idx] if dr_idx is not None else None
@@ -473,13 +488,19 @@ class MyRequestsScreen(QWidget):
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                     if has_pending_change:
                         item.setData(Qt.BackgroundRole, pending_bg)
+                    elif is_new_unreviewed:
+                        item.setData(Qt.BackgroundRole, new_bg)
                     if c_vis == 0:
                         item.setData(Qt.UserRole, req_id)
                     self._tbl.setItem(r, c_vis, item)
 
                     combo = NoScrollComboBox()
                     combo.setMinimumHeight(24)
-                    combo_border = "#e0a800" if has_pending_change else "#8fbf8f"
+                    combo_border = (
+                        "#e0a800" if has_pending_change
+                        else "#4a90d9" if is_new_unreviewed
+                        else "#8fbf8f"
+                    )
                     combo.setStyleSheet(
                         f"QComboBox {{ background: #ffffff; border: 1px solid {combo_border}; padding: 2px 6px; }}"
                         "QComboBox QAbstractItemView { background: #ffffff; }"
@@ -490,6 +511,8 @@ class MyRequestsScreen(QWidget):
                             "Es liegt ein noch nicht freigegebener Änderungsvorschlag zu diesem "
                             "Request vor (wartet auf Superuser-Prüfung)."
                         )
+                    elif is_new_unreviewed:
+                        tooltip_parts.append("Neuer Request, noch nicht geprüft.")
                     if current_status_id == 2 and denial_reason_val:
                         tooltip_parts.append(f"Denial reason: {denial_reason_val}")
                     if tooltip_parts:
@@ -647,8 +670,11 @@ class MyRequestsScreen(QWidget):
                     except Exception:
                         pass
                 display_val = "" if val is None else str(val)
-                if has_pending_change and str(_col_name).strip().lower() == "titel":
-                    display_val = "⏳ " + display_val
+                if str(_col_name).strip().lower() == "titel":
+                    if has_pending_change:
+                        display_val = "⏳ " + display_val
+                    elif is_new_unreviewed:
+                        display_val = "🆕 " + display_val
                 item = QTableWidgetItem(display_val)
 
                 # Titel-Spalte gruen + fett darstellen
@@ -665,6 +691,9 @@ class MyRequestsScreen(QWidget):
                         "Es liegt ein noch nicht freigegebener Änderungsvorschlag zu diesem "
                         "Request vor (wartet auf Superuser-Prüfung)."
                     )
+                elif is_new_unreviewed:
+                    item.setData(Qt.BackgroundRole, new_bg)
+                    item.setToolTip("Neuer Request, noch nicht geprüft.")
 
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 if c_vis == 0:
@@ -911,20 +940,24 @@ class MyRequestsScreen(QWidget):
 
         top_row = QHBoxLayout()
 
-        self.btn_back_chip = QPushButton("← Experiment Request")
-        self.btn_back_chip.setCursor(Qt.PointingHandCursor)
-        self.btn_back_chip.setStyleSheet(
-            "QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
-            "border-radius:4px;padding:5px 10px;font-weight:600;}"
-            "QPushButton:hover{background:#e8f5e9;}"
-        )
-        self.btn_back_chip.clicked.connect(self._go_experiment_request)
-        self.btn_back_chip.setVisible(callable(self.on_back_experiment_request))
-        top_row.addWidget(self.btn_back_chip, 0, Qt.AlignLeft)
-
         title = QLabel("Meine Experiment Requests")
         title.setStyleSheet("font-size: 18px; font-weight: 600;")
         top_row.addWidget(title, 0, Qt.AlignLeft)
+
+        # Kontext-Hilfe (Lebenszyklus-Diagramm), Nutzerwunsch 2026-08-31:
+        # nicht dauerhaft sichtbar, nur ein kleiner Trigger daneben.
+        self.btn_help = QPushButton("?")
+        self.btn_help.setCursor(Qt.PointingHandCursor)
+        self.btn_help.setFixedSize(26, 26)
+        self.btn_help.setToolTip("Wie funktionieren Experiment Requests?")
+        self.btn_help.setStyleSheet(
+            "QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
+            "border-radius:13px;padding:0;font-size:14px;font-weight:700;}"
+            "QPushButton:hover{background:#e8f5e9;}"
+        )
+        self.btn_help.clicked.connect(lambda: show_experiment_request_help(self))
+        top_row.addWidget(self.btn_help, 0, Qt.AlignLeft)
+
         top_row.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         self._btn_toggle_details = QPushButton("Show details")
@@ -1013,6 +1046,16 @@ class MyRequestsScreen(QWidget):
             pending_id = self._pending_copy_map.get(req_id)
             if pending_id is not None:
                 req_id = pending_id
+        else:
+            # A superuser double-clicking a row that has a pending change
+            # goes straight to the side-by-side review instead of the plain
+            # edit form (user request 2026-09-01: reviewing a change must
+            # default to seeing old vs. new, not require an extra
+            # right-click detour).
+            pending_id = self._pending_copy_map.get(req_id)
+            if pending_id is not None:
+                self._review_pending_change(req_id, pending_id)
+                return
 
         # 1) Preferred: expliziter Navigator-Callback
         if callable(self.on_open_request):
@@ -1094,8 +1137,13 @@ class MyRequestsScreen(QWidget):
     # ---------------- Context Menu / Assign Experiment ----------------
 
     def _on_context_menu(self, pos):
-        """Zeigt Rechtsklick-Menü an – «Experiment zuordnen» nur für Superuser bei Status=3."""
-        if self._tbl is None or not self._is_superuser:
+        """Right-click menu - "Experiment zuordnen"/accepting/rejecting a
+        pending change stays superuser-only, "View version history" is
+        available to EVERY user for their own requests (the table already
+        only shows non-superusers their own rows, see refresh()) - user
+        request 2026-09-01: version history should be traceable for the
+        user, not just superusers."""
+        if self._tbl is None:
             return
 
         index = self._tbl.indexAt(pos)
@@ -1119,82 +1167,66 @@ class MyRequestsScreen(QWidget):
                 current_status_id = widget.currentData()
                 break
 
-        pending_copy_id = self._pending_copy_map.get(req_id)
+        pending_copy_id = self._pending_copy_map.get(req_id) if self._is_superuser else None
+        has_history = request_changes.has_versions(req_id)
 
-        if current_status_id != 3 and pending_copy_id is None:
+        if not self._is_superuser and not has_history:
+            return
+        if self._is_superuser and current_status_id != 3 and pending_copy_id is None and not has_history:
             return
 
         menu = QMenu(self)
         action_assign = None
+        action_review = None
         action_view = None
-        action_accept = None
-        action_reject = None
+        action_history = None
 
-        if current_status_id == 3:
+        if self._is_superuser and current_status_id == 3:
             action_assign = menu.addAction("Experiment zuordnen…")
 
-        if pending_copy_id is not None:
+        if self._is_superuser and pending_copy_id is not None:
             if action_assign is not None:
                 menu.addSeparator()
+            action_review = menu.addAction("Review Changes…")
             action_view = menu.addAction("Änderungsvorschlag ansehen/bearbeiten…")
-            action_accept = menu.addAction("Änderungsvorschlag akzeptieren")
-            action_reject = menu.addAction("Änderungsvorschlag ablehnen")
+
+        if has_history:
+            if action_assign is not None or action_review is not None:
+                menu.addSeparator()
+            action_history = menu.addAction("View version history…")
 
         chosen = menu.exec(self._tbl.viewport().mapToGlobal(pos))
         if chosen is None:
             return
         if chosen is action_assign:
             self._assign_experiment_to_request(req_id)
+        elif chosen is action_review:
+            self._review_pending_change(req_id, pending_copy_id)
         elif chosen is action_view:
             if callable(self.on_open_request):
                 self.on_open_request(pending_copy_id)
-        elif chosen is action_accept:
-            self._accept_pending_change(req_id, pending_copy_id)
-        elif chosen is action_reject:
-            self._reject_pending_change(req_id, pending_copy_id)
+        elif chosen is action_history:
+            from ui.widgets.experiment_request_version_history import show_version_history
+            show_version_history(self, req_id)
 
-    def _accept_pending_change(self, original_req_id: Any, copy_id: Any) -> None:
-        """Uebernimmt eine Aenderungs-Kopie ins Original (siehe db/experiment_request_changes.py)."""
-        reply = QMessageBox.question(
-            self,
-            "Änderung akzeptieren",
-            f"Änderungsvorschlag für Request #{original_req_id} ins Original übernehmen?\n\n"
-            "Status und eine evtl. bereits verknüpfte Experiment-Zuordnung des Originals "
-            "bleiben dabei unverändert erhalten.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-        try:
-            request_changes.accept_pending_change(copy_id)
-        except Exception as e:
-            QMessageBox.critical(self, "Fehler", f"Übernahme fehlgeschlagen:\n{e}")
-            return
-        self._notify_owner_of_request(original_req_id, "your proposed change was accepted")
-        QMessageBox.information(self, "Übernommen", "Der Änderungsvorschlag wurde übernommen.")
-        self.refresh()
-
-    def _reject_pending_change(self, original_req_id: Any, copy_id: Any) -> None:
-        """Verwirft eine Aenderungs-Kopie, ohne das Original anzufassen."""
-        reply = QMessageBox.question(
-            self,
-            "Änderung ablehnen",
-            f"Änderungsvorschlag für Request #{original_req_id} verwerfen?\n\n"
-            "Das Original bleibt dabei unverändert.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-        try:
-            request_changes.reject_pending_change(copy_id)
-        except Exception as e:
-            QMessageBox.critical(self, "Fehler", f"Ablehnen fehlgeschlagen:\n{e}")
-            return
-        self._notify_owner_of_request(original_req_id, "your proposed change was rejected")
-        QMessageBox.information(self, "Abgelehnt", "Der Änderungsvorschlag wurde verworfen.")
-        self.refresh()
+    def _review_pending_change(self, original_req_id: Any, copy_id: Any) -> None:
+        """Opens the side-by-side diff dialog for a pending change (user
+        request 2026-09-01: a superuser approving a change must see old vs.
+        new by default, with the actual differences highlighted, to make a
+        good decision) and applies whatever accept/reject decision was made
+        there - see ui/widgets/experiment_request_diff_dialog.py, which
+        performs the actual accept/reject itself; this only handles the
+        screen-level follow-up (notify the owner, refresh the table)."""
+        from ui.widgets.experiment_request_diff_dialog import review_pending_change
+        outcome = review_pending_change(self, original_req_id, copy_id)
+        if outcome == "accepted":
+            self._notify_owner_of_request(original_req_id, "your proposed change was accepted")
+            QMessageBox.information(self, "Accepted", "The proposed change has been applied.")
+            self.refresh()
+        elif outcome == "rejected":
+            self._notify_owner_of_request(original_req_id, "your proposed change was rejected")
+            QMessageBox.information(self, "Rejected", "The proposed change has been discarded.")
+            self.refresh()
 
     def _assign_experiment_to_request(self, req_id: Any):
         """Öffnet einen Dialog zur Auswahl eines Experiments (ohne bestehenden Request)
@@ -1441,27 +1473,6 @@ class MyRequestsScreen(QWidget):
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Fehler", str(e))
-
-    def _go_experiment_request(self):
-        """Navigiert zurück zum ExperimentRequest-Übersichts-Screen."""
-        # Prefer explicit callback
-        if callable(getattr(self, "on_back_experiment_request", None)):
-            self.on_back_experiment_request()
-            return
-
-        # Fallback: try navigator on main window
-        try:
-            wnd = self.window()
-            fn = getattr(wnd, "_go_experiment_request", None)
-            if callable(fn):
-                fn()
-                return
-        except Exception:
-            pass
-
-        # Last resort: home
-        if callable(getattr(self, "on_back_home", None)):
-            self.on_back_home()
 
     def _go_home(self):
         """Navigiert zurück zum Home-Screen."""

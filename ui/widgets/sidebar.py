@@ -55,6 +55,7 @@ QScrollArea (kein horizontales Scrollen nötig, feste Breite).
 
 import weakref
 
+import shiboken6
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -86,8 +87,20 @@ _shared_section_expanded: dict[str, bool] = {}
 def _propagate_section_state(section_key: str, expanded: bool):
     """Spiegelt einen Sektions-Toggle auf alle anderen aktuell existierenden
     Panels (auch aktuell nicht sichtbare) - macht das Verhalten für bereits
-    gebaute Screens sofort sichtbar, nicht erst beim nächsten Neuaufbau."""
+    gebaute Screens sofort sichtbar, nicht erst beim nächsten Neuaufbau.
+
+    `_all_panels` ist ein WeakSet, räumt sich also nur auf, sobald das
+    Python-Objekt selbst GC'd wird - ein Panel, dessen C++-Seite bereits per
+    deleteLater() zerstört wurde (z.B. beim Ersetzen von
+    CreateExperimentRequestScreen), kann als Python-Objekt aber noch eine
+    Weile weiterleben (u.a. gehalten durch eigene Signal-Closures) und dann
+    hier mit "RuntimeError: Internal C++ object already deleted" krachen -
+    siehe Bugreport 2026-09-04. shiboken6.isValid() prueft das VOR dem Zugriff
+    statt try/except pro Aufruf."""
     for panel in list(_all_panels):
+        if not shiboken6.isValid(panel):
+            _all_panels.discard(panel)
+            continue
         for section in panel._sections:
             if section.get("section_key") == section_key and section["expanded"] != expanded:
                 section["expanded"] = expanded
@@ -245,6 +258,46 @@ class SidebarPanel(QWidget):
 
         brand_row.addStretch()
         brand_layout.addLayout(brand_row)
+
+        # Environment badge (2026-09-02, user request: "wenn ich das tool in
+        # dev resp. dev_local öffne, dann muss ich einen badge im sidepanel
+        # sehen. sonst ist es ziemlich gefährlich, da ich nun nicht mehr
+        # sehe, dass ich mich in einer dev umgebung bewege"). Lives directly
+        # in `brand_layout` (NOT inside self._brand_text, which gets hidden
+        # by the whole-sidebar collapse toggle) so it stays visible even in
+        # the icon-only collapsed state - the whole point is that it can
+        # never silently disappear. MODE is fixed for the lifetime of the
+        # process (see db/connection.py header comment), so this is a
+        # one-time read, no refresh hook needed. Deliberately restricted to
+        # exactly "dev"/"dev_local" (not offline/offline_prod/
+        # offline_dev_local), which already get their own explicit
+        # QMessageBox warning at startup (see main.py) - this badge covers
+        # the gap those don't: a *persistent*, always-visible reminder while
+        # actually working in the app, not just a one-off dialog on launch.
+        self._env_badge = QLabel()
+        self._env_badge.setObjectName("SidebarEnvBadge")
+        self._env_badge.setAlignment(Qt.AlignCenter)
+        self._env_badge.setWordWrap(True)
+        self._env_badge.setStyleSheet(
+            "QLabel#SidebarEnvBadge { background:#e67e22; color:#ffffff; "
+            "border-radius:4px; padding:3px 6px; font-size:11px; "
+            "font-weight:700; letter-spacing:0.5px; }"
+        )
+        try:
+            from db.connection import is_dev_mode, is_offline_mode, MODE
+            show_badge = is_dev_mode() and not is_offline_mode()
+            badge_text = MODE.replace("_", " ").upper()
+        except Exception:
+            show_badge, badge_text = False, ""
+        self._env_badge.setText(badge_text)
+        self._env_badge.setVisible(show_badge)
+        if show_badge:
+            self._env_badge.setToolTip(
+                f"Connected to the {badge_text} database - not production."
+            )
+            brand_layout.addSpacing(8)
+            brand_layout.addWidget(self._env_badge)
+
         brand_layout.addSpacing(16)
 
     # ------------------------------------------------------------- Content API
@@ -442,9 +495,16 @@ class SidebarPanel(QWidget):
         self.setFixedWidth(self.COLLAPSED_WIDTH if collapsed else self._expanded_width)
         self.apply_collapse_state()
         if _propagate:
+            # shiboken6.isValid()-Guard: siehe Docstring von
+            # _propagate_section_state() - dasselbe WeakSet, derselbe
+            # "already deleted"-Bugreport 2026-09-04.
             for panel in list(_all_panels):
-                if panel is not self:
-                    panel.set_collapsed(collapsed, _propagate=False)
+                if panel is self:
+                    continue
+                if not shiboken6.isValid(panel):
+                    _all_panels.discard(panel)
+                    continue
+                panel.set_collapsed(collapsed, _propagate=False)
 
     def apply_collapse_state(self):
         """Wendet den aktuellen Ganze-Sidebar-Collapse-Zustand auf alle

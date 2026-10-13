@@ -16,11 +16,12 @@ from ui.text_normalize import norm as _norm, canon_simple as _canon
 from db.connection import fetch_all, execute, new_global_id, get_columns_map
 import app_meta
 
-# Wiederverwendet statt dupliziert (anders als bei Top Plates/Jets) - die drei
+# Wiederverwendet statt dupliziert (anders als bei Top Plates/Jets) - die vier
 # Klassen sind vollstaendig generisch (kein Jets-spezifischer State), siehe
 # ui/screen_manage_jets.py fuer die Implementierung.
 from ui.screen_manage_jets import (
     MultiColumnFilterProxy, FilterableHeaderView, ColumnOrderDialog, ExpandableFilterProxy,
+    SearchHighlightDelegate,
 )
 
 
@@ -913,6 +914,7 @@ class ManageYarnScreen(QWidget):
         self._material_delegate: Optional[ComboMapDelegate] = None
         self._yarngroup_delegate: Optional[ComboMapDelegate] = None
         self._colour_delegate: Optional[ComboMapDelegate] = None
+        self._search_highlight_delegate: Optional[SearchHighlightDelegate] = None
         # Yarn hat kein alles-oder-nichts Read-only: AdminBox=0-User dürfen laut
         # Anforderung alles ausser MinStock bearbeiten und nicht löschen.
         self._can_delete = True
@@ -1187,6 +1189,15 @@ class ManageYarnScreen(QWidget):
                     add_new_callback=lambda w: quick_add_colour(w))
             self.table.setItemDelegateForColumn(headers.index(
                 self._colour_col), self._colour_delegate)
+
+        # Die Suchleiste durchsucht nur die Name-Spalte. Der wiederverwendete
+        # Jets-Delegate hebt darin alle passenden Suchbegriffe farbig hervor.
+        if self._name_search_col >= 0:
+            if not self._search_highlight_delegate:
+                self._search_highlight_delegate = SearchHighlightDelegate(
+                    self.proxy, lambda: [self._name_search_col], parent=self.table)
+            self.table.setItemDelegateForColumn(
+                self._name_search_col, self._search_highlight_delegate)
 
         self.table.resizeColumnsToContents()
         # sort by ID ascending
@@ -1808,6 +1819,7 @@ class ManageYarnScreen(QWidget):
         self.proxy.set_search_filter([col], text)
         try:
             self._header.viewport().update()
+            self.table.viewport().update()
         except Exception:
             pass
 

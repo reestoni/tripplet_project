@@ -378,9 +378,24 @@ class ReadOnlyTable(QTableWidget):
         # rutscht der Index durchs Entfernen selbst um 1 nach vorne.
         dst = insert_before - 1 if insert_before > src else insert_before
         dst = max(0, min(self.rowCount() - 1, dst))
-        event.acceptProposedAction()
-        if dst != src:
-            self._on_row_moved(src, dst)
+        # Bugreport 2026-08-31: "die bewegte Zeile verschwindet nach dem
+        # Loslassen". Ursache: bei InternalMove ruft Qt's eigenes
+        # QAbstractItemView::startDrag() nach Abschluss des Drags
+        # zusätzlich intern clearOrRemove() auf, das die urspruenglich
+        # gezogene(n) Zeile(n) NOCHMAL aus der Quelle entfernt - sobald die
+        # resultierende Drop-Action Qt.MoveAction ist (der Default bei
+        # acceptProposedAction()). Wir haben Quelle UND Ziel oben bereits
+        # vollstaendig selbst per Item-Verschiebung + _on_row_moved()
+        # synchronisiert - die zusaetzliche Qt-eigene Entfernung loescht
+        # dadurch die falsche (inzwischen verschobene) Zeile nochmal.
+        # Fix: Drop-Action auf IgnoreAction setzen, bevor akzeptiert wird -
+        # damit bleibt clearOrRemove() aus, ohne den Drop selbst abzulehnen.
+        event.setDropAction(Qt.IgnoreAction)
+        if dst == src:
+            event.ignore()
+            return
+        event.accept()
+        self._on_row_moved(src, dst)
 
 
 from PySide6.QtWidgets import QStyledItemDelegate
@@ -478,6 +493,7 @@ class CreateExperimentScreen(QWidget):
         else:
             self._load_product_groups()
             self._load_order_types()
+            self._load_projects()
             self._load_open_experiment_requests()
             self._load_yarns()
             self._load_jets()
@@ -598,6 +614,11 @@ class CreateExperimentScreen(QWidget):
         self.cmbOrderType = PrettyComboBox()
         self.cmbExperimentRequest = PrettyComboBox()
         self._cmb_expreq_base_stylesheet = self.cmbExperimentRequest.styleSheet()
+        # Project (tblProject), optional - user request 2026-09-02: writeable
+        # freely when creating an experiment, but forced+locked to the linked
+        # Experiment Request's own project whenever that request has one
+        # (see _sync_project_from_request()).
+        self.cmbProject = PrettyComboBox()
         self.txtExperimentNumber = QLineEdit()
         # Default: number is auto-generated
         self.txtExperimentNumber.setReadOnly(True)
@@ -623,6 +644,7 @@ class CreateExperimentScreen(QWidget):
         self._lbl_pg = QLabel("Product Group")
         self._lbl_ot = QLabel("Order Type")
         self._lbl_exp_request = QLabel("Experiment Request")
+        self._lbl_project = QLabel("Project")
         # Keep the top-bar icon visibility in sync with the selection
         self.cmbExperimentRequest.currentIndexChanged.connect(self._on_experiment_request_changed)
         self._lbl_num = QLabel("Experiment Number")
@@ -641,6 +663,7 @@ class CreateExperimentScreen(QWidget):
         self._gen_form.addRow(self._lbl_pg, self.cmbProductGroup)
         self._gen_form.addRow(self._lbl_ot, self.cmbOrderType)
         self._gen_form.addRow(self._lbl_exp_request, self.cmbExperimentRequest)
+        self._gen_form.addRow(self._lbl_project, self.cmbProject)
         self._gen_form.addRow(self._lbl_num, self.txtExperimentNumber)
         self._gen_form.addRow(self._lbl_series, self.txtSeriesName)
         self._gen_form.addRow(self._lbl_backlog_status, self.cmbBacklogStatus)
@@ -1086,6 +1109,85 @@ class CreateExperimentScreen(QWidget):
         self.cmbOrderType.setCurrentIndex(-1)
         self.strExperimentData[2] = ""
 
+    def _load_projects(self):
+        """Lädt alle Projekte aus tblProject/tblProjects in die Project-Combobox
+        (General-Tab, optional - siehe _sync_project_from_request() für die
+        Auto-Fill+Lock-Logik, wenn ein Experiment Request mit Projekt gewählt wird)."""
+        self.cmbProject.clear()
+        # Explicit "none" entry (data=None) - user request 2026-09-02: once a
+        # project was picked, it must stay possible to clear it back to empty
+        # again (as long as no linked request forces one, see
+        # _sync_project_from_request()). A bare QComboBox has no built-in way
+        # to deselect back to "nothing chosen" via the UI once an item was
+        # picked - this placeholder is that "nothing" choice.
+        self.cmbProject.addItem("— none —", None)
+        project_table = "tblProjects" if table_exists("tblProjects") else (
+            "tblProject" if table_exists("tblProject") else None)
+        if not project_table:
+            self.cmbProject.setCurrentIndex(0)
+            return
+        cmap = get_columns_map(project_table)
+        col_id = resolve_field(["ID"], cmap) or "ID"
+        col_no = resolve_field(["Project Number", "ProjectNumber", "Projekt Nummer", "ProjektNummer"], cmap)
+        col_name = resolve_field(["Project Name", "ProjectName", "Projekt Name", "ProjektName"], cmap)
+        if not (col_no and col_name):
+            self.cmbProject.setCurrentIndex(0)
+            return
+        try:
+            rows = fetch_all(
+                f"SELECT [{col_id}] AS PID, [{col_no}] AS PNo, [{col_name}] AS PName "
+                f"FROM [{project_table}] ORDER BY [{col_no}]"
+            )
+        except Exception:
+            rows = []
+        for r in rows:
+            pid = r.get("PID")
+            if pid is None:
+                continue
+            txt = f"{r.get('PNo')} – {r.get('PName')}".strip(' –') or f"Project {pid}"
+            self.cmbProject.addItem(txt, int(pid))
+        self.cmbProject.setCurrentIndex(0)
+
+    def _sync_project_from_request(self) -> None:
+        """Erzwingt+sperrt das Project-Dropdown auf das Projekt des verknüpften
+        Experiment Requests, sofern dieser eines hinterlegt hat (Nutzerwunsch
+        2026-09-02: "wenn ich eine Experiment Request hinterlege, dann soll
+        aber immer die Projektnummer des requests niedergeschrieben werden -
+        sofern das request eine hinterlegt hat"). Kein Request (oder ein
+        Request ohne Projekt) ausgewählt → Dropdown bleibt frei editierbar."""
+        if not hasattr(self, "cmbProject"):
+            return
+        rid = None
+        try:
+            rid = self._to_int_or_none(self.cmbExperimentRequest.currentData())
+        except Exception:
+            rid = None
+
+        project_id = None
+        if rid is not None:
+            try:
+                req_cols = get_columns_map("tblExperimentRequests")
+                col_proj = resolve_field(["Projekt", "Project", "ProjectID"], req_cols)
+                if col_proj:
+                    rows = fetch_all(
+                        f"SELECT [{col_proj}] AS Projekt FROM [tblExperimentRequests] WHERE [ID]=?",
+                        [rid],
+                    )
+                    if rows:
+                        project_id = self._to_int_or_none(rows[0].get("Projekt"))
+            except Exception:
+                project_id = None
+
+        if project_id is not None:
+            self._select_combo_by_data(self.cmbProject, project_id)
+            self.cmbProject.setEnabled(False)
+            self.cmbProject.setToolTip(
+                "Taken from the linked Experiment Request's project - cannot be changed here."
+            )
+        else:
+            self.cmbProject.setEnabled(True)
+            self.cmbProject.setToolTip("")
+
     def _on_experiment_request_changed(self, *_) -> None:
         """Callback wenn ein Experiment-Request aus der Combobox gewählt wird.
 
@@ -1095,6 +1197,10 @@ class CreateExperimentScreen(QWidget):
         self._update_expreq_icon_visibility()
         # Remove the "attention" highlight once a request is actually selected.
         self._refresh_expreq_combo_highlight()
+        try:
+            self._sync_project_from_request()
+        except Exception:
+            pass
         try:
             self._check_safe()
         except Exception:
@@ -1184,6 +1290,14 @@ class CreateExperimentScreen(QWidget):
 
         select_title = f", r.[{col_req_title}] AS ReqTitle" if col_req_title else ""
 
+        # Archived prior versions (PriorVersionOfID set, see
+        # db/experiment_request_changes.py) are not standalone requests -
+        # without this filter, this dropdown would grow an extra stale entry
+        # for the same request with every accepted change to an approved
+        # request. Column doesn't exist on every environment yet (dev is
+        # still pending as of 2026-09-02), hence the columns-map check.
+        version_where = "AND r.[PriorVersionOfID] IS NULL\n" if "priorversionofid" in req_cols else ""
+
         sql = (
             f"SELECT r.[{col_req_id}] AS RequestID"
             f"{select_project}"
@@ -1194,6 +1308,7 @@ class CreateExperimentScreen(QWidget):
             f"WHERE 1=1\n"
             f"AND r.[{col_req_status}] = ?\n"
             f"{exp_where}"
+            f"{version_where}"
             f"ORDER BY r.[{col_req_id}] DESC"
         )
 
@@ -2301,6 +2416,7 @@ class CreateExperimentScreen(QWidget):
         self._hide_row(self._lbl_pg,  self.cmbProductGroup, False)
         self._hide_row(self._lbl_ot,  self.cmbOrderType, False)
         self._hide_row(self._lbl_exp_request, self.cmbExperimentRequest, False)
+        self._hide_row(self._lbl_project, self.cmbProject, False)
         self._hide_row(self._lbl_num, self.txtExperimentNumber, False)
         self._hide_row(self._lbl_exp, self.cmbExistingExperiment, True)
         self._hide_row(self._lbl_ser, self.cmbExistingSeries, True)
@@ -2319,6 +2435,7 @@ class CreateExperimentScreen(QWidget):
         self._hide_row(self._lbl_pg,  self.cmbProductGroup, True)
         self._hide_row(self._lbl_ot,  self.cmbOrderType, True)
         self._hide_row(self._lbl_exp_request, self.cmbExperimentRequest, True)
+        self._hide_row(self._lbl_project, self.cmbProject, True)
         self._hide_row(self._lbl_num, self.txtExperimentNumber, True)
         self._hide_row(self._lbl_exp, self.cmbExistingExperiment, False)
         self._hide_row(self._lbl_ser, self.cmbExistingSeries, True)
@@ -2341,6 +2458,7 @@ class CreateExperimentScreen(QWidget):
         self._hide_row(self._lbl_pg,  self.cmbProductGroup, True)
         self._hide_row(self._lbl_ot,  self.cmbOrderType, True)
         self._hide_row(self._lbl_exp_request, self.cmbExperimentRequest, True)
+        self._hide_row(self._lbl_project, self.cmbProject, True)
         self._hide_row(self._lbl_num, self.txtExperimentNumber, True)
         # In "addtrials" sollen SeriesName/Backlog-Infos im General-Tab nicht sichtbar sein
         self._hide_row(self._lbl_series, self.txtSeriesName, True)
@@ -3039,6 +3157,7 @@ class CreateExperimentScreen(QWidget):
         self._hide_row(self._lbl_pg,  self.cmbProductGroup, True)
         self._hide_row(self._lbl_ot,  self.cmbOrderType, True)
         self._hide_row(self._lbl_exp_request, self.cmbExperimentRequest, True)
+        self._hide_row(self._lbl_project, self.cmbProject, True)
         self._hide_row(self._lbl_num, self.txtExperimentNumber, True)
         # In "addlabmachines" sollen Request/SeriesName/Backlog-Infos im General-Tab nicht sichtbar sein
         self._hide_row(self._lbl_series, self.txtSeriesName, True)
@@ -3095,9 +3214,10 @@ class CreateExperimentScreen(QWidget):
         col_mac = resolve_field(["Maschine", "MachineID", "Machine"], cmap)
         col_gid = resolve_field(["GlobalID"], cmap)
         col_expreq = resolve_field(["ExperimentRequest", "Experiment Request", "RequestID", "ExperimentRequestID"], cmap)
+        col_project = resolve_field(["Projekt", "Project", "ProjectID"], cmap)
         if not all([col_year, col_pg, col_ot, col_num]) or not col_mac:
             return None
-        return table, {"year": col_year, "pg": col_pg, "ot": col_ot, "num": col_num, "machine": col_mac, "gid": col_gid, "expreq": col_expreq}
+        return table, {"year": col_year, "pg": col_pg, "ot": col_ot, "num": col_num, "machine": col_mac, "gid": col_gid, "expreq": col_expreq, "project": col_project}
 
     def _recompute_experiment_number(self):
         if self.mode == "legacy":
@@ -4541,6 +4661,7 @@ class CreateExperimentScreen(QWidget):
                         self.cmbOrderType.currentData()) or 0
                     exp_gid_col = exp_cols.get('gid')
                     exp_req_col = exp_cols.get('expreq')
+                    exp_project_col = exp_cols.get('project')
 
                     if self.mode == "legacy":
                         manual = self.txtExperimentNumber.text().strip()
@@ -4569,6 +4690,32 @@ class CreateExperimentScreen(QWidget):
                     if exp_gid_col:
                         exp_fields.append(exp_gid_col)
                         exp_values.append(new_global_id())
+
+                    if exp_project_col:
+                        # Re-derive from the DB (not just the UI's cmbProject
+                        # state) so a linked request's project always wins
+                        # here, authoritatively - matches the "immer" in the
+                        # user request even if _sync_project_from_request()
+                        # somehow got out of sync with the selection.
+                        project_id = None
+                        if selected_request_id is not None:
+                            try:
+                                req_cols_pj = get_columns_map("tblExperimentRequests")
+                                col_proj_pj = resolve_field(["Projekt", "Project", "ProjectID"], req_cols_pj)
+                                if col_proj_pj:
+                                    rows_pj = fetch_all(
+                                        f"SELECT [{col_proj_pj}] AS Projekt FROM [tblExperimentRequests] WHERE [ID]=?",
+                                        [int(selected_request_id)],
+                                    )
+                                    if rows_pj:
+                                        project_id = self._to_int_or_none(rows_pj[0].get("Projekt"))
+                            except Exception:
+                                project_id = None
+                        if project_id is None and hasattr(self, "cmbProject"):
+                            project_id = self._to_int_or_none(self.cmbProject.currentData())
+                        if project_id is not None:
+                            exp_fields.append(exp_project_col)
+                            exp_values.append(int(project_id))
 
                     fields_sql = ",".join(f"[{f}]" if f != 'Experiment ID' else "[Experiment ID]" for f in exp_fields)
                     qmarks = ",".join(["?"] * len(exp_values))

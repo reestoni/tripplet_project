@@ -374,6 +374,40 @@ def _fetch_series_data(series_pk: int) -> List[Dict[str, Any]]:
     return rows
 
 
+def series_short_title(series_pk: int) -> Optional[str]:
+    """Builds "<ExperimentID>.<NN>" (e.g. "2026-73-033.02") from the
+    leading number of SeriesName plus the trial series' experiment ID -
+    a compact SmartChart tab/window title so several SmartChart tabs open
+    at once stay distinguishable (see main.py::_smartchart_title()).
+    Returns None if the series no longer exists."""
+    import re
+    from db.connection import fetch_all
+
+    try:
+        rows = fetch_all(
+            "SELECT TS.SeriesName, E.[Experiment ID] AS exp_id "
+            "FROM tblTrialSeries AS TS "
+            "LEFT JOIN tblExperimente AS E ON E.ID = TS.ExperimentID "
+            "WHERE TS.ID = ?",
+            [series_pk],
+        )
+    except Exception as e:
+        logger.error("series_short_title: %s", e)
+        return None
+
+    if not rows:
+        return None
+
+    exp_id = str(rows[0].get("exp_id") or "").strip()
+    sname = str(rows[0].get("SeriesName") or "").strip()
+    m = re.match(r"(\d+)", sname)
+    nn = m.group(1) if m else ""
+
+    if exp_id and nn:
+        return f"{exp_id}.{nn}"
+    return exp_id or (sname or None)
+
+
 def _fetch_infobox_data(series_pk: int) -> Dict[str, Any]:
     from db.connection import fetch_all, table_exists
 

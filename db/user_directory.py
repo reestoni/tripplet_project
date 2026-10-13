@@ -29,3 +29,21 @@ def load_user_id_to_name() -> Dict[object, str]:
         out[uid] = name
         out[str(uid)] = name
     return out
+
+
+def load_user_id_to_username() -> Dict[object, str]:
+    """Returns {UserID: Username} (short login name, e.g. "soj") for every tblUser row.
+
+    Used for the owner badge on uploaded images/PDFs, where the full
+    "FirstName LastName" from load_user_id_to_name() would be too wide.
+    """
+    rows = fetch_all("SELECT ID, Username FROM tbluser", [])
+    out: Dict[object, str] = {}
+    for r in rows:
+        uid = r.get("ID")
+        if uid is None:
+            continue
+        name = r.get("Username") or f"User {uid}"
+        out[uid] = name
+        out[str(uid)] = name
+    return out

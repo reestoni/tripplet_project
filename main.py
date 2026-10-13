@@ -433,10 +433,14 @@ class MainWindow(QMainWindow):
 
         Wird neu erstellt wenn der Screen noch nicht existiert oder request_id sich geändert hat.
 
-        `on_back`: wohin der "←"-Chip zurückführt - Default ist der
-        Experiment-Request-Hub (Neuanlage-Fall), `_go_edit_experiment_request()`
-        übergibt hier `_go_my_requests` (Bearbeiten kommt immer von dort,
-        siehe dortiger Aufrufer-Kommentar).
+        `on_back`: wohin der "←"-Chip zurückführt. Neuanlage-Fall (kein
+        `on_back` übergeben) zeigt gar keinen Chip mehr (Nutzerwunsch
+        2026-08-31: "ich will die landing page 'experiment request' nicht
+        mehr ansteuern... mit der sidebar haben wir das eleganter gelöst") -
+        vorher fiel das hier auf `_go_experiment_request()` (den Hub) zurück.
+        `_go_edit_experiment_request()` übergibt weiterhin `_go_my_requests`
+        (Bearbeiten kommt immer von dort, siehe dortiger Aufrufer-Kommentar,
+        bleibt unverändert, ist NICHT die abgeschaffte Hub-Landingpage).
         """
         """Create/replace the CreateExperimentRequestScreen.
 
@@ -458,7 +462,7 @@ class MainWindow(QMainWindow):
 
         self.create_experiment_request = CreateExperimentRequestScreen(
             on_back_home=self._go_home,
-            on_back_experiment_request=on_back or self._go_experiment_request,
+            on_back_experiment_request=on_back,
             request_id=request_id,
             sidebar_callbacks=self._sidebar_nav_kwargs(),
         )
@@ -492,7 +496,11 @@ class MainWindow(QMainWindow):
     def _go_create_experiment_request(self):
         """Öffnet den Experiment-Request-Screen im Neuanlage-Modus."""
         """Öffnet den Screen zum Erfassen eines neuen Experiment-Requests."""
-        self._set_create_experiment_request_screen(request_id=None)
+        # Nutzerwunsch 2026-09-04: nach dem Speichern eines neuen Requests
+        # soll es nirgends mehr auf den (aus der Sidebar nicht mehr
+        # erreichbaren) Experiment-Request-Hub gehen, sondern direkt auf
+        # "My Requests" - wie beim Bearbeiten (siehe _go_edit_experiment_request).
+        self._set_create_experiment_request_screen(request_id=None, on_back=self._go_my_requests)
         self.setWindowTitle("TrippleT – Create Experiment Request")
         self.stack.setCurrentWidget(self.create_experiment_request)
 
@@ -531,13 +539,6 @@ class MainWindow(QMainWindow):
         self._tabs.set_title_provider(self.windowTitle, self.setWindowTitle)
         self.setCentralWidget(self._tabs)
         self.stack = _StackFacade(self._tabs)
-        # Siehe ui/widgets/sidebar_nav.py::_wire_tab_capable_click() - liest
-        # das beim normalen (nicht Strg-)Klick auf einen Sidebar-Eintrag, um
-        # einen gepinnten Vergleichs-Tab (siehe TabbedNavigator.
-        # is_current_tab_pinned()) vor versehentlichem Ueberschreiben zu
-        # schuetzen. Gleiches Registrierungs-Muster wie app_meta.
-        # open_quick_search/refresh_bell.
-        app_meta.is_active_tab_pinned = self._tabs.is_current_tab_pinned
 
         self.current_user = None
         self.home = None
@@ -552,6 +553,7 @@ class MainWindow(QMainWindow):
         self._fresh_tab_targets = {
             self._go_backlog: self._open_backlog_in_new_tab,
             self._go_all_experiments: self._open_all_experiments_in_new_tab,
+            self._go_smartchart: self._open_smartchart_visual_in_new_tab,
         }
 
         self.change_pw = ChangePasswordScreen(on_dismiss=self._back_to_login)
@@ -562,6 +564,7 @@ class MainWindow(QMainWindow):
             on_open_in_new_os_window=self.open_experiment_in_new_window,
             on_copy_trialseries=self._go_copy_trialseries,
             on_open_report=self._go_report,
+            on_open_report_in_new_tab=self._open_report_in_new_tab,
             can_review=False,
             **self._sidebar_nav_kwargs(include_all_experiments=False),
         )
@@ -693,6 +696,7 @@ class MainWindow(QMainWindow):
             on_open_in_new_window=self._open_experiment_from_backlog_in_new_tab,
             on_open_in_new_os_window=self.open_experiment_in_new_window,
             on_open_report=self._go_report,
+            on_open_report_in_new_tab=self._open_report_in_new_tab,
             open_in_new_tab=self._open_in_new_tab_dispatch,
             on_all_experiments=self._go_all_experiments,
             on_create_experiment=lambda: self._go_create_experiment("create"),
@@ -735,7 +739,6 @@ class MainWindow(QMainWindow):
         )
         self.my_requests = MyRequestsScreen(
             on_back_home=self._go_home,
-            on_back_experiment_request=self._go_experiment_request,
             on_open_request=self._go_edit_experiment_request,
             on_open_experiment=lambda exp_pk, series_pk, experiment_id: self._go_show_experiment(
                 exp_pk, series_pk, experiment_id,
@@ -1388,6 +1391,7 @@ class MainWindow(QMainWindow):
                 self._notif_panel.notification_clicked.connect(self._go_show_experiment)
                 self._notif_panel.yarn_stock_clicked.connect(self._go_yarn_stock_from_notification)
                 self._notif_panel.experiment_request_clicked.connect(self._go_my_requests_from_notification)
+                self._notif_panel.experiment_request_changed_clicked.connect(self._open_request_change_diff_from_notification)
                 self._notif_panel.all_read.connect(self._on_bell_mark_all_read)
 
             def _refresh_bell():
@@ -1418,6 +1422,19 @@ class MainWindow(QMainWindow):
                         if not getattr(bell_btn, "_bell_connected", False):
                             bell_btn.clicked.connect(self._on_bell_clicked)
                             bell_btn._bell_connected = True
+                        # icon_btn() (see sidebar_nav.py) disables any button
+                        # built without a click handler yet - the bell is
+                        # built with on_click=None (wired up dynamically,
+                        # right here) and was therefore stuck permanently
+                        # disabled/greyed-out even once connected and showing
+                        # a badge count (bugreport 2026-09-02: "in prod hat
+                        # meine glocke 5 notifications, aber sie ist
+                        # ausgegraut"). Always re-enable, every refresh -
+                        # matches build_utility_group()'s own stated intent
+                        # ("Button hier immer sichtbar... kein Grund mehr,
+                        # Zugang zur Notifications-Historie vom Vorhandensein
+                        # irgendwelcher Eintraege abhaengig zu machen").
+                        bell_btn.setEnabled(True)
                 except Exception:
                     pass
 
@@ -1647,6 +1664,8 @@ class MainWindow(QMainWindow):
                     pass
             dlg = QuickSearchDialog(self)
             dlg.open_experiment.connect(self._go_show_experiment)
+            dlg.open_experiment_in_new_tab.connect(self._open_show_experiment_in_new_tab)
+            dlg.open_experiment_in_new_window.connect(self.open_experiment_in_new_window)
             dlg.finished.connect(lambda: setattr(self, "_qs_dlg", None))
             self._qs_dlg = dlg
             dlg.show()
@@ -1725,10 +1744,16 @@ class MainWindow(QMainWindow):
                                         QSizePolicy, QWidget, QMessageBox)
         from PySide6.QtCore import Qt
         from db.connection import fetch_all
+        from db import experiment_request_changes as request_changes
 
+        # Archived prior versions (PriorVersionOfID set, see
+        # db/experiment_request_changes.py) are not standalone requests -
+        # without this filter, this list would grow an extra stale card for
+        # the same request with every accepted change to a matching status.
+        version_filter = " AND [PriorVersionOfID] IS NULL" if request_changes.supports_versioning() else ""
         try:
             rows = fetch_all(
-                "SELECT * FROM [tblExperimentRequests] WHERE [RequestStatus] = ? ORDER BY [ID] DESC",
+                f"SELECT * FROM [tblExperimentRequests] WHERE [RequestStatus] = ?{version_filter} ORDER BY [ID] DESC",
                 [status]
             )
         except Exception:
@@ -2069,6 +2094,7 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(existing)
             existing.set_back_target(back_label, back_callback)
             existing.on_open_report = self._go_report
+            existing.on_open_report_in_new_tab = self._open_report_in_new_tab
             return
 
         # Erst Screen aktivieren, dann laden – so bleibt Navigation auch bei Fehlern nachvollziehbar.
@@ -2078,6 +2104,7 @@ class MainWindow(QMainWindow):
 
         # Report-Callback verdrahten
         self.show_experiment.on_open_report = self._go_report
+        self.show_experiment.on_open_report_in_new_tab = self._open_report_in_new_tab
 
         try:
             self.show_experiment.load_record(exp_pk, series_pk, experiment_id)
@@ -2142,6 +2169,7 @@ class MainWindow(QMainWindow):
         )
         screen_ref["screen"] = screen
         screen.on_open_report = self._go_report
+        screen.on_open_report_in_new_tab = self._open_report_in_new_tab
         screen.set_back_target(back_label, back_callback)
         return screen
 
@@ -2210,6 +2238,23 @@ class MainWindow(QMainWindow):
 
         return _open
 
+    def _smartchart_title(self, series_pk: Optional[int]) -> str:
+        """Builds the SmartChart window/tab title: "SC <ExperimentID>.<NN>"
+        (e.g. "SC 2026-73-033.02") for a specific trial series (mode=
+        "series"), otherwise the generic "Smart Chart" (mode="visual", no
+        series_pk). User request 2026-09-01: with several SmartChart tabs
+        open at once (see _open_report_in_new_tab()), the tab title needs to
+        show which trial series it's showing - "Smart Chart" on every tab
+        was no longer distinguishable."""
+        if series_pk is None:
+            return "Smart Chart"
+        try:
+            from ui.report_queries import series_short_title
+            short = series_short_title(series_pk)
+        except Exception:
+            short = None
+        return f"SC {short}" if short else "Smart Chart"
+
     def _go_report(self, series_pk: int, report_id: Optional[int] = None) -> None:
         """Öffnet den Report-Screen für eine TrialSeries. `report_id` (siehe
         ShowExperimentScreen's "Saved Reports"-Dropdown+Go-Button) lädt
@@ -2222,9 +2267,55 @@ class MainWindow(QMainWindow):
                 "Bitte ausführen: pip install PySide6-WebEngine"
             )
             return
-        self.setWindowTitle("TrippleT – Smart Chart")
+        print(f"[DEBUG _go_report] (SHARED SINGLETON path) series_pk={series_pk} "
+              f"report_screen={self.report_screen!r} tabs.currentIndex()={self._tabs.currentIndex()}")
+        self.setWindowTitle(f"TrippleT – {self._smartchart_title(series_pk)}")
         self.report_screen.load_series(series_pk, initial_report_id=report_id)
         self.stack.setCurrentWidget(self.report_screen)
+
+    def _build_dedicated_smartchart_screen(self) -> "ReportScreen":
+        """Builds a fresh, standalone ReportScreen instance (mode="series")
+        for a SmartChart comparison tab opened via Ctrl+click - analogous to
+        _build_dedicated_show_experiment_screen(). `on_back=None`: this tab
+        is independent of the ShowExperiment tab it was opened from (which
+        stays put, unchanged) - a back-chip to one specific target would be
+        ambiguous here, closing instead goes through the normal tab 'x'."""
+        return ReportScreen(on_back=None, mode="series", sidebar_callbacks=self._sidebar_nav_kwargs())
+
+    def _open_report_in_new_tab(self, series_pk: int, report_id: Optional[int] = None) -> None:
+        """Ctrl+click on "Smart Chart" or the "Go" button next to Saved
+        Reports in ShowExperimentScreen (see on_open_report_in_new_tab
+        there): opens a FRESH, standalone ReportScreen instance in a new
+        tab instead of redirecting the one shared singleton
+        (self.report_screen) - user request 2026-09-01: several different
+        SmartCharts should be able to stay open side by side, exactly like
+        the analogous Ctrl+click path for Show Experiment itself (see
+        _open_show_experiment_in_new_tab())."""
+        if ReportScreen is None:
+            QMessageBox.warning(
+                self, "Report",
+                "Report not available – PySide6-WebEngine is not installed.\n\n"
+                "Please run: pip install PySide6-WebEngine"
+            )
+            return
+
+        def _populate():
+            screen = self._build_dedicated_smartchart_screen()
+            print(f"[DEBUG _open_report_in_new_tab] built screen={screen!r} series_pk={series_pk} "
+                  f"tabs.currentIndex()={self._tabs.currentIndex()} tabs.count()={self._tabs.count()}")
+            self.setWindowTitle(f"TrippleT – {self._smartchart_title(series_pk)}")
+            self.stack.addWidget(screen)
+            self.stack.setCurrentWidget(screen)
+            screen.load_series(series_pk, initial_report_id=report_id)
+            print(f"[DEBUG _open_report_in_new_tab] after add/set: "
+                  f"tabs.currentIndex()={self._tabs.currentIndex()} active_screen={self._tabs.active_screen()!r}")
+
+        print(f"[DEBUG _open_report_in_new_tab] called series_pk={series_pk} "
+              f"tabs.currentIndex()={self._tabs.currentIndex()} tabs.count()={self._tabs.count()}")
+        self._tabs.open_in_new_tab(_populate)
+        print(f"[DEBUG _open_report_in_new_tab] AFTER open_in_new_tab: "
+              f"tabs.currentIndex()={self._tabs.currentIndex()} tabs.count()={self._tabs.count()} "
+              f"active_screen={self._tabs.active_screen()!r}")
 
     def _go_back_to_show_experiment(self) -> None:
         """Zurück von Report-Screen zu ShowExperiment."""
@@ -2241,6 +2332,28 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("TrippleT – Smart Chart")
         self.smartchart_screen.load_visual()
         self.stack.setCurrentWidget(self.smartchart_screen)
+
+    def _open_smartchart_visual_in_new_tab(self) -> None:
+        """Ctrl+click on the "Smart Chart" sidebar entry (visual SQL mode,
+        from Home) - registered in `_fresh_tab_targets`, otherwise
+        TabbedNavigator.open_in_new_tab() would just focus the one shared
+        `self.smartchart_screen` singleton in whichever tab it's already
+        open in, instead of actually opening a second, independent instance
+        (focus-instead-of-duplicate logic, see the module docstring in
+        ui/widgets/tab_container.py) - same as Backlog/All Experiments."""
+        if ReportScreen is None:
+            QMessageBox.warning(self, "Smart Chart",
+                "Smart Chart not available – PySide6-WebEngine is not installed.")
+            return
+
+        def _populate():
+            screen = ReportScreen(on_back=self._go_home, mode="visual", sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.setWindowTitle("TrippleT – Smart Chart")
+            self.stack.addWidget(screen)
+            self.stack.setCurrentWidget(screen)
+            screen.load_visual()
+
+        self._tabs.open_in_new_tab(_populate)
 
     def _open_experiment_from_all(self, exp_pk: int, series_pk: int, experiment_id: str):
         """Öffnet ShowExperimentScreen aus dem AllExperiments-Screen. Der
@@ -2322,7 +2435,7 @@ class MainWindow(QMainWindow):
                 "Report nicht verfügbar – PySide6-WebEngine nicht installiert.")
             return
         win = QMainWindow()
-        win.setWindowTitle("TrippleT – Smart Chart")
+        win.setWindowTitle(f"TrippleT – {self._smartchart_title(series_pk)}")
         win.setMinimumSize(1100, 700)
         try:
             win.setStyleSheet(self.styleSheet())
@@ -2407,13 +2520,24 @@ class MainWindow(QMainWindow):
 
         open_experiment_locally = self._make_local_experiment_opener("Backlog", _back_to_this_backlog)
 
+        def _open_in_new_tab_from_this_backlog(exp_pk: int, series_pk: int, experiment_id: str):
+            # Wie open_experiment_locally, aber fuer Strg+Doppelklick: der
+            # "<- Backlog"-Chip des NEUEN Show-Experiment-Tabs muss zu DIESEM
+            # Backlog-Tab zurueckfuehren, nicht zum globalen Singleton
+            # (self._go_backlog) - sonst _open_experiment_from_backlog_in_new_tab()
+            # verwenden, das genau das hardcoded.
+            self._open_show_experiment_in_new_tab(
+                exp_pk, series_pk, experiment_id,
+                back_label="Backlog", back_callback=_back_to_this_backlog)
+
         def _populate():
             screen = BacklogScreen(
                 on_back_home=self._go_home,
                 on_open_experiment=open_experiment_locally,
-                on_open_in_new_window=self._open_experiment_from_backlog_in_new_tab,
+                on_open_in_new_window=_open_in_new_tab_from_this_backlog,
                 on_open_in_new_os_window=self.open_experiment_in_new_window,
                 on_open_report=self._go_report,
+                on_open_report_in_new_tab=self._open_report_in_new_tab,
                 **self._sidebar_nav_kwargs(include_open_backlog=False),
             )
             backlog_ref["screen"] = screen
@@ -2447,14 +2571,23 @@ class MainWindow(QMainWindow):
 
         open_experiment_locally = self._make_local_experiment_opener("All Experiments", _back_to_this_all_experiments)
 
+        def _open_in_new_tab_from_this_all_experiments(exp_pk: int, series_pk: int, experiment_id: str):
+            # Analog zu _open_in_new_tab_from_this_backlog() in
+            # _open_backlog_in_new_tab(): "<- All Experiments"-Chip muss zu
+            # DIESEM Tab zurueckfuehren, nicht zum globalen Singleton.
+            self._open_show_experiment_in_new_tab(
+                exp_pk, series_pk, experiment_id,
+                back_label="All Experiments", back_callback=_back_to_this_all_experiments)
+
         def _populate():
             screen = AllExperimentsScreen(
                 on_back_home=self._go_home,
                 on_open_experiment=open_experiment_locally,
-                on_open_in_new_window=self._open_experiment_from_all_in_new_tab,
+                on_open_in_new_window=_open_in_new_tab_from_this_all_experiments,
                 on_open_in_new_os_window=self.open_experiment_in_new_window,
                 on_copy_trialseries=self._go_copy_trialseries,
                 on_open_report=self._go_report,
+                on_open_report_in_new_tab=self._open_report_in_new_tab,
                 can_review=can_review,
                 **self._sidebar_nav_kwargs(include_all_experiments=False),
             )
@@ -2741,6 +2874,25 @@ class MainWindow(QMainWindow):
         koennte inzwischen geloescht sein, z.B. eine bereits akzeptierte/
         abgelehnte Kopie) - die Liste ist immer ein gueltiges Ziel."""
         self._go_my_requests()
+
+    def _open_request_change_diff_from_notification(self, request_id: int, archived_version_id: int):
+        """Von einer "Request geändert"-Notification aus (siehe
+        ui/notifications.py::notify_experiment_owners_of_request_change()) -
+        oeffnet direkt den Alt-vs-Neu-Vergleich statt nur zu "My Requests" zu
+        navigieren (2026-09-02, user request: "wenn ich sie dann öffne will
+        ich, dass das die neue und die alte version nebeneinander öffnen und
+        die änderungen ... gehighlighted sind"). Selbes Dialog wie in der
+        Version-History (ui/widgets/experiment_request_version_history.py),
+        nur direkt mit der konkreten "Stand VOR dieser Aenderung"-Version aus
+        der Notification statt einer Auswahlliste."""
+        if not request_id or not archived_version_id:
+            self._go_my_requests()
+            return
+        from ui.widgets.experiment_request_diff_dialog import compare_versions
+        compare_versions(
+            self, current_id=request_id, older_id=archived_version_id,
+            older_label="Before this change",
+        )
 
     def _go_add_user(self):
         self.setWindowTitle("TrippleT – Manage User")

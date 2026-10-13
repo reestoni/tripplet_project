@@ -1219,6 +1219,7 @@ def cleanup_draft_experiment_requests(*, created_by: Any | None, created_by_user
     col_id = req_cols.get("id", "ID")
     col_status = req_cols.get("requeststatus", "RequestStatus")
     col_created_by = req_cols.get("createdby", "CreatedBy")
+    col_prior_version = req_cols.get("priorversionofid")
 
     # Kandidaten bestimmen: primär per UserID, fallback per Username (falls CreatedBy als Text gespeichert wäre)
     where = f"[{col_status}] IS NULL"
@@ -1231,6 +1232,12 @@ def cleanup_draft_experiment_requests(*, created_by: Any | None, created_by_user
         params.append(created_by_username)
     else:
         return stats
+    if col_prior_version:
+        # Archived prior versions (see db/experiment_request_changes.py)
+        # practically never have RequestStatus IS NULL (the original was
+        # always already saved by the time it got archived), but this is a
+        # DELETE - exclude them explicitly, purely as a safety net.
+        where += f" AND [{col_prior_version}] IS NULL"
 
     try:
         req_rows = fetch_all(f"SELECT [{col_id}] AS req_id FROM [tblExperimentRequests] WHERE {where}", params)

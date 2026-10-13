@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Experiment-Request-Lebenszyklus-Diagramm fuer die In-App-Hilfe
+  (ui/widgets/experiment_request_help_dialog.py). Farben sind bewusst 1:1
+  aus ui/theme.py bzw. bereits an anderer Stelle im UI verwendeten Tönen
+  uebernommen (siehe Kommentare unten), damit das Diagramm zum Rest der App
+  passt statt einen eigenen Farbraum zu erfinden:
+    - Gruen  #39a650  = theme.ACCENT           -> Nutzer-Aktionen
+    - Lila   #8a2be2  = theme.PURPLE           -> Superuser-Aktionen
+    - Amber  #fff3cd  = bestehende "pending change"-Zeilenmarkierung
+                         in screen_my_requests.py -> "Kopie"-Kasten
+    - Mustard #E6C802 = theme.MUSTARD          -> Rahmen des Kopie-Kastens
+    - Rot    #611a15  = bestehende Denial-Banner-Textfarbe
+                         in screen_create_experiment_request.py -> "Abgelehnt"
+    - Grau   #565656  = theme.DARK             -> Sekundaertext
+    - Rahmen #dbe2dc  = theme.BORDER           -> Kastenrahmen (neutral)
+
+  Keine CSS-Variablen/Klassen (Qt's SVG-Renderer unterstuetzt kein <style>
+  zuverlaessig) - jedes Element traegt seine Farbe/Schrift direkt als
+  Attribut. Wird in ExperimentRequestHelpDialog via QSvgWidget geladen.
+-->
+<svg viewBox="-230 0 1170 500" xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="Lebenszyklus einer Experiment-Anfrage">
+
+  <defs>
+    <marker id="arrow-user" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#39a650"></path>
+    </marker>
+    <marker id="arrow-super" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a2be2"></path>
+    </marker>
+  </defs>
+
+  <!-- Node A: Anfrage anlegen -->
+  <rect x="330" y="18" width="240" height="58" rx="10" fill="#ffffff" stroke="#dbe2dc" stroke-width="1.4"></rect>
+  <text x="450" y="42" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#2b2b2b" text-anchor="middle">Anfrage anlegen</text>
+  <text x="450" y="61" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#565656" text-anchor="middle">Sidebar &#8594; &#8222;Create Experiment Request&#8220;</text>
+
+  <!-- Edge A -> B -->
+  <line x1="450" y1="76" x2="450" y2="128" stroke="#39a650" stroke-width="2" marker-end="url(#arrow-user)"></line>
+  <text x="464" y="107" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#39a650">Formular speichern</text>
+
+  <!-- Node B: Offen -->
+  <rect x="310" y="132" width="280" height="62" rx="10" fill="#ffffff" stroke="#dbe2dc" stroke-width="1.4"></rect>
+  <text x="450" y="158" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#2b2b2b" text-anchor="middle">Offen</text>
+  <text x="450" y="177" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#565656" text-anchor="middle">wartet auf Pr&#252;fung &#183; sichtbar in &#8222;My Requests&#8220;</text>
+
+  <!-- Edge B -> C (genehmigt) -->
+  <line x1="380" y1="194" x2="235" y2="270" stroke="#8a2be2" stroke-width="2" marker-end="url(#arrow-super)"></line>
+  <text x="230" y="228" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#8a2be2" text-anchor="middle">genehmigt</text>
+
+  <!-- Edge B -> D (abgelehnt) -->
+  <line x1="520" y1="194" x2="665" y2="270" stroke="#8a2be2" stroke-width="2" marker-end="url(#arrow-super)"></line>
+  <text x="675" y="228" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#8a2be2" text-anchor="middle">abgelehnt (+ Grund)</text>
+
+  <!-- Node C: Genehmigt -->
+  <rect x="90" y="274" width="220" height="58" rx="10" fill="#ffffff" stroke="#dbe2dc" stroke-width="1.4"></rect>
+  <rect x="90" y="278" width="4" height="50" fill="#39a650"></rect>
+  <text x="204" y="298" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#2b2b2b" text-anchor="middle">Genehmigt</text>
+  <text x="204" y="317" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#565656" text-anchor="middle">w&#228;hlbar in &#8222;New Experiment&#8220;</text>
+
+  <!-- Kopie-Mechanismus C -->
+  <rect x="-210" y="270" width="160" height="42" rx="8" fill="#fff3cd" stroke="#E6C802" stroke-width="1.4" stroke-dasharray="3 3"></rect>
+  <text x="-130" y="288" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#2b2b2b" text-anchor="middle">Kopie</text>
+  <text x="-130" y="303" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#565656" text-anchor="middle">Status: Offen</text>
+
+  <line x1="90" y1="282" x2="-50" y2="282" stroke="#39a650" stroke-width="2" marker-end="url(#arrow-user)"></line>
+  <text x="20" y="264" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#39a650" text-anchor="middle">bearbeiten</text>
+
+  <line x1="-50" y1="304" x2="90" y2="324" stroke="#8a2be2" stroke-width="2" marker-end="url(#arrow-super)"></line>
+  <text x="20" y="341" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#8a2be2" text-anchor="middle">akzeptiert &#8594;</text>
+  <text x="20" y="354" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#8a2be2" text-anchor="middle">Original bleibt &#8222;Genehmigt&#8220;</text>
+
+  <!-- Node D: Abgelehnt -->
+  <rect x="590" y="274" width="220" height="58" rx="10" fill="#ffffff" stroke="#dbe2dc" stroke-width="1.4"></rect>
+  <rect x="590" y="278" width="4" height="50" fill="#611a15"></rect>
+  <text x="704" y="298" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#2b2b2b" text-anchor="middle">Abgelehnt</text>
+  <text x="704" y="317" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#565656" text-anchor="middle">Grund als Notiz sichtbar</text>
+
+  <!-- Edge D -> B loop back -->
+  <path d="M 810 274 C 900 200, 780 130, 594 152" fill="none" stroke="#39a650" stroke-width="2" marker-end="url(#arrow-user)"></path>
+  <text x="805" y="215" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#39a650" text-anchor="end">&#252;berarbeiten &amp; erneut speichern</text>
+
+  <!-- Edge C -> E -->
+  <line x1="200" y1="332" x2="200" y2="392" stroke="#39a650" stroke-width="2" marker-end="url(#arrow-user)"></line>
+  <text x="214" y="367" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#39a650">Anfrage ausw&#228;hlen</text>
+
+  <!-- Node E: Experiment erstellt -->
+  <rect x="90" y="396" width="240" height="62" rx="10" fill="#E9F6E9" stroke="#39a650" stroke-width="1.4"></rect>
+  <text x="210" y="422" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600" fill="#2b2b2b" text-anchor="middle">Experiment erstellt</text>
+  <text x="210" y="441" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#565656" text-anchor="middle">l&#228;uft ab jetzt wie jedes andere Experiment</text>
+
+  <!-- Kopie-Mechanismus E -->
+  <rect x="-210" y="392" width="160" height="42" rx="8" fill="#fff3cd" stroke="#E6C802" stroke-width="1.4" stroke-dasharray="3 3"></rect>
+  <text x="-130" y="410" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#2b2b2b" text-anchor="middle">Kopie</text>
+  <text x="-130" y="425" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#565656" text-anchor="middle">Status: Offen</text>
+
+  <line x1="90" y1="404" x2="-50" y2="404" stroke="#39a650" stroke-width="2" marker-end="url(#arrow-user)"></line>
+  <text x="20" y="386" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#39a650" text-anchor="middle">bearbeiten</text>
+
+  <line x1="-50" y1="426" x2="90" y2="446" stroke="#8a2be2" stroke-width="2" marker-end="url(#arrow-super)"></line>
+  <text x="20" y="463" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#8a2be2" text-anchor="middle">akzeptiert &#8594;</text>
+  <text x="20" y="476" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#8a2be2" text-anchor="middle">bleibt verkn&#252;pft</text>
+
+  <!-- Legende -->
+  <line x1="410" y1="490" x2="440" y2="490" stroke="#39a650" stroke-width="3"></line>
+  <text x="446" y="494" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b">Nutzer</text>
+  <line x1="520" y1="490" x2="550" y2="490" stroke="#8a2be2" stroke-width="3"></line>
+  <text x="556" y="494" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b">Superuser</text>
+  <rect x="632" y="484" width="14" height="12" rx="2" fill="#fff3cd" stroke="#E6C802" stroke-dasharray="2 2"></rect>
+  <text x="652" y="494" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b">Kopie, wartet auf Pr&#252;fung</text>
+</svg>

@@ -553,8 +553,9 @@ class BacklogDnDTable(QTableWidget):
                     report_rect = _report_icon_rect(item, r)
                     if report_rect is not None and report_rect.contains(pos):
                         series_id = item.data(ROLE_SERIES_ID)
+                        ctrl_held = bool(event.modifiers() & Qt.ControlModifier)
                         try:
-                            self._screen._open_report_icon_for_series(series_id)
+                            self._screen._open_report_icon_for_series(series_id, in_new_tab=ctrl_held)
                         except Exception:
                             pass
                         return
@@ -2107,13 +2108,19 @@ class BacklogScreen(QWidget):
                  # direkt (mit Auswahl-Dialog bei mehreren Reports zur
                  # selben TrialSeries), siehe
                  # _open_report_icon_for_series()/ui/widgets/report_picker.py.
-                 on_open_report=None):
+                 on_open_report=None,
+                 # Ctrl+click on the RE icon (2026-09-01, user request: be
+                 # able to have multiple SmartChart instances) - opens a
+                 # fresh SmartChart instance in a new tab instead of the
+                 # shared singleton.
+                 on_open_report_in_new_tab=None):
         super().__init__()
         self.on_back_home = on_back_home
         self.on_open_experiment = on_open_experiment
         self.on_open_in_new_window = on_open_in_new_window
         self.on_open_in_new_os_window = on_open_in_new_os_window
         self.on_open_report = on_open_report
+        self.on_open_report_in_new_tab = on_open_report_in_new_tab
         self._series_report_map: dict = {}
 
         self._admin_box = bool(admin_box)
@@ -2192,6 +2199,10 @@ class BacklogScreen(QWidget):
             self.reload_all()
         except Exception:
             pass
+        try:
+            self._refresh_welcome_message()
+        except Exception:
+            pass
 
         # 5% Chance: Athena schläft still im rechten unteren Eck (siehe
         # Moduldocstring-Kommentar bei _AthenaOwl-Import).
@@ -2217,6 +2228,90 @@ class BacklogScreen(QWidget):
             self._backlog_athena.show()
         except Exception:
             pass
+
+    # ---------- Willkommensnachricht (umgezogen aus HomeScreen, siehe
+    # ui/screen_home.py::_format_welcome_text()/_fetch_welcome_message_from_db()
+    # für das Original, hier auf Backlog-Groesse verkleinert) ----------
+
+    def _format_welcome_text(self, welcome_message, first_name: str) -> str:
+        msg = (welcome_message or "").strip()
+        fn = (first_name or "").strip()
+        if msg:
+            return f"{msg}, {fn}".strip().strip(",")
+        return f"Welcome, {fn}".strip()
+
+    def _fetch_welcome_message_from_db(self):
+        try:
+            user_id = app_meta.current_user.get("id")
+        except Exception:
+            user_id = None
+        if not user_id:
+            return None
+        try:
+            rows = fetch_all("SELECT [WelcomeMessage] FROM [tblUser] WHERE [ID] = ?", [user_id])
+            return rows[0]["WelcomeMessage"] if rows else None
+        except Exception:
+            return None
+
+    def _refresh_welcome_message(self):
+        try:
+            first_name = app_meta.current_user.get("first_name") or ""
+        except Exception:
+            first_name = ""
+        welcome_message = self._fetch_welcome_message_from_db()
+        self._welcome_message_raw = welcome_message
+        self._welcome_label.setText(self._format_welcome_text(welcome_message, first_name))
+
+    def _edit_welcome_message(self):
+        """Popup zum Bearbeiten der eigenen Willkommensnachricht (max. 45 Zeichen)."""
+        current = (getattr(self, "_welcome_message_raw", None) or "").strip()
+
+        dlg = QInputDialog(self)
+        dlg.setWindowTitle("Welcome Message")
+        dlg.setLabelText("Neue Welcome Message (max. 45 Zeichen):")
+        dlg.setTextValue(current)
+        dlg.setTextEchoMode(QLineEdit.EchoMode.Normal)
+        le = dlg.findChild(QLineEdit)
+        if le is not None:
+            le.setMaxLength(45)
+
+        if dlg.exec() != QInputDialog.DialogCode.Accepted:
+            return
+
+        value = (dlg.textValue() or "").strip()[:45]
+        value_db = value if value else None
+
+        try:
+            user_id = app_meta.current_user.get("id")
+        except Exception:
+            user_id = None
+        if not user_id:
+            return
+
+        try:
+            if value_db is None:
+                execute("UPDATE [tblUser] SET [WelcomeMessage] = NULL WHERE [ID] = ?", [user_id])
+            else:
+                execute("UPDATE [tblUser] SET [WelcomeMessage] = ? WHERE [ID] = ?", [value_db, user_id])
+        except Exception:
+            return
+
+        self._refresh_welcome_message()
+
+    def eventFilter(self, obj, event):
+        if obj is getattr(self, "_welcome_label", None):
+            et = event.type()
+            if et == event.Type.Enter:
+                self._welcome_label.setCursor(Qt.PointingHandCursor)
+                return False
+            if et == event.Type.Leave:
+                self._welcome_label.setCursor(Qt.ArrowCursor)
+                return False
+            if et == event.Type.MouseButtonPress and event.button() == Qt.LeftButton:
+                self._edit_welcome_message()
+                return True
+            return False
+        return super().eventFilter(obj, event)
 
     def _refresh_sidebar(self):
         """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
@@ -2326,17 +2421,23 @@ class BacklogScreen(QWidget):
         except Exception as e:
             QMessageBox.critical(self, 'Error', str(e))
 
-    def _open_report_icon_for_series(self, series_pk) -> None:
+    def _open_report_icon_for_series(self, series_pk, in_new_tab: bool = False) -> None:
         """Klick auf das Report-Icon einer Karte: bei genau einem
         gespeicherten Report direkt öffnen, bei mehreren einen kleinen
         Auswahl-Dialog zeigen (siehe ui/widgets/report_picker.py) - gleiche
-        Logik wie in screen_all_experiments.py."""
-        if not series_pk or not callable(self.on_open_report):
+        Logik wie in screen_all_experiments.py. Ctrl+click (`in_new_tab`)
+        opens a fresh SmartChart instance in a new tab instead of the
+        shared singleton - falls back to the normal callback if
+        on_open_report_in_new_tab isn't wired up."""
+        if not series_pk:
+            return
+        callback = self.on_open_report_in_new_tab if (in_new_tab and callable(self.on_open_report_in_new_tab)) else self.on_open_report
+        if not callable(callback):
             return
         from ui.widgets.report_picker import choose_report_for_series
         report_id = choose_report_for_series(self, series_pk)
         if report_id is not None:
-            self.on_open_report(series_pk, report_id)
+            callback(series_pk, report_id)
 
     # -------------------------------------------------
     # UI
@@ -2457,6 +2558,24 @@ class BacklogScreen(QWidget):
         self._card_stack.addWidget(scroll)              # index 0: normal board
         self._card_stack.addWidget(self._expanded_view)  # index 1: expanded card
         self._card_stack.setCurrentIndex(0)
+
+        # Kleine Willkommenszeile (2026-09-04, Nutzerwunsch: fehlte seit dem
+        # Umzug von Home nach Backlog als Landing-Screen, siehe HomeScreen -
+        # dort war das noch ein grosses 30px-Label). Bewusst klein gehalten
+        # (kein eigener Platz-Fresser), populiert erst in showEvent()
+        # (current_user ist zum Konstruktionszeitpunkt hier noch nicht
+        # gesetzt - Backlog wird schon vor dem Login gebaut).
+        self._welcome_label = QLabel("")
+        self._welcome_label.setAlignment(Qt.AlignCenter)
+        self._welcome_label.setToolTip("Click to edit your welcome message")
+        self._welcome_label.setStyleSheet("color:#555;font-size:13px;font-weight:700;")
+        self._welcome_label.installEventFilter(self)
+        welcome_row = QHBoxLayout()
+        welcome_row.setContentsMargins(24, 10, 24, 0)
+        welcome_row.addStretch(1)
+        welcome_row.addWidget(self._welcome_label)
+        welcome_row.addStretch(1)
+        content_layout.addLayout(welcome_row)
 
         content_layout.addWidget(self._card_stack, 1)
         root.addWidget(FooterBar())

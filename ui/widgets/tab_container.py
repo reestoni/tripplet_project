@@ -85,14 +85,6 @@ class TabbedNavigator(QTabWidget):
         self._pending_label_widget: Optional[QWidget] = None
         # Reentrancy-Guard fuer notify_title_set(), siehe dort.
         self._restoring_title = False
-        # Tabs, die per open_in_new_tab() entstanden sind ("Vergleichs-Tabs",
-        # z.B. ein zweites Experiment neben einem ersten) - siehe
-        # is_current_tab_pinned()/Bugreport 2026-08-27: "wenn ich zwei
-        # experimente in den tabs anzeigen will ... meist wird das erste
-        # überschrieben". Bleibt fuer die gesamte Lebensdauer des Tabs
-        # gesetzt (kein "entpinnen") - genau das ist ja der Sinn eines per
-        # Ctrl+Klick bewusst unabhaengig geoeffneten Tabs.
-        self._pinned_stacks: set = set()
         self.tabCloseRequested.connect(self._on_tab_close_requested)
         self.currentChanged.connect(self._on_current_changed)
         self._add_tab(label="TrippleT")
@@ -213,18 +205,6 @@ class TabbedNavigator(QTabWidget):
         AKTIVEN Tab gerade sichtbar ist."""
         return self.current_stack().currentWidget()
 
-    def is_current_tab_pinned(self) -> bool:
-        """True, wenn der aktive Tab per open_in_new_tab() entstanden ist
-        (ein bewusst unabhängig geöffneter "Vergleichs-Tab", z.B. ein
-        zweites Experiment). Von ui/widgets/sidebar_nav.py's
-        _wire_tab_capable_click() genutzt: eine normale (nicht Strg-)
-        Sidebar-Navigation von einem gepinnten Tab aus wird automatisch wie
-        Strg+Klick behandelt (siehe dort) - sonst würde z.B. das erstmalige
-        Aufrufen von "All Experiments" in dieser Session diesen Vergleichs-
-        Tab stillschweigend kapern, statt in einem eigenen Tab zu landen
-        (Bugreport 2026-08-27: "wird das erste überschrieben")."""
-        return self.current_stack() in self._pinned_stacks
-
     # -------------------------------------------------------- Neuer Tab
     def open_in_new_tab(self, nav_callable: Callable[[], None]):
         """Führt `nav_callable` (eine der _go_X()-Methoden von MainWindow)
@@ -249,8 +229,6 @@ class TabbedNavigator(QTabWidget):
         überschrieb das Label des ERSTEN, obwohl dessen Inhalt unverändert
         blieb)."""
         new_idx = self._add_tab()
-        stack = self.widget(new_idx)
-        self._pinned_stacks.add(stack)
         self.setCurrentIndex(new_idx)
         self._pending_label_widget = None
         try:
@@ -260,7 +238,6 @@ class TabbedNavigator(QTabWidget):
             if stack is not None and stack.count() == 0 and self.indexOf(stack) != -1:
                 idx = self.indexOf(stack)
                 self.removeTab(idx)
-                self._pinned_stacks.discard(stack)
                 stack.deleteLater()
 
     # ------------------------------------------------------------- Close

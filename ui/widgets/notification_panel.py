@@ -56,10 +56,14 @@ class _NotifItem(QFrame):
     clicked   = Signal(int, str)   # series_id, exp_id_txt
     yarn_clicked = Signal(int, str)  # payload_yarn_id, payload_charge
     request_clicked = Signal(int)  # payload_experiment_request_id
+    request_changed_clicked = Signal(int, int)  # payload_experiment_request_id, payload_archived_version_id
     read_toggled = Signal()
 
-    _TYPE_ICON = {"yarn_stock": "🧵", "experiment_request": "📝"}
-    _TYPE_TAG = {"yarn_stock": "YARN STOCK", "experiment_request": "EXPERIMENT REQUEST"}
+    _TYPE_ICON = {"yarn_stock": "🧵", "experiment_request": "📝", "experiment_request_changed": "🔄"}
+    _TYPE_TAG = {
+        "yarn_stock": "YARN STOCK", "experiment_request": "EXPERIMENT REQUEST",
+        "experiment_request_changed": "REQUEST CHANGED",
+    }
 
     def __init__(self, n: dict, parent: QWidget | None = None):
         super().__init__(parent)
@@ -71,12 +75,13 @@ class _NotifItem(QFrame):
         self._payload_yarn_id = n.get("PayloadYarnID")
         self._payload_charge = n.get("PayloadCharge")
         self._payload_request_id = n.get("PayloadExperimentRequestID")
+        self._payload_archived_version_id = n.get("PayloadArchivedVersionID")
         series_name     = str(n.get("SeriesName") or f"Series {self._series_id}")
         created         = n.get("CreatedAt")
         message         = str(n.get("Message") or "")
         # "Message"-basierte Typen (kein Series-Bezug) - zeigen den Message-
         # Text statt des Serien-Namens, siehe unten.
-        _is_message_type = self._notif_type in ("yarn_stock", "experiment_request")
+        _is_message_type = self._notif_type in ("yarn_stock", "experiment_request", "experiment_request_changed")
 
         self.setObjectName("NItem")
         self.setCursor(Qt.PointingHandCursor)
@@ -187,6 +192,12 @@ class _NotifItem(QFrame):
                 self.request_clicked.emit(
                     int(self._payload_request_id) if self._payload_request_id is not None else 0
                 )
+            elif self._notif_type == "experiment_request_changed":
+                self._mark_read()
+                self.request_changed_clicked.emit(
+                    int(self._payload_request_id) if self._payload_request_id is not None else 0,
+                    int(self._payload_archived_version_id) if self._payload_archived_version_id is not None else 0,
+                )
             else:
                 self.clicked.emit(self._series_id, self._exp_id)
 
@@ -204,6 +215,7 @@ class NotificationPanel(QWidget):
     notification_clicked = Signal(int, int, str)
     yarn_stock_clicked = Signal(int, str)  # payload_yarn_id, payload_charge
     experiment_request_clicked = Signal(int)  # payload_experiment_request_id
+    experiment_request_changed_clicked = Signal(int, int)  # payload_experiment_request_id, payload_archived_version_id
     all_read = Signal()
 
     def __init__(self, parent=None):
@@ -348,6 +360,7 @@ class NotificationPanel(QWidget):
                 item.clicked.connect(self._on_item_clicked)
                 item.yarn_clicked.connect(self._on_item_yarn_clicked)
                 item.request_clicked.connect(self._on_item_request_clicked)
+                item.request_changed_clicked.connect(self._on_item_request_changed_clicked)
                 item.read_toggled.connect(lambda: self._refresh_footer(notifications))
                 lay.addWidget(item)
             lay.addStretch()
@@ -404,6 +417,10 @@ class NotificationPanel(QWidget):
     def _on_item_request_clicked(self, request_id: int):
         self.hide()
         self.experiment_request_clicked.emit(request_id)
+
+    def _on_item_request_changed_clicked(self, request_id: int, archived_version_id: int):
+        self.hide()
+        self.experiment_request_changed_clicked.emit(request_id, archived_version_id)
 
     def _on_mark_all(self):
         self.all_read.emit()

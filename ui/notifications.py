@@ -300,41 +300,120 @@ def remove_legacy_batch_yarn_stock_notifications() -> int:
         return 0
 
 
-def create_experiment_request_notification(recipient_user_id: Any, request_id: Any, message: str) -> bool:
+def create_experiment_request_notification(
+    recipient_user_id: Any, request_id: Any, message: str, *,
+    notification_type: str = "experiment_request",
+    archived_version_id: Any = None,
+) -> bool:
     """Legt eine 'experiment_request'-Notification an (Statuswechsel eines
     Requests, oder Aenderungskopie akzeptiert/abgelehnt - siehe
     ui/screen_my_requests.py). Klick navigiert ueber PayloadExperimentRequestID
     zu 'My Requests'.
 
-    Payload-Spalte existiert bisher nur auf Umgebungen mit dem
-    Aenderungs-Review-Feature (dev_local/prod, siehe
-    db/experiment_request_changes.py) - fehlt sie, wird die Notification ohne
-    Payload angelegt (Klick geht dann einfach nicht zur richtigen Zeile,
-    kein Fehler).
+    `notification_type="experiment_request_changed"` + `archived_version_id`
+    (2026-09-02, user request: "ich bin in diesem loop nicht drin und wenn
+    ich nicht explizit nachschaue, dann geht das an mir vorbei") - separate
+    type/click-target fuer notify_experiment_owners_of_request_change(): statt
+    zu "My Requests" zu navigieren, oeffnet ein Klick direkt den
+    Alt-vs-Neu-Vergleich (siehe ui/widgets/notification_panel.py und
+    ui/widgets/experiment_request_diff_dialog.py::compare_versions()) -
+    PayloadArchivedVersionID ist die dafuer noetige "was war der Stand VOR
+    dieser Aenderung"-Referenz (siehe accept_pending_change()).
+
+    Payload-Spalten existieren bisher nur auf Umgebungen mit dem
+    Aenderungs-Review-/Versionierungs-Feature (dev_local/prod, siehe
+    db/experiment_request_changes.py) - fehlen sie, wird die Notification
+    ohne die jeweilige Payload angelegt (Klick geht dann einfach nicht zur
+    richtigen Stelle, kein Fehler).
     """
     if not _tables_ready() or recipient_user_id in (None, ""):
         return False
-    has_payload_col = "payloadexperimentrequestid" in _columns_map("tblnotification")
+    notif_cols = _columns_map("tblnotification")
+    has_request_col = "payloadexperimentrequestid" in notif_cols
+    has_archive_col = "payloadarchivedversionid" in notif_cols
+
+    cols = ["RecipientUserID", "TrialSeriesID", "CreatedAt", "ReadAt", "Message", "NotificationType"]
+    vals: List[Any] = [recipient_user_id, None, None, None, message, notification_type]
+    if has_request_col:
+        cols.append("PayloadExperimentRequestID")
+        vals.append(request_id)
+    if has_archive_col:
+        cols.append("PayloadArchivedVersionID")
+        vals.append(archived_version_id)
+
+    col_sql = ", ".join(cols)
+    placeholders = ", ".join("NOW()" if c == "CreatedAt" else "?" for c in cols)
+    bind_vals = [v for c, v in zip(cols, vals) if c != "CreatedAt"]
     try:
-        if has_payload_col:
-            _execute(
-                "INSERT INTO tblNotification "
-                "(RecipientUserID, TrialSeriesID, CreatedAt, ReadAt, Message, "
-                "NotificationType, PayloadExperimentRequestID) "
-                "VALUES (?, NULL, NOW(), NULL, ?, 'experiment_request', ?)",
-                [recipient_user_id, message, request_id],
-            )
-        else:
-            _execute(
-                "INSERT INTO tblNotification "
-                "(RecipientUserID, TrialSeriesID, CreatedAt, ReadAt, Message, NotificationType) "
-                "VALUES (?, NULL, NOW(), NULL, ?, 'experiment_request')",
-                [recipient_user_id, message],
-            )
+        _execute(f"INSERT INTO tblNotification ({col_sql}) VALUES ({placeholders})", bind_vals)
         return True
     except Exception as e:
         print(f"[Notification] ExperimentRequest-Insert fehlgeschlagen fuer uid={recipient_user_id}: {e}")
         return False
+
+
+def notify_experiment_owners_of_request_change(
+    request_id: Any, archived_version_id: Any, actor_user_id: Optional[Any] = None
+) -> int:
+    """Benachrichtigt die Verantwortlichen der bereits mit dieser Request
+    verknuepften Experiment(e), dass sich der Request-Inhalt geaendert hat
+    (2026-09-02, user request: Use-Case war "ich lege ein Experiment mit 2
+    TrialSeries anhand einer Request an, der Ersteller aendert die Request
+    spaeter, ein Superuser nimmt an - ich als Ausfuehrender bekomme davon
+    nichts mit, ausser ich schaue explizit nach").
+
+    Bewusst nur ein generischer Hinweis ("etwas hat sich geaendert, bitte
+    pruefen") - KEIN Versuch, automatisch zu erkennen WAS sich geaendert hat
+    (Freitext-Felder wie Versuchsumfang sind dafuer nicht strukturiert genug,
+    explizit vom User so bestaetigt). Ein Klick auf die Notification oeffnet
+    stattdessen den Alt-vs-Neu-Vergleich mit hervorgehobenen Unterschieden
+    (siehe ui/widgets/notification_panel.py/experiment_request_diff_dialog.py
+    ::compare_versions()) - der User entscheidet selbst, ob er handeln muss.
+
+    Empfaenger = BacklogOwner jeder verknuepften TrialSeries (dieselbe
+    "wer ist verantwortlich, nicht wer hat's eingetippt"-Konvention wie
+    ui/stats_suite_queries.py's Owner-Gruppierung), dedupliziert, ohne
+    actor_user_id (der Superuser, der die Aenderung gerade akzeptiert hat -
+    keine Selbstbenachrichtigung, falls er zufaellig selbst Owner ist).
+
+    Gibt die Anzahl erstellter Notifications zurueck."""
+    if not _tables_ready() or request_id in (None, ""):
+        return 0
+    try:
+        rows = fetch_all(
+            "SELECT DISTINCT ts.BacklogOwner AS uid, e.ExperimentID AS exp_txt "
+            "FROM tblExperimente e "
+            "JOIN tblTrialSeries ts ON ts.ExperimentID = e.ID "
+            "WHERE e.ExperimentRequestID = ? AND ts.BacklogOwner IS NOT NULL",
+            [request_id],
+        )
+    except Exception:
+        return 0
+
+    recipients: dict[int, str] = {}
+    for r in rows:
+        uid = r.get("uid")
+        if uid is None:
+            continue
+        uid = int(uid)
+        if actor_user_id is not None and str(uid) == str(actor_user_id):
+            continue
+        recipients.setdefault(uid, str(r.get("exp_txt") or ""))
+
+    n = 0
+    for uid, exp_txt in recipients.items():
+        message = (
+            f"The request behind experiment '{exp_txt}' was updated - please check what changed."
+            if exp_txt else
+            "A request behind one of your experiments was updated - please check what changed."
+        )
+        if create_experiment_request_notification(
+            uid, request_id, message,
+            notification_type="experiment_request_changed",
+            archived_version_id=archived_version_id,
+        ):
+            n += 1
+    return n
 
 
 def get_unread_count(user_id: int) -> int:
@@ -415,6 +494,11 @@ def get_notifications(user_id: int, limit: int = 50) -> List[dict]:
         "n.PayloadExperimentRequestID,"
         if "payloadexperimentrequestid" in notif_cols
         else "NULL AS PayloadExperimentRequestID,"
+    )
+    payload_cols += (
+        "n.PayloadArchivedVersionID,"
+        if "payloadarchivedversionid" in notif_cols
+        else "NULL AS PayloadArchivedVersionID,"
     )
     try:
         return fetch_all(

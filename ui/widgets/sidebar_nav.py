@@ -99,25 +99,18 @@ def _wire_tab_capable_click(btn: QPushButton, on_click: Callable, open_in_new_ta
     _CtrlHoverCursorFilter.ensure_installed()
 
     def _handler(*_):
+        # Only an actually held Ctrl opens a new tab now - there used to
+        # also be an automatic "pinned tab protects itself" redirect (any
+        # normal navigation WITHIN a comparison tab opened via Ctrl+click
+        # was treated as if Ctrl were held too), which was removed again on
+        # explicit user request (2026-09-01: "manchmal gehen neue tabs auf
+        # beim navigieren ohne, dass ich explizit in neuem tab öffnen wähle
+        # oder ctrl halte ... ich will, dass nur neue tabs erstellt werden,
+        # wenn ich es explizit so will") - see HISTORY.md for the prior
+        # rationale (2026-08-27 bug report) that originally introduced this
+        # automatism.
         ctrl_held = bool(QApplication.keyboardModifiers() & Qt.ControlModifier)
-        # Ein gepinnter Vergleichs-Tab (siehe TabbedNavigator.
-        # is_current_tab_pinned()) wird vor einer normalen (nicht Strg-)
-        # Navigation automatisch geschützt - sonst würde z.B. das erstmalige
-        # Aufrufen von "All Experiments" in dieser Session diesen Tab
-        # stillschweigend kapern (Bugreport 2026-08-27: "wenn ich zwei
-        # experimente in den tabs anzeigen will ... meist wird das erste
-        # überschrieben"). Best-effort: fehlt der Hook (z.B. sehr früh im
-        # Start, bevor MainWindow ihn registriert), verhält sich der Klick
-        # einfach normal.
-        pinned = False
-        try:
-            import app_meta
-            checker = getattr(app_meta, "is_active_tab_pinned", None)
-            pinned = bool(checker()) if callable(checker) else False
-        except Exception:
-            pinned = False
-
-        if open_in_new_tab is not None and (ctrl_held or pinned):
+        if ctrl_held:
             open_in_new_tab(on_click)
         else:
             on_click()
@@ -243,12 +236,30 @@ def get_backlog_count() -> int:
         return 0
 
 
+def _live_request_filter_sql() -> str:
+    """Extra WHERE clause that filters archived prior versions (see
+    db/experiment_request_changes.py::supports_versioning()) out of count
+    queries - without it, these badges would keep climbing with every
+    accepted change to a matching request. Empty string on environments
+    without the PriorVersionOfID column."""
+    try:
+        from db import experiment_request_changes as request_changes
+        if request_changes.supports_versioning():
+            return " AND [PriorVersionOfID] IS NULL"
+    except Exception:
+        pass
+    return ""
+
+
 def get_open_experiment_request_count() -> int:
     """Zählt offene ExperimentRequests (RequestStatus = 1)."""
     try:
         with get_connection() as cn:
             cur = cn.cursor()
-            cur.execute("SELECT COUNT(*) FROM [tblExperimentRequests] WHERE [RequestStatus] = 1")
+            cur.execute(
+                "SELECT COUNT(*) FROM [tblExperimentRequests] WHERE [RequestStatus] = 1"
+                + _live_request_filter_sql()
+            )
             row = cur.fetchone()
         return int(row[0] or 0) if row else 0
     except Exception:
@@ -260,7 +271,41 @@ def get_approved_experiment_request_count() -> int:
     try:
         with get_connection() as cn:
             cur = cn.cursor()
-            cur.execute("SELECT COUNT(*) FROM [tblExperimentRequests] WHERE [RequestStatus] = 3")
+            cur.execute(
+                "SELECT COUNT(*) FROM [tblExperimentRequests] WHERE [RequestStatus] = 3"
+                + _live_request_filter_sql()
+            )
+            row = cur.fetchone()
+        return int(row[0] or 0) if row else 0
+    except Exception:
+        return 0
+
+
+def get_new_open_request_count(owner_id: Optional[Any] = None) -> int:
+    """Zählt brandneue Requests mit Status 'Request' (RequestStatus=1), die
+    KEINE Änderungs-Kopie sind (ChangeOfRequestID IS NULL) - Gegenstück zu
+    request_changes.count_pending_changes(), das nur die Kopien zählt. Beide
+    zusammen ergeben "alles, was gerade im Status Request wartet" (siehe
+    get_pending_request_changes_count()). `owner_id=None`: alle (Superuser-
+    Sicht), sonst nur CreatedBy=owner_id."""
+    try:
+        from db import experiment_request_changes as request_changes
+        change_filter = (
+            " AND [ChangeOfRequestID] IS NULL" if request_changes.supports_change_tracking() else ""
+        )
+        with get_connection() as cn:
+            cur = cn.cursor()
+            if owner_id in (None, ""):
+                cur.execute(
+                    "SELECT COUNT(*) FROM [tblExperimentRequests] WHERE [RequestStatus] = 1"
+                    + change_filter + _live_request_filter_sql()
+                )
+            else:
+                cur.execute(
+                    "SELECT COUNT(*) FROM [tblExperimentRequests] WHERE [RequestStatus] = 1"
+                    + change_filter + " AND [CreatedBy] = ?" + _live_request_filter_sql(),
+                    [owner_id],
+                )
             row = cur.fetchone()
         return int(row[0] or 0) if row else 0
     except Exception:
@@ -268,9 +313,14 @@ def get_approved_experiment_request_count() -> int:
 
 
 def get_pending_request_changes_count() -> int:
-    """Zählt offene Änderungs-Kopien (siehe db/experiment_request_changes.py)
-    für den Badge auf "My Requests" - Superuser sehen alle, normale Nutzer nur
-    ihre eigenen (gleiche Logik wie zuvor in
+    """Zählt ALLES, was für den Badge auf "My Requests" relevant ist: offene
+    Änderungs-Kopien (siehe db/experiment_request_changes.py) PLUS brandneue,
+    noch nicht geprüfte Requests (RequestStatus=1, keine Kopie) - Nutzerwunsch
+    2026-09-08: beide Arten sollen gezählt/gehighlighted werden, nur mit
+    unterschiedlichem Symbol unterscheidbar (siehe screen_my_requests.py,
+    Markierung neuer Requests neben der bestehenden Kopie-Markierung).
+    Superuser sehen alle, normale Nutzer nur ihre eigenen (gleiche
+    Sichtbarkeits-Logik wie zuvor in
     ExperimentRequestScreen._refresh_my_requests_badge(), jetzt hierher
     verschoben, damit der direkte Sidebar-Eintrag denselben Badge zeigt)."""
     try:
@@ -278,7 +328,10 @@ def get_pending_request_changes_count() -> int:
         from db import experiment_request_changes as request_changes
         is_superuser = bool(getattr(app_meta, "is_superuser_level", lambda: False)())
         owner_id = None if is_superuser else (app_meta.current_user or {}).get("id")
-        return request_changes.count_pending_changes(owner_id)
+        return (
+            request_changes.count_pending_changes(owner_id)
+            + get_new_open_request_count(owner_id)
+        )
     except Exception:
         return 0
 
@@ -412,9 +465,10 @@ def build_experiment_requests_group(
     in der Navigation-Sektion weiterhin erreichbar), diese Sektion ist rein
     additiv.
 
-    Badge auf "My Requests" = offene Änderungs-Kopien, die auf Prüfung warten
-    (siehe get_pending_request_changes_count()) - identische Zählung wie
-    zuvor auf dem Hub-Screen selbst (ExperimentRequestScreen).
+    Badge auf "My Requests" = offene Änderungs-Kopien UND brandneue Requests,
+    die beide auf Prüfung warten (siehe get_pending_request_changes_count()) -
+    identische Zählung wie zuvor auf dem Hub-Screen selbst
+    (ExperimentRequestScreen), seit 2026-09-08 um neue Requests erweitert.
     """
     sidebar.add_section_header("experiment_requests_section_white.png", "Experiment Requests")
 
@@ -428,7 +482,7 @@ def build_experiment_requests_group(
         on_open_my_requests, tab_capable=True, open_in_new_tab=open_in_new_tab)
     cnt = get_pending_request_changes_count()
     wrapped, badge = wrap_with_badge(btn_my_requests, cnt)
-    wrapped.setToolTip("Änderungsvorschläge warten auf Freigabe" if cnt else "")
+    wrapped.setToolTip("Requests/Änderungsvorschläge warten auf Freigabe" if cnt else "")
     sidebar.add_item(wrapped)
 
     return {"my_requests_badge": badge}
@@ -599,6 +653,32 @@ def trigger_quick_search():
         pass
 
 
+def build_pinned_bell(sidebar: SidebarPanel) -> dict[str, Any]:
+    """Fügt die Notifications-Glocke als eigenen, fest sichtbaren Eintrag
+    ganz oben ein, noch vor Search (2026-09-02, Nutzerwunsch: "die glocke
+    muss weiter hoch im sidepanel, am liebsten gleich zu oberst und nicht
+    versteckt in account... mach es direkt über die search hin") - exakt
+    dasselbe Muster wie build_pinned_search() direkt darunter, aus demselben
+    ursprünglichen Grund (Account-Sektion startet standardmässig
+    eingeklappt, war zwei Klicks entfernt und weit weg vom Blick, siehe
+    dortiger Kommentar zum ursprünglichen Such-Feld-Umzug).
+
+    `on_click=None` bleibt hier bewusst (wie zuvor in build_utility_group())
+    - der eigentliche Klick-Handler wird erst dynamisch von
+    main.py::_refresh_bell() verdrahtet, sobald ein User eingeloggt ist
+    (dort auch das setEnabled(True), das icon_btn()'s Auto-Disable-bei-
+    fehlendem-Callback wieder aufhebt - siehe dortiger Kommentar).
+
+    Gibt {"bell_button": QPushButton, "bell_badge": QLabel} zurück -
+    identische Keys wie zuvor aus build_utility_group(), main.py greift
+    darauf über denselben, unveränderten refs["bell_button"]/
+    refs["bell_badge"]-Zugriff zu (siehe install_full_sidebar())."""
+    btn_bell = icon_btn("Notifications", "bell.png", "SidebarItem", None)
+    wrapped, badge = wrap_with_badge(btn_bell, 0)
+    sidebar.add_item(wrapped)
+    return {"bell_button": btn_bell, "bell_badge": badge}
+
+
 def build_pinned_search(sidebar: SidebarPanel) -> QPushButton:
     """Fügt Search als eigenen, fest sichtbaren Eintrag ganz oben ein - vor
     jeder add_section_header()/add_row()-Sektion (siehe install_full_sidebar()),
@@ -653,39 +733,21 @@ def pick_accent_colour(parent: QWidget):
 
 
 def build_utility_group(sidebar: SidebarPanel, *, on_logout: Optional[Callable] = None) -> dict[str, Any]:
-    """Fügt eine "Account"-Gruppe (Notifications, Accent-Farbe, Log Out)
-    ganz unten in die Sidebar ein - Ersatz für die frühere TopBar
-    (HeaderBar), die auf allen vier Sidebar-Screens (Home/Backlog/
-    AllExperiments/ShowExperiment) entfernt wurde (2026-08-26, Nutzerwunsch:
-    "dann brauchen wir die top bar nicht mehr"). Accent-Farbe braucht
-    keinen externen Callback (komplett self-contained, siehe
-    pick_accent_colour() oben) - nur Log Out kommt von
+    """Fügt eine "Account"-Gruppe (Accent-Farbe, Log Out) ganz unten in die
+    Sidebar ein - Ersatz für die frühere TopBar (HeaderBar), die auf allen
+    vier Sidebar-Screens (Home/Backlog/AllExperiments/ShowExperiment)
+    entfernt wurde (2026-08-26, Nutzerwunsch: "dann brauchen wir die top bar
+    nicht mehr"). Accent-Farbe braucht keinen externen Callback (komplett
+    self-contained, siehe pick_accent_colour() oben) - nur Log Out kommt von
     aussen (screen-spezifisch aus main.py durchgereicht), wird bei fehlendem
     Callback komplett versteckt statt nur deaktiviert (gleiches Verhalten wie
     HeaderBar's Log-Out-Button vorher: der wurde nur gebaut, wenn on_logout
     callable war).
 
-    Gibt {"bell_button": QPushButton, "bell_badge": QLabel} zurück - main.py
-    braucht beide, um denselben zentralen _refresh_bell()-Mechanismus, der
-    bisher `header.set_bell_count()`/`header.connect_bell()` nutzte, auch auf
-    die Sidebar-Screens auszuweiten (siehe main.py::_refresh_bell())."""
+    Notifications-Glocke ist seit 2026-09-02 kein Account-Eintrag mehr,
+    sondern (wie Search seit 2026-08-28) ein pinned Item ganz oben in der
+    Sidebar - siehe build_pinned_bell()."""
     sidebar.add_section_header("user_white.png", "Account")
-
-    # Search ist seit 2026-08-28 kein Account-Eintrag mehr, sondern ein
-    # pinned Item ganz oben in der Sidebar - siehe build_pinned_search().
-
-    # Bell-Icon + rotes Badge: exakt dasselbe Overlay-Muster wie bei Backlog/
-    # Experiment-Request oben (wrap_with_badge/refresh_badge) statt der
-    # eigenen, individuell gemalten BellButton-Klasse aus ui/widgets/header.py
-    # (die bleibt für die übrigen, weiterhin per HeaderBar geführten Screens
-    # im Einsatz). Anders als dort ist der Button hier immer sichtbar (kein
-    # "nur sichtbar wenn total>0"-Verstecken) - in einer dauerhaft sichtbaren
-    # Sidebar gibt es keinen Platzgrund mehr, den Zugang zur
-    # Notifications-Historie vom Vorhandensein irgendwelcher Einträge
-    # abhängig zu machen.
-    btn_bell = icon_btn("Notifications", "bell.png", "SidebarItem", None)
-    wrapped, badge = wrap_with_badge(btn_bell, 0)
-    sidebar.add_item(wrapped)
 
     btn_accent = green_btn("Accent Colour", lambda: pick_accent_colour(sidebar))
     sidebar.add_item(btn_accent)
@@ -694,7 +756,7 @@ def build_utility_group(sidebar: SidebarPanel, *, on_logout: Optional[Callable] 
     btn_logout.setVisible(callable(on_logout))
     sidebar.add_item(btn_logout)
 
-    return {"bell_button": btn_bell, "bell_badge": badge}
+    return {}
 
 
 # --------------------------------------------------------------------------- App-wide rollout (2026-08-27)
@@ -749,8 +811,12 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
     offline_gated: list = []
     open_in_new_tab = cb.get("open_in_new_tab")
 
-    # Pinned, VOR jeder Sektion (siehe build_pinned_search()) - dadurch immer
-    # sichtbar, unabhängig vom Klapp-Zustand von "Navigation" & Co.
+    # Pinned, VOR jeder Sektion (siehe build_pinned_bell()/build_pinned_search())
+    # - dadurch immer sichtbar, unabhängig vom Klapp-Zustand von "Navigation"
+    # & Co. Bell zuoberst, direkt über Search (2026-09-02, Nutzerwunsch: "die
+    # glocke muss weiter hoch im sidepanel, am liebsten gleich zu oberst und
+    # nicht versteckt in account... direkt über die search hin").
+    bell_refs = build_pinned_bell(sidebar)
     build_pinned_search(sidebar)
     sidebar.add_separator()
 
@@ -828,6 +894,7 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
     apply_offline_gate(offline_gated)
 
     return {
+        **bell_refs,
         **nav_refs,
         **exp_req_group_refs,
         **utility_refs,

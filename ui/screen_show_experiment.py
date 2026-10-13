@@ -646,6 +646,7 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
             parent: QWidget | None = None,
             request_id: Any = None,
             experiment_request_id: Any = None,
+            title_prefix: str = "",
     ):
         # Support both kwarg spellings for backwards compatibility.
         if request_id in (None, "") and experiment_request_id not in (None, ""):
@@ -654,6 +655,13 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
         super().__init__(parent)
         self._request_id = request_id
         self._table = "tblExperimentRequests"
+        # title_prefix: optional prefix for the window/header title (e.g.
+        # "Version 2 — ") - used by the version history dialog (see
+        # ui/widgets/experiment_request_version_history.py) so viewing an
+        # archived prior version makes it immediately clear this is NOT the
+        # current state. Empty ("") leaves behaviour unchanged for every
+        # other caller.
+        self._title_prefix = title_prefix or ""
         # Window title and header label will be set from tblExperimentRequests.Titel
         # once the record is loaded.
         self.setWindowTitle("Experiment Request")
@@ -692,6 +700,28 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
         self._btn_show_images.clicked.connect(self._open_images_dialog)
         self._btn_show_images.setVisible(False)
         title_row.addWidget(self._btn_show_images, 0, Qt.AlignVCenter)
+
+        # Version history (2026-09-01, user request: reachable from the
+        # read-only request viewer too - "sehe ich das auch im request
+        # viewer? falls nein, da muss ich die einzelnen versionen auch
+        # anzeigen lassen können (ist ja sowieso aller read-only)"). Only
+        # visible when at least one accepted change was ever archived for
+        # this request, see _sync_version_history_button().
+        self._history_target_id: Any = None
+        self._btn_version_history = QPushButton()
+        self._btn_version_history.setObjectName("IconBtn")
+        self._btn_version_history.setCursor(Qt.PointingHandCursor)
+        self._btn_version_history.setFlat(True)
+        self._btn_version_history.setToolTip("View version history")
+        ico_hist = QIcon(resource_path("assets/images/history.png"))
+        if not ico_hist.isNull():
+            self._btn_version_history.setIcon(ico_hist)
+            self._btn_version_history.setIconSize(QSize(22, 22))
+        else:
+            self._btn_version_history.setText("History")
+        self._btn_version_history.clicked.connect(self._open_version_history_dialog)
+        self._btn_version_history.setVisible(False)
+        title_row.addWidget(self._btn_version_history, 0, Qt.AlignVCenter)
 
         root.addLayout(title_row)
 
@@ -749,13 +779,13 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
         with get_connection() as cn:
             cur = cn.cursor()
             cur.execute(
-                "SELECT [RelativePath], [StoredFilename], [OriginalFilename] "
+                "SELECT [ID], [RelativePath], [StoredFilename], [OriginalFilename], [CreatedBy] "
                 "FROM [tblExperimentRequestImage] "
                 "WHERE [ExperimentRequestID]=? "
                 "ORDER BY [ID] DESC",
                 [request_id],
             )
-            for rel_path, stored, orig_name in cur.fetchall() or []:
+            for img_id, rel_path, stored, orig_name, created_by in cur.fetchall() or []:
                 rel_path_s = str(rel_path or "")
                 stored_s = str(stored or "")
                 orig_s = str(orig_name or "")
@@ -763,11 +793,13 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
                 # Provide both keys to be compatible with any viewer implementation
                 rows.append(
                     {
+                        "ID": img_id,
                         "RelativePath": rel_path_s,
                         "StoredFilename": stored_s,
                         "StoredFile": stored_s,
                         "OriginalFilename": orig_s,
                         "FullPath": full,
+                        "CreatedBy": created_by,
                     }
                 )
         return rows
@@ -778,6 +810,35 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
         if not btn:
             return
         btn.setVisible(self._request_has_images(self._request_id))
+
+    def _sync_version_history_button(self, prior_version_of_id: Any) -> None:
+        """Shows the version-history button when the currently displayed
+        row has at least one archived version to show.
+
+        `prior_version_of_id` is this row's OWN PriorVersionOfID (see
+        db/experiment_request_changes.py) - if set, this row IS itself an
+        archived snapshot, and its version history lives under the LIVE row
+        it points to, not under its own ID. Falls back to self._request_id
+        for the normal case (viewing the live/current request)."""
+        btn = getattr(self, "_btn_version_history", None)
+        if not btn:
+            return
+        try:
+            from db import experiment_request_changes as request_changes
+            self._history_target_id = prior_version_of_id or self._request_id
+            btn.setVisible(request_changes.has_versions(self._history_target_id))
+        except Exception:
+            btn.setVisible(False)
+
+    def _open_version_history_dialog(self) -> None:
+        """Opens the version history dialog for this request (see
+        ui/widgets/experiment_request_version_history.py)."""
+        target_id = self._history_target_id or self._request_id
+        try:
+            from ui.widgets.experiment_request_version_history import show_version_history
+            show_version_history(self, target_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Version History", str(e))
 
     def _open_images_dialog(self) -> None:
         """Öffnet einen Dialog zur Anzeige der Bild-Anhänge des Requests."""
@@ -827,17 +888,19 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
 
         # Use tblExperimentRequests.Titel as the popup title (window title + header).
         req_title = "" if data.get("Titel") is None else str(data.get("Titel")).strip()
+        prefix = self._title_prefix
         if req_title:
             safe = req_title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            self.setWindowTitle(req_title)
-            self._title_label.setText(f"<b>{safe}</b>")
+            self.setWindowTitle(f"{prefix}{req_title}")
+            self._title_label.setText(f"{prefix}<b>{safe}</b>")
         else:
             # Fallback: keep prior behaviour if Titel is missing/empty.
-            self.setWindowTitle(f"Experiment Request #{self._request_id}")
-            self._title_label.setText(f"Experiment Request <b>#{self._request_id}</b>")
+            self.setWindowTitle(f"{prefix}Experiment Request #{self._request_id}")
+            self._title_label.setText(f"{prefix}Experiment Request <b>#{self._request_id}</b>")
 
         # Update images indicator after we know the request is valid.
         self._update_images_icon()
+        self._sync_version_history_button(data.get("PriorVersionOfID"))
 
         for c in cols:
             fn = c.name
@@ -2644,6 +2707,7 @@ class ShowExperimentScreen(QWidget):
         self.on_back_all_experiments = on_back_all_experiments
         self.on_add_trials = on_add_trials
         self.on_open_report = None  # wird von MainWindow gesetzt (→ _go_report)
+        self.on_open_report_in_new_tab = None  # set by MainWindow (→ _open_report_in_new_tab, Ctrl+click)
         # Label für den kontextuellen Back-Chip in der Tools-Leiste (Ersatz
         # für den früheren Header-Back-Button) - siehe set_back_target().
         self._back_label: Optional[str] = None
@@ -3867,19 +3931,9 @@ class ShowExperimentScreen(QWidget):
                 else:
                     self.btn_save.setToolTip("")
 
-            if hasattr(self, "btn_upload_series_images") and self.btn_upload_series_images:
-                self.btn_upload_series_images.setEnabled(bool(can_write))
-                if not can_write:
-                    self.btn_upload_series_images.setToolTip("Nur Lesen (AccessLevel 1)")
-                else:
-                    self.btn_upload_series_images.setToolTip("")
-
-            if hasattr(self, "btn_upload_series_pdfs") and self.btn_upload_series_pdfs:
-                self.btn_upload_series_pdfs.setEnabled(bool(can_write))
-                if not can_write:
-                    self.btn_upload_series_pdfs.setToolTip("Nur Lesen (AccessLevel 1)")
-                else:
-                    self.btn_upload_series_pdfs.setToolTip("")
+            # Upload deliberately stays enabled even for read-only users
+            # (AccessLevel 1) - only deleting is reserved for the owner/
+            # superuser (see ExperimentRequestImagesDialog._can_delete()).
 
             if hasattr(self, "btn_statimat_import") and self.btn_statimat_import:
                 self.btn_statimat_import.setEnabled(bool(can_write))
@@ -3921,10 +3975,21 @@ class ShowExperimentScreen(QWidget):
     # ---------- Navigation & Save ----------
 
     def _open_report(self) -> None:
-        """Öffnet den Report-Screen für die aktuelle TrialSeries."""
+        """Opens the report screen for the current trial series.
+
+        Ctrl+click opens a fresh SmartChart instance in a new tab instead
+        (user request 2026-09-01: keep multiple SmartCharts open at once) -
+        same pattern as Ctrl+click elsewhere in the app (e.g. sidebar/All
+        Experiments/Backlog)."""
         if self._series_pk is None:
             return
-        if callable(self.on_open_report):
+        ctrl_held = bool(QApplication.keyboardModifiers() & Qt.ControlModifier)
+        print(f"[DEBUG _open_report] series_pk={self._series_pk} ctrl_held={ctrl_held} "
+              f"on_open_report_in_new_tab={self.on_open_report_in_new_tab} "
+              f"self={self!r}")
+        if ctrl_held and callable(self.on_open_report_in_new_tab):
+            self.on_open_report_in_new_tab(self._series_pk)
+        elif callable(self.on_open_report):
             self.on_open_report(self._series_pk)
 
     def _refresh_saved_reports_dropdown(self) -> None:
@@ -3956,13 +4021,19 @@ class ShowExperimentScreen(QWidget):
 
     def _open_selected_saved_report(self) -> None:
         """"Go!"-Button neben dem Saved-Reports-Dropdown - öffnet den
-        Report-Screen direkt mit dem gerade ausgewählten Report geladen."""
+        Report-Screen direkt mit dem gerade ausgewählten Report geladen.
+
+        Ctrl+click opens a fresh SmartChart instance here too, in a new tab
+        instead of the shared singleton (see _open_report())."""
         if self._series_pk is None:
             return
         report_id = self.cmb_saved_reports.currentData()
         if report_id is None:
             return
-        if callable(self.on_open_report):
+        ctrl_held = bool(QApplication.keyboardModifiers() & Qt.ControlModifier)
+        if ctrl_held and callable(self.on_open_report_in_new_tab):
+            self.on_open_report_in_new_tab(self._series_pk, report_id)
+        elif callable(self.on_open_report):
             self.on_open_report(self._series_pk, report_id)
 
     def set_back_target(self, label: Optional[str], callback: Optional[Callable]):
@@ -4515,13 +4586,13 @@ class ShowExperimentScreen(QWidget):
         with get_connection() as cn:
             cur = cn.cursor()
             cur.execute(
-                "SELECT [ID], [RelativePath], [StoredFilename], [OriginalFilename] "
+                "SELECT [ID], [RelativePath], [StoredFilename], [OriginalFilename], [CreatedBy] "
                 "FROM [tblTrialSeriesImage] "
                 "WHERE [TrialSeriesID]=? "
                 "ORDER BY [ID] DESC",
                 [series_id],
             )
-            for img_id, rel_path, stored, orig_name in cur.fetchall() or []:
+            for img_id, rel_path, stored, orig_name, created_by in cur.fetchall() or []:
                 rel_path = str(rel_path or "")
                 stored = str(stored or "")
                 orig_name = str(orig_name or "")
@@ -4533,6 +4604,7 @@ class ShowExperimentScreen(QWidget):
                         "StoredFilename": stored,
                         "OriginalFilename": orig_name,
                         "FullPath": full,
+                        "CreatedBy": created_by,
                     }
                 )
         return rows
@@ -4645,11 +4717,11 @@ class ShowExperimentScreen(QWidget):
             logger.warning("_analyze_and_save_garnspiegel: %s", e)
 
     def _upload_series_images(self) -> None:
-        """Button-Handler: Bilder waehlen, speichern, DB-Records anlegen."""
-        if self._get_access_level() <= 1:
-            QMessageBox.information(self, "Upload", "Nur Lesen (AccessLevel 1).")
-            return
+        """Button-Handler: Bilder waehlen, speichern, DB-Records anlegen.
 
+        Upload is allowed for read-only users too (AccessLevel 1) - only
+        deleting is reserved for the owner/superuser (see
+        ExperimentRequestImagesDialog._can_delete())."""
         sid = self._series_pk
         if sid in (None, ""):
             QMessageBox.warning(self, "Upload", "Keine TrialSeries ausgewaehlt.")
@@ -4786,14 +4858,14 @@ class ShowExperimentScreen(QWidget):
             # Include ID for robust rename/delete, if present.
             try:
                 cur.execute(
-                    "SELECT [ID],[RelativePath],[StoredFilename],[OriginalFilename] "
+                    "SELECT [ID],[RelativePath],[StoredFilename],[OriginalFilename],[CreatedBy] "
                     "FROM [tblTrialSeriesPDF] "
                     "WHERE [TrialSeriesID]=? "
                     "ORDER BY [ID] DESC",
                     [series_id],
                 )
                 fetched = cur.fetchall() or []
-                for doc_id, rel_path, stored, orig_name in fetched:
+                for doc_id, rel_path, stored, orig_name, created_by in fetched:
                     rel_path = str(rel_path or "")
                     stored = str(stored or "")
                     orig_name = str(orig_name or "")
@@ -4805,18 +4877,19 @@ class ShowExperimentScreen(QWidget):
                             "StoredFilename": stored,
                             "OriginalFilename": orig_name,
                             "FullPath": full,
+                            "CreatedBy": created_by,
                         }
                     )
             except Exception:
                 # Fallback if table lacks ID column in the select
                 cur.execute(
-                    "SELECT [RelativePath],[StoredFilename],[OriginalFilename] "
+                    "SELECT [RelativePath],[StoredFilename],[OriginalFilename],[CreatedBy] "
                     "FROM [tblTrialSeriesPDF] "
                     "WHERE [TrialSeriesID]=? "
                     "ORDER BY [OriginalFilename] DESC",
                     [series_id],
                 )
-                for rel_path, stored, orig_name in cur.fetchall() or []:
+                for rel_path, stored, orig_name, created_by in cur.fetchall() or []:
                     rel_path = str(rel_path or "")
                     stored = str(stored or "")
                     orig_name = str(orig_name or "")
@@ -4827,6 +4900,7 @@ class ShowExperimentScreen(QWidget):
                             "StoredFilename": stored,
                             "OriginalFilename": orig_name,
                             "FullPath": full,
+                            "CreatedBy": created_by,
                         }
                     )
         return rows
@@ -4993,10 +5067,9 @@ class ShowExperimentScreen(QWidget):
                 pass
 
     def _upload_series_pdfs(self) -> None:
-        if self._get_access_level() <= 1:
-            QMessageBox.information(self, "Upload", "Nur Lesen (AccessLevel 1).")
-            return
-
+        """Upload is allowed for read-only users too (AccessLevel 1) - only
+        deleting is reserved for the owner/superuser (see
+        ExperimentRequestPdfsDialog._can_delete())."""
         sid = self._series_pk
         if sid in (None, ""):
             QMessageBox.warning(self, "Upload", "Keine TrialSeries ausgewaehlt.")

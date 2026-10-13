@@ -37,6 +37,7 @@ ENTITY_LABELS = {
 GROUP_BY_LABELS = {
     "ordertype": "Order Type",
     "productgroup": "Product Group",
+    "project": "Project",
     "machine": "Machine",
     "owner": "Owner",
     "labmachine": "Lab Machine",
@@ -112,6 +113,7 @@ _ENTITY_FROM = {
             "       ON ts_date.ExperimentID = e.ID "
             "LEFT JOIN tblproduktgruppe pg ON pg.ID = e.Produktgruppe "
             "LEFT JOIN tblbestellungstyp bt ON bt.ID = e.Bestellungstyp "
+            "LEFT JOIN tblproject p ON p.ID = e.Projekt "
             "LEFT JOIN tblmaschine m ON m.ID = e.Maschine "
             "LEFT JOIN tbluser u ON u.ID = ts_date.FirstOwner"
         ),
@@ -124,6 +126,7 @@ _ENTITY_FROM = {
             "JOIN tblexperimente e ON e.ID = ts.ExperimentID "
             "LEFT JOIN tblproduktgruppe pg ON pg.ID = e.Produktgruppe "
             "LEFT JOIN tblbestellungstyp bt ON bt.ID = e.Bestellungstyp "
+            "LEFT JOIN tblproject p ON p.ID = e.Projekt "
             "LEFT JOIN tblmaschine m ON m.ID = ts.MachineID "
             "LEFT JOIN tbluser u ON u.ID = ts.BacklogOwner"
         ),
@@ -137,6 +140,7 @@ _ENTITY_FROM = {
             "JOIN tblexperimente e ON e.ID = ts.ExperimentID "
             "LEFT JOIN tblproduktgruppe pg ON pg.ID = e.Produktgruppe "
             "LEFT JOIN tblbestellungstyp bt ON bt.ID = e.Bestellungstyp "
+            "LEFT JOIN tblproject p ON p.ID = e.Projekt "
             "LEFT JOIN tblmaschine m ON m.ID = ts.MachineID "
             "LEFT JOIN tbluser u ON u.ID = ts.BacklogOwner"
         ),
@@ -163,6 +167,7 @@ _ENTITY_FROM = {
 _GROUP_BY_COLS = {
     "ordertype": {"id_col": "bt.ID", "name_col": "bt.Bestellungstyp"},
     "productgroup": {"id_col": "pg.ID", "name_col": "pg.Produktgruppe"},
+    "project": {"id_col": "p.ID", "name_col": "CONCAT(p.ProjectNumber, ' - ', p.ProjectName)"},
     "machine": {"id_col": "m.ID", "name_col": "m.Maschine"},
     "owner": {"id_col": "u.ID", "name_col": "CONCAT(u.FirstName, ' ', u.LastName)"},
 }

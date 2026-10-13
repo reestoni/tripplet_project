@@ -164,18 +164,30 @@ def _get_attach_icon_pixmap() -> QPixmap | None:
 
 
 class _ClickableLabel(QLabel):
-    """QLabel das Mausklick-Events weitergibt (für Icons in Tabellenzellen)."""
+    """QLabel das Mausklick-Events weitergibt (für Icons in Tabellenzellen).
 
-    def __init__(self, on_click=None, parent=None):
+    `on_ctrl_click` (optional): called instead of `on_click` when Ctrl is
+    held during the click - falls back to `on_click` if not given (user
+    request 2026-09-01: Ctrl+click on the RE icon opens SmartChart in a new
+    tab instead of the shared singleton, see
+    _open_report_icon_for_series())."""
+
+    def __init__(self, on_click=None, on_ctrl_click=None, parent=None):
         super().__init__(parent)
         self._on_click = on_click
+        self._on_ctrl_click = on_ctrl_click
         self.setCursor(Qt.PointingHandCursor)
 
     def mousePressEvent(self, event):
         try:
-            if event.button() == Qt.LeftButton and callable(self._on_click):
-                self._on_click()
-                return
+            if event.button() == Qt.LeftButton:
+                ctrl_held = bool(event.modifiers() & Qt.ControlModifier)
+                if ctrl_held and callable(self._on_ctrl_click):
+                    self._on_ctrl_click()
+                    return
+                if callable(self._on_click):
+                    self._on_click()
+                    return
         except Exception:
             pass
         return super().mousePressEvent(event)
@@ -189,6 +201,11 @@ class AllExperimentsScreen(QWidget):
                  # Dialog bei mehreren Reports zur selben TrialSeries), siehe
                  # _open_report_icon_for_series()/ui/widgets/report_picker.py.
                  on_open_report=None,
+                 # Ctrl+click on the RE icon (2026-09-01, user request: be
+                 # able to have multiple SmartChart instances) - opens a
+                 # fresh SmartChart instance in a new tab instead of the
+                 # shared singleton.
+                 on_open_report_in_new_tab=None,
                  # Sidebar-Navigation (siehe ui/widgets/sidebar_nav.py, geteilt mit
                  # HomeScreen/BacklogScreen) - dieselben Callbacks wie bei
                  # BacklogScreen, siehe dort für die Begründung des Musters
@@ -224,6 +241,7 @@ class AllExperimentsScreen(QWidget):
         self.on_open_in_new_window = on_open_in_new_window
         self.on_open_in_new_os_window = on_open_in_new_os_window
         self.on_open_report = on_open_report
+        self.on_open_report_in_new_tab = on_open_report_in_new_tab
         self._series_report_map: dict = {}
 
         self._sidebar_nav_callbacks = dict(
@@ -1244,22 +1262,31 @@ class AllExperimentsScreen(QWidget):
         def _open():
             self._open_report_icon_for_series(series_pk)
 
-        lbl = _ClickableLabel(on_click=_open)
+        def _open_ctrl():
+            self._open_report_icon_for_series(series_pk, in_new_tab=True)
+
+        lbl = _ClickableLabel(on_click=_open, on_ctrl_click=_open_ctrl)
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setToolTip("Open saved Smart Chart report")
+        lbl.setToolTip("Open saved Smart Chart report (Ctrl+Click: new tab)")
         lbl.setPixmap(pm)
         self.table.setCellWidget(row, col, lbl)
 
-    def _open_report_icon_for_series(self, series_pk) -> None:
+    def _open_report_icon_for_series(self, series_pk, in_new_tab: bool = False) -> None:
         """Klick auf das RE-Icon: bei genau einem gespeicherten Report direkt
         öffnen, bei mehreren einen kleinen Auswahl-Dialog zeigen (siehe
-        ui/widgets/report_picker.py)."""
-        if not series_pk or not callable(self.on_open_report):
+        ui/widgets/report_picker.py). Ctrl+click (`in_new_tab`) opens a
+        fresh SmartChart instance in a new tab instead of the shared
+        singleton - falls back to the normal callback if
+        on_open_report_in_new_tab isn't wired up."""
+        if not series_pk:
+            return
+        callback = self.on_open_report_in_new_tab if (in_new_tab and callable(self.on_open_report_in_new_tab)) else self.on_open_report
+        if not callable(callback):
             return
         from ui.widgets.report_picker import choose_report_for_series
         report_id = choose_report_for_series(self, series_pk)
         if report_id is not None:
-            self.on_open_report(series_pk, report_id)
+            callback(series_pk, report_id)
 
     def _load_status_lookup(self):
         """Lädt den Status-Lookup aus tblBacklogStatus für die Comboboxen."""

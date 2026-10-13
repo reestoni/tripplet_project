@@ -100,6 +100,7 @@ class MultiColumnFilterProxy(QSortFilterProxyModel):
         self._filters: Dict[int, object] = {}   # str  OR  (lo, hi)
         self._search_cols: List[int] = []
         self._search_text: str = ""
+        self._search_terms: List[str] = []
 
     # ---- text filter ----
     def set_column_filter(self, col: int, text: str):
@@ -115,11 +116,21 @@ class MultiColumnFilterProxy(QSortFilterProxyModel):
     def set_search_filter(self, cols: List[int], text: str):
         """Set/clear a case-insensitive substring search across several columns (OR).
 
+        `text` may hold several search terms separated by ';' (e.g. "APh212;X47.66")
+        - a row matches if ANY term is found as a substring in ANY of `cols`.
         Independent from set_column_filter()'s per-column popup filters, which
-        stay AND-combined; the search matches if ANY of `cols` contains `text`.
+        stay AND-combined.
         """
         self._search_cols = list(cols)
         self._search_text = text.strip().lower()
+        terms: List[str] = []
+        seen = set()
+        for part in self._search_text.split(";"):
+            term = part.strip()
+            if term and term not in seen:
+                seen.add(term)
+                terms.append(term)
+        self._search_terms = terms
         self.invalidateFilter()
 
     # ---- range filter ----
@@ -165,11 +176,14 @@ class MultiColumnFilterProxy(QSortFilterProxyModel):
                 if filt not in str(val).lower():
                     return False
 
-        if self._search_text and self._search_cols:
+        if self._search_terms and self._search_cols:
             for col in self._search_cols:
                 idx = src.index(source_row, col, source_parent)
                 val = src.data(idx, Qt.DisplayRole)
-                if val is not None and self._search_text in str(val).lower():
+                if val is None:
+                    continue
+                val_lower = str(val).lower()
+                if any(term in val_lower for term in self._search_terms):
                     break
             else:
                 return False
@@ -1219,43 +1233,55 @@ class FKComboDelegate(QStyledItemDelegate):
 
 # ----------------- search-hit highlight delegate -----------------
 class SearchHighlightDelegate(QStyledItemDelegate):
-    """Draws DisplayRole text with the active toolbar-search substring highlighted.
+    """Draws DisplayRole text with the active toolbar-search terms highlighted.
+
+    The search box may hold several ';'-separated terms (e.g. "APh212;X47.66")
+    - each term gets its own highlight color (cycling through `_HIGHLIGHT_COLORS`,
+    assigned by the term's position in the search box) so it's visible at a glance
+    which part of a hit matched which term.
 
     Only touches columns the search actually scans (`search_cols_getter`); every
     other cell falls straight through to the default QStyledItemDelegate paint.
     """
 
-    _HIGHLIGHT_BG = "#ffe58a"
+    _HIGHLIGHT_COLORS = ["#ffe58a", "#8ad9ff", "#b3ffb3", "#ffb3d9", "#d9b3ff", "#ffcc99"]
 
     def __init__(self, proxy: MultiColumnFilterProxy, search_cols_getter: Callable[[], List[int]], parent=None):
         super().__init__(parent)
         self._proxy = proxy
         self._search_cols_getter = search_cols_getter
 
-    def _search_text(self) -> str:
-        return getattr(self._proxy, "_search_text", "") if self._proxy else ""
+    def _search_terms(self) -> List[str]:
+        return getattr(self._proxy, "_search_terms", []) if self._proxy else []
 
-    def _highlighted_html(self, text: str, needle: str) -> str:
-        """Escapes `text` and wraps every case-insensitive occurrence of `needle` in a <span>."""
-        parts = re.split(f"({re.escape(needle)})", text, flags=re.IGNORECASE)
+    def _highlighted_html(self, text: str, terms: List[str]) -> str:
+        """Escapes `text` and wraps every case-insensitive occurrence of any `terms`
+        entry in a <span>, colored by that term's index in `terms` (longer terms win
+        on overlap, e.g. one term being a substring of another)."""
+        order = sorted(range(len(terms)), key=lambda i: -len(terms[i]))
+        pattern = "|".join(f"(?P<t{i}>{re.escape(terms[i])})" for i in order)
+        regex = re.compile(pattern, re.IGNORECASE)
+
         out = []
-        for i, part in enumerate(parts):
-            if not part:
-                continue
-            esc = html.escape(part)
-            if i % 2 == 1:
-                out.append(f'<span style="background-color:{self._HIGHLIGHT_BG};">{esc}</span>')
-            else:
-                out.append(esc)
+        pos = 0
+        for m in regex.finditer(text):
+            if m.start() > pos:
+                out.append(html.escape(text[pos:m.start()]))
+            term_idx = next(i for i in order if m.group(f"t{i}") is not None)
+            color = self._HIGHLIGHT_COLORS[term_idx % len(self._HIGHLIGHT_COLORS)]
+            out.append(f'<span style="background-color:{color};">{html.escape(m.group(0))}</span>')
+            pos = m.end()
+        out.append(html.escape(text[pos:]))
         return "".join(out)
 
     def paint(self, painter: QPainter, option, index):
-        needle = self._search_text()
+        terms = self._search_terms()
         cols = self._search_cols_getter() if callable(self._search_cols_getter) else []
         text = index.data(Qt.DisplayRole)
         text = "" if text is None else str(text)
+        text_lower = text.lower()
 
-        if not needle or index.column() not in cols or needle.lower() not in text.lower():
+        if not terms or index.column() not in cols or not any(t in text_lower for t in terms):
             super().paint(painter, option, index)
             return
 
@@ -1270,7 +1296,7 @@ class SearchHighlightDelegate(QStyledItemDelegate):
         text_option = QTextOption()
         text_option.setAlignment(Qt.AlignHCenter)
         doc.setDefaultTextOption(text_option)
-        doc.setHtml(self._highlighted_html(text, needle))
+        doc.setHtml(self._highlighted_html(text, terms))
         doc.setTextWidth(opt.rect.width())
 
         painter.save()
@@ -1449,7 +1475,7 @@ class ManageJetsScreen(QWidget):
         tl.setContentsMargins(24, 12, 24, 0)
         tl.setSpacing(8)
 
-        self.search_edit = QLineEdit(placeholderText="Search Jet or Remarks…")
+        self.search_edit = QLineEdit(placeholderText="Search Jet or Remarks… (separate multiple with ;)")
         self.search_edit.setClearButtonEnabled(True)
         self.search_edit.textChanged.connect(self._on_search_changed)
 
