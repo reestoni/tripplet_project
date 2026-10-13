@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 500" width="940" height="500">
+  <!-- Backlog help sketch - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="940" height="500" fill="#ffffff"/>
+  <rect x="40" y="6" width="890" height="300" rx="8" fill="#f4f4f4" stroke="#cccccc" stroke-width="1"/>
+  <rect x="56" y="18" width="422" height="134" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="56" y="18" width="422" height="24" rx="6" fill="#4a4a4a"/>
+  <text x="66" y="35" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="start" font-weight="bold">Backlog</text>
+  <rect x="454" y="25" width="10" height="10" rx="1" fill="#4a4a4a" stroke="#ffffff" stroke-width="1"/>
+  <circle cx="46" cy="30" r="11" fill="#39a650"/>
+  <text x="46" y="34" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">1</text>
+  <rect x="64" y="50" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="74" y="62" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">X60.112 stability</text>
+  <text x="74" y="73" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="64" y="83" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="74" y="95" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">PES 167f72 DTY trials</text>
+  <text x="74" y="106" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="64" y="116" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="74" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Jet comparison S+</text>
+  <text x="74" y="139" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="493" y="18" width="422" height="134" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="493" y="18" width="422" height="24" rx="6" fill="#4a4a4a"/>
+  <text x="503" y="35" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="start" font-weight="bold">In Progress</text>
+  <rect x="891" y="25" width="10" height="10" rx="1" fill="#4a4a4a" stroke="#ffffff" stroke-width="1"/>
+  <circle cx="483" cy="30" r="11" fill="#39a650"/>
+  <text x="483" y="34" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">2</text>
+  <rect x="501" y="50" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <rect x="501" y="50" width="4" height="28" rx="2" fill="#e67e22"/>
+  <text x="511" y="62" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">X60.112 stability</text>
+  <text x="511" y="73" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="501" y="83" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <rect x="501" y="83" width="4" height="28" rx="2" fill="#2980b9"/>
+  <text x="511" y="95" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">PES 167f72 DTY trials</text>
+  <text x="511" y="106" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="501" y="116" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <rect x="501" y="116" width="4" height="28" rx="2" fill="#8e44ad"/>
+  <text x="511" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Jet comparison S+</text>
+  <text x="511" y="139" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="56" y="162" width="422" height="134" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="56" y="162" width="422" height="24" rx="6" fill="#4a4a4a"/>
+  <text x="66" y="179" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="start" font-weight="bold">Done</text>
+  <rect x="454" y="169" width="10" height="10" rx="1" fill="#4a4a4a" stroke="#ffffff" stroke-width="1"/>
+  <circle cx="46" cy="174" r="11" fill="#39a650"/>
+  <text x="46" y="178" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">3</text>
+  <rect x="64" y="194" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <rect x="64" y="194" width="4" height="28" rx="2" fill="#e67e22"/>
+  <text x="74" y="206" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">X60.112 stability</text>
+  <text x="74" y="217" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="64" y="227" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <rect x="64" y="227" width="4" height="28" rx="2" fill="#2980b9"/>
+  <text x="74" y="239" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">PES 167f72 DTY trials</text>
+  <text x="74" y="250" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="64" y="260" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <rect x="64" y="260" width="4" height="28" rx="2" fill="#8e44ad"/>
+  <text x="74" y="272" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Jet comparison S+</text>
+  <text x="74" y="283" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="493" y="162" width="422" height="62" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="493" y="162" width="422" height="24" rx="6" fill="#4a4a4a"/>
+  <text x="503" y="179" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="start" font-weight="bold">To Be Cleaned</text>
+  <rect x="891" y="169" width="10" height="10" rx="1" fill="#4a4a4a" stroke="#ffffff" stroke-width="1"/>
+  <circle cx="483" cy="174" r="11" fill="#39a650"/>
+  <text x="483" y="178" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">4</text>
+  <rect x="501" y="194" width="406" height="28" rx="6" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="511" y="206" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">X60.112 stability</text>
+  <text x="511" y="217" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  Prio 2  •  owner</text>
+  <rect x="493" y="232" width="422" height="66" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="493" y="232" width="422" height="24" rx="6" fill="#4a4a4a"/>
+  <text x="503" y="249" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="start" font-weight="bold">Archived</text>
+  <circle cx="483" cy="244" r="11" fill="#39a650"/>
+  <text x="483" y="248" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">5</text>
+  <rect x="501" y="260" width="160" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="507" y="273" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#999999" text-anchor="start">Search in Archived…</text>
+  <text x="670" y="273" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start">▶ 2026   ▶ 73  (12)</text>
+  <text x="503" y="292" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start" font-style="italic">{{archived_hint}}</text>
+  <text x="56" y="330" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#2b2b2b" text-anchor="start" font-weight="bold">{{flow_title}}</text>
+  <rect x="56" y="340" width="130" height="26" rx="13" fill="#e8f5e9" stroke="#39a650" stroke-width="1"/>
+  <text x="121.0" y="357" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b" text-anchor="middle">Backlog</text>
+  <line x1="188" y1="353" x2="225" y2="353" stroke="#565656" stroke-width="1.5"/>
+  <polygon points="232,353 224,349 224,357" fill="#565656"/>
+  <rect x="234" y="340" width="130" height="26" rx="13" fill="#e8f5e9" stroke="#39a650" stroke-width="1"/>
+  <text x="299.0" y="357" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b" text-anchor="middle">In Progress</text>
+  <line x1="366" y1="353" x2="403" y2="353" stroke="#565656" stroke-width="1.5"/>
+  <polygon points="410,353 402,349 402,357" fill="#565656"/>
+  <rect x="412" y="340" width="130" height="26" rx="13" fill="#e8f5e9" stroke="#39a650" stroke-width="1"/>
+  <text x="477.0" y="357" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b" text-anchor="middle">Done</text>
+  <line x1="544" y1="353" x2="581" y2="353" stroke="#565656" stroke-width="1.5"/>
+  <polygon points="588,353 580,349 580,357" fill="#565656"/>
+  <rect x="590" y="340" width="130" height="26" rx="13" fill="#eeeeee" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="655.0" y="357" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b" text-anchor="middle">To Be Cleaned</text>
+  <line x1="722" y1="353" x2="759" y2="353" stroke="#565656" stroke-width="1.5"/>
+  <polygon points="766,353 758,349 758,357" fill="#565656"/>
+  <rect x="768" y="340" width="130" height="26" rx="13" fill="#eeeeee" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="833.0" y="357" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b" text-anchor="middle">Archived</text>
+  <text x="56" y="384" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start" font-style="italic">{{flow_hint}}</text>
+  <text x="56" y="410" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#2b2b2b" text-anchor="start" font-weight="bold">{{card_title}}</text>
+  <rect x="56" y="424" width="860" height="58" rx="10" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <rect x="56" y="424" width="6" height="58" rx="3" fill="#e67e22"/>
+  <text x="76" y="446" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#2b2b2b" text-anchor="start" font-weight="bold">X60.112 stability</text>
+  <text x="76" y="468" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start">2026-73-035  •  RPR 3SDS  •  In Progress  •  Prio 2  •  Owner name</text>
+  <rect x="650" y="441" width="54" height="18" rx="4" fill="#e67e22"/>
+  <text x="677" y="454" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#ffffff" text-anchor="middle" font-weight="bold">RETEST</text>
+  <rect x="724" y="440" width="32" height="20" rx="4" fill="#f2f2f2" stroke="#cccccc" stroke-width="1"/>
+  <text x="740" y="454" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">chart</text>
+  <rect x="764" y="440" width="32" height="20" rx="4" fill="#f2f2f2" stroke="#cccccc" stroke-width="1"/>
+  <text x="780" y="454" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">note</text>
+  <rect x="804" y="440" width="32" height="20" rx="4" fill="#f2f2f2" stroke="#cccccc" stroke-width="1"/>
+  <text x="820" y="454" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">file</text>
+  <rect x="844" y="440" width="32" height="20" rx="4" fill="#f2f2f2" stroke="#cccccc" stroke-width="1"/>
+  <text x="860" y="454" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">ER</text>
+  <circle cx="44" cy="453" r="11" fill="#2b2b2b"/>
+  <text x="44" y="457" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">A</text>
+  <circle cx="250" cy="441" r="11" fill="#2b2b2b"/>
+  <text x="250" y="445" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">B</text>
+  <circle cx="640" cy="426" r="11" fill="#2b2b2b"/>
+  <text x="640" y="430" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">C</text>
+  <circle cx="740" cy="426" r="11" fill="#2b2b2b"/>
+  <text x="740" y="430" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">D</text>
+  <circle cx="820" cy="426" r="11" fill="#2b2b2b"/>
+  <text x="820" y="430" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">E</text>
+  <circle cx="860" cy="426" r="11" fill="#2b2b2b"/>
+  <text x="860" y="430" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">F</text>
+</svg>

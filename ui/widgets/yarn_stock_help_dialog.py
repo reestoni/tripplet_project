@@ -123,18 +123,15 @@ def _flag_icon(file_name: str) -> QIcon:
 
 
 def _load_language() -> str:
-    try:
-        lang = QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SETTINGS_KEY, DEFAULT_LANGUAGE)
-        return lang if lang in TEXTS else DEFAULT_LANGUAGE
-    except Exception:
-        return DEFAULT_LANGUAGE
+    # Sprache gilt seit 2026-10-13 fuer ALLE Hilfen gemeinsam (multilang_help)
+    from ui.widgets.multilang_help import load_language
+    lang = load_language()
+    return lang if lang in TEXTS else DEFAULT_LANGUAGE
 
 
 def _save_language(lang: str) -> None:
-    try:
-        QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SETTINGS_KEY, lang)
-    except Exception:
-        pass
+    from ui.widgets.multilang_help import save_language
+    save_language(lang)
 
 
 class YarnStockHelpDialog(QDialog):

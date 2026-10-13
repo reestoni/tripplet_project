@@ -1718,6 +1718,10 @@ class ReportScreen(QWidget):
         self.btn_experiment_request.setVisible(False)
         self.btn_experiment_request.clicked.connect(self._open_experiment_request_popup)
         tl.addWidget(self.btn_experiment_request)
+        # Kontext-Hilfe EN/DE/ES (Nutzerwunsch 2026-10-13, ui/widgets/multilang_help.py);
+        # im Smart-Chart-Modus direkt auf dem Smart-Chart-Tab
+        from ui.widgets.multilang_help import make_help_button
+        tl.addWidget(make_help_button("How do Report and Smart Chart work?", self._open_help))
         content_layout.addWidget(tools)
 
         self.lbl_series = QLabel()  # kept for internal use, not shown
@@ -1928,6 +1932,11 @@ class ReportScreen(QWidget):
             except Exception as _e:
                 logger.error("DEBUG: %s", _e)
             self._web.setHtml(html, QUrl("about:blank"))
+
+    def _open_help(self) -> None:
+        from ui.widgets.multilang_help import show_help
+        from ui.widgets.help_texts_report import TEXTS
+        show_help(TEXTS, self, tab=None if self.mode == "series" else "smart")
 
     def _go_back(self) -> None:
         if callable(self.on_back):

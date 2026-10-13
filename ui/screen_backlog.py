@@ -2575,10 +2575,18 @@ class BacklogScreen(QWidget):
         welcome_row.addStretch(1)
         welcome_row.addWidget(self._welcome_label)
         welcome_row.addStretch(1)
+        # Kontext-Hilfe EN/DE/ES (Nutzerwunsch 2026-10-13, ui/widgets/multilang_help.py)
+        from ui.widgets.multilang_help import make_help_button
+        welcome_row.addWidget(make_help_button("How does the Backlog work?", self._open_help))
         content_layout.addLayout(welcome_row)
 
         content_layout.addWidget(self._card_stack, 1)
         root.addWidget(FooterBar())
+
+    def _open_help(self):
+        from ui.widgets.multilang_help import show_help
+        from ui.widgets.help_texts_backlog import TEXTS
+        show_help(TEXTS, self)
 
     def _open_experiment_request_popup_from_id(self, request_id):
         """Open the read-only Experiment Request popup (same as screen_show_experiment)."""

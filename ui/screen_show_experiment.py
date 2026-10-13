@@ -3586,6 +3586,9 @@ class ShowExperimentScreen(QWidget):
             pass
         tl.addWidget(self.btn_refresh)
         tl.addWidget(self.btn_save)
+        # Kontext-Hilfe EN/DE/ES (Nutzerwunsch 2026-10-13, ui/widgets/multilang_help.py)
+        from ui.widgets.multilang_help import make_help_button
+        tl.addWidget(make_help_button("How does Show Experiment work?", self._open_help))
         content_layout.addWidget(tools)
 
         # NEU: Material-Infobox direkt unter dem Balken
@@ -4136,6 +4139,11 @@ class ShowExperimentScreen(QWidget):
         except Exception:
             # Falls Spalte mal nicht existiert o.ä., fehlerfrei weitermachen
             return 0
+
+    def _open_help(self):
+        from ui.widgets.multilang_help import show_help
+        from ui.widgets.help_texts_show_experiment import TEXTS
+        show_help(TEXTS, self)
 
     def _on_refresh(self):
         """Lädt den aktuellen Screen neu (F5), behält aktiven Tab."""
