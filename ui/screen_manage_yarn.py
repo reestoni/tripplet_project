@@ -972,6 +972,9 @@ class ManageYarnScreen(QWidget):
         tl.addWidget(self.btn_delete, 0)
         tl.addWidget(self.btn_save, 0)
         tl.addWidget(self.status_label, 0, Qt.AlignVCenter)
+        # Kontext-Hilfe EN/DE/ES (Nutzerwunsch 2026-10-13, ui/widgets/multilang_help.py)
+        from ui.widgets.multilang_help import make_help_button
+        tl.addWidget(make_help_button("How does Manage Yarn work?", self._open_help), 0)
 
         # Tabelle
         self.table = QTableView(objectName='YarnTable')
@@ -1808,6 +1811,11 @@ class ManageYarnScreen(QWidget):
             if _canon(h) == 'name':
                 self._name_search_col = i
                 break
+
+    def _open_help(self):
+        from ui.widgets.multilang_help import show_help
+        from ui.widgets.help_texts_manage_yarn import TEXTS
+        show_help(TEXTS, self)
 
     def _on_search_changed(self, text: str):
         if not self.proxy:

@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 372" width="940" height="372">
+  <!-- Create Experiment help sketch - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="940" height="372" fill="#ffffff"/>
+  <rect x="40" y="6" width="890" height="360" rx="8" fill="#f4f4f4" stroke="#cccccc" stroke-width="1"/>
+  <circle cx="22" cy="30" r="11" fill="#39a650"/>
+  <text x="22" y="34" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">1</text>
+  <text x="56" y="34" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#2b2b2b" text-anchor="start" font-weight="bold">New Experiment – fill all tabs</text>
+  <rect x="870" y="19" width="50" height="22" rx="3" fill="#39a650"/>
+  <text x="895.0" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">Save</text>
+  <circle cx="22" cy="64" r="11" fill="#39a650"/>
+  <text x="22" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">2</text>
+  <rect x="56" y="54" width="80" height="22" rx="3" fill="#e9e9e9" stroke="#cccccc" stroke-width="1"/>
+  <circle cx="68" cy="65" r="5" fill="#39a650"/>
+  <text x="107.0" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">General</text>
+  <rect x="138" y="54" width="86" height="22" rx="3" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <circle cx="150" cy="65" r="5" fill="#bbbbbb"/>
+  <text x="192.0" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle" font-weight="bold">Material</text>
+  <rect x="226" y="54" width="53" height="22" rx="3" fill="#e9e9e9" stroke="#cccccc" stroke-width="1"/>
+  <circle cx="238" cy="65" r="5" fill="#bbbbbb"/>
+  <text x="263.5" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Jet</text>
+  <rect x="281" y="54" width="80" height="22" rx="3" fill="#e9e9e9" stroke="#cccccc" stroke-width="1"/>
+  <circle cx="293" cy="65" r="5" fill="#bbbbbb"/>
+  <text x="332.0" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Machine</text>
+  <rect x="363" y="54" width="113" height="22" rx="3" fill="#e9e9e9" stroke="#cccccc" stroke-width="1"/>
+  <circle cx="375" cy="65" r="5" fill="#bbbbbb"/>
+  <text x="430.5" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Lab Machines</text>
+  <text x="486" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start" font-style="italic">{{tab_hint}}</text>
+  <circle cx="22" cy="100" r="11" fill="#39a650"/>
+  <text x="22" y="104" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">3</text>
+  <rect x="56" y="86" width="380" height="220" rx="3" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="60" y="92" width="372" height="22" rx="0" fill="#ffffff"/>
+  <text x="66" y="107" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">▾ PES POY</text>
+  <rect x="60" y="116" width="372" height="22" rx="0" fill="#b7d6ff"/>
+  <text x="66" y="131" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">    280/167f72 dtex (SD round - white)</text>
+  <rect x="60" y="140" width="372" height="22" rx="0" fill="#ffffff"/>
+  <text x="66" y="155" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">    85/50f36 dtex (SD round - white)</text>
+  <rect x="60" y="164" width="372" height="22" rx="0" fill="#ffffff"/>
+  <text x="66" y="179" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">▸ PA6</text>
+  <rect x="60" y="188" width="372" height="22" rx="0" fill="#ffffff"/>
+  <text x="66" y="203" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">▸ CLY FDY</text>
+  <rect x="444" y="92" width="28" height="22" rx="3" fill="#39a650"/>
+  <text x="458.0" y="107.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">+</text>
+  <rect x="476" y="92" width="60" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="506.0" y="107.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">+ Trial</text>
+  <text x="444" y="134" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start">Ends:</text>
+  <rect x="478" y="122" width="40" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="498" y="135" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">1</text>
+  <text x="526" y="134" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start">Yarn Use:</text>
+  <rect x="580" y="122" width="110" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="586" y="135" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">— ▾</text>
+  <circle cx="22" cy="186" r="11" fill="#39a650"/>
+  <text x="22" y="190" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">4</text>
+  <rect x="444" y="150" width="478" height="156" rx="3" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="444" y="150" width="478" height="22" rx="0" fill="#3f3f3f"/>
+  <text x="450" y="165" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="start" font-weight="bold">Material</text>
+  <text x="700" y="165" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="start" font-weight="bold">Ply</text>
+  <text x="740" y="165" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="start" font-weight="bold">Yarn Use</text>
+  <text x="820" y="165" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="start" font-weight="bold">Spool</text>
+  <text x="450" y="190" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">PES POY 280/167f72</text>
+  <text x="704" y="190" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">1</text>
+  <text x="740" y="190" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">Core</text>
+  <text x="820" y="190" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">#213 — 989G</text>
+  <text x="450" y="214" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">PES POY 85/50f36</text>
+  <text x="704" y="214" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">2</text>
+  <text x="740" y="214" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">Effect</text>
+  <text x="820" y="214" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">—</text>
+  <text x="56" y="330" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start" font-style="italic">{{hint_trials}}</text>
+  <text x="56" y="350" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start" font-style="italic">{{hint_delete}}</text>
+</svg>

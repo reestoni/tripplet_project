@@ -590,6 +590,9 @@ class CreateExperimentScreen(QWidget):
         tl.addStretch(1)
         tl.addWidget(self.btn_experiment_request)
         tl.addWidget(self.butSave)
+        # Kontext-Hilfe EN/DE/ES (Nutzerwunsch 2026-10-13, ui/widgets/multilang_help.py)
+        from ui.widgets.multilang_help import make_help_button
+        tl.addWidget(make_help_button("How does Create Experiment work?", self._open_help))
         content_layout.addWidget(tools)
 
         # Tabs
@@ -4544,6 +4547,11 @@ class CreateExperimentScreen(QWidget):
                                                    ["BYTE", "SHORT", "LONG", "INT", "INTEGER", "SINGLE", "DOUBLE", "NUMERIC", "DECIMAL"]):
                     return True
         return False
+
+    def _open_help(self):
+        from ui.widgets.multilang_help import show_help
+        from ui.widgets.help_texts_create_experiment import TEXTS
+        show_help(TEXTS, self)
 
     def _on_save(self):
         # Ensure the non-modal Experiment Request popup doesn't outlive this screen.

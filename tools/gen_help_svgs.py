@@ -234,3 +234,124 @@ for i in range(2):
 s.marker(330, 180, "4", "#2b2b2b")
 s.text(296, 330, "{{drill_hint}}", 10, MUTED)
 s.save("help_report.svg")
+
+# ═════════════════════════════ All Experiments ═════════════════════════════
+s = Svg(940, 256, "All Experiments help sketch")
+s.rect(40, 6, 890, 244, "#f4f4f4", LINE, 8)
+s.marker(22, 30, "1")
+x = 56
+for i, lbl in enumerate(["All", "AFK", "eAFK", "Aalidhra", "Zinser", "SSM DP2T", "SSM Xeno"]):
+    x = s.btn(x, 19, lbl, kind="green" if i == 0 else "grey") + 4
+s.marker(22, 66, "2")
+s.rect(56, 55, 200, 22, "#ffffff", "#999999", 3); s.text(62, 70, "Filter Experiment ID…", 10, "#999999")
+s.rect(262, 55, 220, 22, "#ffffff", "#999999", 3); s.text(268, 70, "Filter Trial Series Name…", 10, "#999999")
+s.btn(802, 55, "Copy TrialSeries", 116)
+s.marker(786, 66, "3", GREEN)
+s.marker(22, 100, "4")
+cols = [("Experiment ID", 56), ("Trial Series Name", 160), ("Machine", 340), ("Creation Date", 420),
+        ("Owner", 510), ("Status", 590), ("AM", 690), ("ER", 730), ("NT", 770), ("RE", 810)]
+s.rect(56, 88, 866, 22, "#e9f6e9", None, 0)
+for t, cx in cols:
+    s.text(cx + 4, 103, t + (" ▲" if t == "Creation Date" else ""), 10, INK, True)
+rows = [("2026-73-035", "X60.112 stability", "RPR 3SDS", "2026-10-01", "A. Muster", "In Progress", ["file", "ER", "", "chart"]),
+        ("2026-73-034", "PES 167f72 DTY trials", "AFK", "2026-09-28", "B. Beispiel", "Done", ["", "", "note", ""]),
+        ("2026-73-033", "Jet comparison S+", "Zinser", "2026-09-20", "C. Test", "Backlog", ["", "ER", "", ""])]
+for i, (a, b, c, d, e, f, icons) in enumerate(rows):
+    y = 112 + i * 26
+    s.rect(56, y, 866, 24, "#b7d6ff" if i == 0 else "#ffffff", None, 0)
+    for t, (_, cx) in zip([a, b, c, d, e, f], cols[:6]):
+        s.text(cx + 4, y + 16, t, 10, INK)
+    for t, (_, cx) in zip(icons, cols[6:]):
+        if t:
+            s.rect(cx + 2, y + 4, 30, 16, "#f2f2f2", "#cccccc", 3); s.text(cx + 17, y + 16, t, 8, INK, anchor="middle")
+s.marker(676, 125, "5", "#2b2b2b")
+s.text(56, 214, "{{hint_open}}", 10, MUTED, italic=True)
+s.text(56, 234, "{{hint_sort}}", 10, MUTED, italic=True)
+s.save("help_all_experiments.svg")
+
+# ═════════════════════════════ Create Experiment ═════════════════════════════
+s = Svg(940, 372, "Create Experiment help sketch")
+s.rect(40, 6, 890, 360, "#f4f4f4", LINE, 8)
+s.marker(22, 30, "1")
+s.text(56, 34, "New Experiment – fill all tabs", 12, INK, True)
+s.btn(870, 19, "Save", 50, "green")
+s.marker(22, 64, "2")
+x = 56
+for i, t in enumerate(["General", "Material", "Jet", "Machine", "Lab Machines"]):
+    w = int(len(t) * 6.6) + 34
+    s.rect(x, 54, w, 22, "#ffffff" if i == 1 else "#e9e9e9", LINE, 3)
+    s.parts.append(f'  <circle cx="{x + 12}" cy="65" r="5" fill="{GREEN if i < 1 else "#bbbbbb"}"/>')
+    s.text(x + 22 + (w - 22) / 2, 69, t, 10, INK, i == 1, "middle")
+    x += w + 2
+s.text(x + 8, 69, "{{tab_hint}}", 9, MUTED, italic=True)
+# Material-Tab Inhalt
+s.marker(22, 100, "3")
+s.rect(56, 86, 380, 220, "#ffffff", LINE, 3)
+for i, t in enumerate(["▾ PES POY", "    280/167f72 dtex (SD round - white)", "    85/50f36 dtex (SD round - white)", "▸ PA6", "▸ CLY FDY"]):
+    s.rect(60, 92 + i * 24, 372, 22, "#b7d6ff" if i == 1 else "#ffffff", None, 0)
+    s.text(66, 107 + i * 24, t, 10, INK, i in (0, 3, 4))
+s.btn(444, 92, "+", 28, "green"); s.btn(476, 92, "+ Trial", 60)
+s.text(444, 134, "Ends:", 10, MUTED); s.rect(478, 122, 40, 18, "#ffffff", "#999999", 3); s.text(498, 135, "1", 10, INK, anchor="middle")
+s.text(526, 134, "Yarn Use:", 10, MUTED); s.rect(580, 122, 110, 18, "#ffffff", "#999999", 3); s.text(586, 135, "— ▾", 10, INK)
+s.marker(22, 186, "4")
+s.rect(444, 150, 478, 156, "#ffffff", LINE, 3)
+s.rect(444, 150, 478, 22, "#3f3f3f", None, 0)
+for t, cx in [("Material", 450), ("Ply", 700), ("Yarn Use", 740), ("Spool", 820)]:
+    s.text(cx, 165, t, 10, "#ffffff", True)
+for i, (m, p, u, sp) in enumerate([("PES POY 280/167f72", "1", "Core", "#213 — 989G"), ("PES POY 85/50f36", "2", "Effect", "—")]):
+    y = 176 + i * 24
+    s.text(450, y + 14, m, 10, INK); s.text(704, y + 14, p, 10, INK); s.text(740, y + 14, u, 10, INK); s.text(820, y + 14, sp, 10, INK)
+s.text(56, 330, "{{hint_trials}}", 10, MUTED, italic=True)
+s.text(56, 350, "{{hint_delete}}", 10, MUTED, italic=True)
+s.save("help_create_experiment.svg")
+
+# ═════════════════════════════ Manage Yarn / Manage Jets ═════════════════════════════
+def manage_sketch(name, title, buttons, search_ph, headers, rows, usage):
+    s = Svg(940, 240, title)
+    s.rect(40, 6, 890, 228, "#f4f4f4", LINE, 8)
+    s.marker(22, 30, "1")
+    s.rect(56, 19, 250, 22, "#ffffff", "#999999", 3); s.text(62, 34, search_ph, 10, "#999999")
+    x = 922 - (sum(max(26, int(len(l) * 5.6) + 10) for l, _ in buttons) + 4 * (len(buttons) - 1))
+    for lbl, kind in buttons:
+        x = s.btn(x, 19, lbl, kind=kind) + 4
+    s.marker(22, 66, "2")
+    s.rect(56, 54, 866, 22, "#e9f6e9", None, 0)
+    cx = 56
+    widths = [w for _, w in headers]
+    for (t, w) in headers:
+        s.text(cx + 6, 69, t, 10, INK, True)
+        cx += w
+    s.text(56 + widths[0] + widths[1] - 14, 69, "▼", 10, GREEN, True)
+    for i, vals in enumerate(rows):
+        y = 78 + i * 24
+        s.rect(56, y, 866, 22, "#ffffff" if i % 2 == 0 else "#fafafa", None, 0)
+        cx = 56
+        for v, w in zip(vals, widths):
+            s.text(cx + 6, y + 15, v, 10, INK)
+            cx += w
+    if usage:
+        y = 78 + len(rows) * 24
+        s.rect(56, y, 866, 22, "#f2f9f2", None, 0); s.text(76, y + 15, "↳ 2026-73-035 · X60.112 stability   (click: trial numbers · double-click: open)", 10, "#2b7a3d")
+        s.marker(912, 78 + 11, "3", "#2b2b2b")
+    s.line(56 + widths[0], 54, 56 + widths[0], 78 + (len(rows) + (1 if usage else 0)) * 24, LINE, 2)
+    s.text(56, 200, "{{hint_edit}}", 10, MUTED, italic=True)
+    s.text(56, 220, "{{hint_filter}}", 10, MUTED, italic=True)
+    s.save(name)
+
+
+manage_sketch("help_manage_yarn.svg", "Manage Yarn help sketch",
+              [("Reload", "grey"), ("New Yarn", "green"), ("Edit in Form", "grey"), ("Columns…", "grey"),
+               ("Delete", "grey"), ("Save Changes", "purple")],
+              "Filter by Name…",
+              [("Name", 236), ("Garntyp", 70), ("Material", 70), ("Titer", 56), ("Endtiter", 66), ("NumberOfFilaments", 124), ("MinStock", 76), ("StockKg", 70), ("UsedInTrial", 98)],
+              [["PES POY 280/167f72 dtex", "POY", "PES", "280", "167", "72", "100", "521.0", "▸ 3"],
+               ["PES POY 85/50f36 dtex", "POY", "PES", "85", "50", "36", "50", "520.0", "▸ 12"],
+               ["CLY FDY 120f72 dtex", "FDY", "CLY", "120", "120", "72", "", "2.5", "▸ 1"]], True)
+manage_sketch("help_manage_jets.svg", "Manage Jets help sketch",
+              [("Reload", "grey"), ("New Jet", "green"), ("Copy", "grey"), ("Edit in Form", "grey"),
+               ("Delete", "grey"), ("Save Changes", "purple"), ("Columns…", "grey")],
+              "Search Jet or Remarks… (separate multiple with ;)",
+              [("Jet", 150), ("Hersteller", 110), ("Serie", 90), ("Luftbohrung", 100), ("AnzahlLuftbohrungen", 150), ("Prozess", 90), ("Werkstoff", 176)],
+              [["S+ 1.2", "Heberlein", "S+", "1.2", "1", "ATY", "ceramic"],
+               ["S+ 1.4", "Heberlein", "S+", "1.4", "1", "ATY", "ceramic"],
+               ["Proto X-3", "Heberlein", "X", "1.0", "2", "DTY", "steel"]], False)

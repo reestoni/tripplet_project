@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 240" width="940" height="240">
+  <!-- Manage Yarn help sketch - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="940" height="240" fill="#ffffff"/>
+  <rect x="40" y="6" width="890" height="228" rx="8" fill="#f4f4f4" stroke="#cccccc" stroke-width="1"/>
+  <circle cx="22" cy="30" r="11" fill="#39a650"/>
+  <text x="22" y="34" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">1</text>
+  <rect x="56" y="19" width="250" height="22" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="62" y="34" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#999999" text-anchor="start">Filter by Name…</text>
+  <rect x="554" y="19" width="43" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="575.5" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Reload</text>
+  <rect x="601" y="19" width="54" height="22" rx="3" fill="#39a650"/>
+  <text x="628.0" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">New Yarn</text>
+  <rect x="659" y="19" width="77" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="697.5" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Edit in Form</text>
+  <rect x="740" y="19" width="54" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="767.0" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Columns…</text>
+  <rect x="798" y="19" width="43" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="819.5" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Delete</text>
+  <rect x="845" y="19" width="77" height="22" rx="3" fill="#8e44ad"/>
+  <text x="883.5" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">Save Changes</text>
+  <circle cx="22" cy="66" r="11" fill="#39a650"/>
+  <text x="22" y="70" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">2</text>
+  <rect x="56" y="54" width="866" height="22" rx="0" fill="#e9f6e9"/>
+  <text x="62" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Name</text>
+  <text x="298" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Garntyp</text>
+  <text x="368" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Material</text>
+  <text x="438" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Titer</text>
+  <text x="494" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Endtiter</text>
+  <text x="560" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">NumberOfFilaments</text>
+  <text x="684" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">MinStock</text>
+  <text x="760" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">StockKg</text>
+  <text x="830" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">UsedInTrial</text>
+  <text x="348" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#39a650" text-anchor="start" font-weight="bold">▼</text>
+  <rect x="56" y="78" width="866" height="22" rx="0" fill="#ffffff"/>
+  <text x="62" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">PES POY 280/167f72 dtex</text>
+  <text x="298" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">POY</text>
+  <text x="368" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">PES</text>
+  <text x="438" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">280</text>
+  <text x="494" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">167</text>
+  <text x="560" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">72</text>
+  <text x="684" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">100</text>
+  <text x="760" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">521.0</text>
+  <text x="830" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">▸ 3</text>
+  <rect x="56" y="102" width="866" height="22" rx="0" fill="#fafafa"/>
+  <text x="62" y="117" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">PES POY 85/50f36 dtex</text>
+  <text x="298" y="117" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">POY</text>
+  <text x="368" y="117" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">PES</text>
+  <text x="438" y="117" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">85</text>
+  <text x="494" y="117" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">50</text>
+  <text x="560" y="117" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">36</text>
+  <text x="684" y="117" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">50</text>
+  <text x="760" y="117" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">520.0</text>
+  <text x="830" y="117" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">▸ 12</text>
+  <rect x="56" y="126" width="866" height="22" rx="0" fill="#ffffff"/>
+  <text x="62" y="141" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">CLY FDY 120f72 dtex</text>
+  <text x="298" y="141" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">FDY</text>
+  <text x="368" y="141" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">CLY</text>
+  <text x="438" y="141" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">120</text>
+  <text x="494" y="141" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">120</text>
+  <text x="560" y="141" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">72</text>
+  <text x="684" y="141" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start"></text>
+  <text x="760" y="141" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">2.5</text>
+  <text x="830" y="141" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">▸ 1</text>
+  <rect x="56" y="150" width="866" height="22" rx="0" fill="#f2f9f2"/>
+  <text x="76" y="165" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b7a3d" text-anchor="start">↳ 2026-73-035 · X60.112 stability   (click: trial numbers · double-click: open)</text>
+  <circle cx="912" cy="89" r="11" fill="#2b2b2b"/>
+  <text x="912" y="93" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">3</text>
+  <line x1="292" y1="54" x2="292" y2="174" stroke="#cccccc" stroke-width="2"/>
+  <text x="56" y="200" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start" font-style="italic">{{hint_edit}}</text>
+  <text x="56" y="220" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start" font-style="italic">{{hint_filter}}</text>
+</svg>

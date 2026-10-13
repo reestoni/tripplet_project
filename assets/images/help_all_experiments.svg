@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 256" width="940" height="256">
+  <!-- All Experiments help sketch - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="940" height="256" fill="#ffffff"/>
+  <rect x="40" y="6" width="890" height="244" rx="8" fill="#f4f4f4" stroke="#cccccc" stroke-width="1"/>
+  <circle cx="22" cy="30" r="11" fill="#39a650"/>
+  <text x="22" y="34" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">1</text>
+  <rect x="56" y="19" width="26" height="22" rx="3" fill="#39a650"/>
+  <text x="69.0" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">All</text>
+  <rect x="86" y="19" width="26" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="99.0" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">AFK</text>
+  <rect x="116" y="19" width="32" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="132.0" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">eAFK</text>
+  <rect x="152" y="19" width="54" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="179.0" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Aalidhra</text>
+  <rect x="210" y="19" width="43" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="231.5" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Zinser</text>
+  <rect x="257" y="19" width="54" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="284.0" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">SSM DP2T</text>
+  <rect x="315" y="19" width="54" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="342.0" y="34.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">SSM Xeno</text>
+  <circle cx="22" cy="66" r="11" fill="#39a650"/>
+  <text x="22" y="70" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">2</text>
+  <rect x="56" y="55" width="200" height="22" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="62" y="70" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#999999" text-anchor="start">Filter Experiment ID…</text>
+  <rect x="262" y="55" width="220" height="22" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="268" y="70" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#999999" text-anchor="start">Filter Trial Series Name…</text>
+  <rect x="802" y="55" width="116" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="860.0" y="70.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Copy TrialSeries</text>
+  <circle cx="786" cy="66" r="11" fill="#39a650"/>
+  <text x="786" y="70" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">3</text>
+  <circle cx="22" cy="100" r="11" fill="#39a650"/>
+  <text x="22" y="104" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">4</text>
+  <rect x="56" y="88" width="866" height="22" rx="0" fill="#e9f6e9"/>
+  <text x="60" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Experiment ID</text>
+  <text x="164" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Trial Series Name</text>
+  <text x="344" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Machine</text>
+  <text x="424" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Creation Date ▲</text>
+  <text x="514" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Owner</text>
+  <text x="594" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Status</text>
+  <text x="694" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">AM</text>
+  <text x="734" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">ER</text>
+  <text x="774" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">NT</text>
+  <text x="814" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">RE</text>
+  <rect x="56" y="112" width="866" height="24" rx="0" fill="#b7d6ff"/>
+  <text x="60" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">2026-73-035</text>
+  <text x="164" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">X60.112 stability</text>
+  <text x="344" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">RPR 3SDS</text>
+  <text x="424" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">2026-10-01</text>
+  <text x="514" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">A. Muster</text>
+  <text x="594" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">In Progress</text>
+  <rect x="692" y="116" width="30" height="16" rx="3" fill="#f2f2f2" stroke="#cccccc" stroke-width="1"/>
+  <text x="707" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">file</text>
+  <rect x="732" y="116" width="30" height="16" rx="3" fill="#f2f2f2" stroke="#cccccc" stroke-width="1"/>
+  <text x="747" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">ER</text>
+  <rect x="812" y="116" width="30" height="16" rx="3" fill="#f2f2f2" stroke="#cccccc" stroke-width="1"/>
+  <text x="827" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">chart</text>
+  <rect x="56" y="138" width="866" height="24" rx="0" fill="#ffffff"/>
+  <text x="60" y="154" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">2026-73-034</text>
+  <text x="164" y="154" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">PES 167f72 DTY trials</text>
+  <text x="344" y="154" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">AFK</text>
+  <text x="424" y="154" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">2026-09-28</text>
+  <text x="514" y="154" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">B. Beispiel</text>
+  <text x="594" y="154" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">Done</text>
+  <rect x="772" y="142" width="30" height="16" rx="3" fill="#f2f2f2" stroke="#cccccc" stroke-width="1"/>
+  <text x="787" y="154" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">note</text>
+  <rect x="56" y="164" width="866" height="24" rx="0" fill="#ffffff"/>
+  <text x="60" y="180" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">2026-73-033</text>
+  <text x="164" y="180" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">Jet comparison S+</text>
+  <text x="344" y="180" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">Zinser</text>
+  <text x="424" y="180" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">2026-09-20</text>
+  <text x="514" y="180" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">C. Test</text>
+  <text x="594" y="180" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">Backlog</text>
+  <rect x="732" y="168" width="30" height="16" rx="3" fill="#f2f2f2" stroke="#cccccc" stroke-width="1"/>
+  <text x="747" y="180" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">ER</text>
+  <circle cx="676" cy="125" r="11" fill="#2b2b2b"/>
+  <text x="676" y="129" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">5</text>
+  <text x="56" y="214" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start" font-style="italic">{{hint_open}}</text>
+  <text x="56" y="234" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start" font-style="italic">{{hint_sort}}</text>
+</svg>

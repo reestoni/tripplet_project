@@ -367,6 +367,12 @@ class AllExperimentsScreen(QWidget):
         chead_title.setStyleSheet(
             "color: white; font-weight: bold; font-size: 14px;")
         chead_lay.addWidget(chead_title)
+        # Kontext-Hilfe EN/DE/ES (Nutzerwunsch 2026-10-13, ui/widgets/multilang_help.py) -
+        # bewusst links neben dem Titel: der Screen ist breiter als viele Fenster,
+        # rechtsbuendige Elemente waeren dort nicht sichtbar.
+        from ui.widgets.multilang_help import make_help_button
+        chead_lay.addWidget(make_help_button("How does All Experiments work?", self._open_help))
+        chead_lay.addStretch(1)
         cardlay.addWidget(chead)
 
         # Filter-Buttons
@@ -1550,6 +1556,11 @@ class AllExperimentsScreen(QWidget):
             self.butCopyTS.setEnabled(has_sel)
         except Exception:
             pass
+
+    def _open_help(self):
+        from ui.widgets.multilang_help import show_help
+        from ui.widgets.help_texts_all_experiments import TEXTS
+        show_help(TEXTS, self)
 
     def _on_copy_trialseries(self):
         # Guard

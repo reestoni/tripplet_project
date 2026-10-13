@@ -1512,6 +1512,9 @@ class ManageJetsScreen(QWidget):
         tl.addWidget(self.btn_columns, 0)
         tl.addWidget(self.btn_save, 0)
         tl.addWidget(self.status_label, 0, Qt.AlignVCenter)
+        # Kontext-Hilfe EN/DE/ES (Nutzerwunsch 2026-10-13, ui/widgets/multilang_help.py)
+        from ui.widgets.multilang_help import make_help_button
+        tl.addWidget(make_help_button("How does Manage Jets work?", self._open_help), 0)
 
         self.table = FrozenNColumnsTable(
             freeze_count=2, objectName="JetsTable")
@@ -1699,6 +1702,11 @@ class ManageJetsScreen(QWidget):
         headers = self.model.headers()
         self._jet_search_cols = [i for i, h in enumerate(headers)
                                   if _canon(h) in ("jet", "bemerkungen")]
+
+    def _open_help(self):
+        from ui.widgets.multilang_help import show_help
+        from ui.widgets.help_texts_manage_jets import TEXTS
+        show_help(TEXTS, self)
 
     def _on_search_changed(self, text: str):
         """Aktualisiert den Proxy-Filter bei Texteingabe im Suchfeld (durchsucht Jet + Bemerkungen)."""
