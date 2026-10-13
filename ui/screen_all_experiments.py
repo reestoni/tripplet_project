@@ -452,6 +452,9 @@ class AllExperimentsScreen(QWidget):
         # Fenstern bis auf wenige Pixel (unlesbar); so kommt dann lieber der
         # horizontale Scrollbalken zurueck.
         self.table.viewport().installEventFilter(self)
+        # Basis fuer die groessenabhaengige Skalierung (siehe _update_scale)
+        self._scale = 1.0
+        self._base_row_h = self.table.verticalHeader().defaultSectionSize()
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         self.table.setMinimumHeight(650)  # +25%
@@ -728,16 +731,7 @@ class AllExperimentsScreen(QWidget):
             self._original_status_ids.append(status_id)
 
         # Spaltenbreiten
-        self.table.resizeColumnToContents(0)
-        self._fit_name_column()
-        self.table.setColumnWidth(2, 120)  # Machine (schmal)
-        self.table.setColumnWidth(3, 160)  # Creation Date
-        self.table.setColumnWidth(4, 110)  # Owner (schmaler)
-        self.table.setColumnWidth(5, 110)  # Status
-        self.table.setColumnWidth(6, 50)  # AM
-        self.table.setColumnWidth(7, 60)  # ER
-        self.table.setColumnWidth(8, 50)  # NT
-        self.table.setColumnWidth(9, 50)  # RE
+        self._apply_column_widths()
 
         # Sortindikator im Header aktualisieren
         header_view = self.table.horizontalHeader()
@@ -1567,6 +1561,47 @@ class AllExperimentsScreen(QWidget):
             pass
 
     _NAME_COL_MIN = 200
+    # Feste Spaltenbreiten bei Massstab 1.0 (Spalte 0 nach Inhalt, Spalte 1 = Rest)
+    _BASE_COL_WIDTHS = {2: 120, 3: 160, 4: 110, 5: 110, 6: 50, 7: 60, 8: 50, 9: 50}
+    # Groessenabhaengige Darstellung (Nutzerwunsch 2026-10-13: "wenn wir genug
+    # Platz haben, mach das ganze etwas groesser"): Massstab 1.0 bei einer
+    # Tabellenbreite wie im 1600-px-Fenster, darueber in 5-%-Schritten bis
+    # max. 1.35. Nie kleiner als bisher.
+    _BASE_FONT_PX = 13          # wie QTableWidget#ExpTable in ui/theme.py
+    _SCALE_REF_WIDTH = 1200
+    _SCALE_MAX = 1.35
+
+    def _apply_column_widths(self) -> None:
+        t = getattr(self, "table", None)
+        if t is None:
+            return
+        sc = getattr(self, "_scale", 1.0)
+        t.resizeColumnToContents(0)
+        for col, w in self._BASE_COL_WIDTHS.items():
+            if col < t.columnCount():
+                t.setColumnWidth(col, int(round(w * sc)))
+        self._fit_name_column()
+
+    def _update_scale(self) -> None:
+        """Passt Schrift, Zeilenhoehe und Spaltenbreiten an die verfuegbare
+        Tabellenbreite an. Die Schrift wird per Widget-Stylesheet gesetzt, weil
+        das globale QSS (QTableWidget#ExpTable, font-size: 13px) setFont() sonst
+        ueberschreibt."""
+        t = getattr(self, "table", None)
+        if t is None or not t.width():
+            return
+        raw = t.width() / self._SCALE_REF_WIDTH
+        new = min(self._SCALE_MAX, max(1.0, round(raw / 0.05) * 0.05))
+        if abs(new - getattr(self, "_scale", 1.0)) < 1e-6:
+            return
+        self._scale = new
+        px = int(round(self._BASE_FONT_PX * new))
+        t.setStyleSheet(
+            f"QTableWidget#ExpTable {{ font-size: {px}px; }}"
+            f"QHeaderView::section {{ font-size: {px}px; }}"
+            f"QComboBox {{ font-size: {px}px; }}")
+        t.verticalHeader().setDefaultSectionSize(int(round(self._base_row_h * new)))
+        self._apply_column_widths()
 
     def _fit_name_column(self) -> None:
         """Gibt der Spalte "Trial Series Name" die restliche Breite der Tabelle
@@ -1583,6 +1618,7 @@ class AllExperimentsScreen(QWidget):
         from PySide6.QtCore import QEvent
         t = getattr(self, "table", None)
         if t is not None and obj is t.viewport() and event.type() == QEvent.Resize:
+            self._update_scale()
             self._fit_name_column()
         return super().eventFilter(obj, event)
 
