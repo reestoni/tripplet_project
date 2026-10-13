@@ -136,8 +136,9 @@ def get_superuser_ids() -> List[int]:
 
 
 def create_yarn_stock_notifications(warnings: List[dict]) -> int:
-    """Erstellt fuer jeden Superuser eine Notification pro Garn/Batch mit
-    Status 'Low' oder 'Empty' - aber nur, wenn dafuer noch KEINE Notification
+    """Erstellt fuer jeden Superuser eine Notification pro Garn (seit
+    2026-10-13; vorher pro Garn/Batch - Aufrufer uebergibt dafuer Charge=None)
+    mit Status 'Low' oder 'Empty' - aber nur, wenn dafuer noch KEINE Notification
     (gelesen ODER ungelesen) mit derselben Message existiert.
 
     Bewusst NICHT mehr "nur ungelesene" (frueherer Bug, siehe CLAUDE.md,
@@ -171,8 +172,12 @@ def create_yarn_stock_notifications(warnings: List[dict]) -> int:
 
     n = 0
     for w in warnings:
-        charge = w.get("Charge") or "–"
-        message = f"{w['Status']} stock: {w['YarnName']} (Batch {charge})"
+        # Seit 2026-10-13 gilt der Status pro Garn (Charge=None -> Meldung ohne
+        # Batch). Der Batch-Zweig bleibt nur fuer eventuelle Altaufrufer.
+        if w.get("Charge") is None:
+            message = f"{w['Status']} stock: {w['YarnName']}"
+        else:
+            message = f"{w['Status']} stock: {w['YarnName']} (Batch {w.get('Charge') or '–'})"
         yarn_id = w.get("YarnID")
         for uid in recipients:
             try:
@@ -208,6 +213,9 @@ def expire_recovered_yarn_stock_notifications(ok_pairs: List[dict]) -> int:
     """Löscht bestehende yarn_stock-Notifications für Garn/Batch-Kombinationen,
     die inzwischen wieder auf Status 'OK' sind.
 
+    Seit 2026-10-13 nicht mehr aufgerufen (Status pro Garn) - ersetzt durch
+    expire_yarn_stock_notifications_for_yarns().
+
     Gegenstück zu create_yarn_stock_notifications()'s "Message existiert schon
     (gelesen oder nicht) -> nicht nochmal anlegen"-Dedup: ohne dieses Aufräumen
     würde ein Garn/Batch, das sich erholt und danach ERNEUT unter den
@@ -241,6 +249,55 @@ def expire_recovered_yarn_stock_notifications(ok_pairs: List[dict]) -> int:
         except Exception as e:
             print(f"[Notification] Yarn-Stock-Expire fehlgeschlagen fuer yarn={yarn_id}: {e}")
     return n
+
+
+def expire_yarn_stock_notifications_for_yarns(yarn_ids: List[int]) -> int:
+    """Loescht ALLE yarn_stock-Notifications der angegebenen Garne (egal
+    welche Batch) - Gegenstueck zu create_yarn_stock_notifications() fuer den
+    Status pro Garn (seit 2026-10-13): Garn wieder 'OK' -> alte Low/Empty-
+    Meldungen weg, damit ein erneutes Unterschreiten wieder meldet.
+    No-op, falls die Payload-Spalten auf der Umgebung fehlen."""
+    if not yarn_ids or not table_exists("tblnotification"):
+        return 0
+    if "payloadyarnid" not in _columns_map("tblnotification"):
+        return 0
+    n = 0
+    for yarn_id in yarn_ids:
+        try:
+            n += _execute(
+                "DELETE FROM tblNotification WHERE NotificationType = 'yarn_stock' "
+                "AND PayloadYarnID = ?",
+                [yarn_id],
+            ) or 0
+        except Exception as e:
+            print(f"[Notification] Yarn-Stock-Expire fehlgeschlagen fuer yarn={yarn_id}: {e}")
+    return n
+
+
+def remove_legacy_batch_yarn_stock_notifications() -> int:
+    """Entfernt yarn_stock-Notifications aus der Zeit vor 2026-10-13, als der
+    Status noch pro Garn/Batch berechnet wurde (erkennbar an gesetzter
+    PayloadCharge bzw. "(Batch ...)" in der Message). Sie wuerden sonst neben
+    den neuen Meldungen pro Garn stehen bleiben. Idempotent - nach der ersten
+    Ausfuehrung findet der DELETE nichts mehr."""
+    if not table_exists("tblnotification"):
+        return 0
+    try:
+        if "payloadcharge" in _columns_map("tblnotification"):
+            # Beide Merkmale pruefen: es gibt Altmeldungen mit "(Batch ...)" in
+            # der Message, aber leerer PayloadCharge (auf dev_local gefunden,
+            # vermutlich vor Einfuehrung der Payload-Spalten entstanden).
+            return _execute(
+                "DELETE FROM tblNotification WHERE NotificationType = 'yarn_stock' "
+                "AND (PayloadCharge IS NOT NULL OR Message LIKE '%(Batch %')"
+            ) or 0
+        return _execute(
+            "DELETE FROM tblNotification WHERE NotificationType = 'yarn_stock' "
+            "AND Message LIKE '%(Batch %'"
+        ) or 0
+    except Exception as e:
+        print(f"[Notification] Legacy-Yarn-Stock-Cleanup fehlgeschlagen: {e}")
+        return 0
 
 
 def create_experiment_request_notification(recipient_user_id: Any, request_id: Any, message: str) -> bool:

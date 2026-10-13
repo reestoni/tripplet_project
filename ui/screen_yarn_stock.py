@@ -16,11 +16,12 @@ Write access (check in/out/adjust) only from app_meta.access_level() >= 2,
 same convention as the rest of the app (see screen_show_experiment.py
 _ctx_is_readonly / screen_all_experiments.py "Keine Schreibrechte").
 """
+import re
 from typing import List, Dict, Optional, Tuple, Any
 from datetime import date, datetime
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QTimer
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QTimer, QSize
+from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QFrame, QPushButton,
     QSizePolicy, QTableView, QTableWidget, QTableWidgetItem, QMessageBox,
@@ -30,12 +31,16 @@ from PySide6.QtWidgets import (
 
 from ui.theme import accent_tint, accent_gridline
 from ui.widgets.footer import FooterBar
+from ui.widgets.yarn_stock_help_dialog import show_yarn_stock_help
+from ui.pathutil import resource_path
 from ui.widgets import sidebar_nav
 from ui.widgets.label_printing import (
     MM, fit_text, wrap_text_lines, draw_qr, generate_label_sheet_pdf,
     load_label_template, save_label_template, PrintLabelsDialog,
 )
-from db.connection import fetch_all, execute, new_global_id, get_columns_map, table_exists
+from db.connection import fetch_all, execute, execute_insert, new_global_id, get_columns_map, table_exists
+from db import yarn_spool_log
+from db.usage_log import log_usage_event
 import app_meta
 
 try:
@@ -75,6 +80,24 @@ def _resolve_field(cands: List[str], cmap: Dict[str, str]) -> Optional[str]:
         if key in cmap:
             return cmap[key]
     return None
+
+
+# Spulennummer am Ende des QR-Inhalts ("...;S:213", siehe _qr_content()).
+# Bewusst tolerant beim Trennzeichen: Handscanner senden meist mit US-Layout,
+# auf CH/DE-Tastaturen kommt ":" dann z.B. als anderes Zeichen an ("SÖ213").
+_QR_SPOOL_RE = re.compile(r"[sS][^0-9A-Za-z]{1,3}#?(\d+)\s*$")
+
+
+def parse_spool_input(text: str) -> Optional[int]:
+    """Spulen-ID aus "Go to spool #"-Eingabe: "213", "#213" oder kompletter
+    QR-Inhalt eines Etiketts ("Y:...;B:...;L:...;S:213", z.B. per Scanner).
+    None, wenn nichts Brauchbares erkannt wird."""
+    raw = (text or "").strip()
+    plain = raw.lstrip("#").strip()
+    if plain.isascii() and plain.isdigit():
+        return int(plain)
+    m = _QR_SPOOL_RE.search(raw)
+    return int(m.group(1)) if m else None
 
 
 def _qr_content(item: Dict) -> str:
@@ -358,6 +381,12 @@ class SpoolTableModel(QAbstractTableModel):
         return bool(self._dirty_weights) or bool(self._dirty_locations) \
             or bool(self._dirty_colours) or bool(self._dirty_producers)
 
+    def clear_pending_changes(self) -> None:
+        self._dirty_weights.clear()
+        self._dirty_locations.clear()
+        self._dirty_colours.clear()
+        self._dirty_producers.clear()
+
 
 class ProducerComboDelegate(QStyledItemDelegate):
     """Dropdown-Editor fuer die Producer-Spalte (Lookup auf tblYarnProducer).
@@ -457,6 +486,62 @@ class UsedInDialog(QDialog):
         root.addWidget(btns)
 
 
+class SpoolHistoryDialog(QDialog):
+    """Aenderungsprotokoll (tblYarnSpoolLog) fuer eine Menge Spulen -
+    wer hat wann was von welchem auf welchen Wert geaendert."""
+
+    def __init__(self, spool_ids: List[int], title: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Spool history")
+        self.setMinimumSize(760, 400)
+        root = QVBoxLayout(self)
+        root.addWidget(QLabel(f"<b>{title}</b>"))
+
+        if not yarn_spool_log.log_table_exists():
+            root.addWidget(QLabel("The change history is not available in this database yet."))
+            rows = []
+        else:
+            try:
+                rows = yarn_spool_log.fetch_spool_history(spool_ids)
+            except Exception:
+                rows = []
+            if not rows:
+                root.addWidget(QLabel(
+                    "No changes recorded for these spools. Changes are recorded since the "
+                    "history feature was introduced; older changes are not available."))
+
+        table = QTableWidget(len(rows), 4)
+        table.setHorizontalHeaderLabels(["When", "User", "Spool", "Change"])
+        table.horizontalHeader().setStretchLastSection(True)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        table.setSelectionBehavior(QTableView.SelectRows)
+        for i, r in enumerate(rows):
+            when = r.get("ChangedAt")
+            when_txt = when.strftime("%Y-%m-%d %H:%M") if hasattr(when, "strftime") else str(when or "")
+            vals = [when_txt, str(r.get("Username") or "–"), f"#{r.get('SpoolID')}", self._describe(r)]
+            for c, v in enumerate(vals):
+                table.setItem(i, c, QTableWidgetItem(v))
+        table.resizeColumnsToContents()
+        root.addWidget(table, 1)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Close)
+        btns.rejected.connect(self.accept)
+        btns.button(QDialogButtonBox.Close).clicked.connect(self.accept)
+        root.addWidget(btns)
+
+    @staticmethod
+    def _describe(r: Dict) -> str:
+        action = r.get("Action")
+        if action == yarn_spool_log.CREATED:
+            return f"Created: {r.get('NewValue') or ''}".rstrip(": ")
+        if action == yarn_spool_log.DISCARDED:
+            new = (r.get("NewValue") or "").strip()
+            note = new[len("discarded"):].strip() if new.lower().startswith("discarded") else ""
+            return f"Discarded {note}".strip()
+        return f"{r.get('FieldName') or 'Value'}: {r.get('OldValue') or '–'} → {r.get('NewValue') or '–'}"
+
+
 class NewSpoolDialog(QDialog):
     def __init__(self, yarn_choices: List[Tuple[int, str]], parent=None, preselect_yarn_id=None):
         super().__init__(parent)
@@ -530,6 +615,14 @@ LABEL_QUEUE_TABLE = "tblYarnLabelQueue"
 class YarnStockScreen(QWidget):
     """Yarn stock: overview (yarn x batch) + spool detail."""
 
+    # Overview-Spalten
+    # Status bewusst VOR Locations: die Lagerplatz-Liste ist variabel lang,
+    # Status soll ohne horizontales Scrollen sichtbar bleiben.
+    OV_HEADERS = ["Yarn", "Batch", "Producer", "Spools", "Total (kg)",
+                  "Yarn total (kg)", "Min. stock (kg)", "Status", "Locations"]
+    OV_COL_BATCH, OV_COL_PRODUCER, OV_COL_MINSTOCK = 1, 2, 6
+    OV_NUMERIC_COLS = (3, 4, 5, 6)
+
     YARN_TABLE = "tblYarn"
     SPOOL_TABLE = "tblYarnSpool"
 
@@ -593,14 +686,38 @@ class YarnStockScreen(QWidget):
         goto_hdr = QHBoxLayout()
         goto_hdr.addWidget(QLabel("Go to spool #:"))
         self.txt_goto_spool = QLineEdit()
-        self.txt_goto_spool.setPlaceholderText("e.g. 213")
-        self.txt_goto_spool.setFixedWidth(90)
+        self.txt_goto_spool.setPlaceholderText("213 or scan label")
+        self.txt_goto_spool.setToolTip("Type a spool number or scan the QR code on a spool label.")
+        self.txt_goto_spool.setFixedWidth(130)
         self.txt_goto_spool.returnPressed.connect(self._on_goto_spool)
         goto_hdr.addWidget(self.txt_goto_spool)
         btn_goto_spool = QPushButton("Go", objectName="GreyBtn")
         btn_goto_spool.clicked.connect(self._on_goto_spool)
         goto_hdr.addWidget(btn_goto_spool)
         goto_hdr.addStretch(1)
+
+        # Kontext-Hilfe (Nutzerwunsch 2026-10-13), gleiches Muster/Styling wie
+        # der Hilfe-Button in screen_create_experiment_request.py.
+        self.btn_help = QPushButton()
+        self.btn_help.setCursor(Qt.PointingHandCursor)
+        self.btn_help.setFixedSize(26, 26)
+        self.btn_help.setToolTip("How does Yarn Stock work?")
+        self.btn_help.setStyleSheet(
+            "QPushButton{background:transparent;border:1px solid #39a650;"
+            "border-radius:13px;padding:0;}"
+            "QPushButton:hover{background:#e8f5e9;}"
+        )
+        help_icon = QIcon(resource_path("assets/images/help_tour.png"))
+        if not help_icon.isNull():
+            self.btn_help.setIcon(help_icon)
+            self.btn_help.setIconSize(QSize(16, 16))
+        else:
+            self.btn_help.setText("?")
+            self.btn_help.setStyleSheet(
+                self.btn_help.styleSheet() + "QPushButton{color:#39a650;font-size:14px;font-weight:700;}"
+            )
+        self.btn_help.clicked.connect(lambda: show_yarn_stock_help(self))
+        goto_hdr.addWidget(self.btn_help, 0, Qt.AlignVCenter)
         bl.addLayout(goto_hdr)
 
         # ── Overview ─────────────────────────────────────────────────
@@ -617,16 +734,19 @@ class YarnStockScreen(QWidget):
         self.cmb_status_filter.currentIndexChanged.connect(self._apply_overview_filter)
         ov_hdr.addWidget(self.cmb_status_filter)
         btn_reload = QPushButton("Reload", objectName="GreyBtn")
-        btn_reload.clicked.connect(self.reload_data)
+        btn_reload.clicked.connect(self._on_reload_clicked)
         ov_hdr.addWidget(btn_reload)
         btn_export = QPushButton("Export to Excel", objectName="GreyBtn")
         btn_export.clicked.connect(self._on_export_excel)
         ov_hdr.addWidget(btn_export)
         bl.addLayout(ov_hdr)
 
-        self.tbl_overview = QTableWidget(0, 7)
-        self.tbl_overview.setHorizontalHeaderLabels(
-            ["Yarn", "Batch", "Producer", "Spools", "Total (kg)", "Locations", "Status"])
+        self.tbl_overview = QTableWidget(0, len(self.OV_HEADERS))
+        self.tbl_overview.setHorizontalHeaderLabels(self.OV_HEADERS)
+        self.tbl_overview.horizontalHeaderItem(5).setToolTip(
+            "Sum over all batches of this yarn. The status is based on this value.")
+        self.tbl_overview.horizontalHeaderItem(self.OV_COL_MINSTOCK).setToolTip(
+            "Minimum stock of the yarn (all batches together). Editable by superusers (double-click).")
         self.tbl_overview.horizontalHeader().setStretchLastSection(True)
         self.tbl_overview.verticalHeader().setVisible(False)
         self.tbl_overview.setSelectionBehavior(QTableView.SelectRows)
@@ -675,6 +795,11 @@ class YarnStockScreen(QWidget):
         self.btn_new_producer.clicked.connect(self._on_new_producer)
         self.btn_used_in = QPushButton("Used in…", objectName="GreyBtn")
         self.btn_used_in.clicked.connect(self._on_used_in)
+        self.btn_history = QPushButton("History…", objectName="GreyBtn")
+        self.btn_history.setToolTip(
+            "Change history of the ticked/selected spools, or of the whole batch "
+            "(including discarded spools) if none is ticked or selected.")
+        self.btn_history.clicked.connect(self._on_history)
         self.btn_add_to_queue = QPushButton("Add to label queue", objectName="GreyBtn")
         self.btn_add_to_queue.clicked.connect(self._on_add_to_label_queue)
         self.btn_discard = QPushButton("Discard", objectName="GreyBtn")
@@ -685,6 +810,7 @@ class YarnStockScreen(QWidget):
         det_hdr.addWidget(self.btn_new_spool)
         det_hdr.addWidget(self.btn_new_producer)
         det_hdr.addWidget(self.btn_used_in)
+        det_hdr.addWidget(self.btn_history)
         det_hdr.addWidget(self.btn_add_to_queue)
         det_hdr.addWidget(self.btn_discard)
         det_hdr.addWidget(self.btn_save)
@@ -771,6 +897,12 @@ class YarnStockScreen(QWidget):
         self.txt_rack.textChanged.connect(self._apply_rack_filter)
         rack_hdr.addWidget(self.txt_rack)
         rack_hdr.addStretch(1)
+        self.btn_stock_take = QPushButton("Start stock take…", objectName="GreenBtn")
+        self.btn_stock_take.setToolTip(
+            "Compare a rack or slot with what is physically there: scan the spools, "
+            "fix differences, and handle missing spools.")
+        self.btn_stock_take.clicked.connect(self._on_stock_take)
+        rack_hdr.addWidget(self.btn_stock_take)
         btn_rack_export = QPushButton("Export to Excel", objectName="GreyBtn")
         btn_rack_export.clicked.connect(self._on_export_rack_excel)
         rack_hdr.addWidget(btn_rack_export)
@@ -823,6 +955,8 @@ class YarnStockScreen(QWidget):
             self.btn_save.setEnabled(False)
             self.btn_remove_from_queue.setEnabled(False)
             self.btn_print_labels.setEnabled(False)
+            self.btn_stock_take.setEnabled(False)
+            self.btn_stock_take.setToolTip("No write access (read-only).")
             self.btn_new_spool.setToolTip("No write access (read-only).")
             self.btn_new_producer.setToolTip("No write access (read-only).")
             self.btn_add_to_queue.setToolTip("No write access (read-only).")
@@ -932,31 +1066,52 @@ class YarnStockScreen(QWidget):
         self._yarn_name_map = yarn_name_map
         self._yarn_minstock_map = yarn_minstock_map
 
+        # Status gilt PRO GARN (Summe ueber alle Batches), nicht pro Batch
+        # (Nutzerentscheid 2026-10-13, "muss global in TrippleT so sein").
+        yarn_total_kg: Dict[int, float] = {}
+        for (yid, _charge), spools in groups.items():
+            yarn_total_kg[yid] = yarn_total_kg.get(yid, 0.0) + sum(
+                float(s.get("WeightKg") or 0) for s in spools if s.get("Status") == "in stock")
+        yarn_status: Dict[int, str] = {}
+        for yid, ykg in yarn_total_kg.items():
+            ms = yarn_minstock_map.get(yid)
+            if ykg <= 0:
+                yarn_status[yid] = "Empty"
+            elif ms is not None and ykg < ms:
+                yarn_status[yid] = "Low"
+            else:
+                yarn_status[yid] = "OK"
+        status_color = {"Empty": "#FCEBEB", "Low": "#FAEEDA", "OK": "#EAF3DE"}
+        self._yarn_status = yarn_status
+        self._yarn_total_kg = yarn_total_kg
+
         self._overview = []
         for (yid, charge), spools in sorted(
                 groups.items(), key=lambda kv: (yarn_name_map.get(kv[0][0], ""), kv[0][1])):
             active = [s for s in spools if s.get("Status") == "in stock"]
+            if not active:
+                # Aufgebrauchte Batch (keine Spule mehr am Lager) - nicht anzeigen
+                # (Nutzerentscheid 2026-10-13). Ein komplett leeres Garn
+                # verschwindet damit ganz aus der Uebersicht; Hinweis kommt dann
+                # nur noch ueber die Glocke und Manage Yarn (0 kg).
+                continue
             total_kg = sum(float(s.get("WeightKg") or 0) for s in active)
-            min_stock = yarn_minstock_map.get(yid)
             locations = sorted({(s.get("Location") or "").strip() for s in active if s.get("Location")})
             locations_disp = " / ".join(locations) if locations else "–"
             producer_ids = sorted({int(s["ProducerID"]) for s in active if s.get("ProducerID")})
             producers_disp = " / ".join(
                 self._producer_map.get(pid, f"#{pid}") for pid in producer_ids) if producer_ids else "–"
-            if total_kg <= 0:
-                status, color = "Empty", "#FCEBEB"
-            elif min_stock is not None and total_kg < min_stock:
-                status, color = "Low", "#FAEEDA"
-            else:
-                status, color = "OK", "#EAF3DE"
+            status = yarn_status[yid]
             self._overview.append({
                 "YarnID": yid, "Charge": charge,
                 "YarnName": yarn_name_map.get(yid, f"Yarn {yid}"),
                 "Count": len(active), "TotalKg": total_kg,
+                "YarnTotalKg": yarn_total_kg[yid],
+                "MinStock": yarn_minstock_map.get(yid),
                 "Locations": locations_disp,
                 "Producers": producers_disp,
                 "ProducerIDs": set(producer_ids),
-                "Status": status, "Color": color,
+                "Status": status, "Color": status_color[status],
             })
 
         prev_selected = self._selected_group
@@ -983,6 +1138,12 @@ class YarnStockScreen(QWidget):
 
         if not restored:
             self._selected_group = None
+            # Auch die sichtbare Markierung aufheben - sonst bleibt die Zeile
+            # optisch selektiert, ein spaeteres selectRow() auf dieselbe Zeile
+            # loest kein itemSelectionChanged aus und der Spools-Bereich bliebe leer.
+            self.tbl_overview.blockSignals(True)
+            self.tbl_overview.clearSelection()
+            self.tbl_overview.blockSignals(False)
             self._render_detail([])
             self.lbl_detail_title.setText("<b>Spools</b> — select yarn/batch above")
 
@@ -990,25 +1151,28 @@ class YarnStockScreen(QWidget):
         self._apply_rack_filter()
 
         try:
-            low_or_empty = [g for g in self._overview if g["Status"] in ("Low", "Empty")]
-            ok_now = [g for g in self._overview if g["Status"] == "OK"]
             from ui.notifications import (
                 create_yarn_stock_notifications,
-                expire_recovered_yarn_stock_notifications,
+                expire_yarn_stock_notifications_for_yarns,
+                remove_legacy_batch_yarn_stock_notifications,
             )
+            # Einmalige Umstellung: alte Meldungen pro Garn/Batch (vor
+            # 2026-10-13) entfernen - ab jetzt gibt es eine Meldung pro Garn.
+            remove_legacy_batch_yarn_stock_notifications()
+            low_or_empty = [yid for yid, st in yarn_status.items() if st in ("Low", "Empty")]
+            ok_now = [yid for yid, st in yarn_status.items() if st == "OK"]
             if low_or_empty:
                 create_yarn_stock_notifications([
-                    {"YarnID": g["YarnID"], "YarnName": g["YarnName"], "Charge": g["Charge"], "Status": g["Status"]}
-                    for g in low_or_empty
+                    {"YarnID": yid, "YarnName": yarn_name_map.get(yid, f"Yarn {yid}"),
+                     "Charge": None, "Status": yarn_status[yid]}
+                    for yid in low_or_empty
                 ])
             if ok_now:
-                # Räumt Notifications für inzwischen wieder aufgefüllte
-                # Garn/Batch-Kombinationen weg, sonst würde ein erneuter
-                # Rückgang unter den Schwellwert nie wieder benachrichtigen
-                # (siehe expire_recovered_yarn_stock_notifications()).
-                expire_recovered_yarn_stock_notifications([
-                    {"YarnID": g["YarnID"], "Charge": g["Charge"]} for g in ok_now
-                ])
+                # Räumt Notifications für inzwischen wieder aufgefüllte Garne
+                # weg, sonst würde ein erneuter Rückgang unter den Schwellwert
+                # nie wieder benachrichtigen (Dedup über die Message, siehe
+                # create_yarn_stock_notifications()).
+                expire_yarn_stock_notifications_for_yarns(ok_now)
         except Exception:
             pass  # Notification-Feature ist optional, darf reload_data nie blockieren
 
@@ -1027,21 +1191,26 @@ class YarnStockScreen(QWidget):
         self._render_guard = True
         self.tbl_overview.setRowCount(len(self._overview_filtered))
         for r, g in enumerate(self._overview_filtered):
+            ms = g.get("MinStock")
             items = [
                 g["YarnName"], g["Charge"] or "–", g["Producers"],
-                str(g["Count"]), f"{g['TotalKg']:.2f}", g["Locations"], g["Status"],
+                str(g["Count"]), f"{g['TotalKg']:.2f}", f"{g['YarnTotalKg']:.2f}",
+                f"{ms:g}" if ms is not None else "–",
+                g["Status"], g["Locations"],
             ]
             pids = g.get("ProducerIDs") or set()
             single_pid = next(iter(pids)) if len(pids) == 1 else None
+            can_edit_ms = bool(self._yarn_minstock_col) and app_meta.can_edit_min_stock()
             for c, txt in enumerate(items):
                 it = QTableWidgetItem(txt)
-                editable = c in (1, 2) and self._writable
+                editable = ((c in (self.OV_COL_BATCH, self.OV_COL_PRODUCER) and self._writable)
+                            or (c == self.OV_COL_MINSTOCK and can_edit_ms))
                 if not editable:
                     it.setFlags(it.flags() & ~Qt.ItemIsEditable)
-                if c == 2:
+                if c == self.OV_COL_PRODUCER:
                     it.setData(Qt.EditRole, single_pid)
                     it.setData(Qt.DisplayRole, txt)  # EditRole-Write ueberschreibt sonst den Anzeigetext
-                if c in (3, 4):
+                if c in self.OV_NUMERIC_COLS:
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 it.setBackground(QColor(g["Color"]))
                 self.tbl_overview.setItem(r, c, it)
@@ -1166,6 +1335,7 @@ class YarnStockScreen(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Export to Excel", f"Failed to save: {e}")
             return
+        log_usage_event("feature", "yarn_stock_export_excel", "rack")
         QMessageBox.information(self, "Export to Excel", f"Saved to:\n{out_path}")
 
     def _on_group_item_changed(self, item: QTableWidgetItem, filtered_attr: str) -> None:
@@ -1178,6 +1348,9 @@ class YarnStockScreen(QWidget):
         if not self._writable:
             return
         col = item.column()
+        if col == self.OV_COL_MINSTOCK and filtered_attr == "_overview_filtered":
+            self._on_minstock_edited(item)
+            return
         if col not in (1, 2):
             return
         row = item.row()
@@ -1198,6 +1371,9 @@ class YarnStockScreen(QWidget):
         # sonst wird die Tabelle noch waehrend der Delegate-Ausfuehrung neu
         # aufgebaut und der zweite setData-Aufruf (Anzeigetext) laeuft ins Leere.
         self._render_guard = True
+        # Betroffene Spulen (inkl. ausgebuchter) fuers Protokoll VOR dem Update merken
+        affected = [sp for sp in getattr(self, "_all_spools", [])
+                    if int(sp.get("YarnID") or -1) == int(yarn_id) and (sp.get("Charge") or "") == old_charge]
         try:
             if col == 1:
                 new_charge = item.text().strip()
@@ -1208,6 +1384,10 @@ class YarnStockScreen(QWidget):
                     f"WHERE [YarnID] = ? AND ([Charge] = ? OR (? = '' AND ([Charge] IS NULL OR [Charge] = '')))",
                     [new_charge or None, yarn_id, old_charge, old_charge],
                 )
+                if new_charge != old_charge:
+                    yarn_spool_log.log_spool_changes(
+                        {"SpoolID": sp["ID"], "Action": yarn_spool_log.UPDATED, "Field": "Batch",
+                         "Old": old_charge or None, "New": new_charge or None} for sp in affected)
             else:
                 new_pid = item.data(Qt.EditRole)
                 execute(
@@ -1215,8 +1395,54 @@ class YarnStockScreen(QWidget):
                     f"WHERE [YarnID] = ? AND ([Charge] = ? OR (? = '' AND ([Charge] IS NULL OR [Charge] = '')))",
                     [new_pid, yarn_id, old_charge, old_charge],
                 )
+                pmap = getattr(self, "_producer_map", {})
+                yarn_spool_log.log_spool_changes(
+                    {"SpoolID": sp["ID"], "Action": yarn_spool_log.UPDATED, "Field": "Producer",
+                     "Old": pmap.get(sp.get("ProducerID")) if sp.get("ProducerID") else None,
+                     "New": pmap.get(new_pid) if new_pid else None}
+                    for sp in affected if sp.get("ProducerID") != new_pid)
         except Exception as e:
             QMessageBox.critical(self, "Edit", f"Failed to update: {e}")
+        QTimer.singleShot(0, self._finish_group_edit)
+
+    def _on_minstock_edited(self, item: QTableWidgetItem) -> None:
+        """Mindestbestand (tblYarn.MinStock) direkt in der Overview aendern -
+        gilt fuer das ganze Garn (alle Batch-Zeilen). Nur Superuser
+        (app_meta.can_edit_min_stock(), Live-Check statt nur Item-Flags)."""
+        rows = getattr(self, "_overview_filtered", [])
+        if item.row() >= len(rows) or not self._yarn_minstock_col:
+            return
+        g = rows[item.row()]
+        if not app_meta.can_edit_min_stock():
+            QMessageBox.information(self, "Min. stock", "Only superusers can change the minimum stock.")
+            QTimer.singleShot(0, self.reload_data)
+            return
+        raw = (item.text() or "").strip().replace(",", ".")
+        if raw in ("", "–", "-"):
+            new_val = None
+        else:
+            try:
+                new_val = float(raw)
+            except ValueError:
+                new_val = -1.0
+            if new_val < 0:
+                QMessageBox.warning(
+                    self, "Min. stock",
+                    "Please enter a number of kg (0 or more), or leave the field empty for no minimum.")
+                QTimer.singleShot(0, self.reload_data)
+                return
+        if new_val == g.get("MinStock"):
+            return
+        self._render_guard = True
+        try:
+            execute(
+                f"UPDATE {self.YARN_TABLE} SET [{self._yarn_minstock_col}] = ? "
+                f"WHERE [{self._yarn_id_col}] = ?",
+                [new_val, g["YarnID"]],
+            )
+            log_usage_event("feature", "yarn_stock_edit_min_stock")
+        except Exception as e:
+            QMessageBox.critical(self, "Min. stock", f"Failed to update: {e}")
         QTimer.singleShot(0, self._finish_group_edit)
 
     def _finish_group_edit(self) -> None:
@@ -1246,7 +1472,7 @@ class YarnStockScreen(QWidget):
         ws = wb.active
         ws.title = "Yarn Stock"
 
-        headers = ["Yarn", "Batch", "Producer", "Spools", "Total (kg)", "Locations", "Status"]
+        headers = list(self.OV_HEADERS)
         ws.append(headers)
         hdr_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
         for c, cell in enumerate(ws[1], start=1):
@@ -1265,7 +1491,8 @@ class YarnStockScreen(QWidget):
         for g in rows:
             ws.append([
                 g["YarnName"], g["Charge"] or "–", g["Producers"], g["Count"],
-                round(g["TotalKg"], 2), g["Locations"], g["Status"],
+                round(g["TotalKg"], 2), round(g["YarnTotalKg"], 2), g.get("MinStock"),
+                g["Status"], g["Locations"],
             ])
             r = ws.max_row
             fill = status_fill.get(g["Status"])
@@ -1274,10 +1501,10 @@ class YarnStockScreen(QWidget):
                 cell.border = border
                 if fill:
                     cell.fill = fill
-                if c in (4, 5):
+                if c in (4, 5, 6, 7):
                     cell.alignment = Alignment(horizontal="right")
 
-        widths = [30, 16, 20, 10, 12, 24, 10]
+        widths = [30, 16, 20, 10, 12, 14, 14, 10, 24]
         for c, w in enumerate(widths, start=1):
             ws.column_dimensions[chr(64 + c)].width = w
         ws.freeze_panes = "A2"
@@ -1292,6 +1519,7 @@ class YarnStockScreen(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Export to Excel", f"Failed to save: {e}")
             return
+        log_usage_event("feature", "yarn_stock_export_excel", "overview")
         QMessageBox.information(self, "Export to Excel", f"Saved to:\n{out_path}")
 
     def _on_detail_clicked(self, index):
@@ -1338,29 +1566,46 @@ class YarnStockScreen(QWidget):
             (i for i, g in enumerate(self._overview_filtered)
              if g["YarnID"] == yarn_id and (g["Charge"] or "") == charge), None)
         if group_row is None:
+            # Meldungen gelten seit 2026-10-13 pro Garn (ohne Batch) - dann
+            # zur ersten sichtbaren Batch-Zeile dieses Garns springen.
+            group_row = next(
+                (i for i, g in enumerate(self._overview_filtered) if g["YarnID"] == yarn_id), None)
+        if group_row is None:
             return False
 
         self.tbl_overview.selectRow(group_row)
         self.tbl_overview.scrollToItem(self.tbl_overview.item(group_row, 0))
+        g = self._overview_filtered[group_row]
+        if self._selected_group != (g["YarnID"], g["Charge"]):
+            # selectRow() feuert kein Signal, wenn die Zeile schon markiert war
+            self._on_overview_selected()
 
         if not self.detail_content.isVisible():
             self._toggle_detail_section()
         return True
 
     def _on_goto_spool(self):
-        raw = self.txt_goto_spool.text().strip().lstrip("#")
-        if not raw.isdigit():
-            QMessageBox.information(self, "Go to spool", "Please enter a numeric spool ID.")
+        if not self._confirm_pending_changes():
             return
-        spool_id = int(raw)
+        text = self.txt_goto_spool.text()
+        spool_id = parse_spool_input(text)
+        if spool_id is None:
+            QMessageBox.information(
+                self, "Go to spool", "Please enter a spool number (e.g. 213) or scan a spool label.")
+            return
         spool = next((s for s in getattr(self, "_all_spools", []) if s.get("ID") == spool_id), None)
         if spool is None:
             QMessageBox.information(self, "Go to spool", f"Spool #{spool_id} not found.")
             return
         if spool.get("Status") != "in stock":
-            QMessageBox.information(
-                self, "Go to spool",
-                f"Spool #{spool_id} is discarded and no longer shown in the active list.")
+            box = QMessageBox(QMessageBox.Information, "Go to spool",
+                              f"Spool #{spool_id} is discarded and no longer shown in the active list.",
+                              parent=self)
+            btn_hist = box.addButton("Show history", QMessageBox.ActionRole)
+            box.addButton(QMessageBox.Close)
+            box.exec()
+            if box.clickedButton() is btn_hist:
+                self._show_history_for(spool_id)
             return
 
         yarn_id = int(spool.get("YarnID") or -1)
@@ -1380,6 +1625,65 @@ class YarnStockScreen(QWidget):
                 self.tbl_detail.selectRow(spool_row)
                 self.tbl_detail.scrollTo(idx)
 
+        # Eingabe markiert lassen: der naechste Scan/Tippvorgang ersetzt sie,
+        # statt an die alte Nummer angehaengt zu werden.
+        self.txt_goto_spool.setFocus()
+        self.txt_goto_spool.selectAll()
+        log_usage_event("feature", "yarn_stock_goto_spool",
+                        "number" if text.strip().lstrip("#").strip().isdigit() else "label_scan")
+
+    def _ask_pending_changes(self) -> Optional[str]:
+        """Fragt bei ungespeicherten Aenderungen im Spools-Bereich nach.
+        Rueckgabe "save" / "discard" / "cancel", oder None wenn nichts offen ist."""
+        m = self.model_detail
+        if m is None or not self._writable or not m.has_pending_changes():
+            return None
+        resp = QMessageBox.question(
+            self, "Unsaved changes",
+            "You have unsaved changes in the spool list.\nSave them before continuing?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Save)
+        if resp == QMessageBox.Save:
+            return "save"
+        if resp == QMessageBox.Discard:
+            return "discard"
+        return "cancel"
+
+    def _confirm_pending_changes(self) -> bool:
+        """Guard fuer Aktionen, die den Spools-Bereich neu aufbauen (Reload,
+        New spool(s), Discard, Go to spool). True = Aktion darf weiterlaufen."""
+        choice = self._ask_pending_changes()
+        if choice is None:
+            return True
+        if choice == "cancel":
+            return False
+        if choice == "save":
+            if self._write_pending_changes() is None:
+                return False
+            self.reload_data()
+        else:
+            self.model_detail.clear_pending_changes()
+        return True
+
+    def _reselect_overview_group(self, group: Optional[Tuple[int, str]]) -> None:
+        """Waehlt `group` in der Overview aus, OHNE _on_overview_selected
+        auszuloesen (fuer "Cancel" bei ungespeicherten Aenderungen)."""
+        self.tbl_overview.blockSignals(True)
+        try:
+            self.tbl_overview.clearSelection()
+            if group is not None:
+                row_idx = next(
+                    (i for i, g in enumerate(getattr(self, "_overview_filtered", []))
+                     if g["YarnID"] == group[0] and (g["Charge"] or "") == (group[1] or "")),
+                    None)
+                if row_idx is not None:
+                    self.tbl_overview.selectRow(row_idx)
+        finally:
+            self.tbl_overview.blockSignals(False)
+
+    def _on_reload_clicked(self):
+        if self._confirm_pending_changes():
+            self.reload_data()
+
     def _on_overview_selected(self):
         rows = self.tbl_overview.selectionModel().selectedRows()
         if not rows:
@@ -1389,7 +1693,25 @@ class YarnStockScreen(QWidget):
         if idx < 0 or idx >= len(src):
             return
         g = src[idx]
-        self._selected_group = (g["YarnID"], g["Charge"])
+        new_group = (g["YarnID"], g["Charge"])
+        if new_group != self._selected_group:
+            choice = self._ask_pending_changes()
+            if choice == "cancel":
+                self._reselect_overview_group(self._selected_group)
+                return
+            if choice == "save":
+                if self._write_pending_changes() is None:
+                    self._reselect_overview_group(self._selected_group)
+                    return
+                # Frisch laden (Summen/Gewichte), danach die neu gewaehlte
+                # Gruppe wiederherstellen - verzoegert, da wir gerade mitten im
+                # itemSelectionChanged-Handler der Tabelle stecken.
+                self._selected_group = new_group
+                QTimer.singleShot(0, self.reload_data)
+                return
+            if choice == "discard":
+                self.model_detail.clear_pending_changes()
+        self._selected_group = new_group
         spools = [s for s in self._all_spools
                   if int(s.get("YarnID") or -1) == g["YarnID"] and (s.get("Charge") or "") == g["Charge"]
                   and s.get("Status") == "in stock"]
@@ -1415,17 +1737,61 @@ class YarnStockScreen(QWidget):
     def _on_used_in(self):
         if self.model_detail is None:
             return
-        sel_rows = self.tbl_detail.selectionModel().selectedRows()
-        if not sel_rows:
-            QMessageBox.information(self, "Used in", "Please select at least one spool row.")
+        spool_ids = self._ticked_or_selected_spool_ids()
+        if not spool_ids:
+            QMessageBox.information(self, "Used in", "Please tick or select at least one spool.")
             return
-        spool_ids = []
-        for idx in sel_rows:
-            r = idx.row()
-            if 0 <= r < len(self.model_detail._rows):
-                spool_ids.append(self.model_detail._rows[r]["ID"])
+        log_usage_event("feature", "yarn_stock_used_in", str(len(spool_ids)))
         dlg = UsedInDialog(spool_ids, parent=self)
         dlg.exec()
+
+    def _ticked_or_selected_spool_ids(self) -> List[int]:
+        """Angehakte UND markierte Spulen (Discard/Label queue arbeiten mit
+        Haekchen - Used in/History sollen sich nicht anders verhalten)."""
+        if self.model_detail is None:
+            return []
+        spool_ids = list(self.model_detail.checked_spool_ids())
+        for idx in self.tbl_detail.selectionModel().selectedRows():
+            r = idx.row()
+            if 0 <= r < len(self.model_detail._rows):
+                sid = self.model_detail._rows[r]["ID"]
+                if sid not in spool_ids:
+                    spool_ids.append(sid)
+        return spool_ids
+
+    def _on_history(self):
+        spool_ids = self._ticked_or_selected_spool_ids()
+        if spool_ids:
+            title = "Spool(s) " + ", ".join(f"#{i}" for i in spool_ids)
+        elif self._selected_group is not None:
+            # Ganze Batch inkl. ausgebuchter Spulen - so laesst sich auch
+            # "wer hat das ausgebucht?" beantworten.
+            yid, charge = self._selected_group
+            spool_ids = [int(s["ID"]) for s in getattr(self, "_all_spools", [])
+                         if int(s.get("YarnID") or -1) == yid and (s.get("Charge") or "") == (charge or "")]
+            title = (f"{self._yarn_name_map.get(yid, f'Yarn {yid}')} / {charge or '(no batch)'} "
+                     f"— all spools incl. discarded")
+        else:
+            QMessageBox.information(self, "History", "Please select a yarn/batch or spools first.")
+            return
+        log_usage_event("feature", "yarn_stock_history", str(len(spool_ids)))
+        SpoolHistoryDialog(spool_ids, title, parent=self).exec()
+
+    def _on_stock_take(self):
+        if not self._writable:
+            return
+        if not self._confirm_pending_changes():
+            return
+        self.reload_data()  # frischer Stand als Soll-Liste
+        from ui.widgets.stock_take_dialog import StockTakeDialog
+        dlg = StockTakeDialog(getattr(self, "_all_spools", []), getattr(self, "_yarn_name_map", {}),
+                              location_prefix=self.txt_rack.text(), parent=self)
+        dlg.exec()
+        if dlg.changed:
+            self.reload_data()
+
+    def _show_history_for(self, spool_id: int) -> None:
+        SpoolHistoryDialog([spool_id], f"Spool #{spool_id}", parent=self).exec()
 
     def _on_new_producer(self):
         if not self._writable:
@@ -1446,14 +1812,26 @@ class YarnStockScreen(QWidget):
     def _on_new_spool(self):
         if not self._writable:
             return
-        preselect = self._selected_group[0] if self._selected_group else None
+        if not self._confirm_pending_changes():
+            return
+        prev_group = self._selected_group
+        preselect = prev_group[0] if prev_group else None
         dlg = NewSpoolDialog(self._yarn_choices, self, preselect_yarn_id=preselect)
-        if self._selected_group and self._selected_group[1]:
-            dlg.txt_charge.setText(self._selected_group[1])
+        if prev_group and prev_group[1]:
+            dlg.txt_charge.setText(prev_group[1])
+
+        # Nutzerwunsch 2026-10-13: waehrend des Anlegens keine Overview-Auswahl,
+        # Spools-Bereich leer - nach Erfolg springt die Auswahl auf das Garn/
+        # die Batch der neuen Spulen (siehe unten). Vorbelegung oben nutzt
+        # bewusst noch die alte Auswahl (prev_group).
+        self._clear_overview_selection()
+
         if dlg.exec() != QDialog.Accepted:
+            self._restore_overview_selection(prev_group)
             return
         vals = dlg.values()
         if vals["YarnID"] is None:
+            self._restore_overview_selection(prev_group)
             return
         user_id = _current_user_id()
         today = date.today().isoformat()
@@ -1469,17 +1847,60 @@ class YarnStockScreen(QWidget):
             base_vals.append(vals.get("ProducerID"))
         cols.append("GlobalID")
         ph = ",".join(["?"] * len(cols))
+        inserted = 0
+        new_ids: List[int] = []
         try:
             for _ in range(vals["Count"]):
-                execute(
+                new_id = execute_insert(
                     f"INSERT INTO {self.SPOOL_TABLE} ({','.join('['+c+']' for c in cols)}) "
                     f"VALUES ({ph})",
                     base_vals + [new_global_id()],
                 )
+                inserted += 1
+                if new_id:
+                    new_ids.append(int(new_id))
         except Exception as e:
             QMessageBox.critical(self, "New spool(s)", f"Failed to create: {e}")
-            return
+            if inserted == 0:
+                self._restore_overview_selection(prev_group)
+                return
+            # Teilweise angelegt: trotzdem neu laden und zur Gruppe springen,
+            # damit die bereits angelegten Spulen sichtbar sind.
+        log_usage_event("feature", "yarn_stock_new_spools", str(inserted))
+        summary = (f"{float(vals['WeightKg']):.2f} kg, location {vals['Location'] or '–'}, "
+                   f"batch {vals['Charge'] or '–'}")
+        yarn_spool_log.log_spool_changes(
+            {"SpoolID": sid, "Action": yarn_spool_log.CREATED, "New": summary} for sid in new_ids)
         self.reload_data()
+        if self.goto_yarn_batch(int(vals["YarnID"]), vals["Charge"] or ""):
+            # Detailtabelle explizit fuellen (Signal feuert nach dem Rebuild
+            # nicht zuverlaessig, siehe reload_data()).
+            self._on_overview_selected()
+            self.tbl_overview.setFocus()
+
+    def _clear_overview_selection(self) -> None:
+        """Hebt die Auswahl in der Overview auf und leert den Spools-Bereich."""
+        self.tbl_overview.clearSelection()
+        self._selected_group = None
+        self._render_detail([])
+        self.lbl_detail_title.setText("<b>Spools</b> — select yarn/batch above")
+
+    def _restore_overview_selection(self, group: Optional[Tuple[int, str]]) -> None:
+        """Waehlt `group` (YarnID, Charge) in der Overview wieder aus, sofern es
+        im aktuell gefilterten Stand sichtbar ist - Filter bleiben unangetastet."""
+        if group is None:
+            return
+        yarn_id, charge = group
+        row_idx = next(
+            (i for i, g in enumerate(getattr(self, "_overview_filtered", []))
+             if g["YarnID"] == yarn_id and (g["Charge"] or "") == (charge or "")),
+            None,
+        )
+        if row_idx is None:
+            return
+        self.tbl_overview.selectRow(row_idx)
+        self.tbl_overview.scrollToItem(self.tbl_overview.item(row_idx, 0))
+        self._on_overview_selected()
 
     def _on_discard(self):
         if not self._writable or self.model_detail is None:
@@ -1487,6 +1908,9 @@ class YarnStockScreen(QWidget):
         ids = self.model_detail.checked_spool_ids()
         if not ids:
             QMessageBox.information(self, "Discard", "Please check at least one spool.")
+            return
+        # ids vorher gemerkt: ein "Save" im Guard laedt neu und verwirft die Haekchen.
+        if not self._confirm_pending_changes():
             return
         resp = QMessageBox.question(
             self, "Discard",
@@ -1506,19 +1930,33 @@ class YarnStockScreen(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Discard", f"Failed to discard: {e}")
             return
+        log_usage_event("feature", "yarn_stock_discard", str(n))
+        yarn_spool_log.log_spool_changes(
+            {"SpoolID": sid, "Action": yarn_spool_log.DISCARDED, "Field": "Status",
+             "Old": "in stock", "New": "discarded"} for sid in ids)
         QMessageBox.information(self, "Discard", f"{n} spool(s) discarded.")
         self.reload_data()
 
     def _on_save(self):
         if not self._writable or self.model_detail is None:
             return
+        if not self.model_detail.has_pending_changes():
+            QMessageBox.information(self, "Save Changes", "No changes.")
+            return
+        n = self._write_pending_changes()
+        if n is None:
+            return
+        QMessageBox.information(self, "Save Changes", f"{n} spool(s) updated.")
+        self.reload_data()
+
+    def _write_pending_changes(self) -> Optional[int]:
+        """Schreibt die offenen Aenderungen des Spools-Bereichs in die DB.
+        Anzahl geaenderter Felder, oder None bei Fehler (Meldung bereits gezeigt).
+        Laedt NICHT neu - das entscheidet der Aufrufer."""
         weight_updates = self.model_detail.dirty_weight_updates()
         loc_updates = self.model_detail.dirty_location_updates()
         colour_updates = self.model_detail.dirty_colour_updates()
         producer_updates = self.model_detail.dirty_producer_updates()
-        if not (weight_updates or loc_updates or colour_updates or producer_updates):
-            QMessageBox.information(self, "Save Changes", "No changes.")
-            return
         n = 0
         try:
             for sid, w in weight_updates.items():
@@ -1543,9 +1981,41 @@ class YarnStockScreen(QWidget):
                 )
         except Exception as e:
             QMessageBox.critical(self, "Save Changes", f"Failed to save: {e}")
-            return
-        QMessageBox.information(self, "Save Changes", f"{n} spool(s) updated.")
-        self.reload_data()
+            return None
+        self._log_pending_changes(weight_updates, loc_updates, colour_updates, producer_updates)
+        self.model_detail.clear_pending_changes()
+        log_usage_event("feature", "yarn_stock_save_changes", str(n))
+        return n
+
+    def _log_pending_changes(self, weight_updates, loc_updates, colour_updates, producer_updates) -> None:
+        """Protokolliert gespeicherte Feldaenderungen (nur echte Aenderungen)."""
+        rows_by_id = {r["ID"]: r for r in self.model_detail._rows}
+        pmap = getattr(self, "_producer_map", {})
+        entries = []
+
+        def add(sid, field, old, new):
+            if (old or None) == (new or None):
+                return
+            entries.append({"SpoolID": sid, "Action": yarn_spool_log.UPDATED,
+                            "Field": field, "Old": old, "New": new})
+
+        for sid, w in weight_updates.items():
+            old = rows_by_id.get(sid, {}).get("WeightKg")
+            old_f = float(old) if old is not None else None
+            if old_f is None or abs(old_f - float(w)) > 1e-9:
+                entries.append({"SpoolID": sid, "Action": yarn_spool_log.UPDATED,
+                                "Field": "Weight (kg)", "Old": old_f, "New": float(w)})
+        for sid, loc in loc_updates.items():
+            add(sid, "Location", rows_by_id.get(sid, {}).get("Location"), loc)
+        for sid, col in colour_updates.items():
+            add(sid, "Tube Colour", rows_by_id.get(sid, {}).get("Colour"), col)
+        for sid, pid in producer_updates.items():
+            old_pid = rows_by_id.get(sid, {}).get("ProducerID")
+            if old_pid != pid:
+                entries.append({"SpoolID": sid, "Action": yarn_spool_log.UPDATED, "Field": "Producer",
+                                "Old": pmap.get(old_pid) if old_pid else None,
+                                "New": pmap.get(pid) if pid else None})
+        yarn_spool_log.log_spool_changes(entries)
 
     # ---------------- Label queue ----------------
 
@@ -1605,6 +2075,7 @@ class YarnStockScreen(QWidget):
             QMessageBox.critical(self, "Add to label queue", f"Failed to add: {e}")
             return
         self._reload_label_queue()
+        log_usage_event("feature", "yarn_stock_add_to_label_queue", str(added))
         QMessageBox.information(self, "Add to label queue", f"{added} spool(s) added to the queue.")
 
     def _on_remove_from_label_queue(self):
@@ -1669,5 +2140,6 @@ class YarnStockScreen(QWidget):
         msg = f"{placed} label(s) written to:\n{out_path}"
         if remaining > 0:
             msg += f"\n\n{remaining} spool(s) didn't fit on the sheet and stay in the queue."
+        log_usage_event("feature", "yarn_stock_print_labels", str(placed))
         QMessageBox.information(self, "Print Labels", msg)
         self._reload_label_queue()

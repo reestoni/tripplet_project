@@ -73,5 +73,13 @@ Basierend auf einer Architektur-/Qualitätsdurchsicht der Codebasis. Priorisieru
   - Der PDF-Import-Teil ist vermutlich NICHT generisch lösbar: jedes Gerät/jeder Hersteller hat ein anderes Report-Layout (siehe `statimat_pdf_parser.py` vs. `itemat_pdf_parser.py` – strukturell komplett unterschiedlich). Ein neuer Parser pro Maschine bleibt wahrscheinlich Handarbeit, egal wie generisch der Rest wird.
   - Empfehlung: zweigeteilt angehen – Tab/DB-Anbindung generisch+admin-konfigurierbar, PDF-Parsing weiterhin als expliziter Code-Baustein pro Maschine (aber mit klarer Schnittstelle, damit er sich einfach andocken lässt).
 
+## Yarn Stock (Stand 2026-10-13, Details in HISTORY.md → "Yarn Stock Ausbau")
+- [x] Hilfe dreisprachig, New-spool-Fokus, QR-Scan, Rückfrage ungespeicherte Änderungen, Used in mit Häkchen, Usage-Events, Status pro Garn, aufgebrauchte Batches ausgeblendet, MinStock-Spalte (nur Superuser), Änderungsprotokoll, Inventur.
+- [ ] Beim Prod-Rollout: Superuser vorwarnen (einmalig neue Meldungen pro Garn), Admins/AdminBox informieren (MinStock nicht mehr änderbar).
+- [ ] Wegnavigieren über die Sidebar bei ungespeicherten Spool-Änderungen fragt nicht nach (kein Abbruch-Haken in der Navigation) – bewusst offen.
+- [ ] `ui/notifications.py::expire_recovered_yarn_stock_notifications()` ungenutzt – entfernen, sobald sicher kein Altaufrufer mehr existiert.
+- Abgelehnt (Nutzerentscheid): Verbrauch beim Anlegen eines Versuchs abfragen/abziehen ("Punkt 8").
+- Mögliche Folgeidee: Verbrauchsauswertung pro Garn/Monat aus `tblYarnSpoolLog` (Gewichtsänderungen) für Bestellmengen.
+
 ## Bekannt, bewusst zurückgestellt
 - DB-Secrets-Setup (Klartext-Fallback `db_secrets.json`, gebündelter Fernet-Key) – laut vorheriger Entscheidung unverändert lassen, kein Handlungsbedarf hier.

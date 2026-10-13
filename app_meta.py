@@ -78,6 +78,15 @@ def is_superuser_level() -> bool:
     return access_level() >= 4
 
 
+def can_edit_min_stock() -> bool:
+    """Darf der Benutzer den Mindestbestand (tblYarn.MinStock) aendern?
+
+    Einzige Quelle fuer diese Regel (Manage Yarn, New/Edit Yarn, Yarn Stock).
+    Seit 2026-10-13 nur Superuser (Nutzerentscheid) - vorher can_use_admin_box(),
+    also auch Admins (Level 3) und AdminBox-Nutzer."""
+    return is_superuser_level()
+
+
 # ---------------------------------------------------------------------------
 # Globaler Quick-Search-Callback
 # ---------------------------------------------------------------------------

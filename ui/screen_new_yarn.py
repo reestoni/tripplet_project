@@ -16,7 +16,8 @@ kennt den Unterschied nicht.
 MinStock ist separat sperrbar (set_minstock_locked) statt das ganze Formular
 read-only zu machen: AdminBox=0-User dürfen laut Anforderung alles ausser
 MinStock und Löschen bearbeiten - anders als bei Jets/Top Plates, wo Read-only
-alles-oder-nichts ist.
+alles-oder-nichts ist. MinStock selbst ist seit 2026-10-13 nur fuer Superuser
+editierbar (app_meta.can_edit_min_stock()).
 """
 
 from typing import List, Dict, Optional, Callable, Set

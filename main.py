@@ -2504,7 +2504,7 @@ class MainWindow(QMainWindow):
                 self.stack.addWidget(self.manage_yarn)
             self.setWindowTitle("TrippleT – Manage Yarn")
             full = app_meta.can_use_admin_box()
-            self.manage_yarn.set_permissions(can_delete=full, can_edit_minstock=full)
+            self.manage_yarn.set_permissions(can_delete=full, can_edit_minstock=app_meta.can_edit_min_stock())
             self.stack.setCurrentWidget(self.manage_yarn)
         except Exception as e:
             QMessageBox.critical(self, "Manage Yarn",
@@ -2514,7 +2514,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("TrippleT – Manage Yarn")
         if hasattr(self, 'manage_yarn') and self.manage_yarn is not None:
             full = app_meta.can_use_admin_box()
-            self.manage_yarn.set_permissions(can_delete=full, can_edit_minstock=full)
+            self.manage_yarn.set_permissions(can_delete=full, can_edit_minstock=app_meta.can_edit_min_stock())
             self.stack.setCurrentWidget(self.manage_yarn)
         else:
             self._go_add_yarn()
@@ -2584,7 +2584,7 @@ class MainWindow(QMainWindow):
             return
 
         def _create_save(data: Dict) -> Optional[int]:
-            if not app_meta.can_use_admin_box():
+            if not app_meta.can_edit_min_stock():
                 data = {k: v for k, v in data.items() if k.lower() != "minstock"}
             # Gleicher Duplicate-Check wie beim Bearbeiten (exclude_id=None,
             # da der Datensatz noch gar nicht existiert).
@@ -2629,7 +2629,7 @@ class MainWindow(QMainWindow):
             self.new_yarn._on_save = _create_save
             self.new_yarn._on_created = _on_created
             self.new_yarn.load_from_row({})  # alle Felder auf blank/leer zuruecksetzen
-            self.new_yarn.set_minstock_locked(not app_meta.can_use_admin_box())
+            self.new_yarn.set_minstock_locked(not app_meta.can_edit_min_stock())
             self.new_yarn.set_audit_fields_visible(app_meta.is_superuser_level())
         except Exception:
             pass
@@ -2639,8 +2639,9 @@ class MainWindow(QMainWindow):
 
     def _go_edit_yarn_form(self, row: Dict):
         """Öffnet den NewYarnScreen für einen bestehenden Yarn-Datensatz (Formular-
-        Ansicht statt Pivot-Tabelle). MinStock bleibt für AdminBox=0-User gesperrt,
-        alles andere ist editierbar - siehe screen_new_yarn.NewYarnScreen."""
+        Ansicht statt Pivot-Tabelle). MinStock nur fuer Superuser editierbar
+        (app_meta.can_edit_min_stock()), alles andere ist editierbar - siehe
+        screen_new_yarn.NewYarnScreen."""
         if not self._ensure_new_yarn_screen():
             QMessageBox.information(
                 self, "Yarn", "'Edit in Form' ist derzeit nicht verfügbar.")
@@ -2652,7 +2653,7 @@ class MainWindow(QMainWindow):
             # Defense-in-depth: NewYarnScreen already strips MinStock from data
             # when locked, but re-check live here too rather than trust the
             # form's cached lock state alone.
-            if not app_meta.can_use_admin_box():
+            if not app_meta.can_edit_min_stock():
                 data = {k: v for k, v in data.items() if k.lower() != "minstock"}
             # Duplicate-Check vor dem Schreiben (Nutzerwunsch: "bei jedem
             # speichern/aktualisieren geprüft werden") - None signalisiert
@@ -2682,7 +2683,7 @@ class MainWindow(QMainWindow):
             self.new_yarn._on_save = _update_save
             self.new_yarn._on_created = _on_saved
             self.new_yarn.load_from_row(row)
-            self.new_yarn.set_minstock_locked(not app_meta.can_use_admin_box())
+            self.new_yarn.set_minstock_locked(not app_meta.can_edit_min_stock())
             self.new_yarn.set_audit_fields_visible(app_meta.is_superuser_level())
         except Exception:
             pass
@@ -2721,10 +2722,13 @@ class MainWindow(QMainWindow):
             if hasattr(self, "yarn_stock") and self.yarn_stock is not None:
                 found = self.yarn_stock.goto_yarn_batch(yarn_id, charge)
                 if not found:
+                    # Komplett aufgebrauchte Garne sind in Yarn Stock seit
+                    # 2026-10-13 bewusst ausgeblendet (keine Batch-Zeile mehr).
                     QMessageBox.information(
                         self, "Yarn Stock",
-                        "Diese Garn/Batch-Kombination wurde nicht gefunden "
-                        "(evtl. inzwischen aufgefüllt oder Batch geändert)."
+                        "No spools of this yarn are in stock at the moment, so it is not "
+                        "listed in Yarn Stock.\nAll yarns, including those without stock, "
+                        "are listed in Manage Yarn."
                     )
         except Exception as e:
             QMessageBox.critical(self, "Yarn Stock", f"Fehler beim Springen: {e}")

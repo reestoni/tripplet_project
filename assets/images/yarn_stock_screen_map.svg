@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 470" width="940" height="470">
+  <!-- Schematic map of the Yarn Stock screen (Yarn Stock help, "Screen guide" tab).
+       Plain SVG Tiny shapes only so QSvgWidget renders it. {{key}} placeholders are filled per
+       language (yarn_stock_help_texts.py). Keep in sync with
+       YarnStockScreen._build_ui() when the layout changes. -->
+  <rect x="0" y="0" width="940" height="470" fill="#ffffff"/>
+  <rect x="40" y="6" width="890" height="458" rx="8" fill="#f4f4f4" stroke="#cccccc"/>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="12">
+    <!-- A: Go to spool -->
+    <circle cx="20" cy="30" r="12" fill="#2b2b2b"/>
+    <text x="20" y="34" text-anchor="middle" fill="#ffffff" font-weight="bold">A</text>
+    <text x="56" y="34" fill="#2b2b2b">Go to spool #:</text>
+    <rect x="140" y="20" width="60" height="22" rx="3" fill="#ffffff" stroke="#999999"/>
+    <text x="148" y="35" fill="#999999">213</text>
+    <rect x="208" y="20" width="36" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/>
+    <text x="226" y="35" text-anchor="middle" fill="#2b2b2b">Go</text>
+    <circle cx="912" cy="31" r="11" fill="#ffffff" stroke="#39a650"/>
+    <text x="912" y="35" text-anchor="middle" fill="#39a650" font-weight="bold">?</text>
+    <text x="894" y="35" text-anchor="end" fill="#565656">{{help}}</text>
+
+    <!-- 1: Overview -->
+    <circle cx="20" cy="70" r="12" fill="#39a650"/>
+    <text x="20" y="74" text-anchor="middle" fill="#ffffff" font-weight="bold">1</text>
+    <text x="56" y="74" fill="#2b2b2b" font-weight="bold">Overview — yarn / batch</text>
+    <rect x="540" y="60" width="130" height="22" rx="3" fill="#ffffff" stroke="#999999"/>
+    <text x="548" y="75" fill="#999999">Search yarn / batch…</text>
+    <rect x="676" y="60" width="92" height="22" rx="3" fill="#ffffff" stroke="#999999"/>
+    <text x="684" y="75" fill="#2b2b2b">All statuses ▾</text>
+    <rect x="774" y="60" width="50" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/>
+    <text x="799" y="75" text-anchor="middle" fill="#2b2b2b">Reload</text>
+    <rect x="830" y="60" width="92" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/>
+    <text x="876" y="75" text-anchor="middle" fill="#2b2b2b">Export to Excel</text>
+
+    <rect x="56" y="90" width="866" height="20" fill="#e9f6e9"/>
+    <text x="64" y="104" fill="#2b2b2b" font-weight="bold">Yarn</text><text x="270" y="104" fill="#2b2b2b" font-weight="bold">Batch</text><text x="330" y="104" fill="#2b2b2b" font-weight="bold">Producer</text><text x="410" y="104" fill="#2b2b2b" font-weight="bold">Spools</text><text x="462" y="104" fill="#2b2b2b" font-weight="bold">Total (kg)</text><text x="532" y="104" fill="#2b2b2b" font-weight="bold">Yarn total</text><text x="620" y="104" fill="#2b2b2b" font-weight="bold">Min. stock</text><text x="700" y="104" fill="#2b2b2b" font-weight="bold">Status</text><text x="760" y="104" fill="#2b2b2b" font-weight="bold">Locations</text>
+    <rect x="56" y="110" width="866" height="20" fill="#b7d6ff"/>
+    <text x="64" y="124" fill="#2b2b2b">PES POY 85/50f36 dtex</text><text x="270" y="124" fill="#2b2b2b">989G</text><text x="410" y="124" fill="#2b2b2b">52</text><text x="462" y="124" fill="#2b2b2b">520.00</text><text x="532" y="124" fill="#2b2b2b">520.00</text><text x="620" y="124" fill="#2b2b2b">50</text><text x="700" y="124" fill="#2b2b2b">OK</text><text x="760" y="124" fill="#2b2b2b">E12 / E13 / F13 …</text>
+    <rect x="56" y="130" width="866" height="20" fill="#FAEEDA"/>
+    <text x="64" y="144" fill="#2b2b2b">PES POY 130/78f36 white</text><text x="270" y="144" fill="#2b2b2b">00L</text><text x="410" y="144" fill="#2b2b2b">12</text><text x="462" y="144" fill="#2b2b2b">84.00</text><text x="532" y="144" fill="#2b2b2b">96.00</text><text x="620" y="144" fill="#2b2b2b">100</text><text x="700" y="144" fill="#2b2b2b">Low</text><text x="760" y="144" fill="#2b2b2b">G51 / G52</text>
+    <rect x="56" y="150" width="866" height="20" fill="#FAEEDA"/>
+    <text x="64" y="164" fill="#2b2b2b">PES POY 130/78f36 white</text><text x="270" y="164" fill="#2b2b2b">03L</text><text x="410" y="164" fill="#2b2b2b">2</text><text x="462" y="164" fill="#2b2b2b">12.00</text><text x="532" y="164" fill="#2b2b2b">96.00</text><text x="620" y="164" fill="#2b2b2b">100</text><text x="700" y="164" fill="#2b2b2b">Low</text><text x="760" y="164" fill="#2b2b2b">G53</text>
+
+    <!-- link: selected row feeds section 2 -->
+    <polyline points="48,120 48,200" fill="none" stroke="#39a650" stroke-width="2" stroke-dasharray="4,3"/>
+    <polygon points="48,208 43,198 53,198" fill="#39a650"/>
+
+    <!-- 2: Spools -->
+    <circle cx="20" cy="200" r="12" fill="#39a650"/>
+    <text x="20" y="204" text-anchor="middle" fill="#ffffff" font-weight="bold">2</text>
+    <text x="56" y="204" fill="#2b2b2b"><tspan font-weight="bold">Spools</tspan> — PES POY 85/50f36 dtex / 989G</text>
+    <g>
+      <rect x="326" y="190" width="56" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/><text x="354" y="205" text-anchor="middle" fill="#2b2b2b">Select all</text>
+      <rect x="386" y="190" width="74" height="22" rx="3" fill="#39a650"/><text x="423" y="205" text-anchor="middle" fill="#ffffff">New spool(s)</text>
+      <rect x="464" y="190" width="86" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/><text x="507" y="205" text-anchor="middle" fill="#2b2b2b">New producer…</text>
+      <rect x="554" y="190" width="54" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/><text x="581" y="205" text-anchor="middle" fill="#2b2b2b">Used in…</text>
+      <rect x="612" y="190" width="54" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/><text x="639" y="205" text-anchor="middle" fill="#2b2b2b">History…</text>
+      <rect x="670" y="190" width="110" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/><text x="725" y="205" text-anchor="middle" fill="#2b2b2b">Add to label queue</text>
+      <rect x="784" y="190" width="50" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/><text x="809" y="205" text-anchor="middle" fill="#2b2b2b">Discard</text>
+      <rect x="838" y="190" width="84" height="22" rx="3" fill="#8e44ad"/><text x="880" y="205" text-anchor="middle" fill="#ffffff">Save Changes</text>
+    </g>
+    <rect x="56" y="220" width="866" height="20" fill="#e9f6e9"/>
+    <rect x="64" y="224" width="11" height="11" rx="2" fill="#ffffff" stroke="#565656"/>
+    <text x="90" y="234" fill="#2b2b2b" font-weight="bold">Spool</text>
+    <text x="150" y="234" fill="#2b2b2b" font-weight="bold">Weight (kg)</text>
+    <text x="240" y="234" fill="#2b2b2b" font-weight="bold">Location</text>
+    <text x="320" y="234" fill="#2b2b2b" font-weight="bold">Tube Colour</text>
+    <text x="420" y="234" fill="#2b2b2b" font-weight="bold">Producer</text>
+    <text x="520" y="234" fill="#2b2b2b" font-weight="bold">Received</text>
+    <text x="620" y="234" fill="#2b2b2b" font-weight="bold">Status</text>
+    <rect x="56" y="240" width="866" height="20" fill="#ffffff"/>
+    <rect x="64" y="244" width="11" height="11" rx="2" fill="#ffffff" stroke="#565656"/><polyline points="66,250 69,253 73,246" fill="none" stroke="#39a650" stroke-width="2"/><text x="90" y="254" fill="#2b2b2b">#213</text><text x="150" y="254" fill="#2b2b2b">10.00</text><text x="240" y="254" fill="#2b2b2b">E12</text><text x="320" y="254" fill="#2b2b2b">white</text><text x="520" y="254" fill="#2b2b2b">2026-09-01</text><text x="620" y="254" fill="#2b2b2b">in stock</text>
+    <rect x="56" y="260" width="866" height="20" fill="#ffffff"/>
+    <rect x="64" y="264" width="11" height="11" rx="2" fill="#ffffff" stroke="#565656"/><text x="90" y="274" fill="#2b2b2b">#214</text><text x="150" y="274" fill="#2b2b2b">7.50</text><text x="240" y="274" fill="#2b2b2b">E12</text><text x="320" y="274" fill="#2b2b2b">white</text><text x="520" y="274" fill="#2b2b2b">2026-09-01</text><text x="620" y="274" fill="#2b2b2b">in stock</text>
+    <text x="64" y="298" fill="#565656" font-style="italic">{{hint}}</text>
+
+    <!-- 3: Label queue -->
+    <circle cx="20" cy="330" r="12" fill="#39a650"/>
+    <text x="20" y="334" text-anchor="middle" fill="#ffffff" font-weight="bold">3</text>
+    <text x="56" y="334" fill="#2b2b2b" font-weight="bold">Label queue</text>
+    <rect x="720" y="320" width="98" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/><text x="769" y="335" text-anchor="middle" fill="#2b2b2b">Remove selected</text>
+    <rect x="824" y="320" width="98" height="22" rx="3" fill="#39a650"/><text x="873" y="335" text-anchor="middle" fill="#ffffff">Print Labels…</text>
+    <rect x="56" y="348" width="866" height="20" fill="#e9f6e9"/>
+    <text x="64" y="362" fill="#2b2b2b" font-weight="bold">Spool</text><text x="140" y="362" fill="#2b2b2b" font-weight="bold">Yarn</text><text x="420" y="362" fill="#2b2b2b" font-weight="bold">Batch</text><text x="520" y="362" fill="#2b2b2b" font-weight="bold">Weight (kg)</text>
+    <rect x="56" y="368" width="866" height="20" fill="#ffffff"/>
+    <text x="64" y="382" fill="#2b2b2b">#213</text><text x="140" y="382" fill="#2b2b2b">PES POY 85/50f36 dtex</text><text x="420" y="382" fill="#2b2b2b">989G</text><text x="520" y="382" fill="#2b2b2b">10.00</text>
+
+    <!-- 4: Rack lookup -->
+    <circle cx="20" cy="414" r="12" fill="#39a650"/>
+    <text x="20" y="418" text-anchor="middle" fill="#ffffff" font-weight="bold">4</text>
+    <text x="56" y="418" fill="#2b2b2b" font-weight="bold">Rack lookup</text>
+    <text x="150" y="418" fill="#2b2b2b">Rack (e.g. "C"):</text>
+    <rect x="246" y="404" width="40" height="22" rx="3" fill="#ffffff" stroke="#999999"/>
+    <text x="256" y="419" fill="#2b2b2b">E</text>
+    <rect x="718" y="404" width="106" height="22" rx="3" fill="#39a650"/><text x="771" y="419" text-anchor="middle" fill="#ffffff">Start stock take…</text>
+    <rect x="830" y="404" width="92" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/>
+    <text x="876" y="419" text-anchor="middle" fill="#2b2b2b">Export to Excel</text>
+    <rect x="56" y="432" width="866" height="20" fill="#ffffff"/>
+    <text x="64" y="446" fill="#2b2b2b">PES POY 85/50f36 dtex</text><text x="330" y="446" fill="#2b2b2b">989G</text><text x="520" y="446" fill="#2b2b2b">18</text><text x="580" y="446" fill="#2b2b2b">180.00</text><text x="670" y="446" fill="#2b2b2b">E12 / E13 / E14</text>
+  </g>
+</svg>

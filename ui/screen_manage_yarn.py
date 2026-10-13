@@ -1270,8 +1270,8 @@ class ManageYarnScreen(QWidget):
         # Defense-in-depth: der Model-Flag-Guard verhindert schon, dass
         # MinStock überhaupt dirty werden kann, aber ein frischer Live-Check
         # hier stellt sicher, dass nie ein MinStock-Wert geschrieben wird,
-        # wenn der eingeloggte User inzwischen keine Admin-Box-Rechte mehr hat.
-        can_edit_minstock = app_meta.can_use_admin_box()
+        # wenn der eingeloggte User dafuer (inzwischen) keine Rechte hat.
+        can_edit_minstock = app_meta.can_edit_min_stock()
         total = 0
         try:
             for r in dirty_rows:
