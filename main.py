@@ -1452,7 +1452,7 @@ class MainWindow(QMainWindow):
 
         # Global Ctrl+F shortcut + app_meta registration
         try:
-            from PySide6.QtGui import QShortcut
+            from PySide6.QtGui import QShortcut, QKeySequence
             self._sc_search = QShortcut(QKeySequence("Ctrl+F"), self)
             self._sc_search.setContext(Qt.ApplicationShortcut)
             self._sc_search.activated.connect(self._open_quick_search)
@@ -1465,11 +1465,12 @@ class MainWindow(QMainWindow):
 
         # Hilfe-Suche: F1 + Sidebar-Eintrag "Help" (ui/widgets/help_search.py)
         try:
-            from PySide6.QtGui import QShortcut
+            # Registrierung zuerst: Sidebar-Eintrag soll auch ohne Shortcut gehen
+            app_meta.open_help_search = self._open_help_search
+            from PySide6.QtGui import QShortcut, QKeySequence
             self._sc_help = QShortcut(QKeySequence("F1"), self)
             self._sc_help.setContext(Qt.ApplicationShortcut)
             self._sc_help.activated.connect(self._open_help_search)
-            app_meta.open_help_search = self._open_help_search
         except Exception:
             pass
 
