@@ -349,7 +349,7 @@ class AllExperimentsScreen(QWidget):
 
         center = QFrame()
         clay = QVBoxLayout(center)
-        clay.setContentsMargins(24, 48, 24, 0)
+        clay.setContentsMargins(24, 48, 24, 24)
         clay.setSpacing(0)
 
         card = QFrame(objectName="Card")
@@ -457,7 +457,8 @@ class AllExperimentsScreen(QWidget):
         self._base_row_h = self.table.verticalHeader().defaultSectionSize()
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
-        self.table.setMinimumHeight(650)  # +25%
+        # Hoehe folgt dem Fenster (Nutzerwunsch 2026-10-13); vorher fest min. 650 px.
+        self.table.setMinimumHeight(250)
         self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
         self.table.itemSelectionChanged.connect(
             self._on_table_selection_changed
@@ -480,8 +481,8 @@ class AllExperimentsScreen(QWidget):
         table_wrap_lay.setContentsMargins(18, 12, 18, 18)
         table_wrap_lay.addWidget(self.table)
 
-        cardlay.addWidget(table_wrap)
-        clay.addWidget(card, 0, Qt.AlignTop)
+        cardlay.addWidget(table_wrap, 1)
+        clay.addWidget(card, 1)
 
         content_layout.addWidget(center, 1)
         root.addWidget(FooterBar())
