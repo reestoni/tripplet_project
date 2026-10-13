@@ -53,7 +53,9 @@ SYNONYMS: List[List[str]] = [
     ["trial series", "series", "serie", "versuchsserie", "auftrag", "auftrage", "order", "orders", "job",
      "pedido", "encargo", "experiment", "experimento", "projekt", "project"],
     ["trial", "trials", "versuch", "versuche", "ensayo", "ensayos", "probe", "test"],
-    ["machine", "maschine", "maquina", "anlage", "texturiermaschine"],
+    ["machine", "maschine", "maquina", "anlage", "texturiermaschine",
+     # Maschinennamen (tblMaschine), damit z. B. "alles von der AFK" die Maschinen-Anleitung findet
+     "afk", "eafk", "aalidhra", "erdmann", "ssm", "dp2t", "xeno", "zinser"],
     ["yarn", "garn", "garne", "hilo", "hilos", "faden", "material"],
     ["spool", "spule", "spulen", "bobina", "bobinas", "rolle", "cone", "konus"],
     ["jet", "jets", "duse", "dusen", "duese", "duesen", "tobera", "toberas", "nozzle"],
@@ -217,6 +219,16 @@ class SearchHit:
     score: float
     best_lang: str
     by_lang: Dict[str, HelpEntry]
+    ai_answer: str = ""          # gesetzt, wenn der Treffer aus der KI-Antwort stammt
+
+
+def hit_for_key(key: str) -> Optional[SearchHit]:
+    """SearchHit fuer einen Eintrags-Key (alle Sprachfassungen)."""
+    by_lang = {e.lang: e for e in get_index() if e.key == key}
+    if not by_lang:
+        return None
+    any_e = next(iter(by_lang.values()))
+    return SearchHit(key, any_e.screen, any_e.tab, 0.0, any_e.lang, by_lang)
 
 
 def search(query: str, limit: int = 12) -> List[SearchHit]:
@@ -277,19 +289,25 @@ UI = {
            "e.g. the name of a screen, a button or what you want to do.",
            "hint": "Describe what you want to do in your own words.", "screen": "Screen",
            "needs_series": "Open a trial series first (e.g. from the Backlog or All Experiments).",
-           "areas": "Numbers like (1) refer to the screen sketch in the full help."},
+           "areas": "Numbers like (1) refer to the screen sketch in the full help.",
+           "ask": "Ask AI", "ask_tip": "Let the AI answer in your own words (uses your AI token quota).",
+           "asking": "Asking the AI…", "ai_label": "AI answer", "ai_none": "The help does not cover this question yet."},
     "de": {"title": "Hilfe – wo finde ich…?", "placeholder": "Was suchst du? z. B. alle Aufträge einer Maschine",
            "go": "Hinführen", "full": "Ganze Hilfe öffnen", "none": "Keine passende Hilfe gefunden. Versuch es mit "
            "anderen Worten – z. B. dem Namen eines Bildschirms, eines Buttons oder was du tun willst.",
            "hint": "Beschreib in eigenen Worten, was du tun willst.", "screen": "Bildschirm",
            "needs_series": "Zuerst eine Versuchsserie öffnen (z. B. aus dem Backlog oder All Experiments).",
-           "areas": "Nummern wie (1) verweisen auf die Bildschirm-Skizze in der ganzen Hilfe."},
+           "areas": "Nummern wie (1) verweisen auf die Bildschirm-Skizze in der ganzen Hilfe.",
+           "ask": "KI fragen", "ask_tip": "Die KI antwortet in eigenen Worten (verbraucht dein KI-Kontingent).",
+           "asking": "Die KI wird gefragt…", "ai_label": "KI-Antwort", "ai_none": "Die Hilfe deckt diese Frage noch nicht ab."},
     "es": {"title": "Ayuda – ¿dónde encuentro…?", "placeholder": "¿Qué buscas? p. ej. todos los pedidos de una máquina",
            "go": "Llévame allí", "full": "Abrir la ayuda completa", "none": "No se encontró ayuda. Prueba con "
            "otras palabras – p. ej. el nombre de una pantalla, de un botón o lo que quieres hacer.",
            "hint": "Describe con tus palabras lo que quieres hacer.", "screen": "Pantalla",
            "needs_series": "Primero abre una serie de ensayos (p. ej. desde el Backlog o All Experiments).",
-           "areas": "Los números como (1) se refieren al esquema de la pantalla en la ayuda completa."},
+           "areas": "Los números como (1) se refieren al esquema de la pantalla en la ayuda completa.",
+           "ask": "Preguntar a la IA", "ask_tip": "La IA responde con sus palabras (usa tu cuota de tokens de IA).",
+           "asking": "Preguntando a la IA…", "ai_label": "Respuesta de la IA", "ai_none": "La ayuda aún no cubre esta pregunta."},
 }
 
 # Screens, die eine geoeffnete Serie brauchen - "Take me there" fuehrt dann zu All Experiments.
@@ -330,7 +348,19 @@ class HelpSearchDialog(QDialog):
         self.txt.setClearButtonEnabled(True)
         self.txt.setMinimumHeight(36)
         self.txt.setStyleSheet("font-size: 15px; padding: 4px 8px;")
-        root.addWidget(self.txt)
+        search_row = QHBoxLayout()
+        search_row.addWidget(self.txt, 1)
+        # Etappe 2: KI-Antwort nur mit KI-Zugang (tblUser.api_key_enc + Kontingent)
+        from ui.widgets.help_ai import has_ai_access
+        self._ai_enabled = has_ai_access()
+        self._ai_thread = None
+        self._ai_result: Optional[dict] = None
+        self.btn_ai = QPushButton(objectName="PurpleBtn")
+        self.btn_ai.setMinimumHeight(36)
+        self.btn_ai.clicked.connect(self._on_ask_ai)
+        self.btn_ai.setVisible(self._ai_enabled)
+        search_row.addWidget(self.btn_ai)
+        root.addLayout(search_row)
         self.lbl_hint = QLabel()
         self.lbl_hint.setStyleSheet("color:#565656;")
         root.addWidget(self.lbl_hint)
@@ -393,12 +423,15 @@ class HelpSearchDialog(QDialog):
         self.txt.setPlaceholderText(u["placeholder"])
         self.btn_go.setText(u["go"])
         self.btn_full.setText(u["full"])
+        self.btn_ai.setText(u["ask"])
+        self.btn_ai.setToolTip(u["ask_tip"])
         for code, btn in self._flags.items():
             btn.setChecked(code == self._lang)
 
     # ── Suche ──
     def _run_search(self) -> None:
         q = self.txt.text().strip()
+        self._ai_result = None
         self._hits = search(q) if q else []
         # Anzeige-Sprache automatisch auf die Sprache der Frage, solange keine Flagge gewaehlt wurde
         if self._hits and not self._lang_pinned and self._hits[0].best_lang != self._lang:
@@ -412,14 +445,17 @@ class HelpSearchDialog(QDialog):
         self.lst.clear()
         for h in self._hits:
             e = h.by_lang.get(self._lang) or h.by_lang[h.best_lang]
-            it = QListWidgetItem(f"{normalize_display(e.question)}\n{SCREEN_NAMES.get(h.screen, h.screen)}")
+            title = f"{u['ai_label']}: {normalize_display(e.question)}" if h.ai_answer else normalize_display(e.question)
+            it = QListWidgetItem(f"{title}\n{SCREEN_NAMES.get(h.screen, h.screen)}")
+            if h.ai_answer:
+                f = it.font(); f.setBold(True); it.setFont(f)
             self.lst.addItem(it)
         self.lst.blockSignals(False)
         q = self.txt.text().strip()
         if not q:
             self.lbl_hint.setText(u["hint"])
         elif not self._hits:
-            self.lbl_hint.setText(u["none"])
+            self.lbl_hint.setText(u["none"] + (" " + u["ask_tip"] if self._ai_enabled else ""))
         else:
             self.lbl_hint.setText("")
         has = bool(self._hits)
@@ -447,8 +483,12 @@ class HelpSearchDialog(QDialog):
                 if h.screen in NEEDS_SERIES or (h.screen == "report" and h.tab != "smart") else "")
         areas = (f"<p style='color:#8a8a8a;font-size:12px'>{u['areas']}</p>"
                  if re.search(r"\(\d\)|\([A-F]\)", " ".join(e.steps) + e.note) else "")
+        ai = ""
+        if h.ai_answer:
+            ai = (f"<p style='background:#f3eefc;border:1px solid #8e44ad;border-radius:6px;padding:8px'>"
+                  f"<b>{u['ai_label']}:</b> {html.escape(h.ai_answer)}</p>")
         self.detail.setText(
-            f"<p style='color:#2b7a3d;font-weight:600'>{u['screen']}: {SCREEN_NAMES.get(h.screen, h.screen)}</p>"
+            f"{ai}<p style='color:#2b7a3d;font-weight:600'>{u['screen']}: {SCREEN_NAMES.get(h.screen, h.screen)}</p>"
             f"<h3>{e.question}</h3><ol>{steps}</ol>{extra}{warn}{areas}")
 
     # ── Aktionen ──
@@ -458,6 +498,45 @@ class HelpSearchDialog(QDialog):
             log_usage_event("feature", event, detail[:250])
         except Exception:
             pass
+
+    def _on_ask_ai(self) -> None:
+        q = self.txt.text().strip()
+        if not q or not self._ai_enabled or self._ai_thread is not None:
+            return
+        from ui.advisor_worker import load_api_key
+        from ui.widgets.help_ai import start_worker
+        key = load_api_key()
+        if not key:
+            self._ai_enabled = False
+            self.btn_ai.setVisible(False)
+            return
+        u = UI[self._lang]
+        self.btn_ai.setEnabled(False)
+        self.detail.setText(f"<p style='color:#8e44ad'>{u['asking']}</p>")
+        self._ai_question = q
+        self._ai_thread = start_worker(self, q, self._lang, key, self._on_ai_done)
+
+    def _on_ai_done(self, result: dict) -> None:
+        self._ai_thread = None
+        self.btn_ai.setEnabled(True)
+        u = UI[self._lang]
+        if result.get("error"):
+            self.detail.setText(f"<p style='color:#a32d2d'>{html.escape(result['error'])}</p>")
+            self._log("help_ai_error", f"{self._ai_question} | {result['error']}")
+            return
+        answer = (result.get("answer") or "").strip()
+        key = result.get("entry_key") or "none"
+        self._log("help_ai_ask", f"{self._ai_question} -> {key}")
+        hit = hit_for_key(key) if key != "none" else None
+        if hit is None:
+            self.detail.setText(
+                f"<p style='background:#f3eefc;border:1px solid #8e44ad;border-radius:6px;padding:8px'>"
+                f"<b>{u['ai_label']}:</b> {html.escape(answer or u['ai_none'])}</p>")
+            return
+        hit.ai_answer = answer
+        self._hits = [hit] + [h for h in self._hits if h.key != key]
+        self._opened_key = None
+        self._render_list()
 
     def _on_go(self) -> None:
         h = self._current_hit()

@@ -62,6 +62,10 @@ except Exception:
 # --- cryptography (Fernet encryption fuer API Keys in tbluser)
 cryptography_datas, cryptography_binaries, cryptography_hidden = collect_all("cryptography")
 
+# --- anthropic (offizielles Claude-SDK, Hilfe-Suche "Ask AI", ui/widgets/help_ai.py)
+# Laedt Teile (Ressourcen, httpx2-Transport, pydantic-Modelle) dynamisch -> collect_all.
+anthropic_datas, anthropic_binaries, anthropic_hidden = collect_all("anthropic")
+
 # --- scipy
 # scipy laedt einige Untermodule (u.a. scipy.*.array_api_compat.numpy.fft) dynamisch
 # zur Laufzeit -- PyInstaller erkennt das nicht ueber einzelne hiddenimports.
@@ -89,6 +93,7 @@ a = Analysis(
         + joblib_binaries + pandas_binaries + xgboost_binaries
         + sklearn_binaries + lgbm_binaries
         + scipy_binaries
+        + anthropic_binaries
     ),
     datas=(
         pyside6_datas + pyodbc_datas + mysql_datas + project_assets
@@ -99,6 +104,7 @@ a = Analysis(
         + joblib_datas + pandas_datas + xgboost_datas
         + sklearn_datas + lgbm_datas
         + scipy_datas
+        + anthropic_datas
     ),
     hiddenimports=(
         pyside6_hidden + pyodbc_hidden + mysql_hidden
@@ -107,6 +113,7 @@ a = Analysis(
         + pdfplumber_hidden + pdfminer_hidden
         + cryptography_hidden
         + scipy_hidden
+        + anthropic_hidden
         + [
             # onnxruntime loads its C-extension dynamically — must be explicit
             "onnxruntime.capi._pybind_state",

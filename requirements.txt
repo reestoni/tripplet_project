@@ -22,3 +22,4 @@ openpyxl==3.1.5
 qrcode==8.2
 xgboost==3.2.0
 opencv-python==4.13.0.92
+anthropic==1.13.0
