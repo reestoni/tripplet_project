@@ -94,3 +94,7 @@ def can_edit_min_stock() -> bool:
 # Alle HeaderBars rufen ``open_quick_search()`` auf wenn der 🔍-Button geklickt wird.
 # None = Quick Search noch nicht registriert (Button im Header bleibt stumm).
 open_quick_search = None   # callable or None
+
+# Globale Hilfe-Suche (Sidebar "Help" / F1) - von MainWindow gesetzt, siehe
+# ui/widgets/help_search.py. None = noch nicht registriert.
+open_help_search = None    # callable or None

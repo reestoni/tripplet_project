@@ -1463,6 +1463,16 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+        # Hilfe-Suche: F1 + Sidebar-Eintrag "Help" (ui/widgets/help_search.py)
+        try:
+            from PySide6.QtGui import QShortcut
+            self._sc_help = QShortcut(QKeySequence("F1"), self)
+            self._sc_help.setContext(Qt.ApplicationShortcut)
+            self._sc_help.activated.connect(self._open_help_search)
+            app_meta.open_help_search = self._open_help_search
+        except Exception:
+            pass
+
     def _log_screen_open(self) -> None:
         """Loggt jeden sichtbaren Screen-Wechsel fuer den Admin-Stats-Screen
         (best-effort) - an TabbedNavigator.screenChanged gehängt (siehe
@@ -1650,6 +1660,38 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("TrippleT – Air Supply Network Calculator")
         self.stack.setCurrentWidget(self.air_supply)
 
+
+    def _open_help_search(self):
+        """Hilfe-Suche ueber alle Kontext-Hilfen (F1 / Sidebar "Help")."""
+        try:
+            if getattr(self, "_help_dlg", None) is not None and self._help_dlg.isVisible():
+                self._help_dlg.activateWindow()
+                return
+            from ui.widgets.help_search import HelpSearchDialog
+            dlg = HelpSearchDialog(self, navigate=self._navigate_to_help_screen)
+            dlg.finished.connect(lambda _r=0: setattr(self, "_help_dlg", None))
+            self._help_dlg = dlg
+            dlg.show()
+        except Exception as e:
+            QMessageBox.warning(self, "Help", f"Help search could not be opened: {e}")
+
+    def _navigate_to_help_screen(self, screen: str, tab: str) -> None:
+        """"Take me there" aus der Hilfe-Suche: oeffnet den passenden Screen.
+        Show Experiment und Report (ausser Smart Chart) brauchen eine Serie -
+        dann geht es zu All Experiments, um eine zu waehlen."""
+        targets = {
+            "all_experiments": self._go_all_experiments,
+            "backlog": self._go_backlog,
+            "show_experiment": self._go_all_experiments,
+            "create_experiment": lambda: self._go_create_experiment("create"),
+            "report": self._go_smartchart if tab == "smart" else self._go_all_experiments,
+            "manage_yarn": self._go_add_yarn,
+            "manage_jets": self._go_add_jet,
+            "yarn_stock": self._go_yarn_stock,
+        }
+        fn = targets.get(screen)
+        if callable(fn):
+            fn()
 
     def _open_quick_search(self):
         """Öffnet den Quick-Search-Dialog (Ctrl+F / 🔍-Button)."""

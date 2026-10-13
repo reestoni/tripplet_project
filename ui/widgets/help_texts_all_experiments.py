@@ -29,7 +29,7 @@ TEXTS = {
                 ("p", "All Experiments lists every trial series in one table. Numbers (1)–(5) refer to the "
                       "<i>Screen guide</i> tab."),
                 ("h", "Finding"),
-                ("task", "Show only one machine",
+                ("task", "Show all trial series (orders) of one machine",
                  ["Click the machine button (1), e.g. <i>AFK</i>. <i>All</i> shows everything again."]),
                 ("task", "Find a series by number or name",
                  ["Type part of the experiment ID into <i>Filter Experiment ID…</i> or part of the name into "
@@ -83,7 +83,7 @@ TEXTS = {
                 ("p", "All Experiments zeigt alle Versuchsserien in einer Tabelle. Die Nummern (1)–(5) verweisen auf "
                       "den Tab <i>Bildschirm</i>."),
                 ("h", "Finden"),
-                ("task", "Nur eine Maschine anzeigen",
+                ("task", "Alle Versuchsserien (Aufträge) einer Maschine anzeigen",
                  ["Auf den Maschinen-Knopf (1) klicken, z.&nbsp;B. <i>AFK</i>. <i>All</i> zeigt wieder alles."]),
                 ("task", "Eine Serie über Nummer oder Namen finden",
                  ["Einen Teil der Experiment-ID in <i>Filter Experiment ID…</i> oder einen Teil des Namens in "
@@ -137,7 +137,7 @@ TEXTS = {
                 ("p", "All Experiments muestra todas las series de ensayos en una tabla. Los números (1)–(5) se "
                       "refieren a la pestaña <i>Pantalla</i>."),
                 ("h", "Buscar"),
-                ("task", "Mostrar solo una máquina",
+                ("task", "Mostrar todas las series (pedidos) de una máquina",
                  ["Haz clic en el botón de la máquina (1), p.&nbsp;ej. <i>AFK</i>. <i>All</i> vuelve a mostrar todo."]),
                 ("task", "Encontrar una serie por número o nombre",
                  ["Escribe parte del ID del experimento en <i>Filter Experiment ID…</i> o parte del nombre en "

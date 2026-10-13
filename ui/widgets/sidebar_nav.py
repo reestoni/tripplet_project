@@ -653,6 +653,17 @@ def trigger_quick_search():
         pass
 
 
+def trigger_help_search():
+    """Oeffnet die Hilfe-Suche ueber die globale app_meta-Registrierung
+    (main.py setzt app_meta.open_help_search, gleiches Muster wie Quick Search)."""
+    try:
+        import app_meta
+        if callable(app_meta.open_help_search):
+            app_meta.open_help_search()
+    except Exception:
+        pass
+
+
 def build_pinned_bell(sidebar: SidebarPanel) -> dict[str, Any]:
     """Fügt die Notifications-Glocke als eigenen, fest sichtbaren Eintrag
     ganz oben ein, noch vor Search (2026-09-02, Nutzerwunsch: "die glocke
@@ -695,6 +706,15 @@ def build_pinned_search(sidebar: SidebarPanel) -> QPushButton:
     btn_search = icon_btn("Search", "quick_Search.png", "SidebarItem", trigger_quick_search)
     sidebar.add_item(btn_search)
     return btn_search
+
+
+def build_pinned_help(sidebar: SidebarPanel) -> QPushButton:
+    """Fester Eintrag "Help" direkt unter Search (2026-10-13): Hilfe-Suche
+    ueber alle Kontext-Hilfen ("wo finde ich…?"), auch per F1."""
+    btn_help = icon_btn("Help (F1)", "help_tour.png", "SidebarItem", trigger_help_search)
+    btn_help.setToolTip("Where do I find…? Search all help pages")
+    sidebar.add_item(btn_help)
+    return btn_help
 
 
 def pick_accent_colour(parent: QWidget):
@@ -818,6 +838,7 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
     # nicht versteckt in account... direkt über die search hin").
     bell_refs = build_pinned_bell(sidebar)
     build_pinned_search(sidebar)
+    build_pinned_help(sidebar)
     sidebar.add_separator()
 
     sidebar.add_section_header("experiment_white.png", "Navigation", expanded=True)
