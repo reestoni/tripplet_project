@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QSizePolicy, QTableView, QTableWidget, QTableWidgetItem, QMessageBox,
     QLineEdit, QAbstractItemView, QDialog, QFormLayout, QComboBox,
     QSpinBox, QDoubleSpinBox, QDialogButtonBox, QFileDialog, QStyledItemDelegate,
+    QCheckBox,
 )
 
 from ui.theme import accent_tint, accent_gridline
@@ -591,6 +592,12 @@ class NewSpoolDialog(QDialog):
         producer_row.addWidget(btn_new_producer)
         form.addRow("Producer", producer_row)
 
+        # Nach einer Lieferung druckt man praktisch immer Etiketten (Nutzerwunsch
+        # 2026-10-13) - daher standardmaessig an, aber sichtbar abwaehlbar.
+        self.chk_label_queue = QCheckBox("Add new spools to the label queue")
+        self.chk_label_queue.setChecked(True)
+        form.addRow("", self.chk_label_queue)
+
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
@@ -605,6 +612,7 @@ class NewSpoolDialog(QDialog):
             "Location": self.txt_location.text().strip() or None,
             "Colour": self.txt_colour.text().strip() or None,
             "ProducerID": self.cmb_producer.currentData(),
+            "AddToLabelQueue": self.chk_label_queue.isChecked(),
         }
 
 
@@ -1871,6 +1879,10 @@ class YarnStockScreen(QWidget):
                    f"batch {vals['Charge'] or '–'}")
         yarn_spool_log.log_spool_changes(
             {"SpoolID": sid, "Action": yarn_spool_log.CREATED, "New": summary} for sid in new_ids)
+        if vals.get("AddToLabelQueue") and new_ids:
+            queued = self._queue_labels(new_ids, "New spool(s)")
+            if queued:
+                log_usage_event("feature", "yarn_stock_add_to_label_queue", f"{queued} (new spools)")
         self.reload_data()
         if self.goto_yarn_batch(int(vals["YarnID"]), vals["Charge"] or ""):
             # Detailtabelle explizit fuellen (Signal feuert nach dem Rebuild
@@ -2057,6 +2069,17 @@ class YarnStockScreen(QWidget):
         if not ids:
             QMessageBox.information(self, "Add to label queue", "Please check at least one spool.")
             return
+        added = self._queue_labels(ids, "Add to label queue")
+        if added is None:
+            return
+        log_usage_event("feature", "yarn_stock_add_to_label_queue", str(added))
+        QMessageBox.information(self, "Add to label queue", f"{added} spool(s) added to the queue.")
+
+    def _queue_labels(self, ids: List[int], title: str) -> Optional[int]:
+        """Legt Spulen in die Label queue (bereits wartende werden uebersprungen)
+        und laedt die Queue-Anzeige neu. None bei Fehler (Meldung gezeigt)."""
+        if not table_exists(LABEL_QUEUE_TABLE):
+            return 0
         already_queued = {it["SpoolID"] for it in getattr(self, "_queue_items", [])}
         user_id = _current_user_id()
         now = datetime.now().isoformat(sep=" ", timespec="seconds")
@@ -2072,11 +2095,11 @@ class YarnStockScreen(QWidget):
                 )
                 added += 1
         except Exception as e:
-            QMessageBox.critical(self, "Add to label queue", f"Failed to add: {e}")
-            return
+            QMessageBox.critical(self, title, f"Failed to add to the label queue: {e}")
+            self._reload_label_queue()
+            return None
         self._reload_label_queue()
-        log_usage_event("feature", "yarn_stock_add_to_label_queue", str(added))
-        QMessageBox.information(self, "Add to label queue", f"{added} spool(s) added to the queue.")
+        return added
 
     def _on_remove_from_label_queue(self):
         if not self._writable:

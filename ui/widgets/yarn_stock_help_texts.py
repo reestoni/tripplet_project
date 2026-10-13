@@ -107,7 +107,8 @@ TEXTS = {
               f"Click {B('New spool(s)')} in {S2}.",
               "Fill in yarn, batch, weight per spool, number of spools and location "
               "(optionally tube colour and producer). Click OK.",
-              "Print labels for the new spools (next task)."],
+              "The new spools are added to the label queue automatically (checkbox in the dialog, on by "
+              f"default). Print them with {B('Print Labels…')} in {S3}."],
              "Afterwards the new spools' batch is selected in the overview automatically. "
              "One entry is created per physical spool. If the producer is missing from the list, "
              f"add it with the {B('+ New')} button in the dialog or {B('New producer…')}."),
@@ -290,7 +291,8 @@ TEXTS = {
               f"In {S2} auf {B('New spool(s)')} klicken.",
               "Garn, Batch, Gewicht pro Spule, Anzahl Spulen und Lagerplatz ausfüllen "
               "(optional Hülsenfarbe und Hersteller). OK klicken.",
-              "Etiketten für die neuen Spulen drucken (nächste Aufgabe)."],
+              "Die neuen Spulen landen automatisch in der Label queue (Checkbox im Dialog, standardmässig an). "
+              f"Mit {B('Print Labels…')} in {S3} drucken."],
              "Danach ist die Batch der neuen Spulen in der Übersicht automatisch ausgewählt. "
              "Pro physischer Spule wird ein Eintrag angelegt. Fehlt der Hersteller in der Liste, "
              f"mit {B('+ New')} im Dialog oder mit {B('New producer…')} anlegen."),
@@ -473,7 +475,8 @@ TEXTS = {
               f"Haz clic en {B('New spool(s)')} en {S2}.",
               "Rellena hilo, lote, peso por bobina, número de bobinas y ubicación "
               "(opcionalmente color del tubo y fabricante). Haz clic en OK.",
-              "Imprime las etiquetas de las bobinas nuevas (siguiente tarea)."],
+              "Las bobinas nuevas se añaden automáticamente a la cola de etiquetas (casilla en el diálogo, "
+              f"activada por defecto). Imprímelas con {B('Print Labels…')} en {S3}."],
              "Después, el lote de las bobinas nuevas queda seleccionado automáticamente en la vista general. "
              "Se crea una entrada por cada bobina física. Si el fabricante no está en la lista, "
              f"añádelo con el botón {B('+ New')} del diálogo o con {B('New producer…')}."),
