@@ -26,7 +26,7 @@ import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton,
     QTableWidget, QTableWidgetItem, QSizePolicy, QSpacerItem, QAbstractItemView,
-    QLineEdit, QComboBox, QMessageBox, QDialog, QMenu
+    QLineEdit, QComboBox, QMessageBox, QDialog, QMenu, QHeaderView
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
@@ -349,12 +349,15 @@ class AllExperimentsScreen(QWidget):
 
         center = QFrame()
         clay = QVBoxLayout(center)
-        clay.setContentsMargins(0, 48, 0, 0)
+        clay.setContentsMargins(24, 48, 24, 0)
         clay.setSpacing(0)
 
         card = QFrame(objectName="Card")
-        card.setMaximumWidth(1680)  # +40%
-        card.setMinimumWidth(1400)
+        # Volle Fensterbreite (Nutzerwunsch 2026-10-13: vorher fest 1400-1680 px
+        # zentriert - bei ueblichen Fenstern war die letzte Spalte RE nur per
+        # horizontalem Scrollen sichtbar). Die Spalte "Trial Series Name"
+        # nimmt den restlichen Platz ein (siehe Stretch-Modus unten).
+        card.setMinimumWidth(900)
         cardlay = QVBoxLayout(card)
         cardlay.setContentsMargins(0, 0, 0, 0)
         cardlay.setSpacing(0)
@@ -368,8 +371,8 @@ class AllExperimentsScreen(QWidget):
             "color: white; font-weight: bold; font-size: 14px;")
         chead_lay.addWidget(chead_title)
         # Kontext-Hilfe EN/DE/ES (Nutzerwunsch 2026-10-13, ui/widgets/multilang_help.py) -
-        # bewusst links neben dem Titel: der Screen ist breiter als viele Fenster,
-        # rechtsbuendige Elemente waeren dort nicht sichtbar.
+        # links neben dem Titel (urspruenglich, weil der Kasten frueher breiter
+        # als viele Fenster war - seit 2026-10-13 nutzt er die Fensterbreite).
         from ui.widgets.multilang_help import make_help_button
         chead_lay.addWidget(make_help_button("How does All Experiments work?", self._open_help))
         chead_lay.addStretch(1)
@@ -443,6 +446,12 @@ class AllExperimentsScreen(QWidget):
         self.table.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(False)
+        # Trial Series Name fuellt die verfuegbare Breite (mind. 200 px), alle
+        # anderen Spalten behalten ihre festen Breiten - siehe _fit_name_column().
+        # Bewusst kein QHeaderView.Stretch: das schrumpft die Spalte bei schmalen
+        # Fenstern bis auf wenige Pixel (unlesbar); so kommt dann lieber der
+        # horizontale Scrollbalken zurueck.
+        self.table.viewport().installEventFilter(self)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         self.table.setMinimumHeight(650)  # +25%
@@ -469,7 +478,7 @@ class AllExperimentsScreen(QWidget):
         table_wrap_lay.addWidget(self.table)
 
         cardlay.addWidget(table_wrap)
-        clay.addWidget(card, 0, Qt.AlignHCenter | Qt.AlignTop)
+        clay.addWidget(card, 0, Qt.AlignTop)
 
         content_layout.addWidget(center, 1)
         root.addWidget(FooterBar())
@@ -720,7 +729,7 @@ class AllExperimentsScreen(QWidget):
 
         # Spaltenbreiten
         self.table.resizeColumnToContents(0)
-        self.table.setColumnWidth(1, 600)  # Trial Series Name (breit)
+        self._fit_name_column()
         self.table.setColumnWidth(2, 120)  # Machine (schmal)
         self.table.setColumnWidth(3, 160)  # Creation Date
         self.table.setColumnWidth(4, 110)  # Owner (schmaler)
@@ -1556,6 +1565,26 @@ class AllExperimentsScreen(QWidget):
             self.butCopyTS.setEnabled(has_sel)
         except Exception:
             pass
+
+    _NAME_COL_MIN = 200
+
+    def _fit_name_column(self) -> None:
+        """Gibt der Spalte "Trial Series Name" die restliche Breite der Tabelle
+        (mindestens _NAME_COL_MIN), damit alle Spalten bis RE ohne horizontales
+        Scrollen sichtbar sind."""
+        t = getattr(self, "table", None)
+        if t is None or t.columnCount() < 2:
+            return
+        others = sum(t.columnWidth(c) for c in range(t.columnCount()) if c != 1)
+        avail = t.viewport().width() - others
+        t.setColumnWidth(1, max(self._NAME_COL_MIN, avail))
+
+    def eventFilter(self, obj, event):
+        from PySide6.QtCore import QEvent
+        t = getattr(self, "table", None)
+        if t is not None and obj is t.viewport() and event.type() == QEvent.Resize:
+            self._fit_name_column()
+        return super().eventFilter(obj, event)
 
     def _open_help(self):
         from ui.widgets.multilang_help import show_help
