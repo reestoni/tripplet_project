@@ -59,7 +59,8 @@ TEXTS = {
                 ("task", "Copy existing trials",
                  ["In <i>Machine Data</i>, right-click a trial number in the first row (4) → " + M("Copy trials…") + ".",
                   "In <i>Copy trials</i>, choose from/to trial and the number of copies per trial, then OK."],
-                 "Machine settings and plies are copied. Lab values of the copies stay empty. The new trials "
+                 "Machine settings and plies are copied. Lab values and the yarn tensions before/after the "
+                 "jet of the copies stay empty. The new trials "
                  "are added at the end. Several copies of a range are added as repeated blocks "
                  "(e.g. V1–V6 copied 5 times: V7–V12 = V1–V6, V13–V18 = V1–V6, …). Reference samples are never copied."),
                 ("task", "Add a reference sample (e.g. a customer's original spool)",
@@ -172,7 +173,8 @@ TEXTS = {
                  ["In <i>Machine Data</i> mit Rechtsklick auf eine Versuchsnummer in der ersten Zeile (4) → "
                   + M("Copy trials…") + ".",
                   "In <i>Copy trials</i> Von-/Bis-Versuch und Anzahl Kopien pro Versuch wählen, dann OK."],
-                 "Maschineneinstellungen und Plies werden kopiert. Die Laborwerte der Kopien bleiben leer. Die neuen "
+                 "Maschineneinstellungen und Plies werden kopiert. Die Laborwerte und die Fadenspannungen vor/nach "
+                 "Jet der Kopien bleiben leer. Die neuen "
                  "Versuche werden hinten angehängt. Mehrere Kopien eines Bereichs werden als wiederholte Blöcke "
                  "angehängt (z. B. V1–V6 fünfmal kopiert: V7–V12 = V1–V6, V13–V18 = V1–V6, …). "
                  "Referenzmuster werden nie mitkopiert."),
@@ -289,7 +291,8 @@ TEXTS = {
                  ["En <i>Machine Data</i>, clic derecho en un número de ensayo de la primera fila (4) → "
                   + M("Copy trials…") + ".",
                   "En <i>Copy trials</i>, elige el ensayo inicial y final y el número de copias por ensayo, y haz clic en OK."],
-                 "Se copian los ajustes de máquina y los plies. Los valores de laboratorio de las copias quedan "
+                 "Se copian los ajustes de máquina y los plies. Los valores de laboratorio y las tensiones del "
+                 "hilo antes/después del jet de las copias quedan "
                  "vacíos. Los ensayos nuevos se añaden al final. Varias copias de un rango se añaden como "
                  "bloques repetidos (p. ej. V1–V6 copiado 5 veces: V7–V12 = V1–V6, V13–V18 = V1–V6, …). "
                  "Las muestras de referencia nunca se copian."),

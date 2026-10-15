@@ -1189,6 +1189,18 @@ def _retest_flag_dot_icon() -> QIcon:
     return _RETEST_FLAG_DOT_ICON
 
 
+# Measured yarn tensions before/after the jet (tblTrial and, on the ATY
+# machines, tblTrialSettings) - results of the run, not settings, so a trial
+# copy starts with them empty (Nutzerwunsch 2026-10-15). Lower-case names.
+_TENSION_COLS_NOT_COPIED = {
+    "yarntensionbeforejet",
+    "yarntensionafterjet",
+    "tensionbeforejet_core",
+    "tensionafterjetinside",
+    "tensionafterjetoutside",
+}
+
+
 @dataclass
 class CellBinding:
     """Verbindet eine Pivot-Tabellen-Zelle mit einem konkreten DB-Datensatz.
@@ -5738,6 +5750,8 @@ class ShowExperimentScreen(QWidget):
                 values.append(series_id)
             elif cl == "versuchsnummer":
                 values.append(new_versuchsnummer)
+            elif cl in _TENSION_COLS_NOT_COPIED:
+                values.append(None)  # measured on the new run
             else:
                 values.append(src_map.get(col))
 
@@ -6272,7 +6286,9 @@ class ShowExperimentScreen(QWidget):
         """Klont alle tblTrialSettings-Zeilen von src_trial_id auf new_trial_id.
 
         Alle Felder (inkl. Ply-Parameter wie 1stHeaterT1/T2, YarnTensionT1/T2 usw.)
-        werden 1:1 übernommen. Nur ID und TrialID werden neu gesetzt.
+        werden 1:1 übernommen. Nur ID und TrialID werden neu gesetzt; die
+        gemessenen Fadenspannungen vor/nach Jet bleiben leer
+        (_TENSION_COLS_NOT_COPIED).
         """
         if not _db_table_exists("tbltrialsettings"):
             return
@@ -6298,7 +6314,8 @@ class ShowExperimentScreen(QWidget):
 
         for row in rows:
             row_map = dict(zip(col_names, row))
-            values = [row_map.get(c) for c in insert_cols]
+            values = [None if c.lower() in _TENSION_COLS_NOT_COPIED else row_map.get(c)
+                      for c in insert_cols]
 
             cols_for_insert = ["TrialID"] + list(insert_cols)
             vals_for_insert = [new_trial_id] + values
