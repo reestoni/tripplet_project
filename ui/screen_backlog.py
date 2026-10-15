@@ -22,6 +22,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWidget,
+    QGridLayout,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
@@ -290,6 +291,12 @@ class _ExpandIconButton(QPushButton):
             p.drawPixmap(x, y, self._icon_pm.scaled(
                 icon_size, icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         p.end()
+
+
+# Card widths: no upper limit any more (cards grow with the screen); with
+# all four columns side by side (wide screens) a card may be a bit narrower.
+_CARD_MIN_W = 520
+_CARD_MIN_W_WIDE = 520
 
 
 class CardRowDelegate(QStyledItemDelegate):
@@ -2302,6 +2309,10 @@ class BacklogScreen(QWidget):
         self._refresh_welcome_message()
 
     def eventFilter(self, obj, event):
+        scroll = getattr(self, "_board_scroll", None)
+        if scroll is not None and obj is scroll.viewport() and event.type() == event.Type.Resize:
+            self._update_board_layout()
+            return False
         if obj is getattr(self, "_welcome_label", None):
             et = event.type()
             if et == event.Type.Enter:
@@ -2464,25 +2475,18 @@ class BacklogScreen(QWidget):
         c_lay.setContentsMargins(24, 24, 24, 24)
         c_lay.setSpacing(20)
 
-        # ── Row 1: Backlog  |  In Progress ──────────────────────────────
-        row1 = QHBoxLayout()
-        row1.setSpacing(24)
+        # ── Board: 2x2 (Backlog | In Progress / Done | TBC+Archived), on
+        # wide screens all four columns in one row (see _arrange_board) ──
 
         self.tbl_backlog    = self._make_card("Backlog")
         self.tbl_inprogress = self._make_card("In Progress")
 
-        row1.addWidget(self.tbl_backlog["card"], 1)
-        row1.addWidget(self.tbl_inprogress["card"], 1)
-
-        # ── Row 2: Done  |  (To Be Cleaned + Archived gestapelt) ─────────
-        row2 = QHBoxLayout()
-        row2.setSpacing(24)
-
         self.tbl_done = self._make_card("Done")
-        row2.addWidget(self.tbl_done["card"], 1)
 
         # Rechte untere Spalte: TBC oben, Archived unten
-        right_col = QVBoxLayout()
+        self._right_col_w = QWidget()
+        right_col = QVBoxLayout(self._right_col_w)
+        right_col.setContentsMargins(0, 0, 0, 0)
         right_col.setSpacing(16)
 
         self.tbl_tbc = self._make_card("To Be Cleaned")
@@ -2490,8 +2494,7 @@ class BacklogScreen(QWidget):
 
         # Archived Card
         archived_card = QFrame(objectName="Card")
-        archived_card.setMinimumWidth(650)
-        archived_card.setMaximumWidth(900)
+        archived_card.setMinimumWidth(_CARD_MIN_W)
         archived_card.setMinimumHeight(160)
         ac_lay = QVBoxLayout(archived_card)
         ac_lay.setContentsMargins(0, 0, 0, 0)
@@ -2516,11 +2519,14 @@ class BacklogScreen(QWidget):
             lambda: self._expand_card("Archived", self._archived_panel, ac_lay))
 
         right_col.addWidget(archived_card, 1)
-        row2.addLayout(right_col, 1)
 
         # ── Assemble ─────────────────────────────────────────────────────
-        c_lay.addLayout(row1, 1)
-        c_lay.addLayout(row2, 1)
+        self._board_grid = QGridLayout()
+        self._board_grid.setHorizontalSpacing(24)
+        self._board_grid.setVerticalSpacing(20)
+        self._board_wide = None  # None = not arranged yet
+        c_lay.addLayout(self._board_grid, 1)
+        self._arrange_board(False)
 
         # Ganzen Kanban-Bereich in ScrollArea einwickeln → funktioniert auch
         # auf Laptops mit niedriger Auflösung
@@ -2528,6 +2534,8 @@ class BacklogScreen(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(center)
+        self._board_scroll = scroll
+        scroll.viewport().installEventFilter(self)  # resize -> _arrange_board
 
         # ── Expanded-card view ──────────────────────────────────────────
         # Shown instead of the 5-column board when a card's fullscreen icon
@@ -2608,10 +2616,50 @@ class BacklogScreen(QWidget):
     # -------------------------------------------------
     # CARD + TABLE
     # -------------------------------------------------
+    def _arrange_board(self, wide: bool) -> None:
+        """Places the cards: 2x2 normally, all four columns side by side on
+        wide screens (each card then gets the full height, i.e. more rows
+        visible) - Nutzerwunsch 2026-10-15: the board stopped growing on
+        bigger monitors (cards were capped at 900 px)."""
+        if wide == self._board_wide:
+            return
+        self._board_wide = wide
+        g = self._board_grid
+        cells = [self.tbl_backlog["card"], self.tbl_inprogress["card"],
+                 self.tbl_done["card"], self._right_col_w]
+        for w in cells:
+            g.removeWidget(w)
+        for i in range(4):
+            g.setColumnStretch(i, 0)
+            g.setRowStretch(i, 0)
+        if wide:
+            for col, w in enumerate(cells):
+                g.addWidget(w, 0, col)
+                g.setColumnStretch(col, 1)
+            g.setRowStretch(0, 1)
+        else:
+            for i, w in enumerate(cells):
+                g.addWidget(w, i // 2, i % 2)
+            g.setColumnStretch(0, 1)
+            g.setColumnStretch(1, 1)
+            g.setRowStretch(0, 1)
+            g.setRowStretch(1, 1)
+
+    def _update_board_layout(self) -> None:
+        scroll = getattr(self, "_board_scroll", None)
+        if scroll is None or self._board_wide is None:
+            return
+        width = scroll.viewport().width()
+        need = 4 * _CARD_MIN_W_WIDE + 3 * 24 + 48
+        # small hysteresis so it doesn't flip back and forth at the edge
+        if self._board_wide:
+            self._arrange_board(width >= need - 40)
+        else:
+            self._arrange_board(width >= need)
+
     def _make_card(self, title: str):
         card = QFrame(objectName="Card")
-        card.setMinimumWidth(650)
-        card.setMaximumWidth(900)
+        card.setMinimumWidth(_CARD_MIN_W)
         # Füllt mehr Höhe (wird zusätzlich über Stretch in _build_ui verteilt)
         card.setMinimumHeight(200)
 

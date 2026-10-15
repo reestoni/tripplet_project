@@ -85,6 +85,7 @@ TEXTS = {
                     ("(5) Archived", "Completed series, grouped by year and experiment number, with a search field. "
                                      "Drag a row by its handle (the dotted grip on the left) back onto <i>Done</i> to reactivate it (superusers)."),
                 ]),
+                ("p", "On wide screens (from about 2200 pixels) the areas are shown side by side in four columns - each one then uses the full height."),
                 ("h", "What a card shows"),
                 ("areas", [
                     ("A", "Colour stripe of the owner (in In Progress and Done)."),
@@ -185,6 +186,7 @@ TEXTS = {
                     ("(5) Archived", "Abgeschlossene Serien, gruppiert nach Jahr und Experimentnummer, mit Suchfeld. "
                                      "Am Griff (gepunktetes Feld links) lässt sich eine Zeile zurück auf <i>Done</i> ziehen (Superuser)."),
                 ]),
+                ("p", "Auf breiten Bildschirmen (ab etwa 2200 Pixel) stehen die Bereiche in vier Spalten nebeneinander - jeder nutzt dann die volle Höhe."),
                 ("h", "Was eine Karte zeigt"),
                 ("areas", [
                     ("A", "Farbstreifen des Owners (in In Progress und Done)."),
@@ -285,6 +287,7 @@ TEXTS = {
                     ("(5) Archived", "Series cerradas, agrupadas por año y número de experimento, con campo de búsqueda. "
                                      "Arrastrando una fila por su asa (el punteado de la izquierda) se puede devolver la serie a <i>Done</i> (superusuarios)."),
                 ]),
+                ("p", "En pantallas anchas (a partir de unos 2200 píxeles) las áreas se muestran una al lado de otra en cuatro columnas, cada una con toda la altura."),
                 ("h", "Qué muestra una tarjeta"),
                 ("areas", [
                     ("A", "Franja de color del responsable (en In Progress y Done)."),
