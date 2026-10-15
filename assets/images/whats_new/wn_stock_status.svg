@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Stock status per yarn - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="14" width="276" height="18" rx="2" fill="#4a4a4a"/>
+  <text x="16" y="27" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="start" font-weight="bold">Yarn</text>
+  <text x="112" y="27" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="start" font-weight="bold">Yarn total (kg)</text>
+  <text x="186" y="27" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="start" font-weight="bold">Min. stock (kg)</text>
+  <text x="258" y="27" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="start" font-weight="bold">Status</text>
+  <rect x="12" y="32" width="276" height="22" rx="0" fill="#e9f6e9" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="16" y="47" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">PES 167f72</text>
+  <text x="140" y="47" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">84.2</text>
+  <text x="214" y="47" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">40</text>
+  <circle cx="268" cy="43" r="6" fill="#39a650"/>
+  <rect x="12" y="54" width="276" height="22" rx="0" fill="#d5ecd8" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="16" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">PA6 78f68</text>
+  <text x="140" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">31.5</text>
+  <text x="214" y="69" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">30</text>
+  <circle cx="268" cy="65" r="6" fill="#E6A100"/>
+  <rect x="12" y="76" width="276" height="22" rx="0" fill="#e9f6e9" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="16" y="91" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">PES 55f72</text>
+  <text x="140" y="91" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">8.0</text>
+  <text x="214" y="91" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">25</text>
+  <circle cx="268" cy="87" r="6" fill="#d9534f"/>
+  <text x="16" y="116" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start" font-style="italic">all batches of a yarn together vs. minimum stock</text>
+</svg>

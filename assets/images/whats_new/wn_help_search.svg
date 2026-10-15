@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Help search - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="10" width="276" height="110" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="22" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b" text-anchor="start" font-weight="bold">Help  (F1)</text>
+  <rect x="22" y="36" width="180" height="20" rx="3" fill="#ffffff" stroke="#9bbbe0" stroke-width="1"/>
+  <text x="28" y="50" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">where are all orders of a machine?</text>
+  <rect x="208" y="35" width="70" height="22" rx="3" fill="#8e44ad"/>
+  <text x="243.0" y="50.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">Ask AI</text>
+  <rect x="22" y="62" width="256" height="16" rx="2" fill="#d8e7fa"/>
+  <text x="28" y="74" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">All Experiments: Filter by machine</text>
+  <rect x="22" y="80" width="256" height="16" rx="2" fill="#ffffff" stroke="#eeeeee" stroke-width="1"/>
+  <text x="28" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Backlog: Find a trial series</text>
+  <rect x="22" y="98" width="256" height="16" rx="2" fill="#ffffff" stroke="#eeeeee" stroke-width="1"/>
+  <text x="28" y="110" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Show Experiment: Open a series</text>
+</svg>

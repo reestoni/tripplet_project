@@ -67,6 +67,16 @@ RELEASES = [
                  "High contrast, a crosshair for row and column, a reading bar with the value in large words, "
                  "warning symbols and colour-blind friendly colours. Zoom a table with Ctrl + mouse wheel.",
                  "Sidebar → Account → <b>Settings</b> → Show Experiment tables", "wn_reading.svg"),
+                ("h", "Help"),
+                ("feature", "Help in three languages",
+                 "Show Experiment, Backlog, Report, All Experiments, Create Experiment, Manage Yarn and Manage Jets "
+                 "now have their own help in English, German and Spanish: step-by-step answers to \"How do I…?\", a "
+                 "sketch of the screen and the rules. The flags switch the language.",
+                 "Round <b>?</b> button on these screens", "wn_help.svg"),
+                ("feature", "Help search - \"Where do I find…?\"",
+                 "Type your question in your own words and get the matching help page - in English, German or "
+                 "Spanish. <b>Take me there</b> opens the screen. Users with AI access can also <b>Ask AI</b>.",
+                 "Sidebar → <b>Help (F1)</b> or the F1 key", "wn_help_search.svg"),
                 ("h", "Backlog and All Experiments"),
                 ("feature", "Backlog on wide screens",
                  "On big monitors all four columns stand side by side and use the full height.",
@@ -75,6 +85,32 @@ RELEASES = [
                  "A deleted trial series can be restored for 90 days. Whoever may move a series in the Backlog may "
                  "delete it (in To Be Cleaned: superusers only).",
                  "Sidebar → Superuser → <b>Recycle Bin</b>", "wn_recycle_bin.svg"),
+                ("feature", "All Experiments uses the whole window",
+                 "The list fills the full width and height of the window - the last columns are visible without "
+                 "scrolling sideways - and is shown larger on big screens.",
+                 "All Experiments", "wn_all_experiments.svg"),
+                ("h", "Yarn Stock"),
+                ("feature", "Stock status per yarn",
+                 "The traffic light now shows each yarn as a whole: all its batches in stock against its minimum "
+                 "stock. Used-up batches disappear from the overview, notifications come once per yarn. Only "
+                 "superusers may change the minimum stock.",
+                 "Yarn Stock → Overview", "wn_stock_status.svg"),
+                ("feature", "New spools - straight to the new spools and the label queue",
+                 "<b>New spool(s)</b> starts with an empty selection and afterwards jumps right to the new spools. "
+                 "They go to the label queue automatically (tick box in the dialog).",
+                 "Yarn Stock → <b>New spool(s)</b>", "wn_new_spools.svg"),
+                ("feature", "Stock take",
+                 "Check a rack spool by spool: scan each label. Spools in another place are moved right away, "
+                 "missing ones are only booked out when you finish - after asking.",
+                 "Yarn Stock → Rack lookup → <b>Start stock take…</b>", "wn_stock_take.svg"),
+                ("feature", "Spool history",
+                 "Every change of a spool is recorded: created, changed, moved, booked out, stock take. Without a "
+                 "selection you see the whole batch, including used-up spools.",
+                 "Yarn Stock → <b>History…</b>", "wn_spool_history.svg"),
+                ("feature", "Scan labels, keep changes",
+                 "In <i>Go to spool #</i> you can scan the spool label instead of typing the number. And Yarn Stock "
+                 "now asks before unsaved spool changes are lost. Help in three languages: round button top right.",
+                 "Yarn Stock → <b>Go to spool #</b>", None),
             ],
             # ═══════════════════════════════ DE ═══════════════════════════════
             "de": [
@@ -112,6 +148,17 @@ RELEASES = [
                  "Hoher Kontrast, Fadenkreuz für Zeile und Spalte, Lese-Leiste mit dem Wert in grosser Schrift, "
                  "Warnsymbole und farbenblind-freundliche Farben. Tabellen zoomen mit Strg + Mausrad.",
                  "Sidebar → Account → <b>Settings</b> → Show Experiment tables", "wn_reading.svg"),
+                ("h", "Hilfe"),
+                ("feature", "Hilfe in drei Sprachen",
+                 "Show Experiment, Backlog, Report, All Experiments, Create Experiment, Manage Yarn und Manage Jets "
+                 "haben jetzt eine eigene Hilfe auf Englisch, Deutsch und Spanisch: Schritt-für-Schritt-Antworten "
+                 "auf \"Wie mache ich…?\", eine Skizze des Bildschirms und die Regeln. Die Flaggen wechseln die Sprache.",
+                 "Runder <b>?</b>-Knopf in diesen Screens", "wn_help.svg"),
+                ("feature", "Hilfe-Suche - \"Wo finde ich…?\"",
+                 "Die Frage in eigenen Worten eintippen und die passende Hilfe-Seite bekommen - auf Englisch, "
+                 "Deutsch oder Spanisch. <b>Take me there</b> öffnet den Screen. Benutzer mit KI-Zugang können "
+                 "zusätzlich <b>Ask AI</b> nutzen.",
+                 "Sidebar → <b>Help (F1)</b> oder Taste F1", "wn_help_search.svg"),
                 ("h", "Backlog und All Experiments"),
                 ("feature", "Backlog auf breiten Bildschirmen",
                  "Auf grossen Monitoren stehen alle vier Spalten nebeneinander und nutzen die volle Höhe.",
@@ -120,6 +167,33 @@ RELEASES = [
                  "Eine gelöschte Versuchsserie lässt sich 90 Tage lang wiederherstellen. Löschen darf, wer die Serie "
                  "im Backlog verschieben darf (in To Be Cleaned nur Superuser).",
                  "Sidebar → Superuser → <b>Recycle Bin</b>", "wn_recycle_bin.svg"),
+                ("feature", "All Experiments nutzt das ganze Fenster",
+                 "Die Liste füllt die volle Breite und Höhe des Fensters - die letzten Spalten sind ohne seitliches "
+                 "Scrollen sichtbar - und wird auf grossen Bildschirmen grösser dargestellt.",
+                 "All Experiments", "wn_all_experiments.svg"),
+                ("h", "Yarn Stock"),
+                ("feature", "Lagerstatus pro Garn",
+                 "Die Ampel zeigt jetzt jedes Garn als Ganzes: alle Batches am Lager zusammen gegen den "
+                 "Mindestbestand. Aufgebrauchte Batches verschwinden aus der Übersicht, Meldungen kommen einmal pro "
+                 "Garn. Den Mindestbestand ändern dürfen nur Superuser.",
+                 "Yarn Stock → Übersicht", "wn_stock_status.svg"),
+                ("feature", "Neue Spulen - direkt zu den neuen Spulen und in die Etiketten-Liste",
+                 "<b>New spool(s)</b> beginnt mit leerer Auswahl und springt danach direkt zu den neuen Spulen. "
+                 "Diese kommen automatisch in die Label queue (Häkchen im Dialog).",
+                 "Yarn Stock → <b>New spool(s)</b>", "wn_new_spools.svg"),
+                ("feature", "Inventur",
+                 "Ein Regal Spule für Spule prüfen: jedes Etikett scannen. Spulen an einem anderen Platz werden "
+                 "sofort umgelagert, fehlende erst beim Abschluss ausgebucht - nach Rückfrage.",
+                 "Yarn Stock → Rack lookup → <b>Start stock take…</b>", "wn_stock_take.svg"),
+                ("feature", "Spulen-Verlauf",
+                 "Jede Änderung an einer Spule wird festgehalten: angelegt, geändert, umgelagert, ausgebucht, "
+                 "Inventur. Ohne Auswahl sieht man die ganze Batch, auch aufgebrauchte Spulen.",
+                 "Yarn Stock → <b>History…</b>", "wn_spool_history.svg"),
+                ("feature", "Etiketten scannen, Änderungen nicht verlieren",
+                 "In <i>Go to spool #</i> lässt sich das Spulenetikett scannen statt die Nummer zu tippen. Und Yarn "
+                 "Stock fragt jetzt nach, bevor ungespeicherte Spulen-Änderungen verloren gehen. Hilfe in drei "
+                 "Sprachen: runder Knopf oben rechts.",
+                 "Yarn Stock → <b>Go to spool #</b>", None),
             ],
             # ═══════════════════════════════ ES ═══════════════════════════════
             "es": [
@@ -156,6 +230,17 @@ RELEASES = [
                  "Alto contraste, cruz de lectura para fila y columna, barra de lectura con el valor en letra "
                  "grande, símbolos de aviso y colores aptos para daltónicos. Zoom de tablas con Ctrl + rueda.",
                  "Barra lateral → Account → <b>Settings</b> → Show Experiment tables", "wn_reading.svg"),
+                ("h", "Ayuda"),
+                ("feature", "Ayuda en tres idiomas",
+                 "Show Experiment, Backlog, Report, All Experiments, Create Experiment, Manage Yarn y Manage Jets "
+                 "tienen ahora su propia ayuda en inglés, alemán y español: respuestas paso a paso a \"¿Cómo hago…?\", "
+                 "un esquema de la pantalla y las reglas. Las banderas cambian el idioma.",
+                 "Botón redondo <b>?</b> en estas pantallas", "wn_help.svg"),
+                ("feature", "Búsqueda en la ayuda - \"¿Dónde encuentro…?\"",
+                 "Escribe tu pregunta con tus propias palabras y obtén la página de ayuda adecuada, en inglés, alemán "
+                 "o español. <b>Take me there</b> abre la pantalla. Los usuarios con acceso a IA también pueden usar "
+                 "<b>Ask AI</b>.",
+                 "Barra lateral → <b>Help (F1)</b> o la tecla F1", "wn_help_search.svg"),
                 ("h", "Backlog y All Experiments"),
                 ("feature", "Backlog en pantallas anchas",
                  "En monitores grandes las cuatro columnas se muestran una al lado de otra con toda la altura.",
@@ -164,6 +249,33 @@ RELEASES = [
                  "Una serie de ensayos borrada se puede recuperar durante 90 días. Puede borrar quien puede mover la "
                  "serie en el Backlog (en To Be Cleaned solo superusuarios).",
                  "Barra lateral → Superuser → <b>Recycle Bin</b>", "wn_recycle_bin.svg"),
+                ("feature", "All Experiments usa toda la ventana",
+                 "La lista ocupa todo el ancho y alto de la ventana - las últimas columnas se ven sin desplazarse "
+                 "hacia los lados - y se muestra más grande en pantallas grandes.",
+                 "All Experiments", "wn_all_experiments.svg"),
+                ("h", "Yarn Stock"),
+                ("feature", "Estado del stock por hilo",
+                 "El semáforo muestra ahora cada hilo en conjunto: todos sus lotes en stock frente al stock mínimo. "
+                 "Los lotes agotados desaparecen de la vista general y los avisos llegan una vez por hilo. Solo los "
+                 "superusuarios pueden cambiar el stock mínimo.",
+                 "Yarn Stock → vista general", "wn_stock_status.svg"),
+                ("feature", "Bobinas nuevas - directamente a las nuevas y a la cola de etiquetas",
+                 "<b>New spool(s)</b> empieza sin selección y después salta directamente a las bobinas nuevas. "
+                 "Estas pasan automáticamente a la cola de etiquetas (casilla en el diálogo).",
+                 "Yarn Stock → <b>New spool(s)</b>", "wn_new_spools.svg"),
+                ("feature", "Inventario",
+                 "Revisa una estantería bobina por bobina escaneando cada etiqueta. Las bobinas en otro lugar se "
+                 "reubican al momento; las que faltan solo se dan de baja al terminar, tras preguntar.",
+                 "Yarn Stock → Rack lookup → <b>Start stock take…</b>", "wn_stock_take.svg"),
+                ("feature", "Historial de bobinas",
+                 "Se registra cada cambio de una bobina: creada, cambiada, reubicada, dada de baja, inventario. Sin "
+                 "selección se ve todo el lote, incluidas las bobinas agotadas.",
+                 "Yarn Stock → <b>History…</b>", "wn_spool_history.svg"),
+                ("feature", "Escanear etiquetas, no perder cambios",
+                 "En <i>Go to spool #</i> puedes escanear la etiqueta en vez de escribir el número. Y Yarn Stock "
+                 "pregunta ahora antes de perder cambios no guardados. Ayuda en tres idiomas: botón redondo arriba "
+                 "a la derecha.",
+                 "Yarn Stock → <b>Go to spool #</b>", None),
             ],
         },
     },

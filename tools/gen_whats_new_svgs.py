@@ -178,3 +178,109 @@ s.btn(22, 90, "Restore", 60, "green")
 s.btn(88, 90, "Delete permanently", 112, "white")
 s.text(278, 104, "90 days", 8, MUTED, italic=True, anchor="end")
 save(s, "wn_recycle_bin.svg")
+
+# ── Yarn Stock ──────────────────────────────────────────────────────────
+s = new("Stock status per yarn")
+heads = (("Yarn", 16), ("Yarn total (kg)", 112), ("Min. stock (kg)", 186), ("Status", 258))
+s.rect(12, 14, 276, 18, "#4a4a4a", None, 2)
+for h, x in heads:
+    s.text(x, 27, h, 8, "#ffffff", True)
+for r, (yarn, tot, mn, col) in enumerate((("PES 167f72", "84.2", "40", GREEN), ("PA6 78f68", "31.5", "30", "#E6A100"),
+                                          ("PES 55f72", "8.0", "25", "#d9534f"))):
+    y = 32 + r * 22
+    s.rect(12, y, 276, 22, STRIPE_A if r % 2 == 0 else STRIPE_B, "#c9dfcb", 0)
+    s.text(16, y + 15, yarn, 9, INK)
+    s.text(140, y + 15, tot, 9, INK, anchor="middle")
+    s.text(214, y + 15, mn, 9, INK, anchor="middle")
+    s.parts.append(f'  <circle cx="268" cy="{y + 11}" r="6" fill="{col}"/>')
+s.text(16, 116, "all batches of a yarn together vs. minimum stock", 8, MUTED, italic=True)
+save(s, "wn_stock_status.svg")
+
+s = new("New spools")
+s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
+s.text(22, 28, "New spool(s)", 11, INK, True)
+s.text(22, 48, "Yarn   PES 167f72      Batch   B-2410", 9, INK)
+s.text(22, 64, "Spools  4      Weight  5.0 kg", 9, INK)
+s.rect(22, 74, 11, 11, GREEN, "#888888", 2)
+s.text(40, 83, "Add new spools to the label queue", 9, INK)
+s.btn(212, 94, "OK", 66, "green")
+s.text(22, 108, "then jumps to the new spools", 8, MUTED, italic=True)
+save(s, "wn_new_spools.svg")
+
+s = new("Stock take")
+s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
+s.text(22, 28, "Stock take  -  Rack C", 11, INK, True)
+s.rect(22, 36, 256, 18, "#ffffff", "#9bbbe0", 3)
+s.text(28, 49, "Scan the label or type the number", 8, MUTED, italic=True)
+for r, (txt, mark, col) in enumerate((("#213  C12  PES 167f72", "found", GREEN), ("#214  C12  PES 167f72", "found", GREEN),
+                                      ("#230  C14  PA6 78f68", "missing", "#d9534f"))):
+    y = 70 + r * 15
+    s.text(22, y, txt, 9, INK)
+    s.text(278, y, mark, 9, col, True, "end")
+save(s, "wn_stock_take.svg")
+
+s = new("Spool history")
+s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
+s.text(22, 28, "History  -  spool #213", 11, INK, True)
+for r, (when, what) in enumerate((("13.10. 09:12", "created  (5.0 kg, C12)"), ("14.10. 15:40", "location C12 > C14"),
+                                  ("15.10. 08:05", "stock take: found"), ("15.10. 10:31", "discarded (used up)"))):
+    s.text(22, 48 + r * 17, when, 9, MUTED)
+    s.text(100, 48 + r * 17, what, 9, INK)
+save(s, "wn_spool_history.svg")
+
+# ── Help ────────────────────────────────────────────────────────────────
+s = new("Help in three languages")
+s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
+s.parts.append(f'  <circle cx="270" cy="24" r="9" fill="#ffffff" stroke="{GREEN}" stroke-width="1.5"/>')
+s.text(270, 28, "?", 11, GREEN, True, "middle")
+# Union Jack (simplified), German and Spanish flag - like the help's language flags
+s.rect(22, 16, 22, 15, "#012169", None, 0)
+s.line(22, 16, 44, 31, "#ffffff", 3)
+s.line(44, 16, 22, 31, "#ffffff", 3)
+s.line(22, 16, 44, 31, "#C8102E", 1)
+s.line(44, 16, 22, 31, "#C8102E", 1)
+s.rect(30, 16, 6, 15, "#ffffff", None, 0)
+s.rect(22, 21, 22, 5, "#ffffff", None, 0)
+s.rect(31.5, 16, 3, 15, "#C8102E", None, 0)
+s.rect(22, 22, 22, 3, "#C8102E", None, 0)
+for i, (c1, c2, c3) in enumerate((("#000000", "#DD0000", "#FFCE00"), ("#AA151B", "#F1BF00", "#AA151B")), start=1):
+    x = 22 + i * 30
+    for k, (c, h) in enumerate(zip((c1, c2, c3), (5, 5, 5) if i == 1 else (4, 7, 4))):
+        y = 16 + (k * 5 if i == 1 else (0, 4, 11)[k])
+        s.rect(x, y, 22, h, c, None, 0)
+s.text(22, 52, "How do I…?", 10, INK, True)
+s.rect(22, 60, 256, 50, "#f6fbf6", "#d5ecd8", 4)
+s.text(30, 75, "Copy existing trials", 9, INK, True)
+s.text(30, 89, "1. Click Copy trials …", 9, MUTED)
+s.text(30, 102, "2. Tick the trials to copy …", 9, MUTED)
+save(s, "wn_help.svg")
+
+s = new("Help search")
+s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
+s.text(22, 28, "Help  (F1)", 11, INK, True)
+s.rect(22, 36, 180, 20, "#ffffff", "#9bbbe0", 3)
+s.text(28, 50, "where are all orders of a machine?", 8, INK)
+s.btn(208, 35, "Ask AI", 70, "purple")
+for r, t in enumerate(("All Experiments: Filter by machine", "Backlog: Find a trial series", "Show Experiment: Open a series")):
+    s.rect(22, 62 + r * 18, 256, 16, "#d8e7fa" if r == 0 else "#ffffff", None if r == 0 else "#eeeeee", 2)
+    s.text(28, 74 + r * 18, t, 9, INK, r == 0)
+save(s, "wn_help_search.svg")
+
+# ── All Experiments ─────────────────────────────────────────────────────
+s = new("All Experiments full width")
+s.rect(10, 10, 280, 110, "#ffffff", LINE, 4)
+s.rect(10, 10, 280, 16, "#4a4a4a", None, 4)
+for x, h in ((16, "Exp. ID"), (64, "Trial Series Name"), (210, "Machine"), (258, "RE")):
+    s.text(x, 21, h, 7, "#ffffff", True)
+for r in range(5):
+    y = 26 + r * 18
+    s.rect(10, y, 280, 18, STRIPE_A if r % 2 == 0 else "#ffffff", None, 0)
+    s.text(16, y + 12, f"2026-7{r}-0{r + 3}", 8, INK)
+    s.text(64, y + 12, ["Jet comparison S+ series", "PES 167f72 DTY trials", "TexJet D11 vs N12",
+                        "Overfeed series X48", "ATY core/effect"][r], 8, INK)
+    s.text(210, y + 12, ["eAFK", "SSM", "eAFK", "RPR", "ATY"][r], 8, INK)
+    s.rect(262, y + 4, 10, 10, GREEN, None, 2)
+s.arrow_right(150, 124, 290, GREEN)
+s.parts.append(f'  <polygon points="10,124 18,120 18,128" fill="{GREEN}"/>')
+s.line(18, 124, 150, 124, GREEN, 1.5)
+save(s, "wn_all_experiments.svg")

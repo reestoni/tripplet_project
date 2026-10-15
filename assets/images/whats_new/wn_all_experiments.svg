@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- All Experiments full width - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="10" y="10" width="280" height="110" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="10" y="10" width="280" height="16" rx="4" fill="#4a4a4a"/>
+  <text x="16" y="21" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="start" font-weight="bold">Exp. ID</text>
+  <text x="64" y="21" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="start" font-weight="bold">Trial Series Name</text>
+  <text x="210" y="21" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="start" font-weight="bold">Machine</text>
+  <text x="258" y="21" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="start" font-weight="bold">RE</text>
+  <rect x="10" y="26" width="280" height="18" rx="0" fill="#e9f6e9"/>
+  <text x="16" y="38" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">2026-70-03</text>
+  <text x="64" y="38" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">Jet comparison S+ series</text>
+  <text x="210" y="38" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">eAFK</text>
+  <rect x="262" y="30" width="10" height="10" rx="2" fill="#39a650"/>
+  <rect x="10" y="44" width="280" height="18" rx="0" fill="#ffffff"/>
+  <text x="16" y="56" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">2026-71-04</text>
+  <text x="64" y="56" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">PES 167f72 DTY trials</text>
+  <text x="210" y="56" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">SSM</text>
+  <rect x="262" y="48" width="10" height="10" rx="2" fill="#39a650"/>
+  <rect x="10" y="62" width="280" height="18" rx="0" fill="#e9f6e9"/>
+  <text x="16" y="74" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">2026-72-05</text>
+  <text x="64" y="74" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">TexJet D11 vs N12</text>
+  <text x="210" y="74" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">eAFK</text>
+  <rect x="262" y="66" width="10" height="10" rx="2" fill="#39a650"/>
+  <rect x="10" y="80" width="280" height="18" rx="0" fill="#ffffff"/>
+  <text x="16" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">2026-73-06</text>
+  <text x="64" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">Overfeed series X48</text>
+  <text x="210" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">RPR</text>
+  <rect x="262" y="84" width="10" height="10" rx="2" fill="#39a650"/>
+  <rect x="10" y="98" width="280" height="18" rx="0" fill="#e9f6e9"/>
+  <text x="16" y="110" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">2026-74-07</text>
+  <text x="64" y="110" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">ATY core/effect</text>
+  <text x="210" y="110" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">ATY</text>
+  <rect x="262" y="102" width="10" height="10" rx="2" fill="#39a650"/>
+  <line x1="150" y1="124" x2="283" y2="124" stroke="#39a650" stroke-width="1.5"/>
+  <polygon points="290,124 282,120 282,128" fill="#39a650"/>
+  <polygon points="10,124 18,120 18,128" fill="#39a650"/>
+  <line x1="18" y1="124" x2="150" y2="124" stroke="#39a650" stroke-width="1.5"/>
+</svg>
