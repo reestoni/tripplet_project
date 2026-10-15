@@ -1169,6 +1169,46 @@ class GroupCellBinding:
     field: str
 
 
+_ALERT_ICONS: Dict[Tuple[str, bool], Any] = {}
+
+
+def _alert_icon(kind: str, cb: bool):
+    """Warning symbol for highlighted cells (Settings -> "Mark warnings with a
+    symbol"): red = filled circle with "!", orange = triangle with "!" - the
+    shape differs, so it also works without telling the colours apart."""
+    key = (kind, cb)
+    if key in _ALERT_ICONS:
+        return _ALERT_ICONS[key]
+    from PySide6.QtGui import QPainter, QPixmap, QPolygonF, QIcon
+    from PySide6.QtCore import QPointF, QRectF
+    pm = QPixmap(64, 64)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    if kind == "red":
+        fill = QColor("#000000") if cb else QColor("#C62828")
+        p.setBrush(fill)
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(QRectF(4, 4, 56, 56))
+        text_col = QColor("#FFFFFF")
+    else:
+        fill = QColor("#000000") if cb else QColor("#E65100")
+        p.setBrush(fill)
+        p.setPen(Qt.NoPen)
+        p.drawPolygon(QPolygonF([QPointF(32, 3), QPointF(62, 60), QPointF(2, 60)]))
+        text_col = QColor("#FFFFFF")
+    f = QFont()
+    f.setPixelSize(40)
+    f.setBold(True)
+    p.setFont(f)
+    p.setPen(text_col)
+    p.drawText(QRectF(0, 10 if kind != "red" else 2, 64, 56), Qt.AlignCenter, "!")
+    p.end()
+    icon = QIcon(pm)
+    _ALERT_ICONS[key] = icon
+    return icon
+
+
 class PivotEditModel(QAbstractTableModel):
     """Editierbares Pivot-Tabellenmodell für die Trial-Ansicht.
 
@@ -1205,13 +1245,96 @@ class PivotEditModel(QAbstractTableModel):
     _REF_EVEN = QColor("#FFF4D6")
     _REF_ODD = QColor("#FBE8B5")
 
+    # Display settings (ui/display_prefs.py, passed in by FrozenFirstColumnTable)
+    _CONTRAST_EVEN = QColor("#FFFFFF")
+    _CONTRAST_ODD = QColor("#D0D0D0")
+    _CROSS_LINE = QColor("#FFF3B8")    # row/column of the current cell
+    _CROSS_LABEL = QColor("#FFD54F")   # its parameter name / trial number
+    # Colour-blind friendly (Okabe-Ito): orange / yellow warnings on neutral
+    # stripes, blue crosshair - plus symbols, so colour is never the only cue
+    _CB_EVEN = QColor("#FFFFFF")
+    _CB_ODD = QColor("#E6E6E6")
+    _CB_RED_BG, _CB_RED_FG = QColor("#E69F00"), QColor("#000000")
+    _CB_ORANGE_BG, _CB_ORANGE_FG = QColor("#F0E442"), QColor("#000000")
+    _CB_CROSS_LINE = QColor("#CDE4F7")
+    _CB_CROSS_LABEL = QColor("#7FB8E6")
+
     @property
     def _ALT_EVEN(self):
+        if getattr(self, "_contrast", False):
+            return self._CONTRAST_EVEN
+        if getattr(self, "_cb", False):
+            return self._CB_EVEN
         return QColor(accent_tint())
 
     @property
     def _ALT_ODD(self):
+        if getattr(self, "_contrast", False):
+            return self._CONTRAST_ODD
+        if getattr(self, "_cb", False):
+            return self._CB_ODD
         return QColor(accent_gridline())
+
+    def _cell_font(self) -> QFont:
+        f = getattr(self, "_base_font", None)
+        return QFont(f) if f is not None else QFont()
+
+    def set_display(self, font: QFont, contrast: bool, cross,
+                    alert_marks: bool = False, cb_colours: bool = False) -> None:
+        """Called by FrozenFirstColumnTable when the display settings change."""
+        self._base_font = QFont(font)
+        self._contrast = bool(contrast)
+        self._cross = cross
+        self._alert_marks = bool(alert_marks or cb_colours)
+        self._cb = bool(cb_colours)
+        self._emit_all(Qt.BackgroundRole, Qt.FontRole, Qt.ForegroundRole, Qt.DecorationRole)
+
+    def cell_alert(self, r: int, c: int) -> Optional[str]:
+        """"red" / "orange" / None for a view cell - same rules as the
+        colouring in data() (CV >= 10, cell alerts). Used by the reading bar."""
+        if r < self._n_hdr or c <= 0:
+            return None
+        dr = r - self._n_hdr
+        if not (0 <= dr < len(self._row_titles)):
+            return None
+        title = self._row_titles[dr]
+        if "Elongation CV" in title or "Tenacity CV" in title:
+            raw = self._matrix[dr][c - 1]
+            try:
+                if raw not in (None, "") and float(str(raw).replace(",", ".")) >= 10.0:
+                    return "red"
+            except Exception:
+                pass
+        kind = self._cell_alerts.get((dr, c - 1))
+        return kind if kind in ("red", "orange") else None
+
+    def set_crosshair(self, cross) -> None:
+        """cross = (view row, view column) of the current cell, or None."""
+        if cross == getattr(self, "_cross", None):
+            return
+        self._cross = cross
+        self._emit_all(Qt.BackgroundRole)
+
+    def _emit_all(self, *roles) -> None:
+        if self.rowCount() and self.columnCount():
+            self.dataChanged.emit(self.index(0, 0),
+                                  self.index(self.rowCount() - 1, self.columnCount() - 1), list(roles))
+
+    def _cross_bg(self, r: int, c: int) -> Optional[QColor]:
+        cross = getattr(self, "_cross", None)
+        if not cross:
+            return None
+        cr, cc = cross
+        # colour-blind mode: blue crosshair (yellow is used for warnings there)
+        label, line = (self._CB_CROSS_LABEL, self._CB_CROSS_LINE) if getattr(self, "_cb", False) \
+            else (self._CROSS_LABEL, self._CROSS_LINE)
+        if r < self._n_hdr:
+            return label if (c == cc and c > 0) else None
+        if r == cr:
+            return label if c == 0 else line
+        if c == cc and c > 0:
+            return line
+        return None
 
     @property
     def _HDR_BG_PLY(self):
@@ -1465,6 +1588,9 @@ class PivotEditModel(QAbstractTableModel):
             hdr = self._header_rows[r]
             _is_ref_col = c > 0 and (c - 1) in self._reference_cols
             if role == Qt.BackgroundRole:
+                _xb = self._cross_bg(r, c)
+                if _xb is not None:
+                    return _xb
                 if _is_ref_col:
                     return self._REF_HDR_BG
                 bg = hdr.get("bg")
@@ -1486,7 +1612,7 @@ class PivotEditModel(QAbstractTableModel):
             if role == Qt.TextAlignmentRole:
                 return Qt.AlignCenter
             if role == Qt.FontRole:
-                f = QFont()
+                f = self._cell_font()
                 f.setBold(True)
                 return f
             return None
@@ -1499,7 +1625,7 @@ class PivotEditModel(QAbstractTableModel):
         # (Background/Foreground/Font). Für alle anderen Rollen (v.a.
         # DisplayRole/TextAlignmentRole, die bei resizeColumnsToContents()
         # o.ä. sehr oft aufgerufen werden) lohnt sich das Parsing nicht.
-        if role in (Qt.BackgroundRole, Qt.ForegroundRole, Qt.FontRole):
+        if role in (Qt.BackgroundRole, Qt.ForegroundRole, Qt.FontRole, Qt.DecorationRole):
             # Elongation CV highlight: Wert >= 10 -> rot + fett + heller Rohhintergrund
             _is_elong_cv_alert = False
             # Tenacity CV highlight: Wert >= 10 -> rot + fett + heller Rohhintergrund (analog Elongation CV)
@@ -1526,24 +1652,33 @@ class PivotEditModel(QAbstractTableModel):
             # cell-level alert (Titer out-of-tolerance, Tenacity orange, etc.)
             _cell_alert = self._cell_alerts.get((dr, c - 1)) if c > 0 else None
 
+            _cb = getattr(self, "_cb", False)
+            _red = _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert == "red"
+            if role == Qt.DecorationRole:
+                if getattr(self, "_alert_marks", False) and (_red or _cell_alert == "orange"):
+                    return _alert_icon("red" if _red else "orange", _cb)
+                return None
             if role == Qt.BackgroundRole:
-                if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert == "red":
-                    return QColor("#FFD0D0")  # helles Rot
+                if _red:
+                    return self._CB_RED_BG if _cb else QColor("#FFD0D0")  # helles Rot
                 if _cell_alert == "orange":
-                    return QColor("#FFE5B4")  # helles Orange
+                    return self._CB_ORANGE_BG if _cb else QColor("#FFE5B4")  # helles Orange
+                _xb = self._cross_bg(r, c)
+                if _xb is not None:
+                    return _xb
                 _odd = self._stripe[dr] if self._stripe and dr < len(self._stripe) else dr % 2
                 if c > 0 and (c - 1) in self._reference_cols:
                     return self._REF_EVEN if _odd == 0 else self._REF_ODD
                 return self._ALT_EVEN if _odd == 0 else self._ALT_ODD
             if role == Qt.ForegroundRole:
-                if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert == "red":
-                    return QColor("#CC0000")  # kräftiges Rot
+                if _red:
+                    return self._CB_RED_FG if _cb else QColor("#CC0000")  # kräftiges Rot
                 if _cell_alert == "orange":
-                    return QColor("#B85C00")  # dunkel Orange
+                    return self._CB_ORANGE_FG if _cb else QColor("#B85C00")  # dunkel Orange
                 return self._FG_BLACK
             if role == Qt.FontRole:
                 if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert in ("red", "orange"):
-                    f = QFont()
+                    f = self._cell_font()
                     f.setBold(True)
                     return f
                 return None

@@ -49,6 +49,21 @@ TEXTS = {
                  ["Select cells and press Ctrl+C, then select the target cell and press Ctrl+V.",
                   f"Click {B('Save')}."],
                  "Works between tables and with Excel."),
+                ("task", "Make the tables bigger and easier to read",
+                 [f"In the sidebar under <i>Account</i>, click {B('Settings')}.",
+                  "Under <i>Show Experiment tables</i> choose the text size (Normal, Large, Extra large, Huge). "
+                  "If needed, switch on <i>High contrast</i> and <i>Crosshair</i> (highlights the row and column of "
+                  "the selected cell, so you can see which trial and parameter a value belongs to).",
+                  "<i>Reading bar</i> shows the selected value in large words below the table, e.g. "
+                  "\"V2 · Ply 1 · Air Pressure (bar) = 3.50\". <i>Mark warnings with a symbol</i> adds a circle "
+                  "(out of tolerance) or triangle (check) to highlighted values. <i>Colour-blind friendly colours</i> "
+                  "avoids red/green.",
+                  "<i>App size</i> makes the whole program bigger (buttons, menus, dialogs). It applies after a "
+                  "restart; TrippleT offers to restart right away.",
+                  "Check the preview, then click " + B("Save") + "."],
+                 "Quick zoom in a table: Ctrl + mouse wheel or Ctrl +/-, Ctrl+0 resets to normal. The settings are "
+                 "saved for your login and apply on every PC. The welcome message and the accent colour are also "
+                 "set in Settings."),
                 ("task", "Hide rows you don't need (Machine Data)",
                  ["Right-click the parameter name in the first column (6) → " + M("Hide row") + ". "
                   "To hide several rows at once, first select their names (Ctrl+click), then right-click one of them.",
@@ -182,6 +197,21 @@ TEXTS = {
                  ["Zellen markieren und Strg+C drücken, dann die Zielzelle wählen und Strg+V drücken.",
                   f"Auf {B('Save')} klicken."],
                  "Funktioniert zwischen Tabellen und mit Excel."),
+                ("task", "Tabellen grösser und besser lesbar machen",
+                 [f"In der Sidebar unter <i>Account</i> auf {B('Settings')} klicken.",
+                  "Unter <i>Show Experiment tables</i> die Textgrösse wählen (Normal, Large, Extra large, Huge). "
+                  "Bei Bedarf <i>High contrast</i> und <i>Crosshair</i> einschalten (hebt Zeile und Spalte der "
+                  "gewählten Zelle hervor, damit man sieht, zu welchem Versuch und Parameter ein Wert gehört).",
+                  "<i>Reading bar</i> zeigt den gewählten Wert gross in Worten unter der Tabelle, z.&nbsp;B. "
+                  "\"V2 · Ply 1 · Air Pressure (bar) = 3.50\". <i>Mark warnings with a symbol</i> setzt einen Kreis "
+                  "(ausserhalb der Toleranz) oder ein Dreieck (prüfen) vor markierte Werte. <i>Colour-blind friendly "
+                  "colours</i> verzichtet auf Rot/Grün.",
+                  "<i>App size</i> vergrössert das ganze Programm (Knöpfe, Menüs, Dialoge). Das gilt nach einem "
+                  "Neustart; TrippleT bietet an, gleich neu zu starten.",
+                  "Die Vorschau prüfen, dann auf " + B("Save") + " klicken."],
+                 "Schnell zoomen in einer Tabelle: Strg + Mausrad oder Strg +/-, Strg+0 setzt auf normal zurück. Die "
+                 "Einstellungen gelten für dein Login an jedem PC. Auch Willkommensnachricht und Akzentfarbe werden "
+                 "unter Settings eingestellt."),
                 ("task", "Nicht benötigte Zeilen ausblenden (Machine Data)",
                  ["Rechtsklick auf den Parameternamen in der ersten Spalte (6) → " + M("Hide row") + ". "
                   "Für mehrere Zeilen auf einmal zuerst ihre Namen markieren (Strg+Klick), dann auf einen davon "
@@ -320,6 +350,21 @@ TEXTS = {
                  ["Selecciona celdas y pulsa Ctrl+C, luego elige la celda de destino y pulsa Ctrl+V.",
                   f"Haz clic en {B('Save')}."],
                  "Funciona entre tablas y con Excel."),
+                ("task", "Hacer las tablas más grandes y fáciles de leer",
+                 [f"En la barra lateral, en <i>Account</i>, haz clic en {B('Settings')}.",
+                  "En <i>Show Experiment tables</i> elige el tamaño del texto (Normal, Large, Extra large, Huge). "
+                  "Si hace falta, activa <i>High contrast</i> y <i>Crosshair</i> (resalta la fila y la columna de la "
+                  "celda seleccionada, para ver a qué ensayo y parámetro pertenece un valor).",
+                  "<i>Reading bar</i> muestra el valor seleccionado en letra grande debajo de la tabla, p.&nbsp;ej. "
+                  "\"V2 · Ply 1 · Air Pressure (bar) = 3.50\". <i>Mark warnings with a symbol</i> añade un círculo "
+                  "(fuera de tolerancia) o un triángulo (revisar) a los valores marcados. <i>Colour-blind friendly "
+                  "colours</i> evita el rojo/verde.",
+                  "<i>App size</i> agranda todo el programa (botones, menús, diálogos). Se aplica tras reiniciar; "
+                  "TrippleT ofrece reiniciar enseguida.",
+                  "Revisa la vista previa y haz clic en " + B("Save") + "."],
+                 "Zoom rápido en una tabla: Ctrl + rueda del ratón o Ctrl +/-, Ctrl+0 vuelve al tamaño normal. Los "
+                 "ajustes se guardan para tu usuario y valen en cualquier PC. El mensaje de bienvenida y el color de "
+                 "acento también se ajustan en Settings."),
                 ("task", "Ocultar filas que no necesitas (Machine Data)",
                  ["Clic derecho en el nombre del parámetro en la primera columna (6) → " + M("Hide row") + ". "
                   "Para ocultar varias filas a la vez, selecciona primero sus nombres (Ctrl+clic) y haz clic "

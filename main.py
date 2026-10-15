@@ -57,6 +57,14 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget, QMessag
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt, QTimer
 
+# App size (Settings -> App size, ui/display_prefs.py): Qt reads
+# QT_SCALE_FACTOR only before the first QApplication is created.
+try:
+    from ui.display_prefs import apply_startup_scale
+    apply_startup_scale()
+except Exception:
+    pass
+
 # --- DB-Modus wählen (nur im Quellcode-Start, NICHT in der gebauten .exe) ---
 # Muss vor jedem Import passieren, der db.connection lädt (u.a. ui.theme, ui.screen_login).
 # In der gefrorenen .exe (PyInstaller) läuft TrippleT immer im prod-Modus, mit

@@ -2,10 +2,21 @@
 from __future__ import annotations
 from typing import Optional
 from PySide6.QtCore import Qt, Slot, QEvent
+from PySide6.QtGui import QFont, QKeySequence, QShortcut
+from PySide6.QtCore import QSize
 from PySide6.QtWidgets import (
-    QWidget, QGridLayout, QTableView, QAbstractItemView, QHeaderView, QSizePolicy
+    QWidget, QGridLayout, QTableView, QAbstractItemView, QHeaderView, QSizePolicy, QLabel
 )
 from PySide6.QtCore import QItemSelectionModel
+
+from ui import display_prefs
+
+# High contrast (Settings -> Display, see ui/display_prefs.py): appended to
+# the table's own stylesheet so it wins over grid/selection colours there.
+_CONTRAST_QSS = """
+QTableView { gridline-color: #404040; color: #000000; }
+QTableView::item:selected { background: #1F4E8C; color: #FFFFFF; }
+"""
 
 
 class FrozenFirstColumnTable(QWidget):
@@ -56,6 +67,13 @@ class FrozenFirstColumnTable(QWidget):
         lay.addWidget(self.top_right, 0, 1)
         lay.addWidget(self.bottom_left, 1, 0)
         lay.addWidget(self.bottom_right, 1, 1)
+        # Reading bar (Settings -> "Reading bar"): the current cell in plain
+        # words, e.g. "V2 · Ply 1 · Air Pressure (bar) = 3.50"
+        self.read_bar = QLabel(self)
+        self.read_bar.setTextFormat(Qt.RichText)
+        self.read_bar.setWordWrap(True)
+        self.read_bar.setVisible(False)
+        lay.addWidget(self.read_bar, 2, 0, 1, 2)
 
         self.top_left.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.bottom_left.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
@@ -111,6 +129,24 @@ class FrozenFirstColumnTable(QWidget):
         self.bottom_right.verticalHeader().installEventFilter(self)
         self._sync_vheader_visibility()
 
+        # ── Display settings (text size, contrast, crosshair) ────────────
+        self._user_qss = ""
+        self._fixed_data_w: Optional[int] = None
+        self._base_font = QFont(self.bottom_right.font())
+        self._base_row_h = self.bottom_right.verticalHeader().defaultSectionSize()
+        for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):
+            v.viewport().installEventFilter(self)  # Ctrl+mouse wheel = zoom
+        for keys, step in ((QKeySequence.ZoomIn, 1), (QKeySequence("Ctrl+="), 1),
+                           (QKeySequence.ZoomOut, -1)):
+            sc = QShortcut(keys, self)
+            sc.setContext(Qt.WidgetWithChildrenShortcut)
+            sc.activated.connect(lambda s=step: display_prefs.zoom_step(s))
+        sc0 = QShortcut(QKeySequence("Ctrl+0"), self)
+        sc0.setContext(Qt.WidgetWithChildrenShortcut)
+        sc0.activated.connect(lambda: display_prefs.update(scale=100))
+        display_prefs.add_listener(self._apply_display)
+        self._apply_display()
+
     # ---------- Öffentliche API ----------
 
     def setModel(self, model):
@@ -122,6 +158,10 @@ class FrozenFirstColumnTable(QWidget):
         for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):
             v.setModel(model)
             v.setSelectionModel(sel)
+        sel.currentChanged.connect(self._on_current_changed)
+        model.dataChanged.connect(self._update_read_bar)
+        self._pass_display_to_model()
+        self._update_read_bar()
 
         self._apply_row_and_column_visibility()
 
@@ -177,6 +217,13 @@ class FrozenFirstColumnTable(QWidget):
             v.setEditTriggers(triggers)
 
     def setStyleSheet(self, style):  # noqa: N802
+        self._user_qss = style or ""
+        self._apply_qss()
+
+    def _apply_qss(self):
+        style = self._user_qss
+        if display_prefs.current().get("contrast"):
+            style = style + _CONTRAST_QSS
         QWidget.setStyleSheet(self, style)
         for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):
             v.setStyleSheet(style)
@@ -195,7 +242,10 @@ class FrozenFirstColumnTable(QWidget):
         """
         self.top_left.resizeColumnToContents(0)
         self.bottom_left.resizeColumnToContents(0)
+        self._fixed_data_w = fixed_data_column_width
         if fixed_data_column_width is not None:
+            # scaled with the text size (Settings -> Display)
+            fixed_data_column_width = int(fixed_data_column_width * display_prefs.scale() / 100)
             model = self.bottom_right.model()
             n_cols = model.columnCount() if model else 0
             for c in range(1, n_cols):
@@ -276,9 +326,120 @@ class FrozenFirstColumnTable(QWidget):
         try:
             if obj is self.bottom_right.verticalHeader() and ev.type() in (QEvent.Hide, QEvent.Show):
                 self._sync_vheader_visibility()
+            elif ev.type() == QEvent.Wheel and ev.modifiers() & Qt.ControlModifier:
+                dy = ev.angleDelta().y()
+                if dy:
+                    display_prefs.zoom_step(1 if dy > 0 else -1)
+                return True
         except Exception:
             pass
         return super().eventFilter(obj, ev)
+
+    # ---------- Display settings ----------
+
+    def _display_font(self) -> QFont:
+        p = display_prefs.current()
+        f = QFont(self._base_font)
+        s = p["scale"] / 100.0
+        if f.pointSizeF() > 0:
+            f.setPointSizeF(f.pointSizeF() * s)
+        elif f.pixelSize() > 0:
+            f.setPixelSize(max(6, int(f.pixelSize() * s)))
+        if p["contrast"]:
+            f.setBold(True)
+        return f
+
+    def _pass_display_to_model(self):
+        """Models that know the display settings (PivotEditModel): bold
+        fonts in the right size, contrast stripes, crosshair."""
+        model = self._model
+        if model is None or not hasattr(model, "set_display"):
+            return
+        p = display_prefs.current()
+        cur = self.bottom_right.selectionModel().currentIndex() if self.bottom_right.selectionModel() else None
+        cross = (cur.row(), cur.column()) if (p["crosshair"] and cur is not None and cur.isValid()) else None
+        model.set_display(self._display_font(), bool(p["contrast"]), cross,
+                          alert_marks=bool(p["alert_marks"]), cb_colours=bool(p["cb_colours"]))
+
+    def _apply_display(self):
+        f = self._display_font()
+        row_h = max(self._base_row_h, int(self._base_row_h * display_prefs.scale() / 100))
+        icon_px = max(12, int(row_h * 0.55))
+        for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):
+            v.setFont(f)
+            v.verticalHeader().setDefaultSectionSize(row_h)
+            v.setIconSize(QSize(icon_px, icon_px))
+        self._style_read_bar(f)
+        self._apply_qss()
+        self._pass_display_to_model()
+        if self._model is not None:
+            if self._fixed_data_w is not None:
+                self.resizeColumnsToContents(fixed_data_column_width=self._fixed_data_w)
+            else:
+                self.top_left.resizeColumnToContents(0)
+                self.bottom_left.resizeColumnToContents(0)
+                self._update_left_width()
+            self._update_top_height()
+
+    def _style_read_bar(self, table_font: QFont):
+        p = display_prefs.current()
+        self.read_bar.setVisible(bool(p["readbar"]))
+        # font size via stylesheet - the app stylesheet would override setFont()
+        if table_font.pointSizeF() > 0:
+            size = f"{table_font.pointSizeF() * 1.4:.1f}pt"
+        else:
+            size = f"{int(max(table_font.pixelSize(), 12) * 1.4)}px"
+        if p["contrast"]:
+            colours = "background:#000000;color:#FFFFFF;border:2px solid #000;"
+        else:
+            colours = "background:#F4F7FB;color:#1a1a1a;border:1px solid #9bbbe0;"
+        self.read_bar.setStyleSheet(f"QLabel{{{colours}padding:8px 12px;font-size:{size};}}")
+        self._update_read_bar()
+
+    def read_bar_text(self, index) -> str:
+        """Plain-word description of a cell: header values (trial, ply),
+        parameter name, value - and "warning" for highlighted cells."""
+        import html as _html
+        model = self._model
+        if model is None or index is None or not index.isValid():
+            return "Click a value in the table."
+        r, c = index.row(), index.column()
+        parts = []
+        if c > 0:
+            for h in range(self._n_hdr):
+                v = str(model.data(model.index(h, c), Qt.DisplayRole) or "").strip()
+                if v and v not in parts:
+                    parts.append(v)
+        if r < self._n_hdr:
+            return _html.escape(" · ".join(parts)) if parts else ""
+        title = str(model.data(model.index(r, 0), Qt.DisplayRole) or "").strip()
+        if title:
+            parts.append(title)
+        where = _html.escape(" · ".join(parts))
+        if c == 0:
+            return f"<b>{where}</b>"
+        val = str(model.data(index, Qt.DisplayRole) or "").strip()
+        val_html = f"<b>{_html.escape(val)}</b>" if val else "<i>(empty)</i>"
+        alert = model.cell_alert(r, c) if hasattr(model, "cell_alert") else None
+        warn = "  –  <b>! Warning</b>" if alert == "red" else ("  –  <b>! Check</b>" if alert else "")
+        return f"{where} = {val_html}{warn}"
+
+    def _update_read_bar(self, *_args):
+        if not display_prefs.current().get("readbar"):
+            return
+        sel = self.bottom_right.selectionModel()
+        cur = sel.currentIndex() if sel is not None else None
+        self.read_bar.setText(self.read_bar_text(cur))
+
+    def _on_current_changed(self, current, _previous):
+        self._update_read_bar()
+        model = self._model
+        if model is None or not hasattr(model, "set_crosshair"):
+            return
+        if display_prefs.current().get("crosshair") and current.isValid():
+            model.set_crosshair((current.row(), current.column()))
+        else:
+            model.set_crosshair(None)
 
     def _sync_row_height(self, target_view: QTableView, row: int, new_size: int):
         if self._syncing:

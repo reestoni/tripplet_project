@@ -67,7 +67,9 @@ TEXTS = {
                   + " (reassign yarn) or " + M("Delete trial series…") + "."],
                  "Superusers only."),
                 ("task", "Change my welcome message",
-                 ["Click the welcome line at the top of the screen and enter a new text."]),
+                 ["Click the welcome line at the top of the screen and enter a new text."],
+                 "Or in the sidebar under <i>Account</i> → <b>Settings</b>. There you can also change the accent "
+                 "colour and make the tables in Show Experiment bigger and easier to read."),
             ]},
             {"key": "screen", "title": "Screen guide", "blocks": [
                 ("svg", SVG, {"flow_title": "Status flow",
@@ -165,7 +167,9 @@ TEXTS = {
                   + " oder " + M("Delete trial series…") + "."],
                  "Nur für Superuser."),
                 ("task", "Meine Begrüssung ändern",
-                 ["Auf die Begrüssungszeile oben im Bildschirm klicken und einen neuen Text eingeben."]),
+                 ["Auf die Begrüssungszeile oben im Bildschirm klicken und einen neuen Text eingeben."],
+                 "Oder in der Sidebar unter <i>Account</i> → <b>Settings</b>. Dort lassen sich auch die Akzentfarbe "
+                 "ändern und die Tabellen in Show Experiment grösser und besser lesbar machen."),
             ]},
             {"key": "screen", "title": "Bildschirm", "blocks": [
                 ("svg", SVG, {"flow_title": "Status-Ablauf",
@@ -263,7 +267,9 @@ TEXTS = {
                   + " (reasignar hilo) o " + M("Delete trial series…") + "."],
                  "Solo superusuarios."),
                 ("task", "Cambiar mi mensaje de bienvenida",
-                 ["Haz clic en la línea de bienvenida arriba en la pantalla e introduce un texto nuevo."]),
+                 ["Haz clic en la línea de bienvenida arriba en la pantalla e introduce un texto nuevo."],
+                 "O en la barra lateral, en <i>Account</i> → <b>Settings</b>. Ahí también puedes cambiar el color "
+                 "de acento y hacer las tablas de Show Experiment más grandes y fáciles de leer."),
             ]},
             {"key": "screen", "title": "Pantalla", "blocks": [
                 ("svg", SVG, {"flow_title": "Flujo de estados",

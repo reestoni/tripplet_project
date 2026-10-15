@@ -769,8 +769,13 @@ def build_utility_group(sidebar: SidebarPanel, *, on_logout: Optional[Callable] 
     Sidebar - siehe build_pinned_bell()."""
     sidebar.add_section_header("user_white.png", "Account")
 
-    btn_accent = green_btn("Accent Colour", lambda: pick_accent_colour(sidebar))
-    sidebar.add_item(btn_accent)
+    # "Settings" (welcome message, accent colour, display of the Show
+    # Experiment tables) replaces the former "Accent Colour" button
+    def _open_settings():
+        from ui.widgets.user_settings_dialog import open_user_settings
+        open_user_settings(sidebar.window())
+    btn_settings = green_btn("Settings", _open_settings)
+    sidebar.add_item(btn_settings)
 
     btn_logout = green_btn("Log Out", on_logout)
     btn_logout.setVisible(callable(on_logout))
