@@ -57,12 +57,20 @@ TEXTS = {
                 ("task", "Add new trials",
                  ["Click the <b>+</b> icon (add trial) on the right of (2). Create Experiment opens in the mode for adding trials to this series."]),
                 ("task", "Copy existing trials",
-                 ["In <i>Machine Data</i>, right-click a trial number in the first row (4) → " + M("Copy trials…") + ".",
-                  "In <i>Copy trials</i>, choose from/to trial and the number of copies per trial, then OK."],
+                 [f"Click {B('Copy trials')} on the right of (2), or right-click a trial number (4) → "
+                  + M("Copy trials…") + ".",
+                  "Tick the trials to copy (Shift+click ticks a whole range). Trials whose columns you selected "
+                  "in the table are already ticked.",
+                  "Choose how often and the order: <i>Repeat the block</i> (V1 V2 | V1 V2) or <i>Each trial in "
+                  "a row</i> (V1 V1 | V2 V2).",
+                  "Check the result table: if needed, change values of the copies there (e.g. another air "
+                  "pressure or jet; on ATY also OF Core / OF Effect). Changed cells are highlighted. "
+                  "<i>Show all fields</i> shows the other machine settings.",
+                  f"Click {B('Copy n trials')}."],
                  "Machine settings and plies are copied. Lab values and the yarn tensions before/after the "
-                 "jet of the copies stay empty. The new trials "
-                 "are added at the end. Several copies of a range are added as repeated blocks "
-                 "(e.g. V1–V6 copied 5 times: V7–V12 = V1–V6, V13–V18 = V1–V6, …). Reference samples are never copied."),
+                 "jet of the copies stay empty. The new trials are added at the end and highlighted in the "
+                 "table. Values per ply (e.g. T1/T2 tension) are changed afterwards in the table or in "
+                 "<i>Manage plies</i>. Reference samples are never copied."),
                 ("task", "Add a reference sample (e.g. a customer's original spool)",
                  [f"Click {B('+ Ref')} on the right of (2), or right-click a trial number (4) → "
                   + M("Add reference sample…") + ".",
@@ -108,7 +116,8 @@ TEXTS = {
                     ("(1) Toolbar", "Experiment ID and series, attachments (upload and show images/PDFs), Statimat and "
                                     "Itemat import, report icon and saved reports (list + Go!), reload (↻), Save and this help."),
                     ("(2) Material line", "Material of the series, linked experiment request (ER), machine info, "
-                                          "trial labels, <b>+T</b> (add trials) and <b>+ Ref</b> (add reference sample)."),
+                                          "trial labels, <b>+T</b> (add trials), <b>+ Ref</b> (add reference sample) and "
+                                          "<b>Copy trials</b>."),
                     ("(3) Tabs", "One tab per kind of data, see the <i>Tabs</i> tab. Lab tabs only appear if the "
                                  "series uses that lab machine."),
                     ("(4) Trial row", "Trial numbers (V1, V2, …); reference samples come first as <b>Ref</b> "
@@ -170,14 +179,20 @@ TEXTS = {
                 ("task", "Neue Versuche hinzufügen",
                  ["Rechts in (2) auf das <b>+</b>-Symbol (Versuch hinzufügen) klicken. Create Experiment öffnet sich im Modus zum Hinzufügen von Versuchen zu dieser Serie."]),
                 ("task", "Bestehende Versuche kopieren",
-                 ["In <i>Machine Data</i> mit Rechtsklick auf eine Versuchsnummer in der ersten Zeile (4) → "
+                 [f"Rechts in (2) auf {B('Copy trials')} klicken oder Rechtsklick auf eine Versuchsnummer (4) → "
                   + M("Copy trials…") + ".",
-                  "In <i>Copy trials</i> Von-/Bis-Versuch und Anzahl Kopien pro Versuch wählen, dann OK."],
+                  "Die zu kopierenden Versuche anhaken (Shift+Klick hakt einen ganzen Bereich an). Versuche, deren "
+                  "Spalten in der Tabelle markiert sind, sind schon angehakt.",
+                  "Anzahl und Reihenfolge wählen: <i>Repeat the block</i> (V1 V2 | V1 V2) oder <i>Each trial in "
+                  "a row</i> (V1 V1 | V2 V2).",
+                  "Die Ergebnistabelle prüfen: bei Bedarf dort Werte der Kopien ändern (z.&nbsp;B. anderer Luftdruck "
+                  "oder Jet; bei ATY auch OF Core / OF Effect). Geänderte Zellen werden hervorgehoben. "
+                  "<i>Show all fields</i> zeigt die übrigen Maschineneinstellungen.",
+                  f"Auf {B('Copy n trials')} klicken."],
                  "Maschineneinstellungen und Plies werden kopiert. Die Laborwerte und die Fadenspannungen vor/nach "
-                 "Jet der Kopien bleiben leer. Die neuen "
-                 "Versuche werden hinten angehängt. Mehrere Kopien eines Bereichs werden als wiederholte Blöcke "
-                 "angehängt (z. B. V1–V6 fünfmal kopiert: V7–V12 = V1–V6, V13–V18 = V1–V6, …). "
-                 "Referenzmuster werden nie mitkopiert."),
+                 "Jet der Kopien bleiben leer. Die neuen Versuche werden hinten angehängt und in der Tabelle "
+                 "markiert. Werte pro Ply (z.&nbsp;B. T1/T2-Spannung) werden danach in der Tabelle oder in "
+                 "<i>Manage plies</i> geändert. Referenzmuster werden nie mitkopiert."),
                 ("task", "Ein Referenzmuster hinzufügen (z.&nbsp;B. Originalspule eines Kunden)",
                  [f"Rechts in (2) auf {B('+ Ref')} klicken oder Rechtsklick auf eine Versuchsnummer (4) → "
                   + M("Add reference sample…") + ".",
@@ -224,8 +239,8 @@ TEXTS = {
                     ("(1) Werkzeugleiste", "Experiment-ID und Serie, Anhänge (Bilder/PDFs hochladen und ansehen), Statimat- "
                                            "und Itemat-Import, Report-Symbol und gespeicherte Reports (Liste + Go!), neu laden (↻), Save und diese Hilfe."),
                     ("(2) Materialzeile", "Material der Serie, verknüpfter Experiment Request (ER), Maschineninfo, "
-                                          "Versuchsetiketten, <b>+T</b> (Versuche hinzufügen) und <b>+ Ref</b> "
-                                          "(Referenzmuster hinzufügen)."),
+                                          "Versuchsetiketten, <b>+T</b> (Versuche hinzufügen), <b>+ Ref</b> "
+                                          "(Referenzmuster hinzufügen) und <b>Copy trials</b>."),
                     ("(3) Tabs", "Ein Tab pro Datenart, siehe Tab <i>Tabs</i>. Labor-Tabs erscheinen nur, wenn die Serie "
                                  "diese Labormaschine verwendet."),
                     ("(4) Versuchszeile", "Versuchsnummern (V1, V2, …); Referenzmuster stehen zuerst als "
@@ -288,14 +303,20 @@ TEXTS = {
                 ("task", "Añadir ensayos nuevos",
                  ["Haz clic en el icono <b>+</b> (añadir ensayo) a la derecha de (2). Create Experiment se abre en el modo para añadir ensayos a esta serie."]),
                 ("task", "Copiar ensayos existentes",
-                 ["En <i>Machine Data</i>, clic derecho en un número de ensayo de la primera fila (4) → "
+                 [f"Haz clic en {B('Copy trials')} a la derecha de (2), o clic derecho en un número de ensayo (4) → "
                   + M("Copy trials…") + ".",
-                  "En <i>Copy trials</i>, elige el ensayo inicial y final y el número de copias por ensayo, y haz clic en OK."],
+                  "Marca los ensayos que quieres copiar (Shift+clic marca un rango entero). Los ensayos cuyas "
+                  "columnas seleccionaste en la tabla ya están marcados.",
+                  "Elige cuántas veces y el orden: <i>Repeat the block</i> (V1 V2 | V1 V2) o <i>Each trial in "
+                  "a row</i> (V1 V1 | V2 V2).",
+                  "Revisa la tabla de resultado: si hace falta, cambia ahí los valores de las copias (p.&nbsp;ej. "
+                  "otra presión de aire u otro jet; en ATY también OF Core / OF Effect). Las celdas cambiadas se "
+                  "resaltan. <i>Show all fields</i> muestra los demás ajustes de máquina.",
+                  f"Haz clic en {B('Copy n trials')}."],
                  "Se copian los ajustes de máquina y los plies. Los valores de laboratorio y las tensiones del "
-                 "hilo antes/después del jet de las copias quedan "
-                 "vacíos. Los ensayos nuevos se añaden al final. Varias copias de un rango se añaden como "
-                 "bloques repetidos (p. ej. V1–V6 copiado 5 veces: V7–V12 = V1–V6, V13–V18 = V1–V6, …). "
-                 "Las muestras de referencia nunca se copian."),
+                 "hilo antes/después del jet de las copias quedan vacíos. Los ensayos nuevos se añaden al final y "
+                 "se resaltan en la tabla. Los valores por ply (p.&nbsp;ej. tensión T1/T2) se cambian después en la "
+                 "tabla o en <i>Manage plies</i>. Las muestras de referencia nunca se copian."),
                 ("task", "Añadir una muestra de referencia (p.&nbsp;ej. la bobina original de un cliente)",
                  [f"Haz clic en {B('+ Ref')} a la derecha de (2), o clic derecho en un número de ensayo (4) → "
                   + M("Add reference sample…") + ".",
@@ -344,8 +365,8 @@ TEXTS = {
                                                   "importación de Statimat e Itemat, icono de informe e informes guardados (lista + Go!), "
                                                   "recargar (↻), Save y esta ayuda."),
                     ("(2) Línea de material", "Material de la serie, solicitud de experimento vinculada (ER), datos de "
-                                              "la máquina, etiquetas de ensayos, <b>+T</b> (añadir ensayos) y "
-                                              "<b>+ Ref</b> (añadir muestra de referencia)."),
+                                              "la máquina, etiquetas de ensayos, <b>+T</b> (añadir ensayos), "
+                                              "<b>+ Ref</b> (añadir muestra de referencia) y <b>Copy trials</b>."),
                     ("(3) Pestañas", "Una pestaña por tipo de datos, ver la pestaña <i>Pestañas</i>. Las pestañas de "
                                      "laboratorio solo aparecen si la serie usa esa máquina."),
                     ("(4) Fila de ensayos", "Números de ensayo (V1, V2, …); las muestras de referencia van primero "

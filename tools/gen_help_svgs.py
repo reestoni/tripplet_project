@@ -141,6 +141,7 @@ s.text(112, 70, "PES POY 280/167f72 dtex", 11, INK, True)
 x = s.btn(270, 56, "ER", 30, "white") + 8
 s.text(x, 70, "Machine: RPR 3SDS · Jets …", 10, MUTED)
 s.btn(744, 56, "label", 38, "white"); s.btn(788, 56, "+", 30, "white"); s.btn(824, 56, "+ Ref", 46, "amber")
+s.btn(874, 56, "Copy trials", 54, "grey", size=8)
 # Tabs
 s.marker(22, 102, "3")
 x = 56

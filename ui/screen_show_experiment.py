@@ -393,62 +393,6 @@ class _FillRowRangeJetDialog(QDialog):
         return a, b, self.cb_jet.currentData()
 
 
-class _CopyTrialsRangeDialog(QDialog):
-    """Dialog to batch-copy a range of trials (by Versuchsnummer), each once
-    by default - counterpart to the single-trial "copy N times" flow for
-    "copy trials V7 through V20, once each" (From==To with Copies>1 still
-    covers the old single-trial-N-times case, so this replaces that dialog
-    rather than living alongside it)."""
-
-    def __init__(self, parent: QWidget, v_min: int, v_max: int, v_default: int):
-        super().__init__(parent)
-        self.setWindowTitle("Copy trials")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(10)
-        layout.addWidget(QLabel(f"Trials V{v_min}–V{v_max} in this series."))
-
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignRight)
-        form.setFormAlignment(Qt.AlignLeft)
-
-        self.sp_from = QSpinBox()
-        self.sp_from.setRange(v_min, v_max)
-        self.sp_from.setValue(v_default)
-
-        self.sp_to = QSpinBox()
-        self.sp_to.setRange(v_min, v_max)
-        self.sp_to.setValue(v_default)
-
-        self.sp_copies = QSpinBox()
-        self.sp_copies.setRange(1, 50)
-        self.sp_copies.setValue(1)
-
-        form.addRow("From trial #", self.sp_from)
-        form.addRow("To trial #", self.sp_to)
-        form.addRow("Copies per trial", self.sp_copies)
-        layout.addLayout(form)
-
-        hint = QLabel("Several copies are added as repeated blocks of the range\n"
-                      "(e.g. V1–V3 twice → V1, V2, V3, V1, V2, V3).")
-        hint.setStyleSheet("color: #666;")
-        layout.addWidget(hint)
-
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.accepted.connect(self.accept)
-        btns.rejected.connect(self.reject)
-        layout.addWidget(btns)
-
-    def get_values(self) -> Tuple[int, int, int]:
-        """Returns (from_versuchsnummer, to_versuchsnummer, copies_per_trial)."""
-        a = int(self.sp_from.value())
-        b = int(self.sp_to.value())
-        if b < a:
-            a, b = b, a
-        return a, b, int(self.sp_copies.value())
-
-
 class _FillRowRangeDropdownDialog(QDialog):
     """Dialog zum Füllen eines Zeilenbereichs mit einem FK-Wert aus einer Combobox."""
     """Generischer Bulk-Edit-Dialog für Lookup-Zeilen (z.B. DiscType).
@@ -3849,6 +3793,15 @@ class ShowExperimentScreen(QWidget):
         self.btn_add_reference.clicked.connect(self._add_reference_sample)
         _mfb_lay.addWidget(self.btn_add_reference)
 
+        # ── "Copy trials" Button (selected columns are preselected) ─────────
+        self.btn_copy_trials = QPushButton("Copy trials")
+        self.btn_copy_trials.setToolTip(
+            "Copy trials - choose which trials and how often, and change values\n"
+            "for the copies before copying. Trials selected in the table are preselected.")
+        self.btn_copy_trials.setFixedHeight(30)
+        self.btn_copy_trials.clicked.connect(self._on_copy_trials_button)
+        _mfb_lay.addWidget(self.btn_copy_trials)
+
         vm.addWidget(self._mat_filter_bar)
 
         self.tbl_machine = FrozenFirstColumnTable()
@@ -4033,6 +3986,8 @@ class ShowExperimentScreen(QWidget):
 
             if hasattr(self, "btn_add_reference") and self.btn_add_reference:
                 self.btn_add_reference.setEnabled(bool(can_write) and has_reference_columns())
+            if hasattr(self, "btn_copy_trials") and self.btn_copy_trials:
+                self.btn_copy_trials.setEnabled(bool(can_write))
         except Exception:
             # If anything goes wrong, keep button enabled and let _save_all guard.
             pass
@@ -5527,60 +5482,15 @@ class ShowExperimentScreen(QWidget):
     # ---------- Titer (nur sichtbar wenn Daten) ----------
 
     def _on_machine_header_context(self, pos):
-        """Right-click on the column header in the Machine tab.
-
-        Opens the batch-copy dialog (from/to trial # + copies per trial),
-        pre-filled with the clicked trial as both From and To - this still
-        covers the simple "copy this one trial N times" case (From == To,
-        Copies > 1), plus the batch case "copy trials 7 through 20, once
-        each" (From != To, Copies = 1).
-        """
+        """Right-click on the (hidden) real column header in the Machine tab
+        - opens the copy dialog with the clicked trial preselected. The
+        active path is the trial-number row, see _on_trial_header_menu()."""
         if not self.model_machine or not self._trial_ids:
             return
-
-        header = self.tbl_machine.horizontalHeader()
-        col = header.logicalIndexAt(pos)
-        # Column 0 = row title column (not a trial)
-        if col <= 0:
-            return
-
-        trial_index = col - 1
-        if trial_index < 0 or trial_index >= len(self._trial_ids):
-            return
-
-        try:
-            trial_numbers = [int(v) for v in self._trial_vnos]
-        except (TypeError, ValueError):
-            return
-        # Range only over real trials - reference samples (negative numbers)
-        # are never copied.
-        real_numbers = [
-            v for i, v in enumerate(trial_numbers)
-            if int(self._trial_ids[i]) not in self._reference_names
-        ]
-        if not real_numbers:
-            return
-        v_default = trial_numbers[trial_index]
-        if v_default not in real_numbers:
-            v_default = min(real_numbers)
-
-        dlg = _CopyTrialsRangeDialog(
-            self, min(real_numbers), max(real_numbers), v_default,
-        )
-        if dlg.exec() != QDialog.Accepted:
-            return
-        v_from, v_to, copies = dlg.get_values()
-
-        # Reference samples are never copied (they're not trials).
-        trial_indices = [
-            i for i, v in enumerate(trial_numbers)
-            if v_from <= v <= v_to and int(self._trial_ids[i]) not in self._reference_names
-        ]
-        if not trial_indices:
-            QMessageBox.information(self, "Copy trials", "No trials found in the selected range\n(reference samples are never copied).")
-            return
-
-        self._duplicate_trial_range(trial_indices, copies)
+        col = self.tbl_machine.horizontalHeader().logicalIndexAt(pos)
+        col_specs = getattr(self, "_machine_col_specs", None) or []
+        if 1 <= col <= len(col_specs):
+            self._open_copy_trials_dialog([col_specs[col - 1]["trial_id"]])
 
     def _toggle_custom_group_row(self) -> None:
         """Schaltet die Custom-Group-Zeile im Machine-Tab ein/aus und speichert den Zustand."""
@@ -5645,67 +5555,69 @@ class ShowExperimentScreen(QWidget):
                 self.lbl_material_value.setText(txt or "—")
 
     def _multiply_trial_from_col_spec_idx(self, col_spec_idx: int) -> None:
-        """Opens the batch-copy dialog for the trial mapped to col_spec_idx.
-        This is the actually active right-click path (row 0 of the Machine
-        table shows the trial numbers as a pseudo-header - the real Qt
-        column header is hidden, see _MachineContextMenuFilter);
-        _on_machine_header_context is wired to that hidden real header and
-        is therefore effectively never reached.
+        """"Copy trials..." from the trial-number row (row 0 of the Machine
+        table) - opens the copy dialog with that trial preselected.
+        col_spec_idx = index into _machine_col_specs (= model column - 1)."""
+        col_specs = getattr(self, "_machine_col_specs", None) or []
+        if 0 <= col_spec_idx < len(col_specs):
+            self._open_copy_trials_dialog([col_specs[col_spec_idx]["trial_id"]])
 
-        col_spec_idx = index into _machine_col_specs (= model column minus
-        1). Multiple ply columns can belong to the same trial, so the
-        correct trial_id/trial_index is resolved via _machine_col_specs.
-        """
-        if not self.model_machine or not self._trial_ids:
-            return
-
-        col_specs = getattr(self, "_machine_col_specs", None)
-        if not col_specs or col_spec_idx < 0 or col_spec_idx >= len(col_specs):
-            return
-
-        cs = col_specs[col_spec_idx]
-        trial_id = cs.get("trial_id")
-
-        # trial_index = position in self._trial_ids
+    def _on_copy_trials_button(self) -> None:
+        """"Copy trials" button: trials whose columns are selected in the
+        Machine table are preselected (none selected -> nothing preselected)."""
+        preselected = []
+        col_specs = getattr(self, "_machine_col_specs", None) or []
         try:
-            trial_index = self._trial_ids.index(trial_id)
-        except ValueError:
-            QMessageBox.warning(self, "Error", f"Trial ID {trial_id} not found.")
-            return
+            sel = self.tbl_machine.right.selectionModel()
+            cols = sorted({ix.column() for ix in sel.selectedIndexes()}) if sel else []
+            for c in cols:
+                if 1 <= c <= len(col_specs):
+                    tid = col_specs[c - 1]["trial_id"]
+                    if tid not in preselected:
+                        preselected.append(tid)
+        except Exception:
+            preselected = []
+        self._open_copy_trials_dialog(preselected)
 
-        try:
-            trial_numbers = [int(v) for v in self._trial_vnos]
-        except (TypeError, ValueError):
+    def _open_copy_trials_dialog(self, preselected_trial_ids) -> None:
+        """Opens the copy dialog (ui/copy_trials_dialog.py) and runs the copy.
+        Reference samples are never offered (they're not trials)."""
+        from ui.copy_trials_dialog import CopyTrialsDialog, build_copy_fields, load_source_values
+        if self._series_pk is None or not self._trial_ids:
             return
-        # Range only over real trials - reference samples (negative numbers)
-        # are never copied.
-        real_numbers = [
-            v for i, v in enumerate(trial_numbers)
-            if int(self._trial_ids[i]) not in self._reference_names
+        if self._get_access_level() <= 1:
+            return
+        trials = [
+            {"id": int(tid), "vno": vno}
+            for tid, vno in zip(self._trial_ids, self._trial_vnos)
+            if int(tid) not in self._reference_names
         ]
-        if not real_numbers:
+        if not trials:
+            QMessageBox.information(self, "Copy trials", "There are no trials to copy in this series.")
             return
-        v_default = trial_numbers[trial_index]
-        if v_default not in real_numbers:
-            v_default = min(real_numbers)
-
-        dlg = _CopyTrialsRangeDialog(
-            self, min(real_numbers), max(real_numbers), v_default,
+        if not getattr(self, "_machine_cache", None):
+            self._init_machine_cache()
+        cache = self._machine_cache or {}
+        fields = build_copy_fields(
+            cache.get("machine_fields") or [],
+            cache.get("trial_cols_map") or _db_get_columns_map("tblTrial"),
+            cache.get("lookup_maps") or {},
+            getattr(self, "_jets_list", []),
+            getattr(self, "_housing_list", []),
+            bool(cache.get("has_groups")),
         )
+        source = load_source_values([t["id"] for t in trials], fields)
+        rows = fetch_all("SELECT MAX(Versuchsnummer) AS mx FROM tblTrial WHERE TrialSeriesID = ?",
+                         [self._series_pk])
+        next_no = next_trial_number(rows[0]["mx"] if rows else None)
+        real_ids = {t["id"] for t in trials}
+        dlg = CopyTrialsDialog(self, trials, fields, source, next_no,
+                               [int(t) for t in (preselected_trial_ids or []) if int(t) in real_ids])
         if dlg.exec() != QDialog.Accepted:
             return
-        v_from, v_to, copies = dlg.get_values()
-
-        # Reference samples are never copied (they're not trials).
-        trial_indices = [
-            i for i, v in enumerate(trial_numbers)
-            if v_from <= v <= v_to and int(self._trial_ids[i]) not in self._reference_names
-        ]
-        if not trial_indices:
-            QMessageBox.information(self, "Copy trials", "No trials found in the selected range\n(reference samples are never copied).")
-            return
-
-        self._duplicate_trial_range(trial_indices, copies)
+        plan = dlg.get_plan()
+        if plan:
+            self._copy_trials_with_plan(plan, fields)
 
     def _insert_trial_copy(self, cur, src_trial_id: int, series_id: Any, new_versuchsnummer: int) -> int:
         """Inserts one new tblTrial row as a copy of src_trial_id (machine
@@ -6004,28 +5916,22 @@ class ShowExperimentScreen(QWidget):
         self._build_dtyomat_tab()
         self._build_atyomat_tab()
 
-    def _duplicate_trial_range(self, trial_indices: List[int], copies_per_trial: int = 1) -> None:
-        """Copies each trial in trial_indices (positions into self._trial_ids)
-        `copies_per_trial` times, all appended after the series' current
-        highest Versuchsnummer - as `copies_per_trial` consecutive blocks of
-        the whole range in ascending Versuchsnummer order (see loop below).
+    def _copy_trials_with_plan(self, plan, fields) -> None:
+        """Creates one copy per plan entry [(source_trial_id, {field.key:
+        value})], appended after the series' highest trial number, then
+        applies the values changed in the copy dialog to the new trial
+        (tblTrial columns, or on ATY the OF of all Core/Effect plies).
 
-        Single-trial "N copies" (From == To in the dialog) and "copy a whole
-        range once each" (Copies == 1) both go through here - e.g. V7 through
-        V20 in one go, instead of repeating a single-trial dialog 14 times.
-
-        Guards against silently discarding unsaved edits: _reload_after_trial_copy()
-        below rebuilds every tab from the DB, which would wipe any pending
-        (not-yet-saved) cell edits in e.g. Machine Data without asking.
+        Guards against silently discarding unsaved edits: the reload below
+        rebuilds every tab from the DB, which would wipe pending cell edits.
         """
-        if not self._trial_ids or self._series_pk is None or not trial_indices:
+        if not plan or self._series_pk is None:
             return
-
         if not self._confirm_proceed_despite_unsaved():
             return
-
+        by_key = {f.key: f for f in fields}
         series_id = self._series_pk
-
+        new_ids: List[int] = []
         try:
             with get_connection() as cn:
                 cur = cn.cursor()
@@ -6036,37 +5942,70 @@ class ShowExperimentScreen(QWidget):
                 row = cur.fetchone()
                 # Clamped at 0: negative numbers are reference samples.
                 max_v = next_trial_number(row[0] if row else None) - 1
-
-                # Copies are appended as repeated blocks of the whole range
-                # (V1-V6 copied 5x -> V7..V12 = V1..V6, V13..V18 = V1..V6,
-                # ...), i.e. a repetition of the trial plan - not each trial
-                # N times in a row.
-                src_trial_ids = [
-                    self._trial_ids[i] for i in trial_indices
-                    if 0 <= i < len(self._trial_ids)
-                ]
-                created = 0
-                for _ in range(copies_per_trial):
-                    for src_trial_id in src_trial_ids:
-                        max_v += 1
-                        self._insert_trial_copy(cur, src_trial_id, series_id, max_v)
-                        created += 1
-
+                for src_trial_id, overrides in plan:
+                    max_v += 1
+                    new_id = self._insert_trial_copy(cur, src_trial_id, series_id, max_v)
+                    new_ids.append(new_id)
+                    for fkey, value in (overrides or {}).items():
+                        f = by_key.get(fkey)
+                        if f is None:
+                            continue
+                        if f.kind == "trial":
+                            cur.execute(f"UPDATE tblTrial SET [{f.column}] = ? WHERE ID = ?",
+                                        (value, new_id))
+                        elif f.kind == "use_of":
+                            cur.execute(
+                                f"UPDATE tblTrialSettings SET [{f.column}] = ? "
+                                f"WHERE TrialID = ? AND YarnUseID = ?",
+                                (value, new_id, f.use_id))
         except Exception as e:
             QMessageBox.warning(
                 self,
                 "Error copying trials",
                 f"The trials could not be copied:\n{e}",
             )
-            return
+            if not new_ids:
+                return
+
+        try:
+            from db.usage_log import log_usage_event
+            n_changed = sum(1 for _src, ov in plan if ov)
+            log_usage_event("feature", "copy_trials", f"{len(new_ids)} copies, {n_changed} with changed values")
+        except Exception:
+            pass
 
         self._reload_after_trial_copy()
+        self._show_new_trial_columns(new_ids)
 
-        QMessageBox.information(
-            self,
-            "Trials copied",
-            f"{created} new trial(s) created.",
-        )
+    def _show_new_trial_columns(self, new_ids) -> None:
+        """After copying: switch to Machine Data, select the new trials'
+        columns and scroll there (instead of a message box to click away)."""
+        try:
+            if self.tab_machine is not None:
+                self.tabs.setCurrentWidget(self.tab_machine)
+            col_specs = getattr(self, "_machine_col_specs", None) or []
+            new = {int(t) for t in new_ids}
+            cols = [i + 1 for i, cs in enumerate(col_specs) if int(cs["trial_id"]) in new]
+            if not cols:
+                return
+            view = self.tbl_machine.right
+            model = view.model()
+            sel = view.selectionModel()
+            from PySide6.QtCore import QItemSelection, QItemSelectionModel
+            selection = QItemSelection()
+            last_row = model.rowCount() - 1
+            for c in cols:
+                selection.select(model.index(0, c), model.index(last_row, c))
+            sel.select(selection, QItemSelectionModel.ClearAndSelect)
+            view.scrollTo(model.index(0, cols[-1]))
+            view.scrollTo(model.index(0, cols[0]))
+            QToolTip.showText(
+                view.mapToGlobal(view.rect().center()),
+                f"{len(new_ids)} new trial(s) created - highlighted in the table.",
+                view, view.rect(), 4000,
+            )
+        except Exception:
+            pass
 
     def _on_print_trial_labels(self) -> None:
         """Druckt Labels mit der Versuchsnummer (z.B. 'V23') fuer die Trials
