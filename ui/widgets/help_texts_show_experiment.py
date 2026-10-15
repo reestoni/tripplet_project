@@ -49,6 +49,16 @@ TEXTS = {
                  ["Select cells and press Ctrl+C, then select the target cell and press Ctrl+V.",
                   f"Click {B('Save')}."],
                  "Works between tables and with Excel."),
+                ("task", "Hide rows you don't need (Machine Data)",
+                 ["Right-click the parameter name in the first column (6) → " + M("Hide row") + ". "
+                  "To hide several rows at once, first select their names (Ctrl+click), then right-click one of them.",
+                  "Where rows are hidden, a blue line is shown on the parameter name. Point at it to see which "
+                  "rows are hidden there, click it to show them again.",
+                  f"To show all rows again, click {B('n rows hidden')} in the toolbar above the table → "
+                  + M("Show all rows") + ". There you can also show single rows."],
+                 "Hidden rows are remembered per user and machine, i.e. for all series on this machine. Only the "
+                 "view changes: the values stay saved. Copy and paste skip hidden rows. A red line means a hidden "
+                 "row contains a highlighted value."),
                 ("task", "Import a Statimat or Itemat report",
                  [f"Click {B('Statimat import')} or {B('Itemat import')} in the toolbar (1).",
                   "Choose the PDF report. The values are filled into the matching lab tab.",
@@ -172,6 +182,18 @@ TEXTS = {
                  ["Zellen markieren und Strg+C drücken, dann die Zielzelle wählen und Strg+V drücken.",
                   f"Auf {B('Save')} klicken."],
                  "Funktioniert zwischen Tabellen und mit Excel."),
+                ("task", "Nicht benötigte Zeilen ausblenden (Machine Data)",
+                 ["Rechtsklick auf den Parameternamen in der ersten Spalte (6) → " + M("Hide row") + ". "
+                  "Für mehrere Zeilen auf einmal zuerst ihre Namen markieren (Strg+Klick), dann auf einen davon "
+                  "rechtsklicken.",
+                  "Wo Zeilen ausgeblendet sind, steht eine blaue Linie am Parameternamen. Mit der Maus darauf "
+                  "zeigen, um zu sehen, welche Zeilen dort fehlen; ein Klick darauf blendet sie wieder ein.",
+                  f"Alle Zeilen wieder einblenden: in der Leiste über der Tabelle auf {B('n rows hidden')} → "
+                  + M("Show all rows") + ". Dort lassen sich auch einzelne Zeilen einblenden."],
+                 "Ausgeblendete Zeilen werden pro Benutzer und Maschine gemerkt, gelten also für alle Serien dieser "
+                 "Maschine. Es ändert sich nur die Ansicht, die Werte bleiben gespeichert. Kopieren und Einfügen "
+                 "überspringen ausgeblendete Zeilen. Eine rote Linie bedeutet, dass eine ausgeblendete Zeile einen "
+                 "markierten Wert enthält."),
                 ("task", "Einen Statimat- oder Itemat-Bericht importieren",
                  [f"In der Werkzeugleiste (1) auf {B('Statimat import')} oder {B('Itemat import')} klicken.",
                   "Den PDF-Bericht wählen. Die Werte werden in den passenden Labor-Tab eingetragen.",
@@ -298,6 +320,17 @@ TEXTS = {
                  ["Selecciona celdas y pulsa Ctrl+C, luego elige la celda de destino y pulsa Ctrl+V.",
                   f"Haz clic en {B('Save')}."],
                  "Funciona entre tablas y con Excel."),
+                ("task", "Ocultar filas que no necesitas (Machine Data)",
+                 ["Clic derecho en el nombre del parámetro en la primera columna (6) → " + M("Hide row") + ". "
+                  "Para ocultar varias filas a la vez, selecciona primero sus nombres (Ctrl+clic) y haz clic "
+                  "derecho en uno de ellos.",
+                  "Donde hay filas ocultas aparece una línea azul en el nombre del parámetro. Pasa el ratón por "
+                  "encima para ver qué filas faltan ahí; un clic sobre ella las vuelve a mostrar.",
+                  f"Para mostrar todas las filas otra vez: en la barra encima de la tabla, {B('n rows hidden')} → "
+                  + M("Show all rows") + ". Ahí también puedes mostrar filas sueltas."],
+                 "Las filas ocultas se recuerdan por usuario y máquina, es decir, para todas las series de esta "
+                 "máquina. Solo cambia la vista: los valores siguen guardados. Copiar y pegar se saltan las filas "
+                 "ocultas. Una línea roja indica que una fila oculta contiene un valor marcado."),
                 ("task", "Importar un informe de Statimat o Itemat",
                  [f"Haz clic en {B('Statimat import')} o {B('Itemat import')} en la barra de herramientas (1).",
                   "Elige el informe en PDF. Los valores se introducen en la pestaña de laboratorio correspondiente.",

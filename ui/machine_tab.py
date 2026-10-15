@@ -908,10 +908,10 @@ def build_machine_tab_impl(self) -> None:
     self.tbl_machine.left.horizontalHeader().setVisible(False)
     self.tbl_machine.right.horizontalHeader().setVisible(False)
 
-    # CustomGroup-Zeile: n_hdr Header-Zeilen + Modell-Zeilenindex
-    _cg_view_row = getattr(self.model_machine, '_n_hdr', 2) + self._custom_group_row_idx
-    self.tbl_machine.left.setRowHidden(_cg_view_row, not self._custom_group_visible)
-    self.tbl_machine.right.setRowHidden(_cg_view_row, not self._custom_group_visible)
+    # Custom-Group-Zeile + vom Nutzer ausgeblendete Zeilen (pro Maschine gemerkt)
+    from ui import machine_row_visibility as _mrv
+    _mrv.install(self)
+    _mrv.apply(self)
 
     # ── setSpan für trial-weite Spalten ───────────────────────────────
     # col_specs enthält N Einträge pro Trial (eine pro Ply).

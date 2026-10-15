@@ -72,6 +72,8 @@ SYNONYMS: List[List[str]] = [
     ["retest", "nachmessen", "nachmessung", "repetir", "repeticion", "wiederholen"],
     ["owner", "besitzer", "verantwortlich", "responsable", "zustandig"],
     ["print", "drucken", "imprimir"],
+    ["hide", "ausblenden", "verstecken", "ocultar", "esconder", "einblenden", "unhide", "zeile", "zeilen",
+     "row", "rows", "fila", "filas", "crowded", "uebersichtlich", "ubersichtlich"],
     ["export", "excel", "exportieren", "exportar"],
     ["minimum stock", "mindestbestand", "minstock", "stock minimo", "nachbestellen", "reorder", "low"],
     ["priority", "prioritat", "prioritaet", "prioridad", "prio"],

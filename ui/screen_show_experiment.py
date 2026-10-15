@@ -106,6 +106,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QToolButton,
     QFrame,
     QTabWidget,
     QTableView,
@@ -1257,6 +1258,26 @@ class PivotEditModel(QAbstractTableModel):
         self._flagged_cols: Dict[int, str] = {}
         # col_idx (0-based) -> tooltip; see set_reference_columns()
         self._reference_cols: Dict[int, str] = {}
+        # Hidden data rows (see set_hidden_rows): stripes count visible rows only
+        self._hidden_rows: set = set()
+        self._stripe: Optional[List[int]] = None
+
+    def set_hidden_rows(self, rows) -> None:
+        """Data rows (0-based, as in _row_titles) that the view hides - the
+        light/dark stripes are then counted over the visible rows only."""
+        self._hidden_rows = set(rows or ())
+        if not self._hidden_rows:
+            self._stripe = None
+        else:
+            self._stripe, k = [], 0
+            for dr in range(len(self._row_titles)):
+                self._stripe.append(k % 2)
+                if dr not in self._hidden_rows:
+                    k += 1
+        if self._row_titles:
+            self.dataChanged.emit(self.index(self._n_hdr, 0),
+                                  self.index(self.rowCount() - 1, self.columnCount() - 1),
+                                  [Qt.BackgroundRole])
 
     def set_flagged_columns(self, mapping: Dict[int, str]) -> None:
         """Marks columns with a red dot in the column header (e.g. an open retest flag).
@@ -1510,9 +1531,10 @@ class PivotEditModel(QAbstractTableModel):
                     return QColor("#FFD0D0")  # helles Rot
                 if _cell_alert == "orange":
                     return QColor("#FFE5B4")  # helles Orange
+                _odd = self._stripe[dr] if self._stripe and dr < len(self._stripe) else dr % 2
                 if c > 0 and (c - 1) in self._reference_cols:
-                    return self._REF_EVEN if (dr % 2 == 0) else self._REF_ODD
-                return self._ALT_EVEN if (dr % 2 == 0) else self._ALT_ODD
+                    return self._REF_EVEN if _odd == 0 else self._REF_ODD
+                return self._ALT_EVEN if _odd == 0 else self._ALT_ODD
             if role == Qt.ForegroundRole:
                 if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert == "red":
                     return QColor("#CC0000")  # kräftiges Rot
@@ -1626,6 +1648,12 @@ class PivotEditModel(QAbstractTableModel):
             bind = self._binding[r][c]
             if not bind:
                 continue
+            if str(bind.table).lower() == "tbltrialsettings" \
+                    and str(bind.field).lower() in ("yarntensiont1", "yarntensiont2"):
+                if isinstance(bind, GroupCellBinding):
+                    dy_ratio_ids.update(bind.id_values)
+                else:
+                    dy_ratio_ids.add(bind.id_value)
 
             # ── GroupCellBinding: alle IDs der Gruppe updaten ─────────────
             if isinstance(bind, GroupCellBinding):
@@ -1645,12 +1673,6 @@ class PivotEditModel(QAbstractTableModel):
                         params = [text_str, gid]
                     n += execute_non_query(sql, params)
                 continue
-            if str(bind.table).lower() == "tbltrialsettings" \
-                    and str(bind.field).lower() in ("yarntensiont1", "yarntensiont2"):
-                if isinstance(bind, GroupCellBinding):
-                    dy_ratio_ids.update(bind.id_values)
-                else:
-                    dy_ratio_ids.add(bind.id_value)
 
             table_name = str(bind.table)
             is_lab_table = table_name.lower().startswith("tbllabor")
@@ -2508,6 +2530,16 @@ class _ManagePliesDialog(QDialog):
         self._load()
 
 
+def _view_row_hidden(table, row: int) -> bool:
+    """True if the (data) row is hidden in the table's main view (e.g. rows
+    hidden by the user in Machine Data, see ui/machine_row_visibility.py)."""
+    view = getattr(table, "right", table)
+    try:
+        return bool(view.isRowHidden(row)) and row >= int(getattr(view.model(), "_n_hdr", 0) or 0)
+    except Exception:
+        return False
+
+
 class _MachineContextMenuFilter(QObject):
     """Event-Filter, der Rechtsklick auf die Titelspalte der Machine-Tabelle abfängt."""
 
@@ -2562,6 +2594,11 @@ class _MachineContextMenuFilter(QObject):
                 act_fill = menu.addAction("Fill row")
             else:
                 act_fill = None
+            # Hide / show rows (Machine Data only, see ui/machine_row_visibility.py)
+            row_actions = {}
+            if not self._is_rd:
+                from ui import machine_row_visibility as _mrv
+                row_actions = _mrv.add_context_actions(self._screen, menu, row)
             # Custom Group Toggle
             menu.addSeparator()
             cg_visible = getattr(self._screen, '_custom_group_visible', False)
@@ -2573,6 +2610,8 @@ class _MachineContextMenuFilter(QObject):
                 self._screen._fill_machine_row_from_title(row, is_rd=self._is_rd)
             elif chosen == act_cg:
                 self._screen._toggle_custom_group_row()
+            elif chosen in row_actions:
+                row_actions[chosen]()
             return True
 
         _tbl_attr = "tbl_rd_machine" if self._is_rd else "tbl_machine"
@@ -2961,6 +3000,8 @@ class ShowExperimentScreen(QWidget):
                     val = idx.data()
                     data[r][c] = "" if val is None else str(val)
 
+            # rows hidden by the user are left out (like a filtered Excel range)
+            data = [row for i, row in enumerate(data) if not _view_row_hidden(table, top_row + i)]
             text_block = "\n".join("\t".join(row) for row in data)
             QApplication.clipboard().setText(text_block)
 
@@ -3037,8 +3078,17 @@ class ShowExperimentScreen(QWidget):
             except Exception:
                 pass
 
+            # pasted rows go to the visible rows only (hidden rows are skipped)
+            target_rows: List[int] = []
+            _r = start_row
+            while len(target_rows) < len(grid) and 0 <= _r < max_r:
+                if not _view_row_hidden(table, _r):
+                    target_rows.append(_r)
+                _r += 1
             for r_off, row_vals in enumerate(grid):
-                tr = start_row + r_off
+                if r_off >= len(target_rows):
+                    break
+                tr = target_rows[r_off]
                 if tr < 0 or tr >= max_r:
                     continue
                 for c_off, raw in enumerate(row_vals):
@@ -3759,6 +3809,18 @@ class ShowExperimentScreen(QWidget):
         self._mat_check_layout = QHBoxLayout()
         self._mat_check_layout.setSpacing(8)
         _mfb_lay.addLayout(self._mat_check_layout)
+        # "N rows hidden" - menu with "Show all rows" + single rows
+        # (see ui/machine_row_visibility.py)
+        self.btn_hidden_rows = QToolButton()
+        self.btn_hidden_rows.setPopupMode(QToolButton.InstantPopup)
+        self.btn_hidden_rows.setToolTip("Rows hidden in this table - show them again")
+        self.btn_hidden_rows.setStyleSheet(
+            "QToolButton{border:1px solid #9bbbe0;background:#eaf2fc;color:#1f4e8c;"
+            "padding:3px 8px;border-radius:4px;}"
+            "QToolButton:hover{background:#d8e7fa;}"
+            "QToolButton::menu-indicator{image:none;}")
+        self.btn_hidden_rows.setVisible(False)
+        _mfb_lay.addWidget(self.btn_hidden_rows)
         _mfb_lay.addStretch(1)
 
         # ── "Print trial labels" Button (links vom "+") ────────────────
@@ -5509,12 +5571,11 @@ class ShowExperimentScreen(QWidget):
     def _toggle_custom_group_row(self) -> None:
         """Schaltet die Custom-Group-Zeile im Machine-Tab ein/aus und speichert den Zustand."""
         self._custom_group_visible = not self._custom_group_visible
-        # Zeile im View ein-/ausblenden
+        # Zeile im View ein-/ausblenden (zusammen mit den vom Nutzer
+        # ausgeblendeten Zeilen, damit die Streifen stimmen)
         if self.model_machine:
-            n_hdr = getattr(self.model_machine, '_n_hdr', 2)
-            cg_view_row = n_hdr + getattr(self, '_custom_group_row_idx', 0)
-            self.tbl_machine.left.setRowHidden(cg_view_row, not self._custom_group_visible)
-            self.tbl_machine.right.setRowHidden(cg_view_row, not self._custom_group_visible)
+            from ui import machine_row_visibility as _mrv
+            _mrv.apply(self)
 
     def _manage_plies_for_col_spec_idx(self, col_spec_idx: int) -> None:
         """Öffnet den Manage-Plies-Dialog für den Trial, der col_spec_idx zugeordnet ist."""
