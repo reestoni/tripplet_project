@@ -54,6 +54,8 @@ def statimat_import_impl(self) -> None:
         Festigkeit -CV-> TenacityCV
         Feinheit -X-   -> tbllabortiter.Titer (both STATIMAT DS and STATIMAT M)
     """
+    from db import change_log as _chlog
+    _log: list = []  # change history entries, written after the import
     # Lazy import (vermeidet Zirkularimport, screen_show_experiment importiert
     # dieses Modul selbst) - table_exists/get_columns_map sind die lowercase-
     # normalisierenden Wrapper aus screen_show_experiment, nicht die aus db.connection.
@@ -290,14 +292,17 @@ def statimat_import_impl(self) -> None:
                     ten_x = pr.get("festigkeit_x")
                     ten_cv = pr.get("festigkeit_cv")
 
+                    _after = {col_elong: elong_x, col_elong_cv: elong_cv, col_ten: ten_x, col_ten_cv: ten_cv}
                     if row and row[0] is not None:
                         rec_id = row[0]
+                        _before = _chlog.row_before(cur, target_table, rec_id, list(_after))
                         cur.execute(
                             f"UPDATE [{target_table}] SET "
                             f"[{col_elong}]=?, [{col_elong_cv}]=?, [{col_ten}]=?, [{col_ten_cv}]=? "
                             f"WHERE ID=?",
                             (elong_x, elong_cv, ten_x, ten_cv, rec_id),
                         )
+                        _log.extend(_chlog.upsert_entries(target_table, rec_id, _before, _after, trial_id))
                     else:
                         # try insert with GlobalID if present
                         cols_map = get_columns_map(target_table)
@@ -314,6 +319,7 @@ def statimat_import_impl(self) -> None:
                                 f"VALUES (?,?,?,?,?)",
                                 (trial_id, elong_x, elong_cv, ten_x, ten_cv),
                             )
+                        _log.extend(_chlog.upsert_entries(target_table, cur.lastrowid, {}, _after, trial_id))
 
                     # DS: also write titer
                     # DS + M: also write titer
@@ -326,10 +332,13 @@ def statimat_import_impl(self) -> None:
                             )
                             tr = cur.fetchone()
                             if tr and tr[0] is not None:
+                                _tb = _chlog.row_before(cur, titer_table, tr[0], [titer_col])
                                 cur.execute(
                                     f"UPDATE [{titer_table}] SET [{titer_col}]=? WHERE ID=?",
                                     (titer_x, tr[0]),
                                 )
+                                _log.extend(_chlog.upsert_entries(titer_table, tr[0], _tb,
+                                                                  {titer_col: titer_x}, trial_id))
                             else:
                                 tcols = get_columns_map(titer_table)
                                 has_gid2 = any(k.lower() == "globalid" for k in tcols.keys())
@@ -343,6 +352,8 @@ def statimat_import_impl(self) -> None:
                                         f"INSERT INTO [{titer_table}] ([TrialID],[{titer_col}]) VALUES (?,?)",
                                         (trial_id, titer_x),
                                     )
+                                _log.extend(_chlog.upsert_entries(titer_table, cur.lastrowid, {},
+                                                                  {titer_col: titer_x}, trial_id))
 
                     imported += 1
 
@@ -355,6 +366,9 @@ def statimat_import_impl(self) -> None:
                 prog.close()
             except Exception:
                 pass
+
+    # change history (db/change_log.py)
+    _chlog.log_changes(_log, series_id=getattr(self, "_series_pk", None), source="pdf import")
 
     # refresh views/tabs
     try:
@@ -402,6 +416,8 @@ def itemat_import_impl(self) -> None:
       Stab.-Faktor [%] (Sp. 5)  -> tblLaborItematLab.[Stability (%)]               @ Tension 1.3
       FPm @ Tension > 0.0 = Knoten/m_0 * Stability / 100
     """
+    from db import change_log as _chlog
+    _log: list = []  # change history entries, written after the import
     # Lazy import (vermeidet Zirkularimport, screen_show_experiment importiert
     # dieses Modul selbst) - table_exists/get_columns_map sind die lowercase-
     # normalisierenden Wrapper aus screen_show_experiment, nicht die aus db.connection.
@@ -593,13 +609,19 @@ def itemat_import_impl(self) -> None:
                     if col_ts:
                         set_parts.append(f"[{col_ts}]=NOW()")
 
+                    _after = {col_fpm: fpm_val, col_stability: stab_val}
+                    if fpmcv_val is not None and col_fpmcv:
+                        _after[col_fpmcv] = fpmcv_val
+                    _after = {k: v for k, v in _after.items() if v is not None}
                     if rec_id is not None:
+                        _before = _chlog.row_before(cur, itemat_table, rec_id, list(_after))
                         cur.execute(
                             f"UPDATE [{itemat_table}] SET "
                             + ", ".join(set_parts)
                             + " WHERE ID=?",
                             vals + [rec_id],
                         )
+                        _log.extend(_chlog.upsert_entries(itemat_table, rec_id, _before, _after, trial_id))
                     else:
                         col_names = [f"[TrialID]", f"[{col_tension}]"]
                         ins_vals = [trial_id, tension_val]
@@ -625,6 +647,7 @@ def itemat_import_impl(self) -> None:
                             f"VALUES ({placeholders})",
                             ins_vals,
                         )
+                        _log.extend(_chlog.upsert_entries(itemat_table, cur.lastrowid, {}, _after, trial_id))
 
                 # Tension 0.0: FPm = knoten_m_0, CV = var_koeff, Stability = NULL
                 # 0.0 darf immer inserted werden (Baseline-Row)
@@ -644,6 +667,9 @@ def itemat_import_impl(self) -> None:
                     _upsert(t, fpm, None, stab)
 
                 imported += 1
+
+    # change history (db/change_log.py)
+    _chlog.log_changes(_log, series_id=getattr(self, "_series_pk", None), source="pdf import")
 
     # Tabs auffrischen
     try:

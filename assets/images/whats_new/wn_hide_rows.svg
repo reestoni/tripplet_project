@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Hide rows - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="186" y="8" width="100" height="22" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="236.0" y="23.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">2 rows hidden</text>
+  <rect x="14" y="38" width="272" height="20" rx="0" fill="#e9f6e9" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="52" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Housing</text>
+  <text x="150" y="52" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">SlideJet</text>
+  <text x="200" y="52" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">SlideJet</text>
+  <text x="250" y="52" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">SlideJet</text>
+  <rect x="14" y="58" width="272" height="20" rx="0" fill="#d5ecd8" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="72" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Jet</text>
+  <text x="150" y="72" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">P212</text>
+  <text x="200" y="72" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">P212</text>
+  <text x="250" y="72" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">P212</text>
+  <rect x="14" y="78" width="272" height="20" rx="0" fill="#e9f6e9" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Speed (m/min)</text>
+  <text x="150" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">800</text>
+  <text x="200" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">800</text>
+  <text x="250" y="92" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">800</text>
+  <line x1="16" y1="79" x2="108" y2="79" stroke="#3d7fd6" stroke-width="3"/>
+  <text x="14" y="114" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#3d7fd6" text-anchor="start" font-style="italic">Blue line: rows hidden here - click it to show them again</text>
+</svg>

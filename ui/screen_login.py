@@ -255,10 +255,14 @@ class LoginScreen(QWidget):
             try:
                 from ui import display_prefs
                 display_prefs.load_for_current_user()
+                from PySide6.QtCore import QTimer
                 if display_prefs.app_scale_needs_restart():
                     # e.g. first login on this PC - after the login has finished
-                    from PySide6.QtCore import QTimer
                     QTimer.singleShot(500, lambda: display_prefs.offer_restart(None))
+                else:
+                    # "What's new" once per release and user (ui/whats_new.py)
+                    from ui.whats_new import show_if_unseen
+                    QTimer.singleShot(800, lambda: show_if_unseen(self.window()))
             except Exception:
                 pass
 

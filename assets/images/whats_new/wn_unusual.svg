@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Unusual values - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="10" width="276" height="110" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <polygon points="30,22 40,40 20,40" fill="#E6A100"/>
+  <text x="30" y="37" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle" font-weight="bold">!</text>
+  <text x="48" y="34" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b" text-anchor="start" font-weight="bold">Unusual values</text>
+  <text x="22" y="58" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">V1 · Air Pressure (bar): 35</text>
+  <text x="22" y="72" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start">(usually 1 - 5)   Typo?</text>
+  <rect x="22" y="88" width="108" height="22" rx="3" fill="#39a650"/>
+  <text x="76.0" y="103.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">Go back and check</text>
+  <rect x="136" y="88" width="76" height="22" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="174.0" y="103.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Save anyway</text>
+</svg>

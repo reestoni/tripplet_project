@@ -44,22 +44,32 @@ TEXTS = {
                   "first column (6) → " + M("Fill row") + ".",
                   "Choose the value and the range of trials, then OK.",
                   f"Click {B('Save')}."],
-                 "Right-clicking a merged cell opens the same dialog."),
+                 "Right-clicking a merged cell offers " + M("Fill row…") + " as well."),
+                ("task", "See who changed a value and when",
+                 ["Right-click the value → " + M("Change history…") + ".",
+                  "The list shows every change with date, person, old and new value, newest first. "
+                  "Tick <i>Show all changes in this trial series</i> for the whole series."],
+                 "Superusers only. Recorded are changes saved in Show Experiment and Statimat/Itemat PDF imports, "
+                 "since October 2026."),
+                ("task", "Warning \"Unusual values\" when saving",
+                 ["TrippleT compares changed machine settings with all earlier trials of the same machine. "
+                  "A value far outside the usual range (e.g. 35 instead of 3.5 bar) is listed.",
+                  f"{B('Go back and check')} jumps to the first such value; {B('Save anyway')} saves as it is."],
+                 "Only a hint - unusual values are allowed. Lab values are not checked (they depend on the yarn)."),
                 ("task", "Copy and paste values",
                  ["Select cells and press Ctrl+C, then select the target cell and press Ctrl+V.",
                   f"Click {B('Save')}."],
                  "Works between tables and with Excel."),
-                ("task", "Make the tables bigger and easier to read",
+                ("task", "Make the text bigger and the tables easier to read",
                  [f"In the sidebar under <i>Account</i>, click {B('Settings')}.",
-                  "Under <i>Show Experiment tables</i> choose the text size (Normal, Large, Extra large, Huge). "
-                  "If needed, switch on <i>High contrast</i> and <i>Crosshair</i> (highlights the row and column of "
+                  "Under <i>Text size</i> choose Normal, Large, Extra large or Huge - for the whole program "
+                  "(applies after a restart; TrippleT offers to restart right away). "
+                  "Under <i>Show Experiment tables</i> switch on, if needed, <i>High contrast</i> and <i>Crosshair</i> (highlights the row and column of "
                   "the selected cell, so you can see which trial and parameter a value belongs to).",
                   "<i>Reading bar</i> shows the selected value in large words below the table, e.g. "
                   "\"V2 · Ply 1 · Air Pressure (bar) = 3.50\". <i>Mark warnings with a symbol</i> adds a circle "
                   "(out of tolerance) or triangle (check) to highlighted values. <i>Colour-blind friendly colours</i> "
                   "avoids red/green.",
-                  "<i>App size</i> makes the whole program bigger (buttons, menus, dialogs). It applies after a "
-                  "restart; TrippleT offers to restart right away.",
                   "Check the preview, then click " + B("Save") + "."],
                  "Quick zoom in a table: Ctrl + mouse wheel or Ctrl +/-, Ctrl+0 resets to normal. The settings are "
                  "saved for your login and apply on every PC. The welcome message and the accent colour are also "
@@ -192,22 +202,33 @@ TEXTS = {
                   "ersten Spalte (6) → " + M("Fill row") + ".",
                   "Wert und Versuchsbereich wählen, dann OK.",
                   f"Auf {B('Save')} klicken."],
-                 "Rechtsklick auf eine zusammengefasste Zelle öffnet denselben Dialog."),
+                 "Ein Rechtsklick auf eine zusammengefasste Zelle bietet ebenfalls " + M("Fill row…") + " an."),
+                ("task", "Sehen, wer einen Wert wann geändert hat",
+                 ["Rechtsklick auf den Wert → " + M("Change history…") + ".",
+                  "Die Liste zeigt jede Änderung mit Datum, Person, altem und neuem Wert, die neueste zuoberst. "
+                  "Mit <i>Show all changes in this trial series</i> sieht man die ganze Serie."],
+                 "Nur für Superuser. Erfasst werden in Show Experiment gespeicherte Änderungen und "
+                 "Statimat-/Itemat-PDF-Importe, seit Oktober 2026."),
+                ("task", "Warnung \"Unusual values\" beim Speichern",
+                 ["TrippleT vergleicht geänderte Maschineneinstellungen mit allen früheren Versuchen derselben "
+                  "Maschine. Ein Wert weit ausserhalb des Üblichen (z.&nbsp;B. 35 statt 3.5 bar) wird aufgelistet.",
+                  f"{B('Go back and check')} springt zum ersten solchen Wert, {B('Save anyway')} speichert trotzdem."],
+                 "Nur ein Hinweis - ungewöhnliche Werte sind erlaubt. Laborwerte werden nicht geprüft (sie hängen "
+                 "vom Garn ab)."),
                 ("task", "Werte kopieren und einfügen",
                  ["Zellen markieren und Strg+C drücken, dann die Zielzelle wählen und Strg+V drücken.",
                   f"Auf {B('Save')} klicken."],
                  "Funktioniert zwischen Tabellen und mit Excel."),
-                ("task", "Tabellen grösser und besser lesbar machen",
+                ("task", "Text grösser und Tabellen besser lesbar machen",
                  [f"In der Sidebar unter <i>Account</i> auf {B('Settings')} klicken.",
-                  "Unter <i>Show Experiment tables</i> die Textgrösse wählen (Normal, Large, Extra large, Huge). "
-                  "Bei Bedarf <i>High contrast</i> und <i>Crosshair</i> einschalten (hebt Zeile und Spalte der "
+                  "Unter <i>Text size</i> Normal, Large, Extra large oder Huge wählen - gilt fürs ganze Programm "
+                  "(nach einem Neustart; TrippleT bietet an, gleich neu zu starten). "
+                  "Unter <i>Show Experiment tables</i> bei Bedarf <i>High contrast</i> und <i>Crosshair</i> einschalten (hebt Zeile und Spalte der "
                   "gewählten Zelle hervor, damit man sieht, zu welchem Versuch und Parameter ein Wert gehört).",
                   "<i>Reading bar</i> zeigt den gewählten Wert gross in Worten unter der Tabelle, z.&nbsp;B. "
                   "\"V2 · Ply 1 · Air Pressure (bar) = 3.50\". <i>Mark warnings with a symbol</i> setzt einen Kreis "
                   "(ausserhalb der Toleranz) oder ein Dreieck (prüfen) vor markierte Werte. <i>Colour-blind friendly "
                   "colours</i> verzichtet auf Rot/Grün.",
-                  "<i>App size</i> vergrössert das ganze Programm (Knöpfe, Menüs, Dialoge). Das gilt nach einem "
-                  "Neustart; TrippleT bietet an, gleich neu zu starten.",
                   "Die Vorschau prüfen, dann auf " + B("Save") + " klicken."],
                  "Schnell zoomen in einer Tabelle: Strg + Mausrad oder Strg +/-, Strg+0 setzt auf normal zurück. Die "
                  "Einstellungen gelten für dein Login an jedem PC. Auch Willkommensnachricht und Akzentfarbe werden "
@@ -345,22 +366,33 @@ TEXTS = {
                   "primera columna (6) → " + M("Fill row") + ".",
                   "Elige el valor y el rango de ensayos y haz clic en OK.",
                   f"Haz clic en {B('Save')}."],
-                 "El clic derecho en una celda combinada abre el mismo diálogo."),
+                 "El clic derecho en una celda combinada también ofrece " + M("Fill row…") + "."),
+                ("task", "Ver quién cambió un valor y cuándo",
+                 ["Clic derecho en el valor → " + M("Change history…") + ".",
+                  "La lista muestra cada cambio con fecha, persona, valor anterior y nuevo, el más reciente arriba. "
+                  "Con <i>Show all changes in this trial series</i> se ve toda la serie."],
+                 "Solo superusuarios. Se registran los cambios guardados en Show Experiment y las importaciones "
+                 "de PDF de Statimat/Itemat, desde octubre de 2026."),
+                ("task", "Aviso \"Unusual values\" al guardar",
+                 ["TrippleT compara los ajustes de máquina cambiados con todos los ensayos anteriores de la misma "
+                  "máquina. Un valor muy fuera de lo habitual (p.&nbsp;ej. 35 en vez de 3.5 bar) aparece en la lista.",
+                  f"{B('Go back and check')} salta al primer valor así; {B('Save anyway')} guarda igualmente."],
+                 "Solo es un aviso: se permiten valores inusuales. Los valores de laboratorio no se comprueban "
+                 "(dependen del hilo)."),
                 ("task", "Copiar y pegar valores",
                  ["Selecciona celdas y pulsa Ctrl+C, luego elige la celda de destino y pulsa Ctrl+V.",
                   f"Haz clic en {B('Save')}."],
                  "Funciona entre tablas y con Excel."),
-                ("task", "Hacer las tablas más grandes y fáciles de leer",
+                ("task", "Agrandar el texto y hacer las tablas más fáciles de leer",
                  [f"En la barra lateral, en <i>Account</i>, haz clic en {B('Settings')}.",
-                  "En <i>Show Experiment tables</i> elige el tamaño del texto (Normal, Large, Extra large, Huge). "
-                  "Si hace falta, activa <i>High contrast</i> y <i>Crosshair</i> (resalta la fila y la columna de la "
+                  "En <i>Text size</i> elige Normal, Large, Extra large o Huge - para todo el programa (se aplica "
+                  "tras reiniciar; TrippleT ofrece reiniciar enseguida). "
+                  "En <i>Show Experiment tables</i> activa, si hace falta, <i>High contrast</i> y <i>Crosshair</i> (resalta la fila y la columna de la "
                   "celda seleccionada, para ver a qué ensayo y parámetro pertenece un valor).",
                   "<i>Reading bar</i> muestra el valor seleccionado en letra grande debajo de la tabla, p.&nbsp;ej. "
                   "\"V2 · Ply 1 · Air Pressure (bar) = 3.50\". <i>Mark warnings with a symbol</i> añade un círculo "
                   "(fuera de tolerancia) o un triángulo (revisar) a los valores marcados. <i>Colour-blind friendly "
                   "colours</i> evita el rojo/verde.",
-                  "<i>App size</i> agranda todo el programa (botones, menús, diálogos). Se aplica tras reiniciar; "
-                  "TrippleT ofrece reiniciar enseguida.",
                   "Revisa la vista previa y haz clic en " + B("Save") + "."],
                  "Zoom rápido en una tabla: Ctrl + rueda del ratón o Ctrl +/-, Ctrl+0 vuelve al tamaño normal. Los "
                  "ajustes se guardan para tu usuario y valen en cualquier PC. El mensaje de bienvenida y el color de "

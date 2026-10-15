@@ -65,11 +65,15 @@ TEXTS = {
                 ("task", "Change machine or yarn, or delete a series",
                  ["Right-click the card → " + M("Change machine…") + ", " + M("Garn neu zuweisen…")
                   + " (reassign yarn) or " + M("Delete trial series…") + "."],
-                 "Superusers only."),
+                 "Machine and yarn: superusers only. Deleting: whoever may move the card (see <i>Rules</i>; in "
+                 "To Be Cleaned superusers only). "
+                 "A deleted series can be restored by a superuser for 90 days: Sidebar → <i>Superuser</i> → "
+                 "<b>Recycle Bin</b>."),
                 ("task", "Change my welcome message",
-                 ["Click the welcome line at the top of the screen and enter a new text."],
-                 "Or in the sidebar under <i>Account</i> → <b>Settings</b>. There you can also change the accent "
-                 "colour and make the tables in Show Experiment bigger and easier to read."),
+                 ["In the sidebar under <i>Account</i> click <b>Settings</b>.",
+                  "Enter the new text under <i>Welcome message</i> (max. 45 characters, empty = default), then "
+                  "click <b>Save</b>."],
+                 "There you can also change the accent colour and the text size."),
             ]},
             {"key": "screen", "title": "Screen guide", "blocks": [
                 ("svg", SVG, {"flow_title": "Status flow",
@@ -112,8 +116,8 @@ TEXTS = {
                     [M("Open in New Tab") + " / " + M("Open in New Window") + " / "
                      + M("Change priority…") + " / " + M("Change status…"), "Everyone (status rules above apply)"],
                     [M("Rename trial series…"), "Access level 2 or higher"],
-                    [M("Garn neu zuweisen…") + " / " + M("Change machine…") + " / " + M("Delete trial series…"),
-                     "Superusers only"],
+                    [M("Garn neu zuweisen…") + " / " + M("Change machine…"), "Superusers only"],
+                    [M("Delete trial series…"), "Whoever may move the card (see above); in To Be Cleaned superusers only"],
                 ]),
                 ("h", "Retests"),
                 ("p", "If a superuser flags a lab value for retesting (in Show Experiment), the series comes back "
@@ -166,11 +170,15 @@ TEXTS = {
                 ("task", "Maschine oder Garn ändern, oder eine Serie löschen",
                  ["Rechtsklick auf die Karte → " + M("Change machine…") + ", " + M("Garn neu zuweisen…")
                   + " oder " + M("Delete trial series…") + "."],
-                 "Nur für Superuser."),
+                 "Maschine und Garn: nur Superuser. Löschen: wer die Karte verschieben darf (siehe <i>Regeln</i>; "
+                 "in To Be Cleaned nur Superuser). "
+                 "Eine gelöschte Serie kann ein Superuser 90 Tage lang wiederherstellen: Sidebar → "
+                 "<i>Superuser</i> → <b>Recycle Bin</b>."),
                 ("task", "Meine Begrüssung ändern",
-                 ["Auf die Begrüssungszeile oben im Bildschirm klicken und einen neuen Text eingeben."],
-                 "Oder in der Sidebar unter <i>Account</i> → <b>Settings</b>. Dort lassen sich auch die Akzentfarbe "
-                 "ändern und die Tabellen in Show Experiment grösser und besser lesbar machen."),
+                 ["In der Sidebar unter <i>Account</i> auf <b>Settings</b> klicken.",
+                  "Unter <i>Welcome message</i> den neuen Text eingeben (max. 45 Zeichen, leer = Standard), dann "
+                  "auf <b>Save</b> klicken."],
+                 "Dort lassen sich auch Akzentfarbe und Textgrösse ändern."),
             ]},
             {"key": "screen", "title": "Bildschirm", "blocks": [
                 ("svg", SVG, {"flow_title": "Status-Ablauf",
@@ -213,8 +221,8 @@ TEXTS = {
                     [M("Open in New Tab") + " / " + M("Open in New Window") + " / "
                      + M("Change priority…") + " / " + M("Change status…"), "Alle (es gelten die Status-Regeln oben)"],
                     [M("Rename trial series…"), "Access Level 2 oder höher"],
-                    [M("Garn neu zuweisen…") + " / " + M("Change machine…") + " / " + M("Delete trial series…"),
-                     "Nur Superuser"],
+                    [M("Garn neu zuweisen…") + " / " + M("Change machine…"), "Nur Superuser"],
+                    [M("Delete trial series…"), "Wer die Karte verschieben darf (siehe oben); in To Be Cleaned nur Superuser"],
                 ]),
                 ("h", "Nachmessungen (Retest)"),
                 ("p", "Markiert ein Superuser einen Laborwert zum Nachmessen (in Show Experiment), kommt die Serie "
@@ -267,11 +275,15 @@ TEXTS = {
                 ("task", "Cambiar máquina o hilo, o borrar una serie",
                  ["Clic derecho en la tarjeta → " + M("Change machine…") + ", " + M("Garn neu zuweisen…")
                   + " (reasignar hilo) o " + M("Delete trial series…") + "."],
-                 "Solo superusuarios."),
+                 "Máquina e hilo: solo superusuarios. Borrar: quien puede mover la tarjeta (ver <i>Reglas</i>; "
+                 "en To Be Cleaned solo superusuarios). "
+                 "Un superusuario puede recuperar una serie borrada durante 90 días: barra lateral → "
+                 "<i>Superuser</i> → <b>Recycle Bin</b>."),
                 ("task", "Cambiar mi mensaje de bienvenida",
-                 ["Haz clic en la línea de bienvenida arriba en la pantalla e introduce un texto nuevo."],
-                 "O en la barra lateral, en <i>Account</i> → <b>Settings</b>. Ahí también puedes cambiar el color "
-                 "de acento y hacer las tablas de Show Experiment más grandes y fáciles de leer."),
+                 ["En la barra lateral, en <i>Account</i>, haz clic en <b>Settings</b>.",
+                  "Escribe el nuevo texto en <i>Welcome message</i> (máx. 45 caracteres, vacío = estándar) y haz "
+                  "clic en <b>Save</b>."],
+                 "Ahí también puedes cambiar el color de acento y el tamaño del texto."),
             ]},
             {"key": "screen", "title": "Pantalla", "blocks": [
                 ("svg", SVG, {"flow_title": "Flujo de estados",
@@ -314,8 +326,8 @@ TEXTS = {
                     [M("Open in New Tab") + " / " + M("Open in New Window") + " / "
                      + M("Change priority…") + " / " + M("Change status…"), "Todos (se aplican las reglas de estado de arriba)"],
                     [M("Rename trial series…"), "Nivel de acceso 2 o superior"],
-                    [M("Garn neu zuweisen…") + " / " + M("Change machine…") + " / " + M("Delete trial series…"),
-                     "Solo superusuarios"],
+                    [M("Garn neu zuweisen…") + " / " + M("Change machine…"), "Solo superusuarios"],
+                    [M("Delete trial series…"), "Quien puede mover la tarjeta (ver arriba); en To Be Cleaned solo superusuarios"],
                 ]),
                 ("h", "Repeticiones (retest)"),
                 ("p", "Si un superusuario marca un valor de laboratorio para repetir (en Show Experiment), la serie "

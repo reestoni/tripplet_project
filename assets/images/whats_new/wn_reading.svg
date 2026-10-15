@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Easier reading - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="14" y="8" width="220" height="22" rx="2" fill="#4a4a4a"/>
+  <text x="138.0" y="24" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#ffffff" text-anchor="middle" font-weight="bold">V1</text>
+  <text x="202.0" y="24" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#ffffff" text-anchor="middle" font-weight="bold">V2</text>
+  <rect x="14" y="30" width="220" height="22" rx="0" fill="#e9f6e9" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="46" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Housing</text>
+  <text x="138.0" y="46" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">SlideJet</text>
+  <rect x="170" y="30" width="64" height="22" rx="0" fill="#FFF3B8" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="202.0" y="46" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">SlideJet</text>
+  <rect x="14" y="52" width="220" height="22" rx="0" fill="#d5ecd8" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Air Pressure</text>
+  <rect x="106" y="52" width="64" height="22" rx="0" fill="#FFF3B8" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="138.0" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">3.50</text>
+  <text x="202.0" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">3.50</text>
+  <rect x="14" y="74" width="220" height="22" rx="0" fill="#e9f6e9" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="90" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Speed</text>
+  <text x="138.0" y="90" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">800</text>
+  <rect x="170" y="74" width="64" height="22" rx="0" fill="#FFF3B8" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="202.0" y="90" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">760</text>
+  <rect x="14" y="52" width="92" height="22" rx="0" fill="#FFD54F" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Air Pressure</text>
+  <rect x="170" y="52" width="64" height="22" rx="0" fill="#1F4E8C"/>
+  <text x="202" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle" font-weight="bold">3.50</text>
+  <rect x="14" y="104" width="272" height="20" rx="2" fill="#F4F7FB" stroke="#9bbbe0" stroke-width="1"/>
+  <text x="20" y="118" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">V2 · Air Pressure (bar) = 3.50</text>
+</svg>

@@ -20,6 +20,10 @@ QTableView::item:selected { background: #1F4E8C; color: #FFFFFF; }
 
 
 class FrozenFirstColumnTable(QWidget):
+    # Optional hook for right-click on a data cell: hook(table, index, menu)
+    # adds actions to `menu` (set by ShowExperimentScreen: "Change history…").
+    cell_menu_hook = None
+
     """
     Kombi-Widget aus vier QTableViews ("Freeze Panes", wie in Excel):
 
@@ -134,8 +138,12 @@ class FrozenFirstColumnTable(QWidget):
         self._fixed_data_w: Optional[int] = None
         self._base_font = QFont(self.bottom_right.font())
         self._base_row_h = self.bottom_right.verticalHeader().defaultSectionSize()
+        # extra factor only for the preview in Settings: shows the chosen
+        # program-wide "Text size" before the restart (ui/widgets/user_settings_dialog.py)
+        self.preview_factor = 1.0
         for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):
             v.viewport().installEventFilter(self)  # Ctrl+mouse wheel = zoom
+        self.bottom_right.installEventFilter(self)  # right-click on a value
         for keys, step in ((QKeySequence.ZoomIn, 1), (QKeySequence("Ctrl+="), 1),
                            (QKeySequence.ZoomOut, -1)):
             sc = QShortcut(keys, self)
@@ -245,7 +253,7 @@ class FrozenFirstColumnTable(QWidget):
         self._fixed_data_w = fixed_data_column_width
         if fixed_data_column_width is not None:
             # scaled with the text size (Settings -> Display)
-            fixed_data_column_width = int(fixed_data_column_width * display_prefs.scale() / 100)
+            fixed_data_column_width = int(fixed_data_column_width * self._zoom())
             model = self.bottom_right.model()
             n_cols = model.columnCount() if model else 0
             for c in range(1, n_cols):
@@ -326,6 +334,9 @@ class FrozenFirstColumnTable(QWidget):
         try:
             if obj is self.bottom_right.verticalHeader() and ev.type() in (QEvent.Hide, QEvent.Show):
                 self._sync_vheader_visibility()
+            elif obj is self.bottom_right and ev.type() == QEvent.ContextMenu:
+                if self._cell_context_menu(ev):
+                    return True
             elif ev.type() == QEvent.Wheel and ev.modifiers() & Qt.ControlModifier:
                 dy = ev.angleDelta().y()
                 if dy:
@@ -335,12 +346,31 @@ class FrozenFirstColumnTable(QWidget):
             pass
         return super().eventFilter(obj, ev)
 
+    def _cell_context_menu(self, ev) -> bool:
+        hook = type(self).cell_menu_hook
+        if hook is None or self._model is None:
+            return False
+        view = self.bottom_right
+        index = view.indexAt(view.viewport().mapFrom(view, ev.pos()))
+        if not index.isValid() or index.row() < self._n_hdr or index.column() < 1:
+            return False
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+        hook(self, index, menu)
+        if not menu.actions():
+            return False
+        menu.exec(ev.globalPos())
+        return True
+
     # ---------- Display settings ----------
+
+    def _zoom(self) -> float:
+        return display_prefs.scale() / 100.0 * float(self.preview_factor or 1.0)
 
     def _display_font(self) -> QFont:
         p = display_prefs.current()
         f = QFont(self._base_font)
-        s = p["scale"] / 100.0
+        s = self._zoom()
         if f.pointSizeF() > 0:
             f.setPointSizeF(f.pointSizeF() * s)
         elif f.pixelSize() > 0:
@@ -363,7 +393,7 @@ class FrozenFirstColumnTable(QWidget):
 
     def _apply_display(self):
         f = self._display_font()
-        row_h = max(self._base_row_h, int(self._base_row_h * display_prefs.scale() / 100))
+        row_h = max(self._base_row_h, int(self._base_row_h * self._zoom()))
         icon_px = max(12, int(row_h * 0.55))
         for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):
             v.setFont(f)

@@ -831,7 +831,9 @@ class BacklogDnDTable(QTableWidget):
 
         lvl = getattr(self._screen, "_effective_access_level", lambda: 0)()
         can_rename   = bool(lvl >= 2)
-        can_delete   = bool(lvl >= 4)
+        # delete = whoever may move this series (recycle bin), see db/series_permissions.py
+        from db.series_permissions import can_delete_series_now
+        can_delete   = can_delete_series_now(series_id)
         can_reassign = bool(lvl >= 4)
 
         menu = QMenu(self)
@@ -989,15 +991,27 @@ class BacklogDnDTable(QTableWidget):
         """
         series_name = (item.data(ROLE_SERIES_NAME) or str(series_id)).strip()
 
+        # Security check against the current DB state (the menu may be old)
+        from db.series_permissions import can_delete_series_now
+        if not can_delete_series_now(series_id):
+            QMessageBox.warning(self, "Delete trial series",
+                                "You may only delete a series that you are allowed to move in the Backlog "
+                                "(e.g. as its owner). 'To Be Cleaned' and permanent deleting without recycle "
+                                "bin: superusers only.")
+            return
+
         # ── Bestätigungsdialog ─────────────────────────────────────────────
         msg = QMessageBox(self)
         msg.setWindowTitle("Delete trial series")
         msg.setIcon(QMessageBox.Warning)
+        from db import recycle_bin as _rb
+        _bin = _rb.available()
         msg.setText(
-            f"<b>Permanently delete this trial series?</b><br><br>"
+            f"<b>Delete this trial series?</b><br><br>"
             f"<b>{series_name}</b><br><br>"
             f"All trials, lab data and related entries will be deleted.<br>"
-            f"<b>This action cannot be undone.</b>"
+            + (f"A superuser can restore it from the <b>Recycle Bin</b> for {_rb.RETENTION_DAYS} days."
+               if _bin else "<b>This action cannot be undone.</b>")
         )
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
         msg.setDefaultButton(QMessageBox.Cancel)
@@ -1006,6 +1020,11 @@ class BacklogDnDTable(QTableWidget):
 
         # ── Löschen in FK-sicherer Reihenfolge ────────────────────────────
         try:
+            # Recycle bin (db/recycle_bin.py): copy + delete everything in one
+            # transaction; the old direct delete below then finds nothing
+            # left (only used offline / without the bin table).
+            if _bin:
+                _rb.delete_series(int(series_id), series_name)
             trial_rows = fetch_all(
                 "SELECT [ID] FROM [tblTrial] WHERE [TrialSeriesID] = ?",
                 [series_id],
@@ -2272,58 +2291,10 @@ class BacklogScreen(QWidget):
         self._welcome_message_raw = welcome_message
         self._welcome_label.setText(self._format_welcome_text(welcome_message, first_name))
 
-    def _edit_welcome_message(self):
-        """Popup zum Bearbeiten der eigenen Willkommensnachricht (max. 45 Zeichen)."""
-        current = (getattr(self, "_welcome_message_raw", None) or "").strip()
-
-        dlg = QInputDialog(self)
-        dlg.setWindowTitle("Welcome Message")
-        dlg.setLabelText("Neue Welcome Message (max. 45 Zeichen):")
-        dlg.setTextValue(current)
-        dlg.setTextEchoMode(QLineEdit.EchoMode.Normal)
-        le = dlg.findChild(QLineEdit)
-        if le is not None:
-            le.setMaxLength(45)
-
-        if dlg.exec() != QInputDialog.DialogCode.Accepted:
-            return
-
-        value = (dlg.textValue() or "").strip()[:45]
-        value_db = value if value else None
-
-        try:
-            user_id = app_meta.current_user.get("id")
-        except Exception:
-            user_id = None
-        if not user_id:
-            return
-
-        try:
-            if value_db is None:
-                execute("UPDATE [tblUser] SET [WelcomeMessage] = NULL WHERE [ID] = ?", [user_id])
-            else:
-                execute("UPDATE [tblUser] SET [WelcomeMessage] = ? WHERE [ID] = ?", [value_db, user_id])
-        except Exception:
-            return
-
-        self._refresh_welcome_message()
-
     def eventFilter(self, obj, event):
         scroll = getattr(self, "_board_scroll", None)
         if scroll is not None and obj is scroll.viewport() and event.type() == event.Type.Resize:
             self._update_board_layout()
-            return False
-        if obj is getattr(self, "_welcome_label", None):
-            et = event.type()
-            if et == event.Type.Enter:
-                self._welcome_label.setCursor(Qt.PointingHandCursor)
-                return False
-            if et == event.Type.Leave:
-                self._welcome_label.setCursor(Qt.ArrowCursor)
-                return False
-            if et == event.Type.MouseButtonPress and event.button() == Qt.LeftButton:
-                self._edit_welcome_message()
-                return True
             return False
         return super().eventFilter(obj, event)
 
@@ -2578,9 +2549,8 @@ class BacklogScreen(QWidget):
         # gesetzt - Backlog wird schon vor dem Login gebaut).
         self._welcome_label = QLabel("")
         self._welcome_label.setAlignment(Qt.AlignCenter)
-        self._welcome_label.setToolTip("Click to edit your welcome message")
         self._welcome_label.setStyleSheet("color:#555;font-size:13px;font-weight:700;")
-        self._welcome_label.installEventFilter(self)
+        # (changed in Sidebar -> Account -> Settings, no longer by clicking it)
         welcome_row = QHBoxLayout()
         welcome_row.setContentsMargins(24, 10, 24, 0)
         welcome_row.addStretch(1)

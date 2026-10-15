@@ -82,3 +82,18 @@ def test_reading_bar_and_warning_symbols(qapp):
 def test_app_scale_choices():
     assert dp._clean({"app_scale": 150})["app_scale"] == 150
     assert dp._clean({"app_scale": 133})["app_scale"] == 100
+
+
+def test_settings_dialog_builds(qapp):
+    import app_meta
+    from ui.widgets.user_settings_dialog import UserSettingsDialog
+    app_meta.current_user = {"id": None, "first_name": "Test", "access_level": 4}
+    dlg = UserSettingsDialog()
+    assert sorted(dlg._app_buttons) == [100, 125, 150, 200]
+    assert "Large" in dlg._app_buttons[125].text()
+    size0 = dlg.preview.right.font().pointSizeF()
+    dlg._app_buttons[150].click()
+    assert dp.current()["app_scale"] == 150
+    assert dlg.preview.right.font().pointSizeF() == pytest.approx(size0 * 1.5)  # preview shows it right away
+    dlg.reject()
+    assert dp.current()["app_scale"] == 100

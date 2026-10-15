@@ -624,6 +624,14 @@ def build_superuser_group(
     sidebar.add_item(btn_lab_assistant)
     offline_gated_buttons.append(btn_lab_assistant)
 
+    # Deleted trial series, restorable (db/recycle_bin.py) - a dialog, no screen
+    def _open_recycle_bin():
+        from ui.widgets.recycle_bin_dialog import open_recycle_bin
+        open_recycle_bin(sidebar.window())
+    btn_recycle = green_btn("Recycle Bin", _open_recycle_bin)
+    sidebar.add_item(btn_recycle)
+    offline_gated_buttons.append(btn_recycle)
+
 
 def apply_offline_gate(offline_gated_buttons: list):
     """Deaktiviert alle gesammelten offline-ungeeigneten Buttons, wenn der
@@ -776,6 +784,18 @@ def build_utility_group(sidebar: SidebarPanel, *, on_logout: Optional[Callable] 
         open_user_settings(sidebar.window())
     btn_settings = green_btn("Settings", _open_settings)
     sidebar.add_item(btn_settings)
+
+    # "What's new" (ui/whats_new.py): new features of all versions, any time
+    def _open_whats_new():
+        from ui.whats_new import show_whats_new
+        try:
+            from db.usage_log import log_usage_event
+            log_usage_event("feature", "whats_new_open")
+        except Exception:
+            pass
+        show_whats_new(sidebar.window())
+    btn_new = green_btn("What's new", _open_whats_new)
+    sidebar.add_item(btn_new)
 
     btn_logout = green_btn("Log Out", on_logout)
     btn_logout.setVisible(callable(on_logout))

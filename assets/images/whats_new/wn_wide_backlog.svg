@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Wide Backlog - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="12" width="64" height="106" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="12" width="64" height="14" rx="4" fill="#4a4a4a"/>
+  <text x="44" y="22" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle" font-weight="bold">Backlog</text>
+  <rect x="16" y="30" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="16" y="30" width="3" height="16" rx="1" fill="#e67e22"/>
+  <rect x="16" y="50" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="16" y="50" width="3" height="16" rx="1" fill="#2980b9"/>
+  <rect x="16" y="70" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="16" y="70" width="3" height="16" rx="1" fill="#8e44ad"/>
+  <rect x="16" y="90" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="16" y="90" width="3" height="16" rx="1" fill="#39a650"/>
+  <rect x="82" y="12" width="64" height="106" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="82" y="12" width="64" height="14" rx="4" fill="#4a4a4a"/>
+  <text x="114" y="22" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle" font-weight="bold">In Progress</text>
+  <rect x="86" y="30" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="86" y="30" width="3" height="16" rx="1" fill="#e67e22"/>
+  <rect x="86" y="50" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="86" y="50" width="3" height="16" rx="1" fill="#2980b9"/>
+  <rect x="86" y="70" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="86" y="70" width="3" height="16" rx="1" fill="#8e44ad"/>
+  <rect x="86" y="90" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="86" y="90" width="3" height="16" rx="1" fill="#39a650"/>
+  <rect x="152" y="12" width="64" height="106" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="152" y="12" width="64" height="14" rx="4" fill="#4a4a4a"/>
+  <text x="184" y="22" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle" font-weight="bold">Done</text>
+  <rect x="156" y="30" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="156" y="30" width="3" height="16" rx="1" fill="#e67e22"/>
+  <rect x="156" y="50" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="156" y="50" width="3" height="16" rx="1" fill="#2980b9"/>
+  <rect x="156" y="70" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="156" y="70" width="3" height="16" rx="1" fill="#8e44ad"/>
+  <rect x="156" y="90" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="156" y="90" width="3" height="16" rx="1" fill="#39a650"/>
+  <rect x="222" y="12" width="64" height="106" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="222" y="12" width="64" height="14" rx="4" fill="#4a4a4a"/>
+  <text x="254" y="22" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle" font-weight="bold">To Be Cleaned</text>
+  <rect x="226" y="30" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="226" y="30" width="3" height="16" rx="1" fill="#e67e22"/>
+  <rect x="226" y="50" width="56" height="16" rx="3" fill="#ffffff" stroke="#dddddd" stroke-width="1"/>
+  <rect x="226" y="50" width="3" height="16" rx="1" fill="#2980b9"/>
+  <rect x="222" y="78" width="64" height="40" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="222" y="78" width="64" height="14" rx="4" fill="#4a4a4a"/>
+  <text x="254" y="88" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle" font-weight="bold">Archived</text>
+</svg>

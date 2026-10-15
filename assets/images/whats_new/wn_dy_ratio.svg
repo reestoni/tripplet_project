@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- D/Y Ratio - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="14" y="16" width="270" height="22" rx="2" fill="#4a4a4a"/>
+  <text x="164.0" y="32" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#ffffff" text-anchor="middle" font-weight="bold">V1</text>
+  <text x="244.0" y="32" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#ffffff" text-anchor="middle" font-weight="bold">V2</text>
+  <rect x="14" y="38" width="270" height="22" rx="0" fill="#e9f6e9" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="54" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">T1 Tension (cN)</text>
+  <text x="164.0" y="54" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">22.10</text>
+  <text x="244.0" y="54" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">21.40</text>
+  <rect x="14" y="60" width="270" height="22" rx="0" fill="#d5ecd8" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">T2 Tension (cN)</text>
+  <text x="164.0" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">14.80</text>
+  <text x="244.0" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">14.90</text>
+  <rect x="14" y="82" width="270" height="22" rx="0" fill="#e9f6e9" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="19" y="98" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">D/Y Ratio (T2/T1)</text>
+  <rect x="124" y="82" width="80" height="22" rx="0" fill="#f3f3f3" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="164.0" y="98" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">0.67</text>
+  <rect x="204" y="82" width="80" height="22" rx="0" fill="#f3f3f3" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="244.0" y="98" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">0.70</text>
+  <text x="150" y="122" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="middle" font-style="italic">calculated automatically</text>
+</svg>

@@ -94,7 +94,7 @@ def _preview_table(parent: QWidget):
     tbl.left.verticalHeader().setVisible(False)
     tbl.resizeColumnsToContents(fixed_data_column_width=70)
     tbl._preview_model = model
-    tbl.setMinimumHeight(150)
+    tbl.setMinimumHeight(190)
     return tbl
 
 
@@ -140,28 +140,32 @@ class UserSettingsDialog(QDialog):
         lay.addWidget(g_accent)
         self._update_swatch()
 
-        # ── Display ──────────────────────────────────────────────────────
-        g_disp = QGroupBox("Show Experiment tables (easier reading)")
-        dl = QVBoxLayout(g_disp)
+        # ── Text size (whole program, Qt scale factor -> after a restart) ──
+        g_size = QGroupBox("Text size (whole program)")
+        sl = QVBoxLayout(g_size)
         row = QHBoxLayout()
-        row.addWidget(QLabel("Text size:"))
-        self._size_group = QButtonGroup(self)
-        self._size_buttons = {}
-        for pct, name in zip(display_prefs.SCALE_CHOICES, ("Normal", "Large", "Extra large", "Huge")):
+        self._app_group = QButtonGroup(self)
+        self._app_buttons = {}
+        for pct, name in zip(display_prefs.APP_SCALE_CHOICES, ("Normal", "Large", "Extra large", "Huge")):
             b = QPushButton(f"{name}\n{pct} %")
             b.setCheckable(True)
             b.setStyleSheet(_CHOICE_QSS)
             b.setMinimumHeight(44)
-            self._size_group.addButton(b, pct)
-            self._size_buttons[pct] = b
+            self._app_group.addButton(b, pct)
+            self._app_buttons[pct] = b
             row.addWidget(b)
-        self.lbl_custom = QLabel("")
-        self.lbl_custom.setStyleSheet("color:#666;")
-        row.addWidget(self.lbl_custom)
         row.addStretch(1)
-        self._size_group.idClicked.connect(lambda pct: display_prefs.update(persist=False, scale=pct))
-        dl.addLayout(row)
+        self._app_group.idClicked.connect(lambda pct: display_prefs.update(persist=False, app_scale=pct))
+        sl.addLayout(row)
+        self.lbl_app_hint = QLabel("")
+        self.lbl_app_hint.setStyleSheet("color:#666;")
+        self.lbl_app_hint.setWordWrap(True)
+        sl.addWidget(self.lbl_app_hint)
+        lay.addWidget(g_size)
 
+        # ── Show Experiment tables ───────────────────────────────────────
+        g_disp = QGroupBox("Show Experiment tables (easier reading)")
+        dl = QVBoxLayout(g_disp)
         self.cb_contrast = QCheckBox("High contrast (black text, strong stripes and grid lines)")
         self.cb_contrast.toggled.connect(lambda on: display_prefs.update(persist=False, contrast=on))
         dl.addWidget(self.cb_contrast)
@@ -182,37 +186,18 @@ class UserSettingsDialog(QDialog):
         dl.addWidget(self.cb_cb)
         for cb in (self.cb_readbar, self.cb_marks, self.cb_cb):
             cb.setStyleSheet("QCheckBox{spacing:8px;}")
-        tip = QLabel("Tip: in a table, Ctrl + mouse wheel (or Ctrl +/-) changes the size, Ctrl+0 resets it.")
+        tip = QLabel("Tip: in a table, Ctrl + mouse wheel (or Ctrl +/-) zooms the table right away, "
+                     "Ctrl+0 resets it.")
         tip.setStyleSheet("color:#666;")
         tip.setWordWrap(True)
         dl.addWidget(tip)
-        dl.addWidget(QLabel("Preview (click a value):"))
+        self.lbl_custom = QLabel("")
+        self.lbl_custom.setStyleSheet("color:#666;")
+        dl.addWidget(self.lbl_custom)
+        dl.addWidget(QLabel("Preview - shows the chosen text size right away (click a value):"))
         self.preview = _preview_table(self)
         dl.addWidget(self.preview, 1)
         lay.addWidget(g_disp, 1)
-
-        # ── App size (whole program) ─────────────────────────────────────
-        g_app = QGroupBox("App size (whole program: buttons, menus, dialogs)")
-        apl = QVBoxLayout(g_app)
-        arow = QHBoxLayout()
-        self._app_group = QButtonGroup(self)
-        self._app_buttons = {}
-        for pct in display_prefs.APP_SCALE_CHOICES:
-            b = QPushButton(f"{pct} %")
-            b.setCheckable(True)
-            b.setStyleSheet(_CHOICE_QSS)
-            b.setMinimumHeight(34)
-            self._app_group.addButton(b, pct)
-            self._app_buttons[pct] = b
-            arow.addWidget(b)
-        arow.addStretch(1)
-        self._app_group.idClicked.connect(lambda pct: display_prefs.update(persist=False, app_scale=pct))
-        apl.addLayout(arow)
-        self.lbl_app_hint = QLabel("")
-        self.lbl_app_hint.setStyleSheet("color:#666;")
-        self.lbl_app_hint.setWordWrap(True)
-        apl.addWidget(self.lbl_app_hint)
-        lay.addWidget(g_app)
 
         bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         bb.accepted.connect(self._save)
@@ -226,25 +211,23 @@ class UserSettingsDialog(QDialog):
     # ── controls ─────────────────────────────────────────────────────────
     def _sync_controls(self) -> None:
         p = display_prefs.current()
-        b = self._size_buttons.get(p["scale"])
-        if b is not None:
-            b.setChecked(True)
-            self.lbl_custom.setText("")
-        else:
-            self._size_group.setExclusive(False)
-            for btn in self._size_buttons.values():
-                btn.setChecked(False)
-            self._size_group.setExclusive(True)
-            self.lbl_custom.setText(f"Custom: {p['scale']} %")
+        self.lbl_custom.setText(f"Table zoom (Ctrl + mouse wheel): {p['scale']} %" if p["scale"] != 100 else "")
         ab = self._app_buttons.get(p["app_scale"])
         if ab is not None:
             ab.setChecked(True)
+        # the preview shows the chosen text size right away (the program
+        # itself only after the restart)
+        factor = p["app_scale"] / float(display_prefs.running_app_scale() or 100)
+        if abs(self.preview.preview_factor - factor) > 1e-6:
+            self.preview.preview_factor = factor
+            self.preview._apply_display()
         if display_prefs.app_scale_needs_restart():
             self.lbl_app_hint.setText(f"Applies after TrippleT restarts (now running at "
-                                      f"{display_prefs.running_app_scale()} %). Windows display scaling "
-                                      "comes on top.")
+                                      f"{display_prefs.running_app_scale()} %). Buttons, menus, tables and "
+                                      "dialogs all grow. Windows display scaling comes on top.")
         else:
-            self.lbl_app_hint.setText("Changes take effect after a restart of TrippleT.")
+            self.lbl_app_hint.setText("Buttons, menus, tables and dialogs all grow. Takes effect after a "
+                                      "restart of TrippleT (offered when you save).")
         for cb, key in ((self.cb_contrast, "contrast"), (self.cb_cross, "crosshair"),
                         (self.cb_readbar, "readbar"), (self.cb_marks, "alert_marks"),
                         (self.cb_cb, "cb_colours")):

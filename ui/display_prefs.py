@@ -1,7 +1,8 @@
 """display_prefs.py - per-user display settings for reading Show Experiment's
 tables, Nutzerwunsch 2026-10-15 (colleagues with poor eyesight).
 
-    scale      text size of the tables in percent (100 = normal)
+    scale      zoom of the Show Experiment tables in percent (100 = normal),
+               set live with Ctrl + mouse wheel / Ctrl +/-
     contrast   high contrast: black on white/grey stripes, dark grid lines,
                bold text, strong selection colour
     crosshair  highlights the row and column of the current cell incl.
@@ -10,8 +11,11 @@ tables, Nutzerwunsch 2026-10-15 (colleagues with poor eyesight).
     alert_marks  warnings (red/orange cells) get a symbol, not only a colour
     cb_colours colour-blind friendly: neutral stripes, orange/yellow warnings
                with symbols, blue crosshair
-    app_scale  size of the whole program (Qt scale factor, needs a restart;
+    app_scale  "Text size" in Settings: size of the whole program (Qt scale
+               factor 100/125/150/200 %, needs a restart;
                also kept locally because it must be known before login)
+    whats_new_seen  id of the newest "What's new" release this user has seen
+               (ui/whats_new.py) - stored here so it follows the login
 
 Stored per user in tblUser.DisplaySettings (JSON), so the settings follow
 the login to every PC. Without that column (not migrated yet, older offline
@@ -35,11 +39,11 @@ COLUMN = "DisplaySettings"
 ADD_COLUMN_SQL = "ALTER TABLE tbluser ADD COLUMN DisplaySettings VARCHAR(255) NULL DEFAULT NULL"
 
 DEFAULTS: Dict[str, Any] = {"scale": 100, "contrast": False, "crosshair": False, "readbar": False,
-                            "alert_marks": False, "cb_colours": False, "app_scale": 100}
+                            "alert_marks": False, "cb_colours": False, "app_scale": 100,
+                            "whats_new_seen": ""}
 _BOOL_KEYS = ("contrast", "crosshair", "readbar", "alert_marks", "cb_colours")
-SCALE_CHOICES = [100, 125, 150, 200]
 SCALE_MIN, SCALE_MAX, SCALE_STEP = 80, 300, 10
-APP_SCALE_CHOICES = [100, 125, 150, 175, 200]
+APP_SCALE_CHOICES = [100, 125, 150, 200]
 _LOCAL_APP_SCALE_KEY = "app_scale_local"
 
 _prefs: Dict[str, Any] = dict(DEFAULTS)
@@ -69,6 +73,7 @@ def _clean(d: Dict[str, Any]) -> Dict[str, Any]:
         out["app_scale"] = a if a in APP_SCALE_CHOICES else 100
     except (TypeError, ValueError):
         pass
+    out["whats_new_seen"] = str(d.get("whats_new_seen") or "")[:40]
     return out
 
 

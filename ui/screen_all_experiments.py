@@ -1670,7 +1670,13 @@ class AllExperimentsScreen(QWidget):
 
         lvl = self._effective_access_level()
         can_rename = lvl >= 2
-        can_delete = lvl >= 4
+        # delete = whoever may move this series in the Backlog (recycle bin),
+        # see db/series_permissions.py
+        from db.series_permissions import can_delete_series_now
+        try:
+            can_delete = can_delete_series_now(self._row_payload[row][1])
+        except Exception:
+            can_delete = False
         can_reassign = lvl >= 4
 
         menu = QMenu(self)
@@ -2208,15 +2214,27 @@ class AllExperimentsScreen(QWidget):
         except Exception:
             series_name = str(series_pk)
 
+        # Security check against the current DB state (the menu may be old)
+        from db.series_permissions import can_delete_series_now
+        if not can_delete_series_now(series_pk):
+            QMessageBox.warning(self, "Delete Trial Series",
+                                "You may only delete a series that you are allowed to move in the Backlog "
+                                "(e.g. as its owner). 'To Be Cleaned' and permanent deleting without recycle "
+                                "bin: superusers only.")
+            return
+
         # ── Confirmation dialog ────────────────────────────────────────────
         msg = QMessageBox(self)
         msg.setWindowTitle("Delete Trial Series")
         msg.setIcon(QMessageBox.Warning)
+        from db import recycle_bin as _rb
+        _bin = _rb.available()
         msg.setText(
-            f"<b>Permanently delete this Trial Series?</b><br><br>"
+            f"<b>Delete this Trial Series?</b><br><br>"
             f"<b>{series_name}</b><br><br>"
             f"This will delete all Trials, Lab data, and related records.<br>"
-            f"<b>This action cannot be undone.</b>"
+            + (f"A superuser can restore it from the <b>Recycle Bin</b> for {_rb.RETENTION_DAYS} days."
+               if _bin else "<b>This action cannot be undone.</b>")
         )
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
         msg.setDefaultButton(QMessageBox.Cancel)
@@ -2225,6 +2243,11 @@ class AllExperimentsScreen(QWidget):
 
         # ── Delete in FK-safe order ────────────────────────────────────────
         try:
+            # Recycle bin (db/recycle_bin.py): copy + delete everything in one
+            # transaction; the old direct delete below then finds nothing
+            # left (only used offline / without the bin table).
+            if _bin:
+                _rb.delete_series(int(series_pk), series_name)
             # Collect all TrialIDs for this series
             trial_rows = fetch_all(
                 "SELECT [ID] FROM [tblTrial] WHERE [TrialSeriesID] = ?",

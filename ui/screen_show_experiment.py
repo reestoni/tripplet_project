@@ -1779,6 +1779,27 @@ class PivotEditModel(QAbstractTableModel):
                     break
 
         dy_ratio_ids: set = set()  # tblTrialSettings rows whose T1/T2 changed
+
+        # Change history (db/change_log.py): old DB values of all changed
+        # cells, one query per (table, field), read before writing
+        from db import change_log as _chlog
+        _log_on = _chlog.table_ready()
+        _old_vals: Dict[Tuple[str, str], Dict[int, Dict[str, Any]]] = {}
+        _log_new: Dict[Tuple[str, int, str], Any] = {}
+        if _log_on:
+            _want: Dict[Tuple[str, str], set] = {}
+            for _r, _c, _t in self._dirty:
+                _b = self._binding[_r][_c]
+                if not _b:
+                    continue
+                _ids = _b.id_values if isinstance(_b, GroupCellBinding) else [_b.id_value]
+                _want.setdefault((str(_b.table), str(_b.field)), set()).update(_ids)
+            for (_tb, _fd), _ids in _want.items():
+                try:
+                    _old_vals[(_tb, _fd)] = _chlog.read_current(_tb, _fd, list(_ids))
+                except Exception:
+                    _old_vals[(_tb, _fd)] = {}
+
         for r, c, new_text in self._dirty:
             bind = self._binding[r][c]
             if not bind:
@@ -1794,6 +1815,7 @@ class PivotEditModel(QAbstractTableModel):
             if isinstance(bind, GroupCellBinding):
                 text_str = "" if new_text is None else str(new_text).strip()
                 for gid in bind.id_values:
+                    _log_new[(str(bind.table), int(gid), str(bind.field))] = text_str
                     if text_str == "":
                         sql = (
                             f"UPDATE {bind.table} SET "
@@ -1883,6 +1905,20 @@ class PivotEditModel(QAbstractTableModel):
                     params = [text_str, bind.id_value]
 
             n += execute_non_query(sql, params)
+            try:
+                _log_new[(str(bind.table), int(bind.id_value), str(bind.field))] = text_str
+            except (TypeError, ValueError):
+                pass
+
+        if _log_on and _log_new:
+            _entries = []
+            for (_tb, _rid, _fd), _new in _log_new.items():
+                _cur = _old_vals.get((_tb, _fd), {}).get(_rid, {})
+                _tid = _rid if _tb.lower() == "tbltrial" else _cur.get("trial_id")
+                _entries.append({"table": _tb, "row_id": _rid, "field": _fd,
+                                 "old": _cur.get("value"), "new": _new, "trial_id": _tid})
+            _chlog.log_changes(_entries, series_id=getattr(self, "_log_series_id", None),
+                               source=getattr(self, "_log_source", "edit"))
 
         if dy_ratio_ids:
             from db.dy_ratio import recompute
@@ -2665,6 +2701,33 @@ class _ManagePliesDialog(QDialog):
         self._load()
 
 
+def _add_cell_history_action(screen, model, index, menu) -> None:
+    """Adds "Change history…" for a value (db/change_log.py) - superusers
+    only (Nutzerentscheid 2026-10-15)."""
+    if model is None or not hasattr(model, "get_binding"):
+        return
+    from ui.change_history_dialog import can_view_history
+    if not can_view_history():
+        return
+    act = menu.addAction("Change history…")
+    act.triggered.connect(lambda: _open_cell_history(screen, model, index))
+
+
+def _open_cell_history(screen, model, index) -> None:
+    from ui.change_history_dialog import show_cell_history
+    show_cell_history(screen, model, index)
+
+
+def _show_experiment_cell_menu(table, index, menu) -> None:
+    """FrozenFirstColumnTable.cell_menu_hook: right-click on a value."""
+    w = table.parent()
+    while w is not None and not isinstance(w, ShowExperimentScreen):
+        w = w.parent()
+    if w is None:
+        return
+    _add_cell_history_action(w, table.model(), index, menu)
+
+
 def _view_row_hidden(table, row: int) -> bool:
     """True if the (data) row is hidden in the table's main view (e.g. rows
     hidden by the user in Machine Data, see ui/machine_row_visibility.py)."""
@@ -2757,7 +2820,14 @@ class _MachineContextMenuFilter(QObject):
             if right_view is not None and view is right_view:
                 span = right_view.columnSpan(row, col)
                 if span > 1:
-                    self._screen._fill_machine_row_from_title(row, is_rd=self._is_rd)
+                    from PySide6.QtWidgets import QMenu
+                    menu = QMenu()
+                    act_fill = menu.addAction("Fill row…")
+                    _add_cell_history_action(self._screen, getattr(self._screen, _model_attr),
+                                             right_view.model().index(row, col), menu)
+                    chosen = menu.exec(event.globalPos())
+                    if chosen == act_fill:
+                        self._screen._fill_machine_row_from_title(row, is_rd=self._is_rd)
                     return True
         except Exception:
             pass
@@ -4417,6 +4487,49 @@ class ShowExperimentScreen(QWidget):
         except Exception as e:
             QMessageBox.warning(self, 'Fehler', str(e))
 
+    def _confirm_plausible_values(self) -> bool:
+        """False = the user wants to correct unusual values first."""
+        try:
+            from db.plausibility import find_unusual
+            machine_id = (getattr(self, "_machine_cache", None) or {}).get("machine_id")
+            found = []
+            for attr, tbl_attr in (("model_machine", "tbl_machine"), ("model_rd_machine", "tbl_rd_machine")):
+                for e in find_unusual(getattr(self, attr, None), machine_id):
+                    found.append((attr, tbl_attr, e))
+        except Exception:
+            return True
+        if not found:
+            return True
+        lines = "\n".join("•  " + e["text"] for _a, _t, e in found[:15])
+        more = f"\n… and {len(found) - 15} more" if len(found) > 15 else ""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Unusual values")
+        box.setText(f"{'This value is' if len(found) == 1 else 'These values are'} unusual for this machine "
+                    f"(compared with earlier trials). Typo?\n\n{lines}{more}")
+        btn_back = box.addButton("Go back and check", QMessageBox.RejectRole)
+        box.addButton("Save anyway", QMessageBox.AcceptRole)
+        box.setDefaultButton(btn_back)
+        box.exec()
+        if box.clickedButton() is not btn_back:
+            try:
+                from db.usage_log import log_usage_event
+                log_usage_event("feature", "plausibility_save_anyway", str(len(found)))
+            except Exception:
+                pass
+            return True
+        attr, tbl_attr, e = found[0]
+        try:
+            model, tbl = getattr(self, attr), getattr(self, tbl_attr)
+            if attr == "model_machine":
+                self.tabs.setCurrentWidget(self.tab_machine)
+            idx = model.index(model._n_hdr + e["row"], e["col"] + 1)
+            tbl.setCurrentIndex(idx)
+            tbl.scrollTo(idx)
+        except Exception:
+            pass
+        return False
+
     def _save_all(self):
         # Access level 1: read-only
         try:
@@ -4462,6 +4575,11 @@ class ShowExperimentScreen(QWidget):
             except Exception:
                 pass
 
+        # Plausibility check of machine settings (db/plausibility.py): one
+        # warning for all unusual values, the user can save anyway
+        if not self._confirm_plausible_values():
+            return
+
         # Vor dem Speichern: betroffene Trial-IDs sammeln, falls Tension-Felder geändert wurden
         trial_ids_to_stamp = set()
         try:
@@ -4499,6 +4617,10 @@ class ShowExperimentScreen(QWidget):
 
         # --- Generic save handling for all registered models ---
         for name, model in self._iter_save_models():
+            try:
+                model._log_series_id = self._series_pk  # change history (db/change_log.py)
+            except Exception:
+                pass
             try:
                 if name == "model_itemat":
                     dirty_before = len(getattr(model, "_dirty", []))
@@ -9412,3 +9534,6 @@ def _patch_show_experiment_advisor():
 
 
 _patch_show_experiment_advisor()
+
+# Right-click on a value in any Show Experiment table -> "Change history…"
+FrozenFirstColumnTable.cell_menu_hook = _show_experiment_cell_menu

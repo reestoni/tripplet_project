@@ -58,7 +58,9 @@ TEXTS = {
                 ("task", "Rename, change machine or yarn, delete",
                  ["Right-click the row and choose " + M("Rename Trial Series…") + ", " + M("Change Machine…") + ", "
                   + M("Reassign Yarn…") + " or " + M("Delete Trial Series…") + "."],
-                 "Renaming requires access level 2; machine, yarn and deleting are for superusers only."),
+                 "Renaming requires access level 2; machine and yarn are for superusers only. Deleting: whoever may "
+                 "move the series in the Backlog (e.g. its owner; in To Be Cleaned superusers only). A superuser can restore a deleted series for 90 "
+                 "days: Sidebar → <i>Superuser</i> → <b>Recycle Bin</b>."),
             ]},
             {"key": "screen", "title": "Screen guide", "blocks": [
                 ("svg", SVG, {"hint_open": "double-click a row to open it · Ctrl + double-click opens a new tab",
@@ -112,7 +114,9 @@ TEXTS = {
                 ("task", "Umbenennen, Maschine oder Garn ändern, löschen",
                  ["Rechtsklick auf die Zeile und " + M("Rename Trial Series…") + ", " + M("Change Machine…") + ", "
                   + M("Reassign Yarn…") + " oder " + M("Delete Trial Series…") + " wählen."],
-                 "Umbenennen erfordert Access Level 2; Maschine, Garn und Löschen nur für Superuser."),
+                 "Umbenennen erfordert Access Level 2; Maschine und Garn nur für Superuser. Löschen: wer die Serie "
+                 "im Backlog verschieben darf (z.&nbsp;B. der Owner; in To Be Cleaned nur Superuser). Ein Superuser kann eine gelöschte Serie 90 Tage "
+                 "lang wiederherstellen: Sidebar → <i>Superuser</i> → <b>Recycle Bin</b>."),
             ]},
             {"key": "screen", "title": "Bildschirm", "blocks": [
                 ("svg", SVG, {"hint_open": "Doppelklick auf eine Zeile öffnet sie · Strg + Doppelklick öffnet einen neuen Tab",
@@ -166,7 +170,9 @@ TEXTS = {
                 ("task", "Renombrar, cambiar máquina o hilo, borrar",
                  ["Clic derecho en la fila y elige " + M("Rename Trial Series…") + ", " + M("Change Machine…") + ", "
                   + M("Reassign Yarn…") + " o " + M("Delete Trial Series…") + "."],
-                 "Renombrar requiere nivel de acceso 2; máquina, hilo y borrar solo para superusuarios."),
+                 "Renombrar requiere nivel de acceso 2; máquina e hilo solo para superusuarios. Borrar: quien puede "
+                 "mover la serie en el Backlog (p.&nbsp;ej. su responsable; en To Be Cleaned solo superusuarios). Un superusuario puede recuperar una serie "
+                 "borrada durante 90 días: barra lateral → <i>Superuser</i> → <b>Recycle Bin</b>."),
             ]},
             {"key": "screen", "title": "Pantalla", "blocks": [
                 ("svg", SVG, {"hint_open": "doble clic en una fila para abrirla · Ctrl + doble clic abre una pestaña nueva",

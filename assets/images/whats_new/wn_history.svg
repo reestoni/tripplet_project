@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Change history - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="10" width="276" height="110" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="22" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b" text-anchor="start" font-weight="bold">Change history</text>
+  <text x="22" y="46" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">When</text>
+  <text x="110" y="46" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">Who</text>
+  <text x="190" y="46" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">Old</text>
+  <text x="240" y="46" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">New</text>
+  <line x1="22" y1="50" x2="278" y2="50" stroke="#cccccc" stroke-width="1"/>
+  <text x="22" y="66" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">15.10. 12:42</text>
+  <text x="110" y="66" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">J. Miller</text>
+  <text x="190" y="66" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">3.50</text>
+  <text x="240" y="66" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">4.25</text>
+  <text x="22" y="84" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">02.10. 09:15</text>
+  <text x="110" y="84" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">A. Rossi</text>
+  <text x="190" y="84" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">3.00</text>
+  <text x="240" y="84" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">3.50</text>
+  <text x="22" y="112" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start" font-style="italic">Right-click a value  &gt;  Change history...</text>
+</svg>

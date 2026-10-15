@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Text size - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <text x="16" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Text size (whole program)</text>
+  <rect x="16" y="38" width="62" height="40" rx="5" fill="#eeeeee" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="47" y="54" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">Normal</text>
+  <text x="47" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">100 %</text>
+  <rect x="84" y="38" width="62" height="40" rx="5" fill="#eeeeee" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="115" y="54" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">Large</text>
+  <text x="115" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">125 %</text>
+  <rect x="152" y="38" width="62" height="40" rx="5" fill="#1F4E8C"/>
+  <text x="183" y="54" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="middle" font-weight="bold">Extra large</text>
+  <text x="183" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#ffffff" text-anchor="middle" font-weight="bold">150 %</text>
+  <rect x="220" y="38" width="62" height="40" rx="5" fill="#eeeeee" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="251" y="54" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">Huge</text>
+  <text x="251" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle">200 %</text>
+  <text x="16" y="100" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#2b2b2b" text-anchor="start">Aa</text>
+  <text x="40" y="100" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="#2b2b2b" text-anchor="start">Aa</text>
+  <text x="70" y="100" font-family="Segoe UI, Arial, sans-serif" font-size="19" fill="#2b2b2b" text-anchor="start" font-weight="bold">Aa</text>
+  <text x="104" y="100" font-family="Segoe UI, Arial, sans-serif" font-size="24" fill="#2b2b2b" text-anchor="start">Aa</text>
+</svg>

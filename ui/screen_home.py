@@ -250,101 +250,11 @@ class HomeScreen(QWidget):
         except Exception:
             pass
 
-    def _edit_welcome_message(self):
-        """Öffnet einen Dialog zum Bearbeiten der Willkommensnachricht (nur für Admins).
-
-        Speichert den neuen Text in der DB und aktualisiert die Anzeige.
-        """
-        """Open small popup to edit WelcomeMessage (max 45 chars)."""
-        try:
-            current = (self._welcome_message_raw or "").strip()
-        except Exception:
-            current = ""
-
-        dlg = QInputDialog(self)
-        dlg.setWindowTitle("Welcome Message")
-        dlg.setLabelText("Neue Welcome Message (max. 45 Zeichen):")
-        dlg.setTextValue(current)
-        dlg.setTextEchoMode(QLineEdit.EchoMode.Normal)
-
-        # set max length on internal line edit
-        le = dlg.findChild(QLineEdit)
-        if le is not None:
-            le.setMaxLength(45)
-
-        if dlg.exec() != QInputDialog.DialogCode.Accepted:
-            return
-
-        value = (dlg.textValue() or "").strip()
-        if len(value) > 45:
-            value = value[:45]
-
-        # Empty → store NULL (so default 'Welcome, FirstName' applies)
-        if value == "":
-            value_db = None
-        else:
-            value_db = value
-
-        try:
-            user_id = app_meta.current_user.get("id")
-        except Exception:
-            user_id = None
-        if not user_id:
-            return
-
-        try:
-            if value_db is None:
-                execute("UPDATE [tblUser] SET [WelcomeMessage] = NULL WHERE [ID] = ?", [user_id])
-            else:
-                execute("UPDATE [tblUser] SET [WelcomeMessage] = ? WHERE [ID] = ?", [value_db, user_id])
-        except Exception:
-            # keep UI usable even if save fails
-            return
-
-        # Refresh label immediately
-        self._refresh_welcome_message()
-
     # _pick_accent_colour() ist nach ui/widgets/sidebar_nav.py::pick_accent_colour()
     # ausgelagert (2026-08-26, TopBar-Entfernung) - war schon vorher komplett
     # self-contained (kein Zugriff auf HomeScreen-Zustand) und wird jetzt von
     # allen vier Sidebar-Screens gebraucht, nicht nur von Home.
 
-
-    def eventFilter(self, obj, event):
-        """Fängt Doppelklick auf den Willkommenstext ab (→ Bearbeitungs-Dialog für Admins)."""
-        # --- Welcome label hover + click (edit WelcomeMessage) ---
-        if hasattr(self, "_welcome_label") and obj is self._welcome_label:
-            try:
-                et = event.type()
-            except Exception:
-                et = None
-
-            # Hover → hand cursor
-            if et == event.Type.Enter:
-                try:
-                    self._welcome_label.setCursor(Qt.PointingHandCursor)
-                except Exception:
-                    pass
-                return False
-            if et == event.Type.Leave:
-                try:
-                    self._welcome_label.setCursor(Qt.ArrowCursor)
-                except Exception:
-                    pass
-                return False
-
-            # Click → edit popup
-            if et == event.Type.MouseButtonPress:
-                try:
-                    btn = event.button()
-                except Exception:
-                    btn = None
-                if btn == Qt.LeftButton:
-                    self._edit_welcome_message()
-                    return True
-            return False
-
-        return super().eventFilter(obj, event)
 
     def _refresh_backlog_badge(self):
         """Aktualisiert den Backlog-Badge mit der aktuellen Anzahl offener Einträge."""
@@ -548,7 +458,6 @@ class HomeScreen(QWidget):
         self._welcome_label.setStyleSheet(
             "color: black; font-size: 30px; font-weight: bold;"
         )
-        self._welcome_label.installEventFilter(self)
         wlay.addWidget(self._welcome_label)
 
         main_layout.addWidget(self._welcome_wrapper, 0, Qt.AlignLeft)
