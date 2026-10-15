@@ -238,6 +238,11 @@ REGELN FÜR run_sql_query:
     mit GROUP BY/COUNT als viele einzelne).
   - Bei einem Fehler in der Antwort: die Abfrage anpassen und erneut versuchen,
     nicht aufgeben.
+  - tbltrial-Zeilen mit IsReference = 1 sind KEINE Versuche, sondern
+    Referenzmuster (z.B. Originalspule eines Kunden als Benchmark, Name in
+    ReferenceName). Für Statistiken/Auswertungen über Versuche immer mit
+    COALESCE(IsReference, 0) = 0 ausschliessen - ausser die Frage zielt
+    ausdrücklich auf Referenzmuster/Kundenmuster.
 
 VERFÜGBARES SCHEMA (Tabelle: Spalten):
 {build_schema_summary()}

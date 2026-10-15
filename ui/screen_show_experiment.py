@@ -70,6 +70,17 @@ from db.connection import (
     get_columns_map as _db_get_columns_map,
     is_dev_mode,
 )
+from db.trial_reference import (
+    IS_REFERENCE_COL,
+    REFERENCE_NAME_COL,
+    has_reference_columns,
+    is_reference_value,
+    next_reference_number,
+    next_trial_number,
+    format_trial_number,
+    reference_label,
+    reference_tooltip,
+)
 
 import html
 import math
@@ -418,6 +429,11 @@ class _CopyTrialsRangeDialog(QDialog):
         form.addRow("To trial #", self.sp_to)
         form.addRow("Copies per trial", self.sp_copies)
         layout.addLayout(form)
+
+        hint = QLabel("Several copies are added as repeated blocks of the range\n"
+                      "(e.g. V1–V3 twice → V1, V2, V3, V1, V2, V3).")
+        hint.setStyleSheet("color: #666;")
+        layout.addWidget(hint)
 
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
@@ -1226,6 +1242,11 @@ class PivotEditModel(QAbstractTableModel):
     _FG_BLACK = QColor("black")
     _HDR_BG_TRIAL = QColor("#3f3f3f")
     _HDR_FG = QColor("#ffffff")
+    # Reference sample columns (customer originals, see db/trial_reference.py):
+    # amber, deliberately independent of the user's accent colour.
+    _REF_HDR_BG = QColor("#E8C15A")
+    _REF_EVEN = QColor("#FFF4D6")
+    _REF_ODD = QColor("#FBE8B5")
 
     @property
     def _ALT_EVEN(self):
@@ -1278,6 +1299,8 @@ class PivotEditModel(QAbstractTableModel):
         self._unit_scale_field: Optional[str] = None
         # col_idx (0-based, in _col_titles) -> tooltip text; see set_flagged_columns()
         self._flagged_cols: Dict[int, str] = {}
+        # col_idx (0-based) -> tooltip; see set_reference_columns()
+        self._reference_cols: Dict[int, str] = {}
 
     def set_flagged_columns(self, mapping: Dict[int, str]) -> None:
         """Marks columns with a red dot in the column header (e.g. an open retest flag).
@@ -1285,6 +1308,13 @@ class PivotEditModel(QAbstractTableModel):
         mapping: {col_idx (0-based, as in col_titles): tooltip text}.
         """
         self._flagged_cols = dict(mapping or {})
+        if self._col_titles:
+            self.headerDataChanged.emit(Qt.Horizontal, 1, len(self._col_titles))
+
+    def set_reference_columns(self, mapping: Dict[int, str]) -> None:
+        """Highlights reference-sample columns (amber) - mapping: {col_idx
+        (0-based, as in col_titles): tooltip text}."""
+        self._reference_cols = dict(mapping or {})
         if self._col_titles:
             self.headerDataChanged.emit(Qt.Horizontal, 1, len(self._col_titles))
 
@@ -1364,6 +1394,8 @@ class PivotEditModel(QAbstractTableModel):
                     return _retest_flag_dot_icon()
                 if role == Qt.ToolTipRole:
                     return note or "Retest pending"
+            if role == Qt.ToolTipRole and col_idx in self._reference_cols:
+                return self._reference_cols[col_idx]
         if role != Qt.DisplayRole:
             return None
         if orientation == Qt.Horizontal:
@@ -1454,7 +1486,10 @@ class PivotEditModel(QAbstractTableModel):
         # ── pseudo-header rows ────────────────────────────────────────────
         if r < self._n_hdr:
             hdr = self._header_rows[r]
+            _is_ref_col = c > 0 and (c - 1) in self._reference_cols
             if role == Qt.BackgroundRole:
+                if _is_ref_col:
+                    return self._REF_HDR_BG
                 bg = hdr.get("bg")
                 if bg is None:
                     return self._ALT_EVEN if (r % 2 == 0) else self._ALT_ODD
@@ -1468,6 +1503,8 @@ class PivotEditModel(QAbstractTableModel):
             if role == Qt.ToolTipRole:
                 tips = hdr.get("tooltips", [])
                 tip = tips[c] if c < len(tips) else ""
+                if not tip and _is_ref_col:
+                    tip = self._reference_cols[c - 1]
                 return tip if tip else None
             if role == Qt.TextAlignmentRole:
                 return Qt.AlignCenter
@@ -1517,6 +1554,8 @@ class PivotEditModel(QAbstractTableModel):
                     return QColor("#FFD0D0")  # helles Rot
                 if _cell_alert == "orange":
                     return QColor("#FFE5B4")  # helles Orange
+                if c > 0 and (c - 1) in self._reference_cols:
+                    return self._REF_EVEN if (dr % 2 == 0) else self._REF_ODD
                 return self._ALT_EVEN if (dr % 2 == 0) else self._ALT_ODD
             if role == Qt.ForegroundRole:
                 if _is_elong_cv_alert or _is_ten_cv_alert or _cell_alert == "red":
@@ -2072,7 +2111,7 @@ class _ManagePliesDialog(QDialog):
         self._yarn_list = yarn_list  # [(id, name), ...]
         # all_trials: [(trial_id, vno_label), ...] alle Trials der Series
         self._all_trials = all_trials or [(trial_id, str(vno))]
-        self.setWindowTitle(f"Manage Plies – V{vno}")
+        self.setWindowTitle(f"Manage Plies – {format_trial_number(vno)}")
         self.setMinimumWidth(500)
         self._build_ui()
         self._load()
@@ -2178,7 +2217,7 @@ class _ManagePliesDialog(QDialog):
             self._trial_checkboxes: List = []
             for tid, vlabel in self._all_trials:
                 from PySide6.QtWidgets import QCheckBox
-                cb = QCheckBox(f"V{vlabel}")
+                cb = QCheckBox(format_trial_number(vlabel))
                 cb.setChecked(tid == self._trial_id)
                 cb.setEnabled(tid != self._trial_id)  # aktueller Trial immer an, nicht abwählbar
                 inner_lay.addWidget(cb)
@@ -2471,7 +2510,7 @@ class _ManagePliesDialog(QDialog):
                             "SELECT Versuchsnummer FROM tblTrial WHERE ID = ?", (tid,))
                         vno_row = cur.fetchone()
                         vno_lbl = vno_row[0] if vno_row else str(tid)
-                        skipped.append(f"V{vno_lbl}")
+                        skipped.append(format_trial_number(vno_lbl))
                         continue
                     if tid == self._trial_id:
                         # Current trial: delete by settings ID (exact row)
@@ -2535,7 +2574,7 @@ class _MachineContextMenuFilter(QObject):
         # ist ausgeblendet, daher muss die Vervielfältigung hier abgefangen werden.
         if row == 0 and col > 0:
             # col-1 = Index in col_specs (Spalte 0 = Zeilentitel)
-            self._screen._multiply_trial_from_col_spec_idx(col - 1)
+            self._screen._on_trial_header_menu(col - 1, event.globalPos(), is_rd=self._is_rd)
             return True
 
         # ── Rechtsklick auf Ply-Label-Zeile (Zeile 1, Spalte > 0) ────────────
@@ -2765,6 +2804,9 @@ class ShowExperimentScreen(QWidget):
         self._trials: List[Dict[str, Any]] = []
         self._trial_ids: List[int] = []
         self._trial_labels: List[str] = []
+        self._trial_vnos: List[int] = []
+        # trial_id -> name for reference samples (see db/trial_reference.py)
+        self._reference_names: Dict[int, str] = {}
 
         # Lazy tab population (2026-08-13, perf): profiled that opening an
         # experiment with many trials spends most of its (post-DB-caching)
@@ -3100,6 +3142,30 @@ class ShowExperimentScreen(QWidget):
             self._save_model_names = []
         if attr_name not in self._save_model_names:
             self._save_model_names.append(attr_name)
+        # Every per-trial lab model is built with col_titles=self._trial_labels
+        # (one column per trial, same order) - highlight reference columns
+        # there centrally instead of in each _build_XXX_tab. The machine tabs
+        # (one column per ply) do this themselves via col_specs.
+        model = getattr(self, attr_name, None)
+        if model is not None and getattr(model, "_col_titles", None) is self._trial_labels:
+            self._apply_reference_columns(model, self._trial_ids)
+
+    def _apply_reference_columns(self, model, trial_id_per_col) -> None:
+        """Marks the columns of `model` that belong to a reference sample.
+        trial_id_per_col: trial ID for each data column (0-based)."""
+        if not hasattr(model, "set_reference_columns"):
+            return
+        refs = self._reference_names
+        mapping = {}
+        for c_idx, tid in enumerate(trial_id_per_col):
+            try:
+                tid = int(tid)
+            except (TypeError, ValueError):
+                continue
+            if tid in refs:
+                vno = self._trial_vnos[self._trial_ids.index(tid)] if tid in self._trial_ids else "?"
+                mapping[c_idx] = reference_tooltip(refs[tid], vno)
+        model.set_reference_columns(mapping)
 
     def _iter_save_models(self):
         """Yields (attr_name, model) for all registered models that exist."""
@@ -3356,20 +3422,7 @@ class ShowExperimentScreen(QWidget):
         # for the PREVIOUS experiment.
         if self.tab_machine is not None:
             self.tabs.setCurrentWidget(self.tab_machine)
-        self._build_titer_tab()
-        self._build_jet_air_tab()
-        self._build_statimat_tab()
-        self._build_statimat_ds_tab()
-        self._build_waterbath_tab()
-        self._build_ekb_tab()
-        self._build_hot_air_shrinkage_tab()
-        self._build_hot_water_shrinkage_tab()
-        self._build_aty_shrinkage_tab()
-        self._build_rapid600_tab()
-        self._build_itemat_tab()
-        self._build_itemat_plus_tab()
-        self._build_dtyomat_tab()
-        self._build_atyomat_tab()
+        self._build_lab_tabs()
         self._build_yarnscope_tab()
         self._build_aty_yarnscope_tab()
 
@@ -3770,6 +3823,20 @@ class ShowExperimentScreen(QWidget):
         self.btn_add_empty_trial.clicked.connect(self._add_empty_trial)
         _mfb_lay.addWidget(self.btn_add_empty_trial)
 
+        # ── "Add reference sample" Button (customer original / benchmark) ──
+        self.btn_add_reference = QPushButton("+ Ref")
+        self.btn_add_reference.setToolTip(
+            "Add reference sample (e.g. customer original spool) - shown as a\n"
+            "highlighted benchmark column, not counted as a trial")
+        self.btn_add_reference.setFixedHeight(30)
+        self.btn_add_reference.setStyleSheet(
+            "QPushButton{border:1px solid #E8C15A;background:#FFF4D6;color:#5a4500;"
+            "padding:2px 8px;border-radius:4px;font-weight:bold;}"
+            "QPushButton:hover{background:#FBE8B5;}"
+            "QPushButton:disabled{border-color:#ddd;background:#f4f4f4;color:#aaa;}")
+        self.btn_add_reference.clicked.connect(self._add_reference_sample)
+        _mfb_lay.addWidget(self.btn_add_reference)
+
         vm.addWidget(self._mat_filter_bar)
 
         self.tbl_machine = FrozenFirstColumnTable()
@@ -3951,6 +4018,9 @@ class ShowExperimentScreen(QWidget):
                     self.btn_itemat_import.setToolTip("Write access required (AccessLevel > 1)")
                 else:
                     self.btn_itemat_import.setToolTip("")
+
+            if hasattr(self, "btn_add_reference") and self.btn_add_reference:
+                self.btn_add_reference.setEnabled(bool(can_write) and has_reference_columns())
         except Exception:
             # If anything goes wrong, keep button enabled and let _save_all guard.
             pass
@@ -4376,18 +4446,42 @@ class ShowExperimentScreen(QWidget):
     # ---------- Daten laden ----------
 
     def _load_trials(self):
-        rows = fetch_all(
-            """
-            SELECT ID, Versuchsnummer
-            FROM tblTrial
-            WHERE TrialSeriesID = ?
-            ORDER BY Versuchsnummer
-            """,
-            [self._series_pk],
-        )
+        # Reference samples (customer originals, see db/trial_reference.py)
+        # come first, so the benchmark is always the leftmost column(s).
+        if has_reference_columns():
+            rows = fetch_all(
+                f"""
+                SELECT ID, Versuchsnummer, {IS_REFERENCE_COL}, {REFERENCE_NAME_COL}
+                FROM tblTrial
+                WHERE TrialSeriesID = ?
+                ORDER BY COALESCE({IS_REFERENCE_COL}, 0) DESC,
+                         CASE WHEN COALESCE({IS_REFERENCE_COL}, 0) = 1 THEN ABS(Versuchsnummer)
+                              ELSE Versuchsnummer END
+                """,
+                [self._series_pk],
+            )
+        else:
+            rows = fetch_all(
+                """
+                SELECT ID, Versuchsnummer
+                FROM tblTrial
+                WHERE TrialSeriesID = ?
+                ORDER BY Versuchsnummer
+                """,
+                [self._series_pk],
+            )
         self._trials = rows
         self._trial_ids = [r["ID"] for r in rows]
-        self._trial_labels = [f"V{r['Versuchsnummer']}" for r in rows]
+        self._trial_vnos = [r["Versuchsnummer"] for r in rows]
+        self._reference_names = {
+            int(r["ID"]): str(r.get(REFERENCE_NAME_COL) or "")
+            for r in rows if is_reference_value(r.get(IS_REFERENCE_COL))
+        }
+        self._trial_labels = [
+            reference_label(r["Versuchsnummer"]) if int(r["ID"]) in self._reference_names
+            else f"V{r['Versuchsnummer']}"
+            for r in rows
+        ]
         # Invalidate the per-load cache in _get_jet_info_rows() - new trial
         # list means its cached result (if any) is stale.
         self._jet_info_rows_cache = None
@@ -5442,26 +5536,36 @@ class ShowExperimentScreen(QWidget):
         if trial_index < 0 or trial_index >= len(self._trial_ids):
             return
 
-        # Derive each trial's Versuchsnummer from its label (format "V{n}",
-        # guaranteed by _load_trials() - see self._trial_labels there).
         try:
-            trial_numbers = [int(lbl[1:]) for lbl in self._trial_labels]
-        except (ValueError, IndexError):
+            trial_numbers = [int(v) for v in self._trial_vnos]
+        except (TypeError, ValueError):
             return
-        if not trial_numbers:
+        # Range only over real trials - reference samples (negative numbers)
+        # are never copied.
+        real_numbers = [
+            v for i, v in enumerate(trial_numbers)
+            if int(self._trial_ids[i]) not in self._reference_names
+        ]
+        if not real_numbers:
             return
+        v_default = trial_numbers[trial_index]
+        if v_default not in real_numbers:
+            v_default = min(real_numbers)
 
         dlg = _CopyTrialsRangeDialog(
-            self, min(trial_numbers), max(trial_numbers),
-            trial_numbers[trial_index],
+            self, min(real_numbers), max(real_numbers), v_default,
         )
         if dlg.exec() != QDialog.Accepted:
             return
         v_from, v_to, copies = dlg.get_values()
 
-        trial_indices = [i for i, v in enumerate(trial_numbers) if v_from <= v <= v_to]
+        # Reference samples are never copied (they're not trials).
+        trial_indices = [
+            i for i, v in enumerate(trial_numbers)
+            if v_from <= v <= v_to and int(self._trial_ids[i]) not in self._reference_names
+        ]
         if not trial_indices:
-            QMessageBox.information(self, "Copy trials", "No trials found in the selected range.")
+            QMessageBox.information(self, "Copy trials", "No trials found in the selected range\n(reference samples are never copied).")
             return
 
         self._duplicate_trial_range(trial_indices, copies)
@@ -5557,26 +5661,36 @@ class ShowExperimentScreen(QWidget):
             QMessageBox.warning(self, "Error", f"Trial ID {trial_id} not found.")
             return
 
-        # Derive each trial's Versuchsnummer from its label (format "V{n}",
-        # guaranteed by _load_trials() - see self._trial_labels there).
         try:
-            trial_numbers = [int(lbl[1:]) for lbl in self._trial_labels]
-        except (ValueError, IndexError):
+            trial_numbers = [int(v) for v in self._trial_vnos]
+        except (TypeError, ValueError):
             return
-        if not trial_numbers:
+        # Range only over real trials - reference samples (negative numbers)
+        # are never copied.
+        real_numbers = [
+            v for i, v in enumerate(trial_numbers)
+            if int(self._trial_ids[i]) not in self._reference_names
+        ]
+        if not real_numbers:
             return
+        v_default = trial_numbers[trial_index]
+        if v_default not in real_numbers:
+            v_default = min(real_numbers)
 
         dlg = _CopyTrialsRangeDialog(
-            self, min(trial_numbers), max(trial_numbers),
-            trial_numbers[trial_index],
+            self, min(real_numbers), max(real_numbers), v_default,
         )
         if dlg.exec() != QDialog.Accepted:
             return
         v_from, v_to, copies = dlg.get_values()
 
-        trial_indices = [i for i, v in enumerate(trial_numbers) if v_from <= v <= v_to]
+        # Reference samples are never copied (they're not trials).
+        trial_indices = [
+            i for i, v in enumerate(trial_numbers)
+            if v_from <= v <= v_to and int(self._trial_ids[i]) not in self._reference_names
+        ]
         if not trial_indices:
-            QMessageBox.information(self, "Copy trials", "No trials found in the selected range.")
+            QMessageBox.information(self, "Copy trials", "No trials found in the selected range\n(reference samples are never copied).")
             return
 
         self._duplicate_trial_range(trial_indices, copies)
@@ -5656,10 +5770,220 @@ class ShowExperimentScreen(QWidget):
         shared by both trial-copy flows below."""
         self._load_trials()
         self._build_machine_tab()
+        self._build_lab_tabs()
+
+    # ── Reference samples (customer originals, see db/trial_reference.py) ──
+
+    def _on_trial_header_menu(self, col_spec_idx: int, global_pos, is_rd: bool = False) -> None:
+        """Right-click on a trial number (row 0 of the Machine / R&D Machine
+        table): copy trials + reference-sample actions."""
+        col_specs = getattr(self, "_rd_machine_col_specs" if is_rd else "_machine_col_specs", None)
+        if not col_specs or not (0 <= col_spec_idx < len(col_specs)):
+            return
+        trial_id = int(col_specs[col_spec_idx]["trial_id"])
+        vno = col_specs[col_spec_idx].get("vno", "?")
+        is_ref = trial_id in self._reference_names
+
+        menu = QMenu(self)
+        act_copy = None if is_ref else menu.addAction("Copy trials…")
+        menu.addSeparator()
+        act_add = menu.addAction("Add reference sample…")
+        act_mark = act_rename = act_unmark = None
+        if is_ref:
+            act_rename = menu.addAction("Rename reference sample…")
+            act_unmark = menu.addAction("Turn into a normal trial")
+        else:
+            act_mark = menu.addAction(f"Mark V{vno} as reference sample…")
+        ref_actions = [a for a in (act_add, act_mark, act_rename, act_unmark) if a is not None]
+        if not has_reference_columns() or self._get_access_level() <= 1:
+            for a in ref_actions:
+                a.setEnabled(False)
+
+        chosen = menu.exec(global_pos)
+        if chosen is None:
+            return
+        if chosen is act_copy:
+            self._multiply_trial_from_col_spec_idx(col_spec_idx)
+        elif chosen is act_add:
+            self._add_reference_sample()
+        elif chosen is act_mark:
+            self._set_reference_flag(trial_id, vno, True)
+        elif chosen is act_rename:
+            self._rename_reference_sample(trial_id, vno)
+        elif chosen is act_unmark:
+            self._set_reference_flag(trial_id, vno, False)
+
+    def _ask_reference_name(self, title: str, current: str = "") -> Optional[str]:
+        """Returns the entered name ("" allowed) or None on cancel."""
+        text, ok = QInputDialog.getText(
+            self, title,
+            "Name of the reference sample (e.g. customer, article, lot):",
+            QLineEdit.Normal, current,
+        )
+        return text.strip() if ok else None
+
+    def _add_reference_sample(self) -> None:
+        """Adds a new reference sample (flagged tblTrial row) to the series.
+        Gets the next negative number (-1, -2, ...) instead of a trial
+        number, and the same lab row structure as the first real trial
+        (values empty) so all lab tabs are directly editable."""
+        if self._series_pk is None:
+            return
+        if not has_reference_columns():
+            QMessageBox.information(self, "Reference sample",
+                                    "Reference samples are not available in this database yet.")
+            return
+        if self._get_access_level() <= 1:
+            return
+        if not self._confirm_proceed_despite_unsaved():
+            return
+        name = self._ask_reference_name("Add reference sample")
+        if name is None:
+            return
+
+        trial_cols = _db_get_columns_map("tblTrial")
+        try:
+            with get_connection() as cn:
+                cur = cn.cursor()
+                # Own negative number range (-1, -2, ...): a reference
+                # sample doesn't use up a trial number.
+                cur.execute(
+                    "SELECT MIN(Versuchsnummer) FROM tblTrial WHERE TrialSeriesID = ?",
+                    (self._series_pk,),
+                )
+                row = cur.fetchone()
+                new_v = next_reference_number(row[0] if row else None)
+
+                cols = ["TrialSeriesID", "Versuchsnummer", IS_REFERENCE_COL, REFERENCE_NAME_COL]
+                vals: List[Any] = [self._series_pk, new_v, 1, name or None]
+                if "globalid" in trial_cols:
+                    cols.append(trial_cols["globalid"])
+                    vals.append(new_global_id())
+                uid = self._current_user_id()
+                if "user" in trial_cols and uid not in (None, ""):
+                    cols.append(trial_cols["user"])
+                    vals.append(uid)
+                cur.execute(
+                    f"INSERT INTO tblTrial ({', '.join(f'[{c}]' for c in cols)}) "
+                    f"VALUES ({', '.join('?' for _ in cols)})",
+                    vals,
+                )
+                cur.execute("SELECT @@IDENTITY")
+                id_row = cur.fetchone()
+                new_id = int(id_row[0]) if id_row and id_row[0] else None
+                if not new_id:
+                    raise RuntimeError("Could not determine the new trial ID.")
+
+                template_id = next(
+                    (t for t in self._trial_ids if int(t) not in self._reference_names), None)
+                if template_id is not None:
+                    self._clone_lab_rows_for_trial(cur, int(template_id), new_id)
+        except Exception as e:
+            QMessageBox.warning(self, "Reference sample",
+                                f"The reference sample could not be added:\n{e}")
+            return
+
+        try:
+            from db.usage_log import log_usage_event
+            log_usage_event("feature", "reference_sample", "add")
+        except Exception:
+            pass
+        self._reload_after_trial_copy()
+
+    def _set_reference_flag(self, trial_id: int, vno: Any, make_reference: bool) -> None:
+        """Turns an existing trial into a reference sample or back."""
+        if self._get_access_level() <= 1 or not has_reference_columns():
+            return
+        if not self._confirm_proceed_despite_unsaved():
+            return
+        # Marking keeps the trial's (positive) number - the physical spool
+        # label carries it. Turning a negative-numbered reference back into
+        # a trial gives it the next free trial number.
+        new_vno = None
+        if make_reference:
+            name = self._ask_reference_name(f"Mark V{vno} as reference sample")
+            if name is None:
+                return
+        else:
+            ans = QMessageBox.question(
+                self, "Reference sample",
+                "Turn this reference sample into a normal trial?\n\n"
+                "It will then count as a trial again (statistics, reports, exports).",
+            )
+            if ans != QMessageBox.Yes:
+                return
+            name = None
+            try:
+                if int(vno) < 1:
+                    rows = fetch_all(
+                        "SELECT MAX(Versuchsnummer) AS mx FROM tblTrial WHERE TrialSeriesID = ?",
+                        [self._series_pk])
+                    new_vno = next_trial_number(rows[0]["mx"] if rows else None)
+            except (TypeError, ValueError):
+                pass
+        try:
+            if new_vno is not None:
+                _db_execute(
+                    f"UPDATE tblTrial SET {IS_REFERENCE_COL} = 0, {REFERENCE_NAME_COL} = NULL, "
+                    f"Versuchsnummer = ? WHERE ID = ?",
+                    [new_vno, int(trial_id)],
+                )
+            else:
+                _db_execute(
+                    f"UPDATE tblTrial SET {IS_REFERENCE_COL} = ?, {REFERENCE_NAME_COL} = ? WHERE ID = ?",
+                    [1 if make_reference else 0, name or None, int(trial_id)],
+                )
+        except Exception as e:
+            QMessageBox.warning(self, "Reference sample", f"Could not save:\n{e}")
+            return
+        try:
+            from db.usage_log import log_usage_event
+            log_usage_event("feature", "reference_sample", "mark" if make_reference else "unmark")
+        except Exception:
+            pass
+        self._reload_after_trial_copy()
+
+    def _rename_reference_sample(self, trial_id: int, vno: Any) -> None:
+        if self._get_access_level() <= 1 or not has_reference_columns():
+            return
+        name = self._ask_reference_name(
+            "Rename reference sample", self._reference_names.get(int(trial_id), ""))
+        if name is None:
+            return
+        try:
+            _db_execute(
+                f"UPDATE tblTrial SET {REFERENCE_NAME_COL} = ? WHERE ID = ?",
+                [name or None, int(trial_id)],
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Reference sample", f"Could not save:\n{e}")
+            return
+        self._reference_names[int(trial_id)] = name
+        # Only tooltips change - re-apply them to all built models.
+        for attr, model in self._iter_save_models():
+            if attr in ("model_machine", "model_rd_machine"):
+                specs = getattr(self, "_rd_machine_col_specs" if attr == "model_rd_machine"
+                                else "_machine_col_specs", None) or []
+                self._apply_reference_columns(model, [cs["trial_id"] for cs in specs])
+            elif getattr(model, "_col_titles", None) is self._trial_labels:
+                self._apply_reference_columns(model, self._trial_ids)
+
+    def _build_lab_tabs(self) -> None:
+        """(Re)builds every per-trial lab tab, in tab order. Shared by
+        load_record() and _reload_after_trial_copy() so both always cover
+        the same set - the copy reload used to keep its own shorter list and
+        silently skipped Statimat DS, EKB and the three shrinkage tabs, so a
+        freshly copied trial didn't show up there until the series was
+        reopened."""
         self._build_titer_tab()
         self._build_jet_air_tab()
         self._build_statimat_tab()
+        self._build_statimat_ds_tab()
         self._build_waterbath_tab()
+        self._build_ekb_tab()
+        self._build_hot_air_shrinkage_tab()
+        self._build_hot_water_shrinkage_tab()
+        self._build_aty_shrinkage_tab()
         self._build_rapid600_tab()
         self._build_itemat_tab()
         self._build_itemat_plus_tab()
@@ -5668,8 +5992,9 @@ class ShowExperimentScreen(QWidget):
 
     def _duplicate_trial_range(self, trial_indices: List[int], copies_per_trial: int = 1) -> None:
         """Copies each trial in trial_indices (positions into self._trial_ids)
-        `copies_per_trial` times, in ascending Versuchsnummer order, all
-        appended after the series' current highest Versuchsnummer.
+        `copies_per_trial` times, all appended after the series' current
+        highest Versuchsnummer - as `copies_per_trial` consecutive blocks of
+        the whole range in ascending Versuchsnummer order (see loop below).
 
         Single-trial "N copies" (From == To in the dialog) and "copy a whole
         range once each" (Copies == 1) both go through here - e.g. V7 through
@@ -5695,14 +6020,20 @@ class ShowExperimentScreen(QWidget):
                     (series_id,),
                 )
                 row = cur.fetchone()
-                max_v = int(row[0]) if row and row[0] is not None else 0
+                # Clamped at 0: negative numbers are reference samples.
+                max_v = next_trial_number(row[0] if row else None) - 1
 
+                # Copies are appended as repeated blocks of the whole range
+                # (V1-V6 copied 5x -> V7..V12 = V1..V6, V13..V18 = V1..V6,
+                # ...), i.e. a repetition of the trial plan - not each trial
+                # N times in a row.
+                src_trial_ids = [
+                    self._trial_ids[i] for i in trial_indices
+                    if 0 <= i < len(self._trial_ids)
+                ]
                 created = 0
-                for trial_index in trial_indices:
-                    if trial_index < 0 or trial_index >= len(self._trial_ids):
-                        continue
-                    src_trial_id = self._trial_ids[trial_index]
-                    for _ in range(copies_per_trial):
+                for _ in range(copies_per_trial):
+                    for src_trial_id in src_trial_ids:
                         max_v += 1
                         self._insert_trial_copy(cur, src_trial_id, series_id, max_v)
                         created += 1
@@ -5736,7 +6067,7 @@ class ShowExperimentScreen(QWidget):
         try:
             rows = fetch_all(
                 "SELECT MIN([Versuchsnummer]) AS mn, MAX([Versuchsnummer]) AS mx "
-                "FROM tbltrial WHERE [TrialSeriesID] = ?", [series_pk])
+                "FROM tbltrial WHERE [TrialSeriesID] = ? AND [Versuchsnummer] >= 1", [series_pk])
         except Exception:
             rows = []
         if not rows or rows[0].get("mn") is None:
@@ -6131,7 +6462,12 @@ class ShowExperimentScreen(QWidget):
             # ── Soll-Titer aus Trial 1 berechnen (einmalig für die ganze Series) ──
             self._titer_out_of_tolerance: set = set()  # c_idx der auffälligen Trials
             try:
-                first_trial_id = self._trials[0]["ID"] if self._trials else None
+                # First real trial - a reference sample (listed first) is
+                # the customer's yarn and says nothing about our target titer.
+                first_trial_id = next(
+                    (t["ID"] for t in self._trials if int(t["ID"]) not in self._reference_names),
+                    None,
+                )
                 if first_trial_id is not None:
                     yarn_rows = fetch_all(
                         "SELECT YarnID FROM tbltrialsettings WHERE TrialID = ?",
@@ -7836,7 +8172,7 @@ class ShowExperimentScreen(QWidget):
             except Exception:
                 col_idx = None
             vno = f.get("Versuchsnummer")
-            v_label = f"V{vno}" if vno not in (None, "") else "?"
+            v_label = format_trial_number(vno) if vno not in (None, "") else "?"
             note = (f.get("Note") or "").strip()
             who = f.get("CreatedByUsername") or ""
             tooltip = f"{v_label} — retest pending" + (f": {note}" if note else "")

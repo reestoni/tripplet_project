@@ -26,6 +26,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from db.trial_reference import exclude_references_sql
+
 logger = logging.getLogger(__name__)
 
 ENTITY_LABELS = {
@@ -266,6 +268,10 @@ def run_stats_query(
 
     where_parts = []
     params: List[Any] = []
+
+    if entity == "trial":
+        # Reference samples (customer originals) are not trials.
+        where_parts.append(exclude_references_sql("t"))
 
     machines = filters.get("machines") or []
     if machines:

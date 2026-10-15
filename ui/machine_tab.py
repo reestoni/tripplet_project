@@ -21,6 +21,15 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QCheckBox, QTableView, QMessageBox, QDialog
 
 import app_meta
+from db.trial_reference import reference_label
+
+
+def _trial_hdr_label(self, cs: Dict) -> str:
+    """Trial header text for one column spec - "REF V<n>" for reference
+    samples (see ShowExperimentScreen._load_trials), else "V<n>"."""
+    if int(cs["trial_id"]) in getattr(self, "_reference_names", {}):
+        return reference_label(cs["vno"])
+    return f"V{cs['vno']}"
 
 
 def build_machine_tab_impl(self) -> None:
@@ -530,7 +539,7 @@ def build_machine_tab_impl(self) -> None:
     ply_hdr_vals = [""]
     ply_tooltip_vals = [""]
     for cs in col_specs:
-        trial_hdr_vals.append(f"V{cs['vno']}")
+        trial_hdr_vals.append(_trial_hdr_label(self, cs))
         if compact_mode:
             # Kompakt: alle Plies des Trials zusammenfassen
             all_cs = trial_cs_for_hdr.get(cs["trial_id"], [cs])
@@ -578,6 +587,7 @@ def build_machine_tab_impl(self) -> None:
     )
     self._register_save_model("model_machine")
     self._machine_col_specs = col_specs  # for multi-ply feature tracking
+    self._apply_reference_columns(self.model_machine, [cs["trial_id"] for cs in col_specs])
 
     def _pick_row_key(row: dict, preferred: Optional[str], extra_cands: List[str]) -> Optional[str]:
         if not row:
@@ -1163,7 +1173,7 @@ def build_rd_machine_tab_impl(
     ply_hdr_vals = [""]
     ply_tooltip_vals = [""]
     for cs in col_specs:
-        trial_hdr_vals.append(f"V{cs['vno']}")
+        trial_hdr_vals.append(_trial_hdr_label(self, cs))
         ply_hdr_vals.append(cs["ply"])
         ply_tooltip_vals.append(cs.get("yarn_name") or "")
 
@@ -1188,6 +1198,7 @@ def build_rd_machine_tab_impl(
         dropdown_rows=dropdown_rows,
     )
     self._register_save_model("model_rd_machine")
+    self._apply_reference_columns(self.model_rd_machine, [cs["trial_id"] for cs in col_specs])
 
     # Zellen befüllen (analog zu _build_machine_tab)
     trial_cols_map = cache.get("trial_cols_map") or get_columns_map("tblTrial")

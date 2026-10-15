@@ -38,6 +38,7 @@ from db.connection import (
     get_user_access_level,
     update_trialseries_name,
 )
+from db.trial_reference import exclude_references_sql
 import app_meta  # enthält current_user
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
@@ -1878,7 +1879,7 @@ class AllExperimentsScreen(QWidget):
                 "SELECT DISTINCT ts.Ply, ts.YarnID "
                 "FROM tbltrialsettings ts "
                 "JOIN tbltrial t ON t.ID = ts.TrialID "
-                "WHERE t.TrialSeriesID = ? "
+                "WHERE t.TrialSeriesID = ? AND " + exclude_references_sql("t") + " "
                 "ORDER BY ts.Ply",
                 [series_id],
             )
@@ -2027,7 +2028,8 @@ class AllExperimentsScreen(QWidget):
         # ── Trials laden ──────────────────────────────────────────────────
         try:
             trial_rows_c = fetch_all(
-                "SELECT ID FROM tblTrial WHERE TrialSeriesID = ? ORDER BY Versuchsnummer",
+                "SELECT ID FROM tblTrial WHERE TrialSeriesID = ? AND "
+                + exclude_references_sql("") + " ORDER BY Versuchsnummer",
                 [series_id])
             trial_ids = [int(r["ID"]) for r in trial_rows_c]
         except Exception:
@@ -2077,6 +2079,7 @@ class AllExperimentsScreen(QWidget):
                 WHERE t.TrialSeriesID = ?
                   AND ts.Ply = ?
                   AND ts.YarnID != ?
+                  AND """ + exclude_references_sql("t") + """
                 """,
                 [series_id, new_ply, new_yid],
             )

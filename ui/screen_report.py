@@ -40,6 +40,7 @@ from ui.report_pdf_layout import (
 )
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
+from db.trial_reference import exclude_references_sql
 import app_meta
 
 logger = logging.getLogger(__name__)
@@ -149,7 +150,9 @@ class _ReportBridge(QObject):
             # Material
             material = ""
             try:
-                trials = fetch_all("SELECT ID FROM tblTrial WHERE TrialSeriesID = ?", [series_pk])
+                trials = fetch_all(
+                    f"SELECT ID FROM tblTrial WHERE TrialSeriesID = ? AND {exclude_references_sql('')}",
+                    [series_pk])
                 tids = [int(r["ID"]) for r in trials]
                 if tids:
                     ph = ",".join(["?" for _ in tids])
@@ -240,6 +243,10 @@ class _ReportBridge(QObject):
                 ph = ",".join(["?" for _ in series_pks])
                 where_parts.append("T.TrialSeriesID IN (" + ph + ")")
                 params.extend(series_pks)
+
+            # Cross-series query: reference samples (customer originals,
+            # db/trial_reference.py) are not trials - never part of it.
+            where_parts.append(exclude_references_sql("T"))
 
             joins_sql = "LEFT JOIN tbljets AS J ON J.ID = T.JetID"
             if extra_joins:
@@ -1792,7 +1799,10 @@ class ReportScreen(QWidget):
         active_y_axes = db_y_axes if db_y_axes else Y_AXES
         active_x_axes = db_x_axes if db_x_axes else X_AXES
 
-        self.lbl_status.setText(f"{len(data)} trial(s) loaded")
+        n_refs = sum(1 for r in data if r.get("is_reference"))
+        self.lbl_status.setText(
+            f"{len(data) - n_refs} trial(s) loaded"
+            + (f" + {n_refs} reference sample(s)" if n_refs else ""))
 
         if self._web is not None:
             y_axes_js = [{"key": y["key"], "title": y["title"], "unit": y.get("unit", "")} for y in active_y_axes]

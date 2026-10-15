@@ -86,6 +86,8 @@ SYNONYMS: List[List[str]] = [
     ["lab", "labor", "laboratorio", "statimat", "itemat", "messung", "measurement", "medicion"],
     ["request", "anfrage", "solicitud", "experiment request"],
     ["rename", "umbenennen", "renombrar", "name", "nombre"],
+    ["reference", "referenz", "referenzmuster", "referencia", "benchmark", "golden sample", "kundenmuster",
+     "originalspule", "original", "muster", "muestra", "customer sample", "vorlage", "vergleichsmuster"],
 ]
 
 STOPWORDS: Set[str] = set("""

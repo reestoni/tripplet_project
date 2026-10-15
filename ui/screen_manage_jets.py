@@ -34,6 +34,7 @@ from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.pathutil import resource_path
 from ui.text_normalize import canon_with_id_strip as _canon
+from db.trial_reference import exclude_references_sql
 import app_meta
 
 _AUDIT_COLS = ("createdby", "creationdate")
@@ -2049,7 +2050,7 @@ class ManageJetsScreen(QWidget):
             "LEFT JOIN tblmaschinentypen mt ON mt.ID = m.Maschinentyp "
             "LEFT JOIN tbltrialsettings ts ON ts.TrialID = t.ID "
             "LEFT JOIN tblyarn y ON y.ID = ts.YarnID "
-            "WHERE t.JetID = ? "
+            "WHERE t.JetID = ? AND " + exclude_references_sql("t") + " "
             "GROUP BY t.ID, s.ID, s.ExperimentID, e.ExperimentID, s.SeriesName, m.Maschine, "
             "mt.Maschinentyp, t.Versuchsnummer, t.Shaft2x_OF, t.SpeedShaft2, "
             "t.`Shaft1,1Core_OF`, t.`Shaft1,2Effect_OF`, t.Shaft2Speed "

@@ -919,9 +919,14 @@ def _aty_populate_trial_list(self):
     sid = self._series_pk
     all_have_tdms = True
     restore_row = -1
-    for i, t in enumerate(self._trials):
+    refs = getattr(self, "_reference_names", {}) or {}
+    for t in self._trials:
         tl = {k.lower(): v for k, v in t.items()}
         tid = tl.get("id")
+        # Reference samples (customer originals) never have a TDMS file -
+        # listing them would also keep the auto-refresh timer running forever.
+        if tid is not None and int(tid) in refs:
+            continue
         vno = int(tl.get("versuchsnummer") or 0)
         tdms = _aty_find_tdms(sid, vno) if sid else None
         if not tdms:
@@ -940,7 +945,7 @@ def _aty_populate_trial_list(self):
             item.setForeground(QColor("#555"))
         self._aty_trial_list.addItem(item)
         if tid is not None and tid == prev_tid:
-            restore_row = i
+            restore_row = self._aty_trial_list.count() - 1
         if tid in prev_selected_tids:
             item.setSelected(True)
     if restore_row >= 0:

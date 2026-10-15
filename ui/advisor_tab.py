@@ -32,6 +32,14 @@ from db.connection import new_global_id
 from ui.advisor_worker import AdvisorWorker, load_api_key
 
 
+def _advisor_trial_ids(self) -> list:
+    """Trials Athena analyses - without reference samples (customer
+    originals, see db/trial_reference.py): their machine settings are
+    unknown/estimated and would mislead the process analysis."""
+    refs = getattr(self, "_reference_names", {}) or {}
+    return [t for t in self._trial_ids if int(t) not in refs]
+
+
 def _build_advisor_tab(self):
     """Baut den 🦉 Athena Advisor Tab auf. Nur für User 'soj'.
 
@@ -239,7 +247,7 @@ def _run_advisor(self):
 
     self._advisor_worker = AdvisorWorker(
         series_pk=self._series_pk,
-        trial_ids=list(self._trial_ids),
+        trial_ids=_advisor_trial_ids(self),
         experiment_id_txt=getattr(self, "_experiment_id_txt", ""),
         api_key=api_key,
         history=None,
@@ -276,7 +284,7 @@ def _send_advisor_question(self):
 
     self._advisor_worker = AdvisorWorker(
         series_pk=self._series_pk,
-        trial_ids=list(self._trial_ids),
+        trial_ids=_advisor_trial_ids(self),
         experiment_id_txt=getattr(self, "_experiment_id_txt", ""),
         api_key=api_key,
         history=self._advisor_history,

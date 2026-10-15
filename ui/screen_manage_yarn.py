@@ -14,6 +14,7 @@ from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.text_normalize import norm as _norm, canon_simple as _canon
 from db.connection import fetch_all, execute, new_global_id, get_columns_map
+from db.trial_reference import format_trial_number
 import app_meta
 
 # Wiederverwendet statt dupliziert (anders als bei Top Plates/Jets) - die vier
@@ -843,7 +844,7 @@ class TrialUsageDialog(QDialog):
             top.setFont(0, f)
             top.setForeground(0, QColor("#1a56db"))
             for vno in s["trial_numbers"]:
-                top.addChild(QTreeWidgetItem([f"V{vno}"]))
+                top.addChild(QTreeWidgetItem([format_trial_number(vno)]))
             self.tree.addTopLevelItem(top)
 
         btn_row = QHBoxLayout()

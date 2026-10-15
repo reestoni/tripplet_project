@@ -64,6 +64,7 @@ try:
 except ImportError:
     _ATHENA_AVAILABLE = False
 from db.retest_flags import get_open_retest_flags_by_series, resolve_retest_flags_for_series
+from db.trial_reference import exclude_references_sql, format_trial_number
 import app_meta  # enthält current_user
 
 
@@ -1136,7 +1137,7 @@ class BacklogDnDTable(QTableWidget):
                 "SELECT DISTINCT ts.Ply, ts.YarnID "
                 "FROM tbltrialsettings ts "
                 "JOIN tbltrial t ON t.ID = ts.TrialID "
-                "WHERE t.TrialSeriesID = ? "
+                "WHERE t.TrialSeriesID = ? AND " + exclude_references_sql("t") + " "
                 "ORDER BY ts.Ply",
                 [series_id],
             )
@@ -1284,7 +1285,8 @@ class BacklogDnDTable(QTableWidget):
         # ── Trials laden ──────────────────────────────────────────────────
         try:
             trial_rows_c = fetch_all(
-                "SELECT ID FROM tblTrial WHERE TrialSeriesID = ? ORDER BY Versuchsnummer",
+                "SELECT ID FROM tblTrial WHERE TrialSeriesID = ? AND "
+                + exclude_references_sql("") + " ORDER BY Versuchsnummer",
                 [series_id])
             trial_ids = [int(r["ID"]) for r in trial_rows_c]
         except Exception:
@@ -1334,6 +1336,7 @@ class BacklogDnDTable(QTableWidget):
                 WHERE t.TrialSeriesID = ?
                   AND ts.Ply = ?
                   AND ts.YarnID != ?
+                  AND """ + exclude_references_sql("t") + """
                 """,
                 [series_id, new_ply, new_yid],
             )
@@ -2886,7 +2889,7 @@ class BacklogScreen(QWidget):
                 labels = []
                 for f in open_flags:
                     vno = f.get("Versuchsnummer")
-                    v_label = f"V{vno}" if vno not in (None, "") else "?"
+                    v_label = format_trial_number(vno) if vno not in (None, "") else "?"
                     labels.append(f"{v_label} · {f.get('LabSource') or ''}"
                                   + (f" — {f.get('Note')}" if f.get("Note") else ""))
                 item.setToolTip("Open retest flag:\n" + "\n".join(labels))

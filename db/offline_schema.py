@@ -428,6 +428,19 @@ def build_offline_schema(
 
                 ddl = generate_create_table_sql(t, cols, track_edits=track_edits)
                 cur.execute(ddl)
+
+                # Same no-op problem for columns added to MySQL after the
+                # offline file was created (e.g. tblTrial.IsReference,
+                # 2026-10-15): pull_snapshot() INSERTs with the full MySQL
+                # column list and would fail on an older file. Add them.
+                cur.execute(f'PRAGMA table_info("{t}")')
+                have = {r[1] for r in cur.fetchall()}
+                for c in cols:
+                    if c["name"] not in have:
+                        cur.execute(
+                            f'ALTER TABLE "{t}" ADD COLUMN "{c["name"]}" '
+                            f'{mysql_type_to_sqlite(c["mysql_type"])}'
+                        )
                 if track_edits:
                     cur.execute(generate_update_trigger_sql(t))
     finally:

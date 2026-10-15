@@ -60,6 +60,7 @@ from ui.widgets import sidebar_nav
 from ui.widgets.spool_picker import SpoolPickerDialog, spool_label
 from ui.pathutil import resource_path
 from ui.text_normalize import norm as _norm, resolve_field
+from db.trial_reference import exclude_references_sql, format_trial_number, next_trial_number
 
 import app_meta
 import re
@@ -1638,7 +1639,7 @@ class CreateExperimentScreen(QWidget):
                 tid = r.get("TID")
             label = str(r.get("TNo") if r.get("TNo")
                         not in (None, '') else r.get("TID"))
-            cb = QCheckBox(f"V{label}")
+            cb = QCheckBox(format_trial_number(label))
             cb.setChecked(True)
             # High-contrast checkbox styling (dynamic color for addlabmachines)
             _style = """
@@ -2852,10 +2853,13 @@ class CreateExperimentScreen(QWidget):
 
                 # Letzter Trial der Serie für Lab-Klon
                 cur.execute(
-                    f"SELECT MAX([{tr_no}]) AS mx, MAX([ID]) AS lid "
+                    f"SELECT MAX([{tr_no}]) AS mx, "
+                    f"MAX(CASE WHEN {exclude_references_sql('')} THEN [ID] END) AS lid "
                     f"FROM [{trial_table}] WHERE [{tr_sid}] = ?", [ts_id])
                 row = cur.fetchone()
-                trial_counter = int(row[0]) + 1 if row and row[0] is not None else 1
+                # next_trial_number(): clamped at 0 - reference samples have
+                # negative numbers (db/trial_reference.py)
+                trial_counter = next_trial_number(row[0] if row else None)
                 last_trial_id = int(row[1]) if row and row[1] is not None else None
 
                 new_trial_ids: List[int] = []
@@ -4879,8 +4883,7 @@ class CreateExperimentScreen(QWidget):
                     trial_table, tr_plate)
                 rows_max = fetch_all(
                     f"SELECT MAX([{tr_no}]) AS mx FROM {trial_table} WHERE [{tr_sid}] = ?", [ts_id])
-                trial_counter = (
-                    int(rows_max[0]["mx"]) + 1) if rows_max and rows_max[0]["mx"] is not None else 1
+                trial_counter = next_trial_number(rows_max[0]["mx"] if rows_max else None)
 
                 for j in self._jets_data:
                     try:

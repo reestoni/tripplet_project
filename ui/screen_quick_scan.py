@@ -1215,7 +1215,9 @@ class QuickScanEvaluator:
         all_must: alle Filter + must-Targets (kombiniert).
         """
         params = []
-        where  = []
+        # Reference samples (customer originals) are not trials - never a hit.
+        from db.trial_reference import exclude_references_sql
+        where  = [exclude_references_sql("t")]
         alias_counter = [0]
 
         # Alle must-Filter generisch auflösen

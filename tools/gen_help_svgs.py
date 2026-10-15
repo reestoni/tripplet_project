@@ -33,6 +33,7 @@ class Svg:
     def btn(self, x, y, label, w=None, kind="grey", h=22, size=10):
         w = w or max(26, int(len(label) * 5.6) + 10)
         fill, stroke, tc = {"grey": ("#e6e6e6", "#bbbbbb", INK), "green": (GREEN, None, "#ffffff"),
+                            "amber": ("#FFF4D6", "#E8C15A", "#5a4500"),
                             "purple": ("#8e44ad", None, "#ffffff"), "white": ("#ffffff", "#999999", INK)}[kind]
         self.rect(x, y, w, h, fill, stroke, 3)
         self.text(x + w / 2, y + h / 2 + 4, label, size, tc, anchor="middle")
@@ -139,7 +140,7 @@ s.text(56, 70, "Material:", 11, MUTED)
 s.text(112, 70, "PES POY 280/167f72 dtex", 11, INK, True)
 x = s.btn(270, 56, "ER", 30, "white") + 8
 s.text(x, 70, "Machine: RPR 3SDS · Jets …", 10, MUTED)
-s.btn(792, 56, "label", 38, "white"); s.btn(836, 56, "+", 30, "white")
+s.btn(744, 56, "label", 38, "white"); s.btn(788, 56, "+", 30, "white"); s.btn(824, 56, "+ Ref", 46, "amber")
 # Tabs
 s.marker(22, 102, "3")
 x = 56
@@ -153,16 +154,18 @@ s.text(x + 6, 107, "{{lab_hint}}", 9, MUTED, italic=True)
 tx, ty = 56, 122
 s.rect(tx, ty, 866, 250, "#ffffff", LINE, 3)
 cols_x = [tx + 200 + i * 110 for i in range(6)]
-rows = [("Trial", ["V1", "V2", "V3", "V4", "V5", "V6"], "#e9f6e9", True),
+# First column = reference sample (customer original), amber like in the app
+rows = [("Trial", ["Ref", "V1", "V2", "V3", "V4", "V5"], "#e9f6e9", True),
         ("Ply", ["1", "1", "1", "1", "1", "1"], "#f2f9f2", False),
-        ("Speed [m/min]", ["600", "600", "700", "700", "800", "800"], "#ffffff", False),
-        ("Overfeed [%]", ["2.0", "3.0", "2.0", "3.0", "2.0", "3.0"], "#ffffff", False),
-        ("Air pressure [bar]", ["6", "6", "6", "6", "6", "6"], "#ffffff", False),
-        ("Jet", ["S+ 1.2", "S+ 1.2", "S+ 1.2", "S+ 1.2", "S+ 1.2", "S+ 1.2"], "#ffffff", False),
-        ("Tension T1 [cN]", ["12.1", "11.8", "", "", "", ""], "#ffffff", False)]
+        ("Speed [m/min]", ["", "600", "700", "700", "800", "800"], "#ffffff", False),
+        ("Overfeed [%]", ["", "3.0", "2.0", "3.0", "2.0", "3.0"], "#ffffff", False),
+        ("Air pressure [bar]", ["", "6", "6", "6", "6", "6"], "#ffffff", False),
+        ("Jet", ["", "S+ 1.2", "S+ 1.2", "S+ 1.2", "S+ 1.2", "S+ 1.2"], "#ffffff", False),
+        ("Tension T1 [cN]", ["12.6", "11.8", "", "", "", ""], "#ffffff", False)]
 for i, (title, vals, bg, bold) in enumerate(rows):
     y = ty + 6 + i * 30
     s.rect(tx + 4, y, 858, 26, bg, None, 0)
+    s.rect(cols_x[0] - 25, y, 110, 26, "#E8C15A" if i < 2 else "#FFF4D6", None, 0)
     s.text(tx + 12, y + 17, title, 11, INK, True)
     for cx, v in zip(cols_x, vals):
         s.text(cx + 30, y + 17, v, 11, INK, bold, "middle")

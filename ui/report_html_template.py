@@ -1143,7 +1143,53 @@ var _drillFilters = {};
 // Ursprüngliche xField-Werte je Chart (für Reset)
 var _drillRootStates = {};
 
-var SERIES_REGISTRY = [{pk:PRIMARY_PK, name:INFOBOX.series_name||('Series '+PRIMARY_PK), color:'#39A650', data:DATA, machine:INFOBOX.machine||'', material:INFOBOX.material||''}];
+// ── Reference samples (customer originals, db/trial_reference.py) ─────────────
+// Rows flagged is_reference are NOT trials: they are kept out of s.data (so no
+// bar, slicer, aggregate or trial count ever sees them) and drawn as horizontal
+// benchmark lines per Y value instead (see _referenceLines()). Same row objects
+// as in DATA, so custom fields (receiveFreeFieldData) reach them too.
+function _splitReferences(rows){
+  var data=[],refs=[];
+  (rows||[]).forEach(function(d){ (d&&d.is_reference?refs:data).push(d); });
+  return {data:data,refs:refs};
+}
+var REF_LINE_COLOR='#B8860B';
+function _escHtml(t){
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function _referenceLines(yKeys){
+  var out=[];
+  SERIES_REGISTRY.forEach(function(s){
+    (s.refs||[]).forEach(function(d){
+      yKeys.forEach(function(k){
+        var v=d[k];
+        if(typeof v!=='number'||!isFinite(v)) return;
+        var label=d.reference_name?String(d.reference_name):'Ref';
+        if(yKeys.length>1) label+=' · '+getYTitleShort(k);
+        if(SERIES_REGISTRY.length>1) label=s.name+' · '+label;
+        out.push({y:v,label:label});
+      });
+    });
+  });
+  return out;
+}
+function _buildReferenceShapes(lines){
+  return lines.map(function(l){
+    return{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:l.y,y1:l.y,
+      line:{color:REF_LINE_COLOR,width:2,dash:'dashdot'},_ref:true};
+  });
+}
+function _buildReferenceAnnotations(lines){
+  return lines.map(function(l){
+    return{xref:'paper',x:1,xanchor:'right',yref:'y',y:l.y,yanchor:'bottom',
+      text:'<b>Ref</b> '+_escHtml(l.label)+': '+(Math.round(l.y*100)/100),
+      showarrow:false,font:{size:10,color:REF_LINE_COLOR},
+      bgcolor:'rgba(255,255,255,0.85)',borderpad:1,_ref:true};
+  });
+}
+
+var _primarySplit = _splitReferences(DATA);
+var SERIES_REGISTRY = [{pk:PRIMARY_PK, name:INFOBOX.series_name||('Series '+PRIMARY_PK), color:'#39A650', data:_primarySplit.data, refs:_primarySplit.refs, machine:INFOBOX.machine||'', material:INFOBOX.material||''}];
 
 // ── SQL Builder ───────────────────────────────────────────────────────────────
 var _allSeriesForBuilder = [];
@@ -2355,6 +2401,33 @@ function _oneGridlineAnnotation(v, preview){
     font:{size:9,color:'#c85a4a'},opacity:preview?0.7:1,
     bgcolor:'rgba(255,255,255,0.85)',borderpad:1,_gl:true};
 }
+// Horizontal y overlays shared by updateChart() and the initial render in
+// rebuildGrid(): reference-sample benchmark lines (customer originals) and
+// manual gridlines. Reference lines first, so a gridline-fixed y range
+// still includes them (passed in as an extra pseudo-trace).
+function _applyYOverlays(layout, traces, ct, yKeys, gridlinesRaw){
+  if(ct==='3d' || ct==='heat' || !layout.yaxis) return;
+  var refLines=_referenceLines(yKeys||[]);
+  if(refLines.length){
+    layout.shapes=(layout.shapes||[]).concat(_buildReferenceShapes(refLines));
+    layout.annotations=(layout.annotations||[]).concat(_buildReferenceAnnotations(refLines));
+  }
+  // Manuelle Gitternetzlinien (y-Achse) zusätzlich zum automatischen Grid von
+  // Plotly - Range explizit aus den Trace-Daten fixieren, damit eine weit
+  // entfernte Linie die Skalierung nicht verändert (siehe updateChart()).
+  var glVals=_parseGridlineValues(gridlinesRaw);
+  if(glVals.length){
+    var rangeTraces=refLines.length
+      ? traces.concat([{y:refLines.map(function(l){return l.y;})}]) : traces;
+    var fixedRange=_computeDataYRange(rangeTraces, layout.yaxis.rangemode);
+    if(fixedRange){ layout.yaxis.range=fixedRange; layout.yaxis.autorange=false; }
+    layout.shapes=(layout.shapes||[]).concat(_buildGridlineShapes(glVals));
+    layout.annotations=(layout.annotations||[]).concat(_buildGridlineAnnotations(glVals));
+    // Zusaetzlicher Platz links, damit die Wertlabel nicht mit den normalen
+    // y-Achsen-Ticks kollidieren.
+    layout.margin=layout.margin||{}; layout.margin.l=Math.max(layout.margin.l||60, 95);
+  }
+}
 // Andere, nicht von uns gesetzte shapes/annotations (z.B. die Drill-Down-
 // Breadcrumb-Annotation) unangetastet lassen, wenn während des Draggens per
 // Plotly.relayout nur die Gridline-Elemente ersetzt werden.
@@ -2585,18 +2658,7 @@ function updateChart(idx){
   // mit ein (eine Linie bei y=100 würde den ganzen Chart neu skalieren, auch
   // wenn die echten Daten z.B. nur bis 10 gehen) — deshalb Range explizit aus
   // den reinen Trace-Daten fixieren, sobald mind. eine Gridline aktiv ist.
-  if(ct!=='3d' && ct!=='heat' && layout.yaxis){
-    var glVals=_parseGridlineValues(s.gridlinesY);
-    if(glVals.length){
-      var _fixedRange=_computeDataYRange(traces, layout.yaxis.rangemode);
-      if(_fixedRange){ layout.yaxis.range=_fixedRange; layout.yaxis.autorange=false; }
-      layout.shapes=(layout.shapes||[]).concat(_buildGridlineShapes(glVals));
-      layout.annotations=(layout.annotations||[]).concat(_buildGridlineAnnotations(glVals));
-      // Zusaetzlicher Platz links, damit die Wertlabel nicht mit den normalen
-      // y-Achsen-Ticks kollidieren.
-      layout.margin=layout.margin||{}; layout.margin.l=Math.max(layout.margin.l||60, 95);
-    }
-  }
+  _applyYOverlays(layout, traces, ct, yKeys, s.gridlinesY);
   // Plotly.react ignoriert categoryarray beim allerersten Render eines DOM-Elements
   // (kein _fullLayout vorhanden) → newPlot für Erstrender, react für Updates
   var cfg={responsive:true,displayModeBar:dmb,displaylogo:false};
@@ -2883,7 +2945,9 @@ function receiveSeriesList(list){
 }
 function receiveSeriesData(pk,name,color,data,meta){
   var existing=SERIES_REGISTRY.findIndex(function(s){return s.pk===pk;});
-  var entry={pk:pk,name:name,color:color,data:data,machine:(meta&&meta.machine)||'',material:(meta&&meta.material)||''};
+  var _split=_splitReferences(data);
+  data=_split.data;
+  var entry={pk:pk,name:name,color:color,data:data,refs:_split.refs,machine:(meta&&meta.machine)||'',material:(meta&&meta.material)||''};
   if(existing>=0){
     SERIES_REGISTRY[existing]=entry;
   } else {
@@ -4471,16 +4535,7 @@ function rebuildGrid(){
       // allerersten Rendern hier greifen, nicht erst nach der ersten Interaktion
       // - sonst fehlen sie beim Öffnen eines gespeicherten Reports komplett bis
       // irgendein anderer Toolbar-Klick updateChart() ausloest.
-      if(_ct!=='3d' && _ct!=='heat' && _initLayout.yaxis){
-        var _initGlVals=_parseGridlineValues(state.gridlinesY);
-        if(_initGlVals.length){
-          var _initFixedRange=_computeDataYRange(_initTraces, _initLayout.yaxis.rangemode);
-          if(_initFixedRange){ _initLayout.yaxis.range=_initFixedRange; _initLayout.yaxis.autorange=false; }
-          _initLayout.shapes=(_initLayout.shapes||[]).concat(_buildGridlineShapes(_initGlVals));
-          _initLayout.annotations=(_initLayout.annotations||[]).concat(_buildGridlineAnnotations(_initGlVals));
-          _initLayout.margin=_initLayout.margin||{}; _initLayout.margin.l=Math.max(_initLayout.margin.l||60, 95);
-        }
-      }
+      _applyYOverlays(_initLayout, _initTraces, _ct, _yKeys, state.gridlinesY);
       Plotly.newPlot('chart_'+idx,_initTraces,_initLayout,{responsive:true,displayModeBar:_ct==='3d',displaylogo:false});
       // Gridline-Klick/Drag-Bindung muss auch fuer den allerersten Chart-Render
       // erfolgen - updateChart() (das dies sonst am Ende macht) wird erst bei

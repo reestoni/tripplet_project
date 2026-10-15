@@ -21,6 +21,8 @@ from ui.widgets.help_search import search, get_index, normalize, SOURCES
     ("nachmessung markieren", "show_experiment", "de"),
     ("inventur machen", "yarn_stock", "de"),
     ("report als pdf", "report", "de"),
+    ("originalspule vom kunden als benchmark erfassen", "show_experiment", "de"),
+    ("how do I add a customer reference sample", "show_experiment", "en"),
 ])
 def test_top_hit(query, screen, lang):
     hits = search(query, 3)

@@ -172,6 +172,9 @@ LEFT JOIN (
 
 WHERE mt.Maschinentyp IN ('DTY', 'DT/DW')
   AND t.JetID IS NOT NULL
+  -- Reference samples (customer originals, db/trial_reference.py) are not
+  -- our trials - unknown/estimated settings would only add noise.
+  AND {ref_filter}
   AND (
         fpm.FPm_00 IS NOT NULL OR fpm.FPmCV_00 IS NOT NULL
         OR stab.Stability_03 IS NOT NULL OR stab.Stability_06 IS NOT NULL
@@ -187,7 +190,8 @@ def main() -> None:
     args = parser.parse_args()
 
     from db.connection import fetch_all
-    rows = fetch_all(_SQL, [])
+    from db.trial_reference import exclude_references_sql
+    rows = fetch_all(_SQL.replace("{ref_filter}", exclude_references_sql("t")), [])
 
     if not rows:
         print("Keine Zeilen gefunden.")

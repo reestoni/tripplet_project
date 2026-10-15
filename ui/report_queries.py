@@ -13,6 +13,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from db.trial_reference import (
+    IS_REFERENCE_COL,
+    REFERENCE_NAME_COL,
+    exclude_references_sql,
+    has_reference_columns,
+    is_reference_value,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -247,6 +255,12 @@ def _fetch_series_data(series_pk: int) -> List[Dict[str, Any]]:
             f", T.{xdef['field']} AS {xdef['key']}"
             for xdef in _extra_x
         )
+        # Reference samples (db/trial_reference.py) come along flagged - the
+        # report JS draws them as benchmark lines, never as data points.
+        _has_refs = has_reference_columns()
+        if _has_refs:
+            _extra_selects += (f", T.{IS_REFERENCE_COL} AS is_reference"
+                               f", T.{REFERENCE_NAME_COL} AS reference_name")
 
         sql_base = f"""
             SELECT T.ID AS trial_id, T.Versuchsnummer AS trial_nr,
@@ -327,6 +341,9 @@ def _fetch_series_data(series_pk: int) -> List[Dict[str, Any]]:
             # Extra X-axis fields from tbltrial
             for xdef in _extra_x:
                 row[xdef["key"]] = _f(r.get(xdef["key"]))
+            if _has_refs and is_reference_value(r.get("is_reference")):
+                row["is_reference"] = True
+                row["reference_name"] = str(r.get("reference_name") or "")
             # Y-axis values (skip computed keys — already set in row dict above)
             for ydef in axes_to_load:
                 if ydef["key"] in _COMPUTED_Y_KEYS:
@@ -443,7 +460,9 @@ def _fetch_infobox_data(series_pk: int) -> Dict[str, Any]:
 
     # Trials + Material
     try:
-        trials = fetch_all("SELECT ID FROM tblTrial WHERE TrialSeriesID = ?", [series_pk])
+        trials = fetch_all(
+            f"SELECT ID FROM tblTrial WHERE TrialSeriesID = ? AND {exclude_references_sql('')}",
+            [series_pk])
         info["n_trials"] = len(trials)
         trial_ids = [int(r["ID"]) for r in trials]
         if trial_ids:
@@ -469,7 +488,7 @@ def _fetch_infobox_data(series_pk: int) -> Dict[str, Any]:
     try:
         dims = fetch_all(
             "SELECT DISTINCT AirPressure, Shaft2x_OF AS overfeed, SpeedShaft2 AS speed "
-            "FROM tblTrial WHERE TrialSeriesID = ?", [series_pk]
+            f"FROM tblTrial WHERE TrialSeriesID = ? AND {exclude_references_sql('')}", [series_pk]
         )
         info["air_pressures"] = sorted(set(
             float(r["AirPressure"]) for r in dims if r["AirPressure"] is not None))
@@ -485,7 +504,7 @@ def _fetch_infobox_data(series_pk: int) -> Dict[str, Any]:
         jet_rows = fetch_all(
             "SELECT DISTINCT J.Jet AS jet_name FROM tblTrial AS T "
             "LEFT JOIN tbljets AS J ON J.ID = T.JetID "
-            "WHERE T.TrialSeriesID = ? ORDER BY J.Jet",
+            f"WHERE T.TrialSeriesID = ? AND {exclude_references_sql('T')} ORDER BY J.Jet",
             [series_pk]
         )
         info["jets"] = [str(r["jet_name"]) for r in jet_rows if r.get("jet_name")]

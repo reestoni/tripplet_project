@@ -1204,8 +1204,13 @@ def _ys_populate_trial_list(self):
     sid = self._series_pk
     all_have_tdms = True
     restore_row = -1
-    for i, t in enumerate(self._trials):
+    refs = getattr(self, "_reference_names", {}) or {}
+    for t in self._trials:
         tid = t.get("ID")
+        # Reference samples (customer originals) never have a TDMS file -
+        # listing them would also keep the auto-refresh timer running forever.
+        if tid is not None and int(tid) in refs:
+            continue
         vno = t.get("Versuchsnummer") or t.get("versuchsnummer") or 0
         tdms = _ys_find_tdms(sid, int(vno)) if sid else None
         if not tdms:
@@ -1225,7 +1230,7 @@ def _ys_populate_trial_list(self):
             item.setForeground(QColor("#555"))
         self._ys_trial_list.addItem(item)
         if tid is not None and tid == prev_tid:
-            restore_row = i
+            restore_row = self._ys_trial_list.count() - 1
     if restore_row >= 0:
         self._ys_trial_list.setCurrentRow(restore_row)
     self._ys_trial_list.blockSignals(False)
@@ -1253,8 +1258,11 @@ def _ys_populate_compare_trial_list(self):
     widget.blockSignals(True)
     widget.clear()
     sid = getattr(self, "_series_pk", None)
+    refs = getattr(self, "_reference_names", {}) or {}
     for trial in getattr(self, "_trials", []):
         trial_id = trial.get("ID")
+        if trial_id is not None and int(trial_id) in refs:
+            continue
         vno = trial.get("Versuchsnummer") or trial.get("versuchsnummer") or 0
         tdms = _ys_find_tdms(sid, int(vno)) if sid else None
         item = QListWidgetItem(f"V{int(vno):03d}" + ("" if tdms else "  (kein TDMS)"))
