@@ -24,6 +24,63 @@ import app_meta
 from db.trial_reference import reference_label
 
 
+# Computed, read-only row below "T2 Tension" on DTY machines (Nutzerwunsch).
+# Calculated live from the T1/T2 cells; stored per ply in
+# tblTrialSettings.DYRatio on save (see db/dy_ratio.py).
+DY_RATIO_TITLE = "D/Y Ratio (T2/T1)"
+_DY_RATIO_STORAGE = "computed:dyratio"
+
+
+def dy_ratio_text(t1: Any, t2: Any) -> str:
+    """T2/T1 rounded to 2 decimals, "" if a value is missing or T1 is 0 -
+    same value that is stored in tblTrialSettings.DYRatio on save."""
+    from db.dy_ratio import ratio_text
+    return ratio_text(t1, t2)
+
+
+def _insert_dy_ratio_field(field_map: List[Dict], field_validators: List) -> None:
+    """Adds the computed D/Y ratio row right after T2 Tension if the machine
+    has T1 and T2 Tension as ply fields."""
+    def _idx(col: str) -> Optional[int]:
+        for i, f in enumerate(field_map):
+            if f.get("StorageTable") == "tbltrialsettings" and str(f.get("ColName") or "").lower() == col:
+                return i
+        return None
+    i_t1, i_t2 = _idx("yarntensiont1"), _idx("yarntensiont2")
+    if i_t1 is None or i_t2 is None:
+        return
+    field_map.insert(i_t2 + 1, {"Title": DY_RATIO_TITLE, "ColName": None,
+                                "StorageTable": _DY_RATIO_STORAGE, "LookupTable": None})
+    field_validators.insert(i_t2 + 1, None)
+
+
+def _wire_dy_ratio_row(model, r_t1: int, r_t2: int, r_ratio: int) -> None:
+    """Fills the ratio row from the T1/T2 cells and keeps it current while
+    T1/T2 are edited (typing, paste, fill range)."""
+    from PySide6.QtCore import Qt as _Qt
+
+    def _update(c: int) -> None:
+        txt = dy_ratio_text(model.get_cell_value(r_t1, c), model.get_cell_value(r_t2, c))
+        if model.get_cell_value(r_ratio, c) != txt:
+            model._matrix[r_ratio][c] = txt
+            idx = model.index(model._n_hdr + r_ratio, c + 1)
+            model.dataChanged.emit(idx, idx, [_Qt.DisplayRole])
+
+    for c in range(len(model._col_titles)):
+        model.set_cell(r_ratio, c, dy_ratio_text(model.get_cell_value(r_t1, c),
+                                                 model.get_cell_value(r_t2, c)), None)
+        model._cell_tooltips[(r_ratio, c)] = "Calculated: T2 Tension / T1 Tension (not editable)"
+
+    def _on_changed(top_left, bottom_right, _roles=None) -> None:
+        r0, r1 = top_left.row() - model._n_hdr, bottom_right.row() - model._n_hdr
+        if not (r0 <= r_t1 <= r1 or r0 <= r_t2 <= r1):
+            return
+        for col in range(max(1, top_left.column()), bottom_right.column() + 1):
+            _update(col - 1)
+
+    model.dataChanged.connect(_on_changed)
+
+
 def _trial_hdr_label(self, cs: Dict) -> str:
     """Trial header text for one column spec - "REF V<n>" for reference
     samples (see ShowExperimentScreen._load_trials), else "V<n>"."""
@@ -175,6 +232,8 @@ def build_machine_tab_impl(self) -> None:
         field_validators.append(ff)
         seen_norm_titles.add(disp_norm)
 
+    _insert_dy_ratio_field(field_map, field_validators)
+
     # Modell + Validatoren
     FIX_PLIES = "Plies"
     FIX_YARN_USE = "Yarn Use"
@@ -197,6 +256,9 @@ def build_machine_tab_impl(self) -> None:
     readonly_rows = set()
     if use_yarn_use_grouping or compact_mode:
         readonly_rows.add(titles_fixed.index(FIX_PLIES))  # Plies-Zeile immer read-only
+    for i, fdef in enumerate(field_map):
+        if fdef.get("StorageTable") == _DY_RATIO_STORAGE:
+            readonly_rows.add(len(titles_fixed) + i)
 
     row_validators: List[Optional[str]] = [None] * len(row_titles)
     row_validators[0] = None  # Housing
@@ -785,6 +847,8 @@ def build_machine_tab_impl(self) -> None:
         storage = fdef.get("StorageTable", "tbltrial")
         colname = fdef["ColName"]
 
+        if storage == _DY_RATIO_STORAGE:
+            continue  # computed below from T1/T2
         if storage == "tbltrialsettings" and settings_cols_map:
             real_col = settings_cols_map.get(colname.lower()) or colname
             for c_idx, cs in enumerate(col_specs):
@@ -820,6 +884,12 @@ def build_machine_tab_impl(self) -> None:
                     r_idx, c_idx, val,
                     CellBinding("tblTrial", "ID", trow.get("ID"), real_col) if trow.get("ID") else None,
                 )
+
+    _ratio_rows = {str(f.get("ColName") or "").lower() if f.get("StorageTable") != _DY_RATIO_STORAGE
+                   else "ratio": start_row + i for i, f in enumerate(field_map)}
+    if "ratio" in _ratio_rows:
+        _wire_dy_ratio_row(self.model_machine, _ratio_rows["yarntensiont1"],
+                           _ratio_rows["yarntensiont2"], _ratio_rows["ratio"])
 
     # CustomGroup-Zeile befüllen (direkt aus tblTrial.CustomGroup)
     _cg_col = trial_cols_map.get('customgroup') or trial_cols_map.get('custom_group') or 'CustomGroup'
@@ -879,7 +949,7 @@ def build_machine_tab_impl(self) -> None:
     # Plies-Zeile (n_hdr+4) bewusst NICHT trial-weit — pro Gruppe eigener Wert
     # Dynamic field rows
     for offset, fdef in enumerate(field_map):
-        if fdef.get("StorageTable", "tbltrial") != "tbltrialsettings":
+        if fdef.get("StorageTable", "tbltrial") not in ("tbltrialsettings", _DY_RATIO_STORAGE):
             trial_wide_model_rows.append(n_hdr + len(titles_fixed) + offset)
     # CustomGroup ist tblTrial-Feld → trial-weit spannen
     trial_wide_model_rows.append(n_hdr + self._custom_group_row_idx)
@@ -1468,6 +1538,9 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
     # pseudo-header rows ignorieren
     n_hdr = getattr(_model, "_n_hdr", 0)
     if row < n_hdr:
+        return
+    if (row - n_hdr) in getattr(_model, "_readonly", set()) \
+            and _model.data(_model.index(row, 0), Qt.DisplayRole) == DY_RATIO_TITLE:
         return
 
     # Enforce permissions (AccessLevel >= 2 required for bulk row set)

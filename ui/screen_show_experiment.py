@@ -1621,6 +1621,7 @@ class PivotEditModel(QAbstractTableModel):
                     user_id = user[k]
                     break
 
+        dy_ratio_ids: set = set()  # tblTrialSettings rows whose T1/T2 changed
         for r, c, new_text in self._dirty:
             bind = self._binding[r][c]
             if not bind:
@@ -1644,6 +1645,12 @@ class PivotEditModel(QAbstractTableModel):
                         params = [text_str, gid]
                     n += execute_non_query(sql, params)
                 continue
+            if str(bind.table).lower() == "tbltrialsettings" \
+                    and str(bind.field).lower() in ("yarntensiont1", "yarntensiont2"):
+                if isinstance(bind, GroupCellBinding):
+                    dy_ratio_ids.update(bind.id_values)
+                else:
+                    dy_ratio_ids.add(bind.id_value)
 
             table_name = str(bind.table)
             is_lab_table = table_name.lower().startswith("tbllabor")
@@ -1719,6 +1726,13 @@ class PivotEditModel(QAbstractTableModel):
                     params = [text_str, bind.id_value]
 
             n += execute_non_query(sql, params)
+
+        if dy_ratio_ids:
+            from db.dy_ratio import recompute
+            try:
+                recompute(dy_ratio_ids)
+            except Exception as e:
+                logging.getLogger(__name__).warning("DYRatio recompute failed: %s", e)
 
         self._dirty.clear()
         self.dataChangedExternally.emit()

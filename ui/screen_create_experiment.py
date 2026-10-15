@@ -61,6 +61,7 @@ from ui.widgets.spool_picker import SpoolPickerDialog, spool_label
 from ui.pathutil import resource_path
 from ui.text_normalize import norm as _norm, resolve_field
 from db.trial_reference import exclude_references_sql, format_trial_number, next_trial_number
+from db.dy_ratio import append_ratio_column
 
 import app_meta
 import re
@@ -2919,6 +2920,7 @@ class CreateExperimentScreen(QWidget):
                                     real_s = ts_set_cols_map.get(s_col.lower()) or s_col
                                     s_cols.append(real_s)
                                     s_vals.append(s_val)
+                                append_ratio_column(s_cols, s_vals, ts_set_cols_map)
                                 s_gid = resolve_field(["GlobalID"], ts_set_cols_map)
                                 if s_gid:
                                     s_cols.append(s_gid)
@@ -4948,6 +4950,7 @@ class CreateExperimentScreen(QWidget):
                                     real_s = ts_set_cols_map.get(s_col.lower()) or s_col
                                     s_cols.append(real_s)
                                     s_vals.append(s_val)
+                                append_ratio_column(s_cols, s_vals, ts_set_cols_map)
                                 s_gid = resolve_field(["GlobalID"], ts_set_cols_map)
                                 if s_gid:
                                     s_cols.append(s_gid)

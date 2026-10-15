@@ -131,7 +131,8 @@ TEXTS = {
             {"key": "tabs", "title": "Tabs", "blocks": [
                 ("areas", [
                     ("Machine Data", "Machine settings per trial (speed, overfeed, air pressure, jet, …). Rows are "
-                                     "parameters, columns are trials and plies."),
+                                     "parameters, columns are trials and plies. On DTY machines the row <i>D/Y Ratio (T2/T1)</i> "
+                                     "below T2 Tension is calculated automatically from T1 and T2 and cannot be edited."),
                     ("R&amp;D Machine Data", "Additional development parameters, same operation as Machine Data."),
                     ("Lab tabs", f"{LAB_TABS}. Results of the lab devices per trial; each appears only if the "
                                  "series uses that device. Right-click a column header to flag a retest."),
@@ -254,7 +255,9 @@ TEXTS = {
             {"key": "tabs", "title": "Tabs", "blocks": [
                 ("areas", [
                     ("Machine Data", "Maschineneinstellungen pro Versuch (Geschwindigkeit, Overfeed, Luftdruck, Düse, …). "
-                                     "Zeilen sind Parameter, Spalten sind Versuche und Plies."),
+                                     "Zeilen sind Parameter, Spalten sind Versuche und Plies. Bei DTY-Maschinen wird die Zeile "
+                                     "<i>D/Y Ratio (T2/T1)</i> unter T2 Tension automatisch aus T1 und T2 berechnet und ist "
+                                     "nicht editierbar."),
                     ("R&amp;D Machine Data", "Zusätzliche Entwicklungsparameter, Bedienung wie Machine Data."),
                     ("Labor-Tabs", f"{LAB_TABS}. Resultate der Laborgeräte pro Versuch; jeder erscheint nur, wenn die "
                                    "Serie dieses Gerät verwendet. Rechtsklick auf einen Spaltenkopf markiert eine Nachmessung."),
@@ -380,7 +383,9 @@ TEXTS = {
             {"key": "tabs", "title": "Pestañas", "blocks": [
                 ("areas", [
                     ("Machine Data", "Ajustes de máquina por ensayo (velocidad, sobrealimentación, presión de aire, "
-                                     "tobera, …). Las filas son parámetros, las columnas ensayos y plies."),
+                                     "tobera, …). Las filas son parámetros, las columnas ensayos y plies. En máquinas DTY, la "
+                                     "fila <i>D/Y Ratio (T2/T1)</i> debajo de T2 Tension se calcula automáticamente a partir "
+                                     "de T1 y T2 y no se puede editar."),
                     ("R&amp;D Machine Data", "Parámetros de desarrollo adicionales, se usa igual que Machine Data."),
                     ("Pestañas de laboratorio", f"{LAB_TABS}. Resultados de los equipos de laboratorio por ensayo; "
                                                 "cada una aparece solo si la serie usa ese equipo. Clic derecho en un "
