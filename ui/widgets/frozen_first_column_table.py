@@ -161,6 +161,11 @@ class FrozenFirstColumnTable(QWidget):
         """Alle vier Ansichten auf dasselbe Model setzen, Zeilen/Spalten passend ausblenden."""
         self._model = model
         self._n_hdr = int(getattr(model, "_n_hdr", 0) or 0)
+        try:
+            import weakref
+            model._ffct_owner = weakref.ref(self)  # lets the model find its screen (recycle bin preview)
+        except Exception:
+            pass
 
         sel = QItemSelectionModel(model)
         for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):

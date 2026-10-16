@@ -61,8 +61,8 @@ def _get_ocr():
             import ddddocr
         except ImportError as e:
             raise RuntimeError(
-                "ddddocr nicht installiert.\n"
-                "Bitte ausfuehren: pip install ddddocr"
+                "ddddocr is not installed.\n"
+                "Please run: pip install ddddocr"
             ) from e
         _get_ocr._instance = ddddocr.DdddOcr(show_ad=False)
     return _get_ocr._instance
@@ -119,7 +119,7 @@ def _render_page(pdf_path: str, page_index: int):
     try:
         import fitz
     except ImportError as e:
-        raise RuntimeError("PyMuPDF nicht installiert. pip install pymupdf") from e
+        raise RuntimeError("PyMuPDF is not installed. Please run: pip install pymupdf") from e
     from PIL import Image
     doc = fitz.open(pdf_path)
     try:
@@ -469,7 +469,7 @@ def parse_itemat_pdf(
     try:
         import fitz
     except ImportError as e:
-        raise RuntimeError("PyMuPDF nicht installiert. pip install pymupdf") from e
+        raise RuntimeError("PyMuPDF is not installed. Please run: pip install pymupdf") from e
 
     doc     = fitz.open(pdf_path)
     n_pages = doc.page_count

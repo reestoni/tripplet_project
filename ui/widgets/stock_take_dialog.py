@@ -1,7 +1,7 @@
 # ui/widgets/stock_take_dialog.py
 """Inventur (Stock take) fuer Yarn Stock - Nutzerwunsch 2026-10-13.
 
-Geoeffnet aus Yarn Stock -> Rack lookup -> "Start stock take…" (Zugriff ab
+Geoeffnet aus Yarn Stock -> Rack lookup -> "Stock take…" -> Uebersicht (Zugriff ab
 Level 2). Ablauf: Regal/Platz waehlen -> TrippleT listet die Spulen, die
 laut System dort stehen -> Spulen scannen/tippen -> Abweichungen direkt
 korrigieren -> beim Abschluss fehlende Spulen ausbuchen oder behalten.
@@ -12,6 +12,12 @@ Was wann gespeichert wird (bewusst so, siehe Hilfe-Tab "Stock take"):
 - Fehlende Spulen werden NUR beim Abschluss und nur auf ausdruecklichen
   Klick ausgebucht. Abbrechen bucht nichts aus.
 Jede Korrektur landet im Spulen-Protokoll (db/yarn_spool_log.py).
+
+Platz-Modus (round_location, 2026-10-16): von der Inventur-Runde
+(ui/widgets/stock_take_round_dialog.py) fuer genau einen Lagerplatz geoeffnet -
+Platz fest, Soll = Spulen mit genau diesem Platz (nicht Praefix). Jeder Scan
+wird mit Ergebnis-Code (db/stock_take.py) mitgeschrieben; outcome_items()
+liefert das Ergebnis pro Spule, das die Runde speichert.
 
 UI-Texte englisch (Projektkonvention); die ausfuehrliche Anleitung steht
 dreisprachig in der Yarn-Stock-Hilfe (Tab "Stock take", Button "?" oben rechts).
@@ -24,14 +30,17 @@ from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QMessageBox,
-    QInputDialog, QHeaderView,
+    QInputDialog, QHeaderView, QMenu,
 )
 
 from db.connection import execute
+from db import stock_take as st
 from db import yarn_spool_log
 from db.usage_log import log_usage_event
 
 _FOUND_BG = QColor("#EAF3DE")
+_MANUAL_BG = QColor("#E3EEF9")  # found by double-click, not scanned
+MANUAL_NOTE = st.BY_HAND_NOTE
 _FEEDBACK_STYLE = {
     "ok": "background:#EAF3DE; color:#2b5d22; border:1px solid #9ccc8a;",
     "warn": "background:#FAEEDA; color:#7a4d00; border:1px solid #e3b866;",
@@ -46,17 +55,24 @@ class StockTakeDialog(QDialog):
     SPOOL_TABLE = "tblYarnSpool"
 
     def __init__(self, all_spools: List[Dict], yarn_names: Dict[int, str],
-                 location_prefix: str = "", parent=None):
+                 location_prefix: str = "", parent=None, round_location: Optional[str] = None,
+                 round_name: str = ""):
         super().__init__(parent)
-        self.setWindowTitle("Stock take")
+        self._round_location = st.norm_location(round_location) if round_location else None
+        self.setWindowTitle(f"Stock take - {self._round_location}" + (f" ({round_name})" if round_name else "")
+                            if self._round_location else "Stock take")
+        if self._round_location:
+            location_prefix = self._round_location
         self.setMinimumSize(900, 680)
         self._spools: Dict[int, Dict] = {int(s["ID"]): dict(s) for s in all_spools if s.get("ID") is not None}
         self._yarn_names = yarn_names
         self._prefix = ""
         self._expected: List[int] = []
         self._found: Set[int] = set()
+        self._manual: Set[int] = set()         # found by double-click instead of a scan
         self._others: List[Dict] = []          # Scans, die nicht erwartet waren
         self._finished = False
+        self._missing_result = st.MISSING_KEPT  # set at Finish (kept / discarded)
         self.changed = False                   # True, sobald etwas in der DB geaendert wurde
 
         root = QVBoxLayout(self)
@@ -73,6 +89,9 @@ class StockTakeDialog(QDialog):
         btn_load = QPushButton("Load", objectName="GreyBtn")
         btn_load.clicked.connect(self._on_load)
         top.addWidget(btn_load)
+        if self._round_location:  # round: this one location only
+            self.txt_location.setReadOnly(True)
+            btn_load.hide()
         top.addStretch(1)
         btn_help = QPushButton("?")
         btn_help.setFixedSize(26, 26)
@@ -117,6 +136,11 @@ class StockTakeDialog(QDialog):
         # ── Erwartete Spulen ──
         root.addWidget(QLabel("<b>Expected at this location</b> (according to TrippleT)"))
         self.tbl_expected = self._make_table(["Found", "Spool", "Yarn", "Batch", "Location", "Weight (kg)"])
+        self.tbl_expected.setToolTip("No label? Double-click a spool to mark it as found by hand. "
+                                     "Right-click to undo.")
+        self.tbl_expected.cellDoubleClicked.connect(lambda r, _c: self._mark_found_by_hand(r))
+        self.tbl_expected.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tbl_expected.customContextMenuRequested.connect(self._expected_menu)
         root.addWidget(self.tbl_expected, 3)
 
         # ── Andere Scans ──
@@ -135,6 +159,13 @@ class StockTakeDialog(QDialog):
         btn_cancel.clicked.connect(self.reject)
         btns.addWidget(btn_cancel)
         root.addLayout(btns)
+
+        # Enter belongs to the scan field (scanners send Enter after every
+        # label): no button may be the dialog's default, otherwise Enter
+        # also "clicks" it - in location mode that was Finish (Bug 2026-10-16).
+        for b in self.findChildren(QPushButton):
+            b.setAutoDefault(False)
+            b.setDefault(False)
 
         if self.txt_location.text().strip():
             self._on_load()
@@ -165,6 +196,7 @@ class StockTakeDialog(QDialog):
     def _update_progress(self) -> None:
         n = len(self._expected)
         self.lbl_progress.setText(f"Found {len(self._found)} of {n} expected spool(s)"
+                                  + (f" ({len(self._manual)} by hand)" if self._manual else "")
                                   + (f" · {len(self._others)} other scan(s)" if self._others else ""))
 
     def _open_help(self) -> None:
@@ -191,13 +223,18 @@ class StockTakeDialog(QDialog):
                 self.txt_location.setText(self._prefix)
                 return
         self._prefix = prefix
+        exact = self._round_location is not None
         self._expected = sorted(
             sid for sid, s in self._spools.items()
-            if s.get("Status") == "in stock" and (s.get("Location") or "").strip().upper().startswith(prefix))
-        self._found, self._others = set(), []
+            if s.get("Status") == "in stock" and (
+                st.norm_location(s.get("Location")) == prefix if exact
+                else (s.get("Location") or "").strip().upper().startswith(prefix)))
+        self._found, self._manual, self._others = set(), set(), []
         self._render_expected()
         self._render_others()
         self.lbl_expected.setText(
+            f"<b>{len(self._expected)}</b> spool(s) are registered at <b>{prefix}</b>. "
+            "Scan every spool you find there." if exact else
             f"<b>{len(self._expected)}</b> spool(s) are registered at locations starting with "
             f"<b>{prefix}</b>. Scan every spool you find there.")
         self._set_feedback("info", "Ready - scan the first spool.")
@@ -211,19 +248,60 @@ class StockTakeDialog(QDialog):
         for r, sid in enumerate(self._expected):
             s = self._spools[sid]
             found = sid in self._found
+            manual = sid in self._manual
             w = s.get("WeightKg")
-            vals = ["yes" if found else "", f"#{sid}", self._yarn_names.get(int(s.get("YarnID") or -1), "?"),
+            vals = ["by hand" if manual else "yes" if found else "", f"#{sid}", self._yarn_names.get(int(s.get("YarnID") or -1), "?"),
                     s.get("Charge") or "–", s.get("Location") or "–",
                     f"{float(w):.2f}" if w is not None else ""]
             for c, v in enumerate(vals):
                 it = QTableWidgetItem(v)
                 if found:
-                    it.setBackground(_FOUND_BG)
+                    it.setBackground(_MANUAL_BG if manual else _FOUND_BG)
+                    if manual:
+                        it.setToolTip("Marked as found by hand (not scanned). Right-click to undo.")
                 if c in (0, 5):
                     it.setTextAlignment(Qt.AlignCenter if c == 0 else Qt.AlignRight | Qt.AlignVCenter)
                 t.setItem(r, c, it)
         t.resizeColumnsToContents()
         t.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+
+    # ── Von Hand (Doppelklick) / rueckgaengig (Rechtsklick) ───────────
+    def _mark_found_by_hand(self, row: int) -> None:
+        if not (0 <= row < len(self._expected)):
+            return
+        sid = self._expected[row]
+        if sid in self._found:
+            self._set_feedback("info", f"#{sid} is already marked as found.")
+        else:
+            self._found.add(sid)
+            self._manual.add(sid)
+            self._render_expected()
+            self._update_progress()
+            self._set_feedback("ok", f"#{sid} marked as found by hand - {self._describe_spool(self._spools[sid])}.")
+        self.txt_scan.setFocus()
+
+    def _undo_found(self, row: int) -> None:
+        if not (0 <= row < len(self._expected)):
+            return
+        sid = self._expected[row]
+        self._found.discard(sid)
+        self._manual.discard(sid)
+        self._render_expected()
+        self._update_progress()
+        self._set_feedback("info", f"#{sid} is not found any more.")
+        self.txt_scan.setFocus()
+
+    def _expected_menu(self, pos) -> None:
+        row = self.tbl_expected.rowAt(pos.y())
+        if not (0 <= row < len(self._expected)):
+            return
+        sid = self._expected[row]
+        m = QMenu(self)
+        if sid in self._found:
+            m.addAction(f"Undo - #{sid} not found").triggered.connect(lambda: self._undo_found(row))
+        else:
+            m.addAction(f"Mark #{sid} as found (by hand)").triggered.connect(lambda: self._mark_found_by_hand(row))
+        m.exec(self.tbl_expected.viewport().mapToGlobal(pos))
 
     def _render_others(self) -> None:
         t = self.tbl_others
@@ -233,9 +311,10 @@ class StockTakeDialog(QDialog):
                 t.setItem(r, c, QTableWidgetItem(v))
         t.resizeColumnsToContents()
 
-    def _add_other(self, sid: int, s: Optional[Dict], registered: str, result: str) -> None:
+    def _add_other(self, sid: int, s: Optional[Dict], registered: str, result: str,
+                   code: str = "", detail: str = "") -> None:
         self._others.append({
-            "ID": sid, "Spool": f"#{sid}",
+            "ID": sid, "Spool": f"#{sid}", "Code": code, "Detail": detail,
             "Yarn": self._yarn_names.get(int(s.get("YarnID") or -1), "?") if s else "–",
             "Batch": (s.get("Charge") or "–") if s else "–",
             "Registered": registered, "Result": result,
@@ -256,6 +335,12 @@ class StockTakeDialog(QDialog):
         if sid is None:
             self._set_feedback("error", f"'{raw.strip()[:40]}' is not a spool number or spool label.")
             return
+        if sid in self._manual:  # was marked by hand - the scan confirms it
+            self._manual.discard(sid)
+            self._render_expected()
+            self._set_feedback("ok", f"#{sid} scanned - was marked by hand before, now confirmed.")
+            self._update_progress()
+            return
         if sid in self._found or any(o["ID"] == sid for o in self._others):
             self._set_feedback("warn", f"Spool #{sid} was already scanned.")
             return
@@ -266,7 +351,7 @@ class StockTakeDialog(QDialog):
             self._render_expected()
             self._set_feedback("ok", f"Found #{sid} - {self._describe_spool(s)}, {s.get('Location') or '–'}")
         elif s is None:
-            self._add_other(sid, None, "–", "Unknown spool number - nothing changed")
+            self._add_other(sid, None, "–", "Unknown spool number - nothing changed", st.UNKNOWN)
             self._set_feedback("error", f"Spool #{sid} does not exist in TrippleT. Check the label.")
         elif s.get("Status") != "in stock":
             self._handle_discarded_found(sid, s)
@@ -286,7 +371,8 @@ class StockTakeDialog(QDialog):
             f"Spool #{sid} ({self._describe_spool(s)}) is registered at {old}, but was found here.\n\n"
             "Enter the location where it actually is to move it,\nor click Cancel to leave it unchanged:")
         if new is None or new == (s.get("Location") or "").upper():
-            self._add_other(sid, s, old, "Registered elsewhere - not changed")
+            self._add_other(sid, s, old, "Registered elsewhere - not changed",
+                            st.ELSEWHERE_UNCHANGED, f"registered at {old}")
             self._set_feedback("warn", f"#{sid} is registered at {old} - left unchanged.")
             return
         try:
@@ -299,7 +385,9 @@ class StockTakeDialog(QDialog):
                                            "New": f"{new} (stock take)"}])
         s["Location"] = new
         self.changed = True
-        self._add_other(sid, s, old, f"Moved to {new}")
+        here = new == self._prefix
+        self._add_other(sid, s, old, f"Moved to {new}", st.MOVED_HERE if here else st.MOVED_ELSEWHERE,
+                        f"from {old}" if here else f"from {old} to {new}")
         self._set_feedback("ok", f"#{sid} moved from {old} to {new}.")
 
     def _handle_discarded_found(self, sid: int, s: Dict) -> None:
@@ -307,7 +395,7 @@ class StockTakeDialog(QDialog):
             f"Spool #{sid} ({self._describe_spool(s)}) is marked as DISCARDED, but was found here.\n\n"
             "To put it back in stock, enter its location.\nClick Cancel to leave it discarded:")
         if new is None:
-            self._add_other(sid, s, "discarded", "Discarded - not changed")
+            self._add_other(sid, s, "discarded", "Discarded - not changed", st.DISCARDED_UNCHANGED)
             self._set_feedback("warn", f"#{sid} is discarded - left unchanged.")
             return
         try:
@@ -324,12 +412,24 @@ class StockTakeDialog(QDialog):
         ])
         s["Status"], s["Location"] = "in stock", new
         self.changed = True
-        self._add_other(sid, s, "discarded", f"Put back in stock at {new}")
+        self._add_other(sid, s, "discarded", f"Put back in stock at {new}", st.RESTOCKED, f"at {new}")
         self._set_feedback("ok", f"#{sid} is back in stock at {new}. Check its weight in the spool list.")
 
     # ── Abschluss ────────────────────────────────────────────────────
     def missing_ids(self) -> List[int]:
         return [sid for sid in self._expected if sid not in self._found]
+
+    def expected_count(self) -> int:
+        return len(self._expected)
+
+    def outcome_items(self) -> List[Dict]:
+        """Result per spool for the stock take round (db.stock_take.save_check)."""
+        items = [{"SpoolID": sid, "Result": st.FOUND, "Detail": MANUAL_NOTE if sid in self._manual else None}
+                 for sid in self._expected if sid in self._found]
+        items += [{"SpoolID": o["ID"], "Result": o.get("Code") or st.UNKNOWN, "Detail": o.get("Detail") or None}
+                  for o in self._others]
+        items += [{"SpoolID": sid, "Result": self._missing_result, "Detail": None} for sid in self.missing_ids()]
+        return items
 
     def _on_finish(self) -> None:
         missing = self.missing_ids()
@@ -352,6 +452,8 @@ class StockTakeDialog(QDialog):
             btn_discard = None
             btn_keep = box.addButton("Close", QMessageBox.AcceptRole)
         btn_back = box.addButton("Back to scanning", QMessageBox.RejectRole)
+        for b in box.buttons():  # don't cut the button texts off
+            b.setMinimumWidth(b.fontMetrics().horizontalAdvance(b.text()) + 36)
         box.setText("\n".join(lines))
         box.exec()
         clicked = box.clickedButton()
@@ -363,6 +465,7 @@ class StockTakeDialog(QDialog):
             discarded = self._discard(missing)
             if discarded is None:
                 return
+            self._missing_result = st.MISSING_DISCARDED
         log_usage_event("feature", "yarn_stock_stock_take",
                         f"{self._prefix}: {len(self._found)}/{len(self._expected)} found, "
                         f"{moved} moved, {back} back, {discarded} discarded")

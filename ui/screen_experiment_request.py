@@ -181,7 +181,7 @@ class ExperimentRequestScreen(QWidget):
         btn_row.addWidget(btn_create, 1)
         try:
             wrapped_my, self._my_requests_badge = sidebar_nav.wrap_with_badge(btn_my, 0)
-            wrapped_my.setToolTip("Änderungsvorschläge warten auf Freigabe")
+            wrapped_my.setToolTip("Change proposals waiting for approval")
             btn_row.addWidget(wrapped_my, 1)
         except Exception:
             btn_row.addWidget(btn_my, 1)

@@ -102,6 +102,18 @@ s.line(16, y0 + 41, 108, y0 + 41, BLUE, 3)
 s.text(14, y0 + 76, "Blue line: rows hidden here - click it to show them again", 8, BLUE, italic=True)
 save(s, "wn_hide_rows.svg")
 
+s = new("Unsaved changes")
+s.rect(10, 8, 120, 16, "#ffffff", LINE, 3)
+s.rect(10, 8, 120, 3, GREEN, None, 0)
+s.rect(17, 14, 6, 6, INK, None, 3)
+s.text(27, 20, "Show Experiment", 8, INK, True)
+s.rect(212, 30, 70, 20, "#E8890C", None, 3)
+s.text(247, 44, "Save (3)", 9, "#ffffff", True, "middle")
+grid(s, 14, 52, [("Air Pressure (bar)", ["4.00", "4.50", "4.00"]), ("Overfeed (%)", ["8", "8", "10"]),
+                 ("Jet Plate", ["1", "1", "2"])], 3, 52, 17, first_w=110, header=["V1", "V2", "V3"],
+     fills={(0, 1): "#FFF1A8", (1, 2): "#FFF1A8", (2, 2): "#FFF1A8"})
+save(s, "wn_unsaved.svg")
+
 s = new("Unusual values")
 s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
 s.parts.append('  <polygon points="30,22 40,40 20,40" fill="#E6A100"/>')
@@ -179,6 +191,21 @@ s.btn(88, 90, "Delete permanently", 112, "white")
 s.text(278, 104, "90 days", 8, MUTED, italic=True, anchor="end")
 save(s, "wn_recycle_bin.svg")
 
+s = new("Recycle bin preview")
+s.rect(10, 10, 280, 110, "#ffffff", LINE, 4)
+s.rect(10, 10, 280, 14, "#4a4a4a", None, 4)
+s.text(16, 20, "Show Experiment  2026-79-005", 8, "#ffffff", True)
+s.rect(14, 28, 272, 30, AMBER_BG, AMBER, 3)
+s.text(20, 40, "From the Recycle Bin - read only", 8, "#5a4500", True)
+for i, (t, w) in enumerate((("Restore for good", 78), ("Back to Recycle Bin", 90), ("Delete permanently", 80))):
+    x = 20 + sum((78, 90, 80)[:i]) + 4 * i
+    s.rect(x, 44, w, 11, "#ffffff", "#c9b06a", 2)
+    s.text(x + w / 2, 52, t, 7, INK, anchor="middle")
+grid(s, 14, 62, [("Tenacity", ["38.2", "36.9"]), ("Elongation", ["24.1", "22.8"]), ("Shrinkage", ["4.1", "4.6"])],
+     2, 60, 14, first_w=96, header=["V1", "V2"])
+s.text(250, 104, "read only", 8, MUTED, anchor="middle")
+save(s, "wn_recycle_preview.svg")
+
 # ── Yarn Stock ──────────────────────────────────────────────────────────
 s = new("Stock status per yarn")
 heads = (("Yarn", 16), ("Yarn total (kg)", 112), ("Min. stock (kg)", 186), ("Status", 258))
@@ -209,14 +236,25 @@ save(s, "wn_new_spools.svg")
 
 s = new("Stock take")
 s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
-s.text(22, 28, "Stock take  -  Rack C", 11, INK, True)
-s.rect(22, 36, 256, 18, "#ffffff", "#9bbbe0", 3)
-s.text(28, 49, "Scan the label or type the number", 8, MUTED, italic=True)
-for r, (txt, mark, col) in enumerate((("#213  C12  PES 167f72", "found", GREEN), ("#214  C12  PES 167f72", "found", GREEN),
-                                      ("#230  C14  PA6 78f68", "missing", "#d9534f"))):
-    y = 70 + r * 15
-    s.text(22, y, txt, 9, INK)
-    s.text(278, y, mark, 9, col, True, "end")
+s.text(22, 26, "Stock take October 2026", 10, INK, True)
+s.rect(22, 31, 256, 5, "#e6e6e6", None, 2)
+s.rect(22, 31, 96, 5, "#3d7fd6", None, 2)
+s.text(278, 26, "9 of 24 checked", 8, MUTED, anchor="end")
+tiles = {"ok": ("#EAF3DE", "#9ccc8a", "#2b5d22"), "dev": ("#FAEEDA", "#e3b866", "#7a4d00"),
+         "open": ("#f2f2f2", "#c8c8c8", "#444444"), "out": ("#ffffff", "#d0d0d0", "#a0a0a0")}
+layout = [["ok", "ok", "dev", "ok"], ["ok", "dev", "ok", "open"], ["open", "open", "out", "open"]]
+for r, row in enumerate(layout):
+    for c, kind in enumerate(row):
+        bg, border, fg = tiles[kind]
+        x, y = 22 + c * 46, 42 + r * 25
+        s.rect(x, y, 42, 21, bg, border, 3)
+        s.text(x + 21, y + 9, f"C{r + 1}{c + 1}", 7, fg, True, "middle")
+        sub = {"ok": "16/16", "dev": "14/16", "open": "16", "out": "-"}[kind]
+        s.text(x + 21, y + 18, sub, 6, fg, anchor="middle")
+s.rect(212, 42, 66, 71, "#fafafa", LINE, 3)
+s.text(218, 54, "Results", 8, INK, True)
+for i, (t, col) in enumerate((("#230 missing", "#d9534f"), ("#214 moved here", "#b9770e"), ("#311 seen C23", "#b9770e"))):
+    s.text(218, 68 + i * 14, t, 7, col)
 save(s, "wn_stock_take.svg")
 
 s = new("Spool history")
@@ -258,13 +296,50 @@ save(s, "wn_help.svg")
 s = new("Help search")
 s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
 s.text(22, 28, "Help  (F1)", 11, INK, True)
-s.rect(22, 36, 180, 20, "#ffffff", "#9bbbe0", 3)
+s.rect(22, 36, 256, 20, "#ffffff", "#9bbbe0", 3)
 s.text(28, 50, "where are all orders of a machine?", 8, INK)
-s.btn(208, 35, "Ask AI", 70, "purple")
 for r, t in enumerate(("All Experiments: Filter by machine", "Backlog: Find a trial series", "Show Experiment: Open a series")):
     s.rect(22, 62 + r * 18, 256, 16, "#d8e7fa" if r == 0 else "#ffffff", None if r == 0 else "#eeeeee", 2)
     s.text(28, 74 + r * 18, t, 9, INK, r == 0)
 save(s, "wn_help_search.svg")
+
+s = new("What's new search")
+s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
+s.rect(20, 18, 86, 18, "#ffffff", "#9bbbe0", 3)
+s.text(25, 31, "barcode", 9, INK)
+for r, (v, hits) in enumerate((("Version 4.7.0", ""), ("Version 4.6.5", "2 hits"), ("Version 4.6.2", ""))):
+    y = 42 + r * 24
+    s.rect(20, y, 86, 22, "#d8e7fa" if hits else "#ffffff", "#eeeeee", 2)
+    s.text(25, y + 10, v, 8, INK if hits else "#b0b0b0", bool(hits))
+    if hits:
+        s.text(25, y + 19, hits, 7, GREEN, True)
+s.text(116, 30, "Version 4.6.5", 9, MUTED, True)
+for r, t in enumerate(("Barcode scanner", "Print barcode labels")):
+    y = 38 + r * 38
+    s.rect(116, y, 164, 32, "#ffffff", LINE, 4)
+    s.rect(116, y, 4, 32, GREEN, None, 0)
+    s.text(126, y + 13, t, 9, INK, True)
+    s.rect(126, y + 19, 120, 4, "#e2e2e2", None, 2)
+save(s, "wn_whats_new_search.svg")
+
+s = new("What's new as PDF")
+s.rect(12, 10, 120, 110, "#ffffff", LINE, 6)
+s.text(20, 28, "What's new", 10, INK, True)
+for r in range(3):
+    s.rect(20, 34 + r * 19, 104, 15, "#ffffff", LINE, 3)
+    s.rect(20, 34 + r * 19, 3, 15, GREEN, None, 0)
+    s.rect(28, 40 + r * 19, 70, 4, "#cfcfcf", None, 2)
+s.btn(20, 93, "PDF", 40, "white")
+s.text(150, 66, "→", 18, MUTED, True, "middle")
+for i, (x, n) in enumerate(((168, 2), (232, 3))):
+    s.rect(x, 14, 56, 80, "#ffffff", LINE, 2)
+    s.rect(x + 5, 20, 34, 4, NAVY, None, 1)
+    s.rect(x + 5, 27, 46, 1, GREEN, None, 0)
+    for r in range(n):
+        s.rect(x + 5, 32 + r * 19, 46, 16, "#ffffff", LINE, 2)
+        s.rect(x + 5, 32 + r * 19, 2, 16, GREEN, None, 0)
+    s.text(x + 28, 108, f"page {i + 1}", 8, MUTED, anchor="middle")
+save(s, "wn_whats_new_pdf.svg")
 
 # ── All Experiments ─────────────────────────────────────────────────────
 s = new("All Experiments full width")

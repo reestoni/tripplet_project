@@ -290,7 +290,7 @@ class SnakeDialog(QWidget):
         top_row.addWidget(self._lbl_level, 1)
         top_row.addWidget(self._lbl_hi)
 
-        hint = QLabel("Pfeiltasten / WASD  •  P = Pause  •  ESC = schliessen")
+        hint = QLabel("Arrow keys / WASD  •  P = pause  •  ESC = close")
         hint.setStyleSheet("color: #555577; font-size: 10px;")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -388,7 +388,7 @@ class SnakeDialog(QWidget):
             QPushButton:hover   { background: #1a4a80; }
             QPushButton:default { background: #00ff88; color: #1a1a2e; }
         """)
-        hi_line = "⭐ Neuer Highscore!\n" if new_hi else ""
+        hi_line = "⭐ New high score!\n" if new_hi else ""
         msg.setText(
             f"{'🎉 ' if new_hi else ''}GAME OVER\n\n"
             f"{hi_line}"

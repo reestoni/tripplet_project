@@ -241,7 +241,7 @@ class TabbedNavigator(QTabWidget):
                 stack.deleteLater()
 
     # ------------------------------------------------------------- Close
-    def _on_tab_close_requested(self, index: int):
+    def _on_tab_close_requested(self, index: int, confirm: bool = True):
         """Schliesst einen einzelnen Tab (Nutzerwunsch: "diese Register kann
         ich natürlich auch einzeln schliessen"). Der letzte verbleibende Tab
         lässt sich nicht über sein eigenes 'x' schliessen (gleiches Prinzip
@@ -250,6 +250,16 @@ class TabbedNavigator(QTabWidget):
         if self.count() <= 1:
             return
         stack = self.widget(index)
+        if confirm and stack is not None:
+            # unsaved changes (Show Experiment): Save / Discard / Cancel
+            for i in range(stack.count()):
+                ask = getattr(stack.widget(i), "confirm_close_with_unsaved", None)
+                if callable(ask):
+                    try:
+                        if not ask():
+                            return
+                    except Exception:
+                        pass
         self.removeTab(index)
         if stack is not None:
             # Kind-Screens NICHT löschen - das sind langlebige Singletons,
@@ -268,6 +278,12 @@ class TabbedNavigator(QTabWidget):
             # gemacht hat ("Internal C++ object already deleted").
             while stack.count() > 0:
                 child = stack.widget(0)
+                hook = getattr(child, "on_tab_closed", None)
+                if callable(hook):
+                    try:
+                        hook()  # e.g. Show Experiment in recycle bin preview
+                    except Exception:
+                        pass
                 stack.removeWidget(child)
                 child.setParent(None)
             stack.deleteLater()
@@ -279,7 +295,7 @@ class TabbedNavigator(QTabWidget):
         _logout(). Screens werden wie bei _on_tab_close_requested() nur
         entkoppelt, nie gelöscht."""
         while self.count() > 1:
-            self._on_tab_close_requested(self.count() - 1)
+            self._on_tab_close_requested(self.count() - 1, confirm=False)
         self.setCurrentIndex(0)
 
     # ------------------------------------------------------------- Labels

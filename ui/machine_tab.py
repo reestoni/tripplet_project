@@ -121,7 +121,7 @@ def build_machine_tab_impl(self) -> None:
 
     if not table_exists("tblMachineFields"):
         self.machine_info.setText(
-            "Mapping-Tabelle 'tblMachineFields' nicht gefunden.")
+            "Mapping table 'tblMachineFields' not found.")
         self.tbl_machine.setModel(PivotEditModel([], self._trial_labels))
         return
 
@@ -141,7 +141,7 @@ def build_machine_tab_impl(self) -> None:
                 [machine_id],
             )
         except Exception as e:
-            self.machine_info.setText(f"Fehler beim Laden von tblMachineFields: {e}")
+            self.machine_info.setText(f"Error loading tblMachineFields: {e}")
             self.tbl_machine.setModel(PivotEditModel([], self._trial_labels))
             return
 
@@ -1037,7 +1037,7 @@ def build_machine_tab_impl(self) -> None:
                 seen_set_flt.add(lbl)
                 seen_labels_flt.append(lbl)
 
-        lbl_flt = QLabel("Zeige:")
+        lbl_flt = QLabel("Show:")
         lbl_flt.setStyleSheet("color: #555; font-size: 11px;")
         self._mat_check_layout.addWidget(lbl_flt)
         for pl in seen_labels_flt:
@@ -1543,16 +1543,9 @@ def fill_machine_row_from_title_impl(self, row: int, is_rd: bool = False) -> Non
             and _model.data(_model.index(row, 0), Qt.DisplayRole) == DY_RATIO_TITLE:
         return
 
-    # Enforce permissions (AccessLevel >= 2 required for bulk row set)
-    try:
-        lvl = int(getattr(app_meta, "access_level", lambda: 0)() or 0)
-    except Exception:
-        try:
-            user = getattr(app_meta, "current_user", {}) or {}
-            lvl = int(user.get("access_level")
-                      or user.get("AccessLevel") or 0)
-        except Exception:
-            lvl = 0
+    # Enforce permissions (AccessLevel >= 2 required for bulk row set;
+    # _get_access_level() also covers the recycle bin preview)
+    lvl = self._get_access_level()
     if lvl < 2:
         QMessageBox.information(
             self,

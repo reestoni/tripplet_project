@@ -48,8 +48,8 @@ class ExperimentRequestHelpDialog(QDialog):
         layout.setSpacing(14)
 
         intro = QLabel(
-            "Vom Wunsch zum Experiment: grüne Pfeile sind Schritte, die du "
-            "selbst machst, violette macht ein Superuser bei der Prüfung."
+            "From request to experiment: green arrows are steps you take yourself, purple ones a superuser "
+            "takes when reviewing."
         )
         intro.setWordWrap(True)
         intro.setStyleSheet("font-size: 13px; color: #565656;")
@@ -60,12 +60,10 @@ class ExperimentRequestHelpDialog(QDialog):
         layout.addWidget(self._svg, 0, Qt.AlignHCenter)
 
         note = QLabel(
-            "<b>Wichtig beim Bearbeiten:</b> änderst du eine bereits "
-            "genehmigte oder mit einem Experiment verknüpfte Anfrage, "
-            "legt das eine separate <b>Kopie</b> im Status „Offen“ an "
-            "(im Diagramm gestrichelt) – erst wenn ein Superuser sie "
-            "akzeptiert, wandern die Inhalte ins Original, ohne dessen "
-            "Status oder Experiment-Verknüpfung zu verändern."
+            "<b>Important when editing:</b> if you change a request that is already approved or linked "
+            'to an experiment, a separate <b>copy</b> in status "Open" is created (dashed in the diagram) '
+            "– only when a superuser accepts it does the content go into the original, without changing "
+            "its status or experiment link."
         )
         note.setWordWrap(True)
         note.setStyleSheet(

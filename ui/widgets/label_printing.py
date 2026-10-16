@@ -184,7 +184,7 @@ def generate_label_sheet_pdf(items: List[Dict], template: Dict, start_index: int
     abgebrochen wird).
     """
     if fitz is None:
-        raise RuntimeError("PyMuPDF ist nicht installiert.")
+        raise RuntimeError("PyMuPDF is not installed.")
 
     cols = int(template["ColumnCount"])
     rows = int(template["RowCount"])

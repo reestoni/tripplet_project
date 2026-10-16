@@ -84,7 +84,7 @@ if not getattr(sys, "frozen", False) and not os.environ.get("TRIPPLET_MODE"):
     _mode, _ok = QInputDialog.getItem(
         None,
         "TrippleT – DB-Modus",
-        "Gegen welche Datenbank soll gestartet werden?",
+        "Which database should TrippleT connect to?",
         ["prod", "dev", "dev_local", "offline_prod", "offline_dev_local"],
         0,
         False,
@@ -120,27 +120,27 @@ if _resolved_mode in _OFFLINE_MODES:
         _prep_mode = "dev_local" if _resolved_mode == "offline_dev_local" else "prod"
         QMessageBox.critical(
             None,
-            "TrippleT – Offline-Modus",
-            "Es wurde noch keine Offline-Kopie vorbereitet.\n\n"
-            f"Bitte zuerst online starten ({_prep_mode}) und unter "
-            "Home → Offline Sync eine Kopie vorbereiten.\n\n"
-            f"Erwarteter Pfad:\n{_offline_path}",
+            "TrippleT – Offline mode",
+            "No offline copy has been prepared yet.\n\n"
+            f"Please start online first ({_prep_mode}) and prepare a copy under "
+            "Home → Offline Sync.\n\n"
+            f"Expected path:\n{_offline_path}",
         )
         sys.exit(0)
     QMessageBox.information(
         None,
-        "TrippleT – Offline-Modus",
-        "Der Offline-Modus ist aktuell nur für einen Teil der App getestet:\n"
-        "• Neues Trial anlegen\n"
-        "• Neues Garn / neue Düse anlegen\n"
-        "• Laborergebnisse anlegen/bearbeiten (ATY, Titer, Statimat, EKB, "
-        "ITEMAT, DTYoMat, Rapid600, Jet Air Consumption, Schrumpf-Tabs, Waterbath)\n\n"
-        "Andere Bereiche (Backlog, Notifications, Reports, Requirement Hub, "
-        "Smart Chart, ...) sind noch nicht offline getestet und können "
-        "Fehler zeigen, weil die zugehörigen Tabellen nicht Teil der "
-        "Offline-Kopie sind.\n\n"
-        "Offline-Modus ist aktuell nur für Superuser freigeschaltet - das "
-        "wird nach dem Login geprüft.",
+        "TrippleT – Offline mode",
+        "Offline mode is currently tested for part of the app only:\n"
+        "• Create new trials\n"
+        "• Create new yarns / jets\n"
+        "• Enter/edit lab results (ATY, Titer, Statimat, EKB, ITEMAT, DTYoMat, Rapid600, Jet Air "
+        "Consumption, shrinkage tabs, Waterbath)\n"
+        "\n"
+        "Other areas (Backlog, Notifications, Reports, Requirement Hub, Smart Chart, ...) are not "
+        "tested offline yet and may show errors, because their tables are not part of the offline "
+        "copy.\n"
+        "\n"
+        "Offline mode is currently enabled for superusers only - this is checked after login.",
     )
 
 from ui.theme import APP_QSS, build_qss, set_accent
@@ -428,12 +428,22 @@ class MainWindow(QMainWindow):
         TrippleT-Fenster wäre (beides würde beim Schliessen stillschweigend
         verloren gehen/die App beenden). Genau ein Tab und keine losgelösten
         Fenster → keine Nachfrage mehr."""
+        # Unsaved changes in any Show Experiment (all tabs, also this window's
+        # singleton) - Save / Discard / Cancel each, before anything else.
+        if not self._confirm_unsaved_show_experiments():
+            event.ignore()
+            return
         tab_count = self._tabs.count() if getattr(self, "_tabs", None) is not None else 1
         other_windows_open = self._open_window_count(exclude=self) > 0
         if tab_count > 1 or other_windows_open:
             if not self._confirm_quit_dialog(self, tab_count=tab_count):
                 event.ignore()
                 return
+        try:
+            from ui import recycle_preview
+            recycle_preview.finish_all()  # open recycle bin previews go back into the bin
+        except Exception:
+            pass
         super().closeEvent(event)
 
     def _set_create_experiment_request_screen(self, request_id=None, on_back=None):
@@ -1099,7 +1109,7 @@ class MainWindow(QMainWindow):
         data["CreationDate"] = datetime.datetime.now()
 
         if not data:
-            raise ValueError("Keine Daten zum Speichern übergeben.")
+            raise ValueError("No data passed for saving.")
 
         cols = list(data.keys())
         vals = [data[c] for c in cols]
@@ -1108,7 +1118,7 @@ class MainWindow(QMainWindow):
         sql = f"INSERT INTO [tblDTYJets] ({cols_sql}) VALUES ({placeholders})"
         new_id = execute_insert(sql, vals)
         if new_id is None:
-            raise RuntimeError("Konnte neue ID nach Insert nicht bestimmen.")
+            raise RuntimeError("Could not determine the new ID after the insert.")
         return new_id
 
     def _delete_jets(self, ids: List[int]) -> int:
@@ -1226,7 +1236,7 @@ class MainWindow(QMainWindow):
             data["GlobalID"] = new_global_id()
 
         if not data:
-            raise ValueError("Keine Daten zum Speichern übergeben.")
+            raise ValueError("No data passed for saving.")
 
         cols = list(data.keys())
         vals = [data[c] for c in cols]
@@ -1235,7 +1245,7 @@ class MainWindow(QMainWindow):
         sql = f"INSERT INTO [tblTopPlates] ({cols_sql}) VALUES ({placeholders})"
         new_id = execute_insert(sql, vals)
         if new_id is None:
-            raise RuntimeError("Konnte neue ID nach Insert nicht bestimmen.")
+            raise RuntimeError("Could not determine the new ID after the insert.")
         return new_id
 
     def _delete_top_plates(self, ids: List[int]) -> int:
@@ -1299,8 +1309,8 @@ class MainWindow(QMainWindow):
         if is_offline_mode() and access_level < 4:
             QMessageBox.warning(
                 self,
-                "TrippleT – Offline-Modus",
-                "Der Offline-Modus ist aktuell nur für Superuser freigeschaltet.",
+                "TrippleT – Offline mode",
+                "Offline mode is currently enabled for superusers only.",
             )
             self.login.reset_login_fields()
             self.stack.setCurrentWidget(self.login)
@@ -1471,6 +1481,9 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+        # Papierkorb-Vorschau: Serie im eigenen Show-Experiment-Tab (ui/recycle_preview.py)
+        app_meta.open_show_experiment_preview = self._open_show_experiment_preview
+
         # Hilfe-Suche: F1 + Sidebar-Eintrag "Help" (ui/widgets/help_search.py)
         try:
             # Registrierung zuerst: Sidebar-Eintrag soll auch ohne Shortcut gehen
@@ -1569,7 +1582,7 @@ class MainWindow(QMainWindow):
         """Navigiert zum Requirement Hub Screen."""
         if RequirementHubScreen is None:
             QMessageBox.warning(self, "Requirement Hub",
-                                "Requirement Hub nicht verfügbar – Import fehlgeschlagen.")
+                                "Requirement Hub not available – import failed.")
             return
         if self.requirement_hub is None:
             self.requirement_hub = RequirementHubScreen(
@@ -1585,7 +1598,7 @@ class MainWindow(QMainWindow):
         """Navigiert zum Quick Scan Screen."""
         if QuickScanScreen is None:
             QMessageBox.warning(self, "Quick Scan",
-                                "Quick Scan nicht verfügbar – Import fehlgeschlagen.")
+                                "Quick Scan not available – import failed.")
             return
         if self.quick_scan is None:
             self.quick_scan = QuickScanScreen(
@@ -1600,7 +1613,7 @@ class MainWindow(QMainWindow):
         """Navigiert zum Canvas-Screen."""
         if CanvasScreen is None:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Canvas", "Canvas nicht verfügbar – Import fehlgeschlagen.")
+            QMessageBox.warning(self, "Canvas", "Canvas not available – import failed.")
             return
         if self.canvas is None:
             self.canvas = CanvasScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
@@ -1612,7 +1625,7 @@ class MainWindow(QMainWindow):
         """Navigiert zum TDMS-Batch-Screen."""
         if TDMSBatchScreen is None:
             QMessageBox.warning(self, "YarnScope Batch",
-                                "YarnScope Batch nicht verfügbar – Import fehlgeschlagen.")
+                                "YarnScope Batch not available – import failed.")
             return
         if self.tdms_batch is None:
             self.tdms_batch = TDMSBatchScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
@@ -1624,7 +1637,7 @@ class MainWindow(QMainWindow):
         """Navigiert zum Nozzle ROI / Amortisations-Kalkulator."""
         if NozzleCalculatorScreen is None:
             QMessageBox.warning(self, "Jet Calculator",
-                                "Jet Calculator nicht verfügbar – Import fehlgeschlagen.")
+                                "Jet Calculator not available – import failed.")
             return
         if self.nozzle_calculator is None:
             self.nozzle_calculator = NozzleCalculatorScreen(
@@ -1640,7 +1653,7 @@ class MainWindow(QMainWindow):
         """Navigiert zum Label Generator."""
         if LabelGeneratorScreen is None:
             QMessageBox.warning(self, "Label Generator",
-                                "Label Generator nicht verfügbar – Import fehlgeschlagen.")
+                                "Label Generator not available – import failed.")
             return
         if self.label_generator is None:
             self.label_generator = LabelGeneratorScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
@@ -1652,7 +1665,7 @@ class MainWindow(QMainWindow):
         """Navigiert zum Air Supply Network Calculator."""
         if AirSupplyScreen is None:
             QMessageBox.warning(self, "Air Supply",
-                                "Air Supply Calculator nicht verfügbar – Import fehlgeschlagen.")
+                                "Air Supply Calculator not available – import failed.")
             return
         if self.air_supply is None:
             username = ""
@@ -2163,8 +2176,8 @@ class MainWindow(QMainWindow):
             try:
                 QMessageBox.critical(
                     self,
-                    "Fehler beim Öffnen",
-                    f"Experiment konnte nicht geöffnet werden.\n\n"
+                    "Error while opening",
+                    f"The experiment could not be opened.\n\n"
                     f"ExperimentID: {experiment_id}\n"
                     f"ExpPK: {exp_pk} / SeriesPK: {series_pk}\n\n"
                     f"{e}",
@@ -2231,8 +2244,8 @@ class MainWindow(QMainWindow):
             try:
                 QMessageBox.critical(
                     self,
-                    "Fehler beim Öffnen",
-                    f"Experiment konnte nicht geöffnet werden.\n\n"
+                    "Error while opening",
+                    f"The experiment could not be opened.\n\n"
                     f"ExperimentID: {experiment_id}\n"
                     f"ExpPK: {exp_pk} / SeriesPK: {series_pk}\n\n"
                     f"{e}",
@@ -2255,6 +2268,20 @@ class MainWindow(QMainWindow):
         def _populate():
             screen = self._build_dedicated_show_experiment_screen(back_label, back_callback)
             self.setWindowTitle(f"TrippleT – Show Experiment {experiment_id}")
+            self.stack.addWidget(screen)
+            self.stack.setCurrentWidget(screen)
+            self._load_record_safely(screen, exp_pk, series_pk, experiment_id)
+
+        self._tabs.open_in_new_tab(_populate)
+
+    def _open_show_experiment_preview(self, exp_pk: int, series_pk: int, experiment_id: str, setup) -> None:
+        """Recycle bin preview (ui/recycle_preview.py): fresh Show Experiment
+        in a new tab; setup(screen) switches it to preview mode BEFORE the
+        series is loaded."""
+        def _populate():
+            screen = self._build_dedicated_show_experiment_screen()
+            setup(screen)
+            self.setWindowTitle(f"TrippleT – Show Experiment {experiment_id} (Recycle Bin)")
             self.stack.addWidget(screen)
             self.stack.setCurrentWidget(screen)
             self._load_record_safely(screen, exp_pk, series_pk, experiment_id)
@@ -2314,8 +2341,9 @@ class MainWindow(QMainWindow):
         if self.report_screen is None:
             QMessageBox.warning(
                 self, "Report",
-                "Report nicht verfügbar – PySide6-WebEngine nicht installiert.\n\n"
-                "Bitte ausführen: pip install PySide6-WebEngine"
+                "Report not available – PySide6-WebEngine is not installed.\n"
+                "\n"
+                "Please run: pip install PySide6-WebEngine"
             )
             return
         print(f"[DEBUG _go_report] (SHARED SINGLETON path) series_pk={series_pk} "
@@ -2378,7 +2406,7 @@ class MainWindow(QMainWindow):
         if self.smartchart_screen is None:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Smart Chart",
-                "Smart Chart nicht verfügbar – PySide6-WebEngine nicht installiert.")
+                "Smart Chart not available – PySide6-WebEngine is not installed.")
             return
         self.setWindowTitle("TrippleT – Smart Chart")
         self.smartchart_screen.load_visual()
@@ -2483,7 +2511,7 @@ class MainWindow(QMainWindow):
             from ui.screen_report import ReportScreen as RS
         except ImportError:
             QMessageBox.warning(self, "Report",
-                "Report nicht verfügbar – PySide6-WebEngine nicht installiert.")
+                "Report not available – PySide6-WebEngine is not installed.")
             return
         win = QMainWindow()
         win.setWindowTitle(f"TrippleT – {self._smartchart_title(series_pk)}")
@@ -2675,7 +2703,7 @@ class MainWindow(QMainWindow):
             Screen = None
         if Screen is None:
             QMessageBox.information(
-                self, "Manage Yarn", "'Manage Yarn' ist derzeit nicht verfügbar."
+                self, "Manage Yarn", "'Manage Yarn' is currently not available."
             )
             return
         try:
@@ -2692,7 +2720,7 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.manage_yarn)
         except Exception as e:
             QMessageBox.critical(self, "Manage Yarn",
-                                 f"Fehler beim Öffnen: {e}")
+                                 f"Error while opening: {e}")
 
     def _go_back_manage_yarn(self):
         self.setWindowTitle("TrippleT – Manage Yarn")
@@ -2764,7 +2792,7 @@ class MainWindow(QMainWindow):
         aufzuräumen, siehe CLAUDE.md)."""
         if not self._ensure_new_yarn_screen():
             QMessageBox.information(
-                self, "Yarn", "'New Yarn' ist derzeit nicht verfügbar.")
+                self, "Yarn", "'New Yarn' is currently not available.")
             return
 
         def _create_save(data: Dict) -> Optional[int]:
@@ -2828,7 +2856,7 @@ class MainWindow(QMainWindow):
         screen_new_yarn.NewYarnScreen."""
         if not self._ensure_new_yarn_screen():
             QMessageBox.information(
-                self, "Yarn", "'Edit in Form' ist derzeit nicht verfügbar.")
+                self, "Yarn", "'Edit in Form' is currently not available.")
             return
         id_col = 'ID'
         yarn_id = row.get(id_col)
@@ -2883,7 +2911,7 @@ class MainWindow(QMainWindow):
             Screen = None
         if Screen is None:
             QMessageBox.information(
-                self, "Yarn Stock", "'Yarn Stock' ist derzeit nicht verfügbar."
+                self, "Yarn Stock", "'Yarn Stock' is currently not available."
             )
             return
         try:
@@ -2896,7 +2924,7 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.yarn_stock)
         except Exception as e:
             QMessageBox.critical(self, "Yarn Stock",
-                                 f"Fehler beim Öffnen: {e}")
+                                 f"Error while opening: {e}")
 
     def _go_yarn_stock_from_notification(self, yarn_id: int, charge: str):
         """Von einer Low-Stock-Notification aus: zu Yarn Stock navigieren
@@ -2915,7 +2943,7 @@ class MainWindow(QMainWindow):
                         "are listed in Manage Yarn."
                     )
         except Exception as e:
-            QMessageBox.critical(self, "Yarn Stock", f"Fehler beim Springen: {e}")
+            QMessageBox.critical(self, "Yarn Stock", f"Error while jumping to the item: {e}")
 
     def _go_my_requests_from_notification(self, request_id: int):
         """Von einer Experiment-Request-Notification aus (Statuswechsel,
@@ -3195,7 +3223,23 @@ class MainWindow(QMainWindow):
             pass
         self._go_back_manage_top_plates()
 
+    def _confirm_unsaved_show_experiments(self) -> bool:
+        """Save / Discard / Cancel for every Show Experiment of this window
+        with unsaved changes (closing the program, logging out). False =
+        the user cancelled."""
+        try:
+            from ui.screen_show_experiment import ShowExperimentScreen
+            for w in QApplication.allWidgets():
+                if isinstance(w, ShowExperimentScreen) and w.window() is self and w._has_unsaved():
+                    if not w.confirm_close_with_unsaved():
+                        return False
+        except RuntimeError:
+            pass
+        return True
+
     def _logout(self):
+        if not self._confirm_unsaved_show_experiments():
+            return
         # Tabs der vorherigen Session einsammeln, damit die nächste Anmeldung
         # nicht mit fremden, stehengebliebenen Tabs startet (Nutzerwunsch-
         # Ableitung, siehe closeEvent()-Docstring zur Tabs-Warnung).

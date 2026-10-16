@@ -93,7 +93,7 @@ class _ChatHistoryDialog(QDialog):
         self.selected_row: Optional[dict] = None
 
         layout = QVBoxLayout(self)
-        hint = QLabel("Frühere Sitzung auswählen, um sie zu öffnen (der aktuelle Chat bleibt gespeichert).")
+        hint = QLabel("Choose an earlier session to open it (the current chat stays saved).")
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
@@ -106,7 +106,7 @@ class _ChatHistoryDialog(QDialog):
         layout.addWidget(self.list, 1)
 
         btn_row = QHBoxLayout()
-        btn_open = QPushButton("Öffnen", objectName="GreenBtn")
+        btn_open = QPushButton("Open", objectName="GreenBtn")
         btn_open.clicked.connect(self._accept_selected)
         btn_row.addWidget(btn_open)
         btn_row.addStretch()
@@ -178,20 +178,20 @@ class LabAssistantScreen(QWidget):
 
         btn_history = QPushButton("🕘  History")
         btn_history.setObjectName("GreyBtn")
-        btn_history.setToolTip("Frühere Chat-Sitzungen ansehen und wieder öffnen")
+        btn_history.setToolTip("View and reopen earlier chat sessions")
         btn_history.clicked.connect(self._open_history)
         title_row.addWidget(btn_history)
 
         btn_new_chat = QPushButton("🆕  New Chat")
         btn_new_chat.setObjectName("GreyBtn")
-        btn_new_chat.setToolTip("Neue Sitzung starten (die bisherige bleibt über 'History' erreichbar)")
+        btn_new_chat.setToolTip("Start a new session (the previous one stays available under 'History')")
         btn_new_chat.clicked.connect(self._new_chat)
         title_row.addWidget(btn_new_chat)
         lay.addLayout(title_row)
 
         subtitle = QLabel(
-            "Stell freie Fragen über die gesamte Labordatenbank - nicht nur eine TrialSeries. "
-            "Athena schaut selbst per SQL nach, was sie für die Antwort braucht."
+            "Ask free questions about the whole lab database - not just one trial series. Athena looks "
+            "up what she needs via SQL herself."
         )
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("color:#9ca3af; font-size:11px; background:transparent;")
@@ -224,11 +224,13 @@ class LabAssistantScreen(QWidget):
             "hr { background-color: #374151; }"
         )
         self._output.setPlaceholderText(
-            "Stell eine Frage, z.B.:\n\n"
-            "  • Welche ATY-Trials hatten in den letzten 3 Monaten einen Bulk Index über 20%?\n"
-            "  • Wie viele TrialSeries laufen aktuell im Status 'Backlog'?\n"
-            "  • Welche Jets wurden am häufigsten für PES-Garne verwendet?\n\n"
-            "Athena fragt die Datenbank selbst per SQL ab, um zu antworten."
+            "Ask a question, e.g.:\n"
+            "\n"
+            "  • Which ATY trials had a bulk index above 20% in the last 3 months?\n"
+            "  • How many trial series are currently in status 'Backlog'?\n"
+            "  • Which jets were used most often for PES yarns?\n"
+            "\n"
+            "Athena queries the database via SQL herself to answer."
         )
         output_lay.addWidget(self._output)
         lay.addWidget(output_container, 1)
@@ -253,7 +255,7 @@ class LabAssistantScreen(QWidget):
         self._chat_input = QTextEdit()
         self._chat_input.setFixedHeight(60)
         self._chat_input.setPlaceholderText(
-            "z.B. «Welche Maschine hat dieses Jahr am meisten ATY-Trials gefahren?»"
+            "e.g. «Which machine ran the most ATY trials this year?»"
         )
         self._chat_input.setStyleSheet(
             "background:#111827; color:#e5e7eb; font-size:12px;"
@@ -290,7 +292,7 @@ class LabAssistantScreen(QWidget):
 
         api_key = load_api_key()
         if not api_key:
-            self._status.setText("❌  Kein API Key hinterlegt oder Token-Limit erreicht - siehe Manage User.")
+            self._status.setText("❌  No API key set or token limit reached - see Manage User.")
             return
 
         from db.usage_log import log_usage_event
@@ -298,7 +300,7 @@ class LabAssistantScreen(QWidget):
 
         self._chat_input.clear()
         self._btn_send.setEnabled(False)
-        self._status.setText("⏳  Athena denkt nach...")
+        self._status.setText("⏳  Athena is thinking...")
         self._athena.start_working()
 
         separator = "\n\n---\n\n" if self._output_md else ""
@@ -346,9 +348,9 @@ class LabAssistantScreen(QWidget):
 
     def _on_error(self, error_msg: str):
         self._strip_thinking_marker()
-        self._output_md += f"\n\n❌  Fehler:\n{error_msg}"
+        self._output_md += f"\n\n❌  Error:\n{error_msg}"
         _set_advisor_markdown(self._output, self._output_md)
-        self._status.setText("❌  Fehler")
+        self._status.setText("❌  Error")
 
     def _on_finished(self):
         self._btn_send.setEnabled(True)
@@ -372,9 +374,9 @@ class LabAssistantScreen(QWidget):
         except Exception:
             rows = []
         if rows:
-            self._apply_loaded_row(rows[0], status_prefix="📄  Gespeicherter Chat geladen")
+            self._apply_loaded_row(rows[0], status_prefix="📄  Saved chat loaded")
 
-    def _apply_loaded_row(self, row: dict, status_prefix: str = "📄  Chat geöffnet"):
+    def _apply_loaded_row(self, row: dict, status_prefix: str = "📄  Chat opened"):
         """Übernimmt einen DB-Datensatz (von _load_saved_chat() oder aus dem
         History-Dialog ausgewählt) als aktive Sitzung."""
         self._chat_row_id = row.get("ID")
@@ -395,7 +397,7 @@ class LabAssistantScreen(QWidget):
         in der DB - siehe _apply_loaded_row())."""
         user_id = (app_meta.current_user or {}).get("id")
         if not user_id or not table_exists("tblLabAssistantChat"):
-            self._status.setText("Keine gespeicherten Chats verfügbar.")
+            self._status.setText("No saved chats available.")
             return
         try:
             rows = fetch_all(
@@ -406,7 +408,7 @@ class LabAssistantScreen(QWidget):
         except Exception:
             rows = []
         if not rows:
-            self._status.setText("Noch keine gespeicherten Chats vorhanden.")
+            self._status.setText("No saved chats yet.")
             return
         dlg = _ChatHistoryDialog(rows, parent=self)
         if dlg.exec() == QDialog.Accepted and dlg.selected_row is not None:

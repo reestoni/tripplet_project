@@ -109,3 +109,61 @@ def test_whats_new_dialog_lists_versions(monkeypatch):
     dlg.set_language("de")
     assert dlg.lst.item(1).text().startswith("Version 4.6.2\n13.10.2026")
     display_prefs._prefs = dict(display_prefs.DEFAULTS)
+
+
+def test_whats_new_search(monkeypatch):
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    import ui.widgets.multilang_help as mh
+    monkeypatch.setattr(mh, "save_language", lambda lang: None)
+    from ui import display_prefs
+    import ui.whats_new as wn
+    from ui.widgets import whats_new_texts as W
+    old = {"version": "4.6.2", "date": "2026-10-13",
+           "texts": {"en": [("h", "Stock"), ("feature", "Barcode scanner", "Scan a spool.", "Yarn Stock", None)],
+                     "de": [("h", "Lager"), ("feature", "Strichcode-Leser", "Spule scannen.", "Yarn Stock", None)],
+                     "es": [("h", "Stock"), ("feature", "Lector", "Escanear bobina.", "Yarn Stock", None)]}}
+    monkeypatch.setattr(wn, "RELEASES", W.RELEASES + [old])
+    old_idx = len(W.RELEASES)
+    # any language, word start, every word must match
+    assert wn.search_features("Strichcode") == [(old_idx, 1)]
+    assert wn.search_features("barc") == [(old_idx, 1)]
+    assert (old_idx, 1) in wn.search_features("spule scannen")  # synonyms also find related Yarn Stock cards
+    assert wn.search_features("barcode reference") == []
+    assert wn.search_features("") == []
+    assert any(ri == 0 for ri, _ in wn.search_features("Referenz"))
+    display_prefs._prefs = dict(display_prefs.DEFAULTS, whats_new_seen="4.6.2")
+    dlg = wn.WhatsNewDialog(language="de")
+    dlg.search.setText("Strichcode")
+    dlg._apply_search()
+    assert dlg._hits == [(old_idx, 1)]
+    assert not dlg.lst.item(0).flags() & wn.Qt.ItemIsEnabled  # current version: no hit
+    assert dlg.lst.item(old_idx).text().endswith("1 Treffer")
+    dlg.set_language("en")  # search survives a language switch
+    assert dlg.lst.item(old_idx).text().endswith("1 hits")
+    dlg.search.setText("")
+    dlg._apply_search()
+    assert dlg.lst.item(0).flags() & wn.Qt.ItemIsEnabled and dlg.lst.currentRow() >= 0
+    display_prefs._prefs = dict(display_prefs.DEFAULTS)
+
+
+def test_whats_new_pdf_sections_stay_on_one_page(tmp_path):
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from ui.whats_new_pdf import export_release_pdf, _markup
+    from ui.widgets.whats_new_texts import RELEASES
+    assert _markup("a&nbsp;<b>b</b> <x>", True) == "a\xa0<b>b</b> &lt;x&gt;"
+    for lang in ("en", "de", "es"):
+        path = tmp_path / f"wn_{lang}.pdf"
+        assert export_release_pdf(0, lang, str(path)) >= 1
+        assert path.stat().st_size > 10_000
+    fitz = __import__("pytest").importorskip("fitz")
+    doc = fitz.open(str(tmp_path / "wn_en.pdf"))
+    pages = [" ".join(p.get_text().split()) for p in doc]
+    section = None
+    for block in RELEASES[0]["texts"]["en"]:
+        if block[0] == "h":
+            section = [i for i, t in enumerate(pages) if block[1] in t]
+        elif block[0] == "feature" and section:
+            title = " ".join(block[1].split())[:25]
+            assert any(title in pages[i] for i in section), (block[1], section)  # card on its heading's page

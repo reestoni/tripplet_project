@@ -216,7 +216,7 @@ def _load_pdf_as_pixmap(path: str, page: int = 0) -> "tuple":
         import fitz  # pymupdf
         doc = fitz.open(path)
         if page >= len(doc):
-            return None, "Seite %d existiert nicht (PDF hat %d Seiten)." % (page, len(doc))
+            return None, "Page %d does not exist (the PDF has %d pages)." % (page, len(doc))
         pg = doc[page]
         # etwas höhere Render-Auflösung für bessere Lesbarkeit
         mat = fitz.Matrix(220 / 72, 220 / 72)
@@ -229,7 +229,7 @@ def _load_pdf_as_pixmap(path: str, page: int = 0) -> "tuple":
             return None, "Konvertierung PIL -> QPixmap fehlgeschlagen."
         return pm, None
     except ImportError:
-        return None, "pymupdf nicht installiert. Bitte: pip install pymupdf"
+        return None, "pymupdf is not installed. Please run: pip install pymupdf"
     except Exception as e:
         return None, str(e)
 
@@ -354,7 +354,7 @@ def _load_excel_as_pixmap(path: str, sheet: int = 0) -> "tuple":
             rows_data, sname = _xlsx_read_rows(path, sheet_idx=sheet, max_rows=50)
 
         if not rows_data:
-            rows_data = [["(kein Inhalt)"]]
+            rows_data = [["(no content)"]]
 
         # Spalten normalisieren
         max_cols = max(len(r) for r in rows_data)
@@ -472,7 +472,7 @@ def _word_to_pdf_buf(path: str) -> "tuple":
         import mammoth as _mammoth
         import fitz
     except ImportError as e:
-        return None, "Weder docx2pdf noch mammoth/pymupdf verfuegbar: " + str(e)
+        return None, "Neither docx2pdf nor mammoth/pymupdf available: " + str(e)
     try:
         _WORD_CSS_FB = """
         body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.55; color: #111; }
@@ -790,12 +790,12 @@ class _LoadingOverlay(QWidget):
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self._progress = 0
-        self._text = "Lade..."
+        self._text = "Loading..."
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self.hide()
 
-    def start(self, text: str = "Lade..."):
+    def start(self, text: str = "Loading..."):
         self._text = text
         self._progress = 0
         self.resize(self.parent().size())
@@ -1811,7 +1811,7 @@ class CanvasView(QGraphicsView):
                     self.scene().addItem(item)
                     self._anno_layer.setZValue(1000)
             else:
-                missing.append(src or "(kein Pfad)")
+                missing.append(src or "(no path)")
 
         for ad in project.get("annotations", []):
             anno = Annotation(
@@ -1847,8 +1847,8 @@ class CanvasView(QGraphicsView):
 
         if missing:
             QMessageBox.warning(
-                self, "Fehlende Bilder",
-                "Folgende Bilddateien wurden nicht gefunden:\n\n" +
+                self, "Missing images",
+                "These image files were not found:\n\n" +
                 "\n".join(missing)
             )
 
@@ -1909,8 +1909,8 @@ class _ImageListPanel(QWidget):
         lay.setContentsMargins(4,4,4,4); lay.setSpacing(4)
 
         trow = QHBoxLayout(); trow.setSpacing(3)
-        self._btn_all  = QPushButton("Alle")
-        self._btn_imgs = QPushButton("🖼 Bilder")
+        self._btn_all  = QPushButton("All")
+        self._btn_imgs = QPushButton("🖼 Images")
         self._btn_pdfs = QPushButton("📄 PDFs")
         for btn in (self._btn_all, self._btn_imgs, self._btn_pdfs):
             btn.setCheckable(True); btn.setFixedHeight(24)
@@ -1924,7 +1924,7 @@ class _ImageListPanel(QWidget):
         lay.addLayout(trow)
 
         frow = QHBoxLayout(); frow.setSpacing(4)
-        self._sf = QLineEdit(); self._sf.setPlaceholderText("Filter (Experiment/Datei)...")
+        self._sf = QLineEdit(); self._sf.setPlaceholderText("Filter (experiment/file)...")
         self._sf.setClearButtonEnabled(True); self._sf.textChanged.connect(self._filter_tree)
         frow.addWidget(self._sf)
         lay.addLayout(frow)
@@ -1955,28 +1955,28 @@ class _ImageListPanel(QWidget):
             if it is not getattr(self, "local_root", None):
                 self.tree.takeTopLevelItem(i)
         if not hasattr(self, "local_root") or self.local_root is None:
-            self.local_root = QTreeWidgetItem(self.tree, ["Lokale Bilder"])
+            self.local_root = QTreeWidgetItem(self.tree, ["Local images"])
             self.tree.insertTopLevelItem(0, self.local_root)
         groups = _fetch_series_groups()
         for g in groups:
             name = f"{g['ExperimentID']} | {g['SeriesName']}"
             item = QTreeWidgetItem(self.tree, [name])
             item.setData(0, Qt.UserRole, g); item.setForeground(0, QColor("#7ddf9a"))
-            QTreeWidgetItem(item, ["Lade Bilder..."])
+            QTreeWidgetItem(item, ["Loading images..."])
         self._apply_type_filter()
 
     def _on_item_expanded(self, item):
         """Lädt Bilder/PDFs einer Serie on-demand wenn der Baum-Knoten aufgeklappt wird."""
         data = item.data(0, Qt.UserRole)
         if not isinstance(data, dict) or "TrialSeriesID" not in data: return
-        if item.childCount() == 1 and item.child(0).text(0) == "Lade Bilder...":
+        if item.childCount() == 1 and item.child(0).text(0) == "Loading images...":
             item.removeChild(item.child(0))
             sid    = data["TrialSeriesID"]
             images = _fetch_images_for_series(sid)
             pdfs   = _fetch_pdfs_for_series(sid)
 
             if images:
-                img_root = QTreeWidgetItem(item, [f"🖼  Bilder ({len(images)})"])
+                img_root = QTreeWidgetItem(item, [f"🖼  Images ({len(images)})"])
                 img_root.setForeground(0, QColor("#7ddf9a"))
                 img_root.setFlags(img_root.flags() & ~Qt.ItemIsSelectable)
                 for r in images:
@@ -2000,8 +2000,8 @@ class _ImageListPanel(QWidget):
                         pf_root.setFlags(pf_root.flags() & ~Qt.ItemIsSelectable)
                         for pg in range(n_pages):
                             meta = dict(r); meta["_pdf_page"] = pg
-                            meta["OriginalFilename"] = fname + f" - Seite {pg + 1}"
-                            child = QTreeWidgetItem(pf_root, [f"  Seite {pg + 1}"])
+                            meta["OriginalFilename"] = fname + f" - page {pg + 1}"
+                            child = QTreeWidgetItem(pf_root, [f"  page {pg + 1}"])
                             child.setData(0, Qt.UserRole, meta)
                             child.setForeground(0, QColor("#bbb"))
                         pf_root.setExpanded(n_pages <= 6)
@@ -2013,7 +2013,7 @@ class _ImageListPanel(QWidget):
                 pdf_root.setExpanded(True)
 
             if not images and not pdfs:
-                QTreeWidgetItem(item, ["(keine Dateien)"])
+                QTreeWidgetItem(item, ["(no files)"])
 
             self._apply_type_filter()
 
@@ -2027,17 +2027,17 @@ class _ImageListPanel(QWidget):
         """Öffnet Datei-Dialog für lokale Bilder/Dokumente und fügt sie dem Baum hinzu."""
         # Sicherstellen dass local_root existiert (falls load_images noch nicht lief)
         if not hasattr(self, "local_root") or self.local_root is None:
-            self.local_root = QTreeWidgetItem(self.tree, ["Lokale Bilder"])
+            self.local_root = QTreeWidgetItem(self.tree, ["Local images"])
             self.tree.insertTopLevelItem(0, self.local_root)
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "Bilder / Dokumente", "",
-            "Alle unterstuetzten Dateien (*.png *.jpg *.jpeg *.bmp *.webp *.vk4 *.pdf *.xlsx *.xlsm *.xls *.docx *.doc);;"
-            "Bilder (*.png *.jpg *.jpeg *.bmp *.webp);;"
+            self, "Images / documents", "",
+            "All supported files (*.png *.jpg *.jpeg *.bmp *.webp *.vk4 *.pdf *.xlsx *.xlsm *.xls *.docx *.doc);;"
+            "Images (*.png *.jpg *.jpeg *.bmp *.webp);;"
             "Keyence VK4 (*.vk4);;"
             "PDF (*.pdf);;"
             "Excel (*.xlsx *.xlsm *.xls);;"
             "Word (*.docx *.doc);;"
-            "Alle Dateien (*.*)"
+            "All files (*.*)"
         )
         for p in paths:
             basename = os.path.basename(p)
@@ -2049,9 +2049,9 @@ class _ImageListPanel(QWidget):
                 for pg in range(n_pages):
                     self._local_counter -= 1
                     meta = {"ID": self._local_counter,
-                            "OriginalFilename": basename + " - Seite %d" % (pg + 1),
+                            "OriginalFilename": basename + " - page %d" % (pg + 1),
                             "FullPath": p, "_local": True, "_pdf_page": pg}
-                    child = QTreeWidgetItem(pdf_root, ["  Seite %d" % (pg + 1)])
+                    child = QTreeWidgetItem(pdf_root, ["  page %d" % (pg + 1)])
                     child.setData(0, Qt.UserRole, meta)
                     child.setForeground(0, QColor("#bbb"))
                 pdf_root.setExpanded(n_pages <= 6)
@@ -2077,10 +2077,10 @@ class _ImageListPanel(QWidget):
                 for pg in range(n_pages):
                     self._local_counter -= 1
                     meta = {"ID": self._local_counter,
-                            "OriginalFilename": basename + " - Seite %d" % (pg + 1),
+                            "OriginalFilename": basename + " - page %d" % (pg + 1),
                             "FullPath": p, "_local": True,
                             "_word": True, "_word_page": pg}
-                    child = QTreeWidgetItem(word_root, ["  Seite %d" % (pg + 1)])
+                    child = QTreeWidgetItem(word_root, ["  page %d" % (pg + 1)])
                     child.setData(0, Qt.UserRole, meta)
                     child.setForeground(0, QColor("#bbb"))
                 word_root.setExpanded(n_pages <= 6)
@@ -2224,7 +2224,7 @@ class CanvasScreen(QWidget):
 
         self._tool_btns = {}
         tool_defs = [
-            (TOOL_PAN,       "🖐",  "Pan / Bilder verschieben"),
+            (TOOL_PAN,       "🖐",  "Pan / move images"),
             (TOOL_ARROW,     "↗",  "Pfeil"),
             (TOOL_ELLIPSE,   "⬭",  "Ellipse"),
             (TOOL_RECT,      "▭",  "Rechteck"),
@@ -2318,7 +2318,7 @@ class CanvasScreen(QWidget):
 
         lay.addWidget(self._sep())
 
-        btn_proj_save = QPushButton("📁 Projekt speichern"); btn_proj_save.setFixedHeight(28)
+        btn_proj_save = QPushButton("📁 Save project"); btn_proj_save.setFixedHeight(28)
         btn_proj_save.setStyleSheet("QPushButton{background:#2a3a5a;color:#adf;border-radius:3px;"
                                     "font-size:11px;}QPushButton:hover{background:#3a5a8a;}")
         btn_proj_save.clicked.connect(self._save_project); lay.addWidget(btn_proj_save)
@@ -2498,7 +2498,7 @@ class CanvasScreen(QWidget):
         pm = self._view.render_to_pixmap()
         if pm.isNull(): return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Canvas speichern als...", "canvas.png",
+            self, "Save canvas as...", "canvas.png",
             "PNG (*.png);;JPEG (*.jpg *.jpeg);;BMP (*.bmp);;TIFF (*.tif *.tiff)")
         if not path: return
         ext = os.path.splitext(path)[1].lower().lstrip(".")
@@ -2510,9 +2510,9 @@ class CanvasScreen(QWidget):
         path = _build_full_path(meta)
         is_doc = _is_word(path) or _is_pdf(path) or _is_excel(path)
         if is_doc:
-            label = ("Word wird geladen..." if _is_word(path)
-                     else "PDF wird geladen..." if _is_pdf(path)
-                     else "Excel wird geladen...")
+            label = ("Loading Word..." if _is_word(path)
+                     else "Loading PDF..." if _is_pdf(path)
+                     else "Loading Excel...")
             ov = getattr(self, "_loading_overlay", None)
             if ov:
                 ov.start(label)
@@ -2533,7 +2533,7 @@ class CanvasScreen(QWidget):
         if pm is None:
             if ov: ov.stop()
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Ladefehler", err or "Unbekannter Fehler.")
+            QMessageBox.critical(self, "Ladefehler", err or "Unknown error.")
             return
         try:
             if _is_excel(_build_full_path(meta)) or _is_word(_build_full_path(meta)):
@@ -2552,7 +2552,7 @@ class CanvasScreen(QWidget):
         except Exception as e:
             if ov: ov.stop()
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Fehler", str(e))
+            QMessageBox.critical(self, "Error", str(e))
 
     def _on_pixmap_loaded(self, path, meta):
         """Callback für normale Bilder und VK4: lädt und fügt das Bild dem Canvas hinzu."""
@@ -2565,8 +2565,8 @@ class CanvasScreen(QWidget):
                 vk4_ch = chs[0] if chs else ""
             pm = _load_pixmap_from_path(path, vk4_ch)
             if pm is None or pm.isNull():
-                QMessageBox.warning(self, "Laden fehlgeschlagen",
-                                    "Konnte nicht geladen werden:\n" + path)
+                QMessageBox.warning(self, "Loading failed",
+                                    "Could not be loaded:\n" + path)
                 return
             # Kein Downscaling → volles Original für scharfen Zoom
             item = self._view.add_image(pm, str(meta.get("OriginalFilename") or ""),
@@ -2578,24 +2578,24 @@ class CanvasScreen(QWidget):
                 item._word_page   = None
             self._update_vk4_toolbar()
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Laden", str(e))
+            QMessageBox.critical(self, "Error while loading", str(e))
     def _save_project(self):
         """Öffnet Dialog und speichert das Canvas-Projekt als .ttcanvas."""
         path, _ = QFileDialog.getSaveFileName(
-            self, "Projekt speichern als...", "canvas_projekt.ttcanvas",
-            "TrippleT Canvas (*.ttcanvas);;Alle Dateien (*.*)")
+            self, "Save project as...", "canvas_projekt.ttcanvas",
+            "TrippleT Canvas (*.ttcanvas);;All files (*.*)")
         if not path:
             return
         try:
             self._view.save_project(path)
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Speichern", str(e))
+            QMessageBox.critical(self, "Error while saving", str(e))
 
     def _load_project(self):
         """Öffnet Dialog und lädt ein .ttcanvas-Projekt."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Projekt laden...", "",
-            "TrippleT Canvas (*.ttcanvas);;Alle Dateien (*.*)")
+            "TrippleT Canvas (*.ttcanvas);;All files (*.*)")
         if not path:
             return
         try:
@@ -2609,7 +2609,7 @@ class CanvasScreen(QWidget):
                 f"border-radius:3px;font-size:11px;"
                 f"border:1px solid #888;}}QPushButton:hover{{opacity:0.85;}}")
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Laden", str(e))
+            QMessageBox.critical(self, "Error while loading", str(e))
 
     def _go_home(self):
         """Navigiert zurück zum Home-Screen."""

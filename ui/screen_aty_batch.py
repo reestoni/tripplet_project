@@ -47,10 +47,10 @@ ATY_TDMS_BASE_DIR = r"H:\Technik\TrippleT\ATYtdms"
 
 # Status-Werte
 ST_NO_FILE  = "—"
-ST_PENDING  = "ausstehend"
+ST_PENDING  = "pending"
 ST_RUNNING  = "running…"
-ST_SAVED    = "✅ gespeichert"
-ST_ERROR    = "❌ Fehler"
+ST_SAVED    = "✅ saved"
+ST_ERROR    = "❌ error"
 ST_ANALYZED = "🔍 analysiert"
 
 # Spalten der Ergebnistabelle
@@ -67,7 +67,7 @@ _COL_BIN1_PCT   = 9
 _COL_CORE_CV    = 10
 
 _HEADERS = [
-    "Serie", "Vers.", "TrialID", "Datei", "Status",
+    "Serie", "Vers.", "TrialID", "File", "Status",
     "Length [m]", "Core [µm]", "Bulk Index [%]",
     "Freq [1/m]", "Bin1 % (Kurzhocker)", "Core CV [%]",
 ]
@@ -256,7 +256,7 @@ class ATYFolderScanner:
                 rows.append(ATYTrialRow(
                     series_id=sid, series_name=sname,
                     trial_no=vno, trial_id=None,
-                    tdms_path=fpath, status="⚠️ kein Trial",
+                    tdms_path=fpath, status="⚠️ no trial",
                 ))
 
         rows.sort(key=lambda r: (r.series_id, r.trial_no))
@@ -332,12 +332,12 @@ class _ScanWorker(QRunnable):
 
     def run(self):
         try:
-            self._signals.status.emit("Scanne ATY-TDMS-Ordner…")
+            self._signals.status.emit("Scanning ATY TDMS folder…")
             rows = ATYFolderScanner.scan_multi(self._series_ids)
             n_files = sum(1 for r in rows if r.tdms_path)
             n_pend  = sum(1 for r in rows if r.status == ST_PENDING)
             self._signals.status.emit(
-                f"Scan fertig: {len(rows)} Trials | {n_files} mit TDMS | {n_pend} ausstehend"
+                f"Scan finished: {len(rows)} Trials | {n_files} with TDMS | {n_pend} pending"
             )
             self._signals.done.emit(rows)
         except Exception as e:
@@ -484,7 +484,7 @@ class _ATYTableModel(QAbstractTableModel):
         if row.status == ST_ANALYZED: return QColor("#f0c040")
         if row.status == ST_ERROR:    return QColor("#ff6060")
         if row.status == ST_NO_FILE:  return QColor("#555")
-        if row.status == "⚠️ kein Trial": return QColor("#f0a040")
+        if row.status == "⚠️ no trial": return QColor("#f0a040")
         return QColor("#ddd")
 
     def update_row(self, idx: int):
@@ -587,16 +587,16 @@ class ATYBatchScreen(QWidget):
         rv.setSpacing(4)
 
         frow = QHBoxLayout(); frow.setSpacing(8)
-        self._chk_only_pending = QCheckBox("Nur ausstehende")
+        self._chk_only_pending = QCheckBox("Only pending")
         self._chk_only_pending.setChecked(True)
         self._chk_only_pending.stateChanged.connect(self._refresh_proxy)
         frow.addWidget(self._chk_only_pending)
-        self._chk_only_files = QCheckBox("Nur mit TDMS-File")
+        self._chk_only_files = QCheckBox("Only with TDMS file")
         self._chk_only_files.setChecked(True)
         self._chk_only_files.stateChanged.connect(self._refresh_proxy)
         frow.addWidget(self._chk_only_files)
         frow.addStretch()
-        self._btn_scan = QPushButton("🔄 Ordner scannen")
+        self._btn_scan = QPushButton("🔄 Scan folder")
         self._btn_scan.setObjectName("GreenBtn")
         self._btn_scan.setFixedHeight(28)
         self._btn_scan.clicked.connect(self._on_scan)
@@ -647,13 +647,13 @@ class ATYBatchScreen(QWidget):
             "QProgressBar::chunk{background:#0e8a8a;border-radius:4px;}")
         brow.addWidget(self._progress, 1)
         brow.addStretch()
-        self._btn_sel = QPushButton("☑ Nur Auswahl")
-        self._btn_sel.setToolTip("Nur markierte Zeilen analysieren (Ctrl+Klick / Shift+Klick)")
+        self._btn_sel = QPushButton("☑ Selection only")
+        self._btn_sel.setToolTip("Analyse selected rows only (Ctrl+click / Shift+click)")
         self._btn_sel.setFixedHeight(32)
         self._btn_sel.setEnabled(False)
         self._btn_sel.clicked.connect(self._on_batch_selection)
         brow.addWidget(self._btn_sel)
-        self._btn_batch = QPushButton("⚡ Batch starten")
+        self._btn_batch = QPushButton("⚡ Start batch")
         self._btn_batch.setObjectName("GreenBtn")
         self._btn_batch.setFixedHeight(32)
         self._btn_batch.setStyleSheet(
@@ -664,7 +664,7 @@ class ATYBatchScreen(QWidget):
         self._btn_batch.setEnabled(False)
         self._btn_batch.clicked.connect(self._on_batch)
         brow.addWidget(self._btn_batch)
-        self._btn_retry = QPushButton("🔁 Fehler wiederholen")
+        self._btn_retry = QPushButton("🔁 Retry errors")
         self._btn_retry.setFixedHeight(30)
         self._btn_retry.setStyleSheet(
             "QPushButton{background:#5a2a2a;color:#f88;border-radius:4px;"
@@ -794,7 +794,7 @@ class ATYBatchScreen(QWidget):
         self._btn_toggle_all.setVisible(self._insider_mode)
         self._rebuild_series_list_widget()
         if self._insider_mode:
-            self._lbl_status.setText("🔓 Insider-Modus – alle Serien sichtbar")
+            self._lbl_status.setText("🔓 Insider mode – all series visible")
         else:
             self._lbl_status.setText("Bereit.")
             QTimer.singleShot(50, self._on_scan)
@@ -832,7 +832,7 @@ class ATYBatchScreen(QWidget):
         n_files = sum(1 for r in rows if r.tdms_path)
         n_pend  = sum(1 for r in rows if r.status == ST_PENDING)
         self._lbl_status.setText(
-            f"{len(rows)} Trials | {n_files} mit TDMS | {n_pend} ausstehend")
+            f"{len(rows)} Trials | {n_files} with TDMS | {n_pend} pending")
         self._btn_scan.setEnabled(True)
         self._btn_batch.setEnabled(n_files > 0)
         self._btn_sel.setEnabled(n_files > 0)
@@ -845,7 +845,7 @@ class ATYBatchScreen(QWidget):
     def _on_scan_error(self, msg: str):
         self._btn_scan.setEnabled(True)
         self._btn_batch.setEnabled(False)
-        QMessageBox.critical(self, "Scan-Fehler", msg)
+        QMessageBox.critical(self, "Scan error", msg)
 
     # ── Proxy-Filter ──────────────────────────────────────────────────────
 
@@ -891,9 +891,9 @@ class ATYBatchScreen(QWidget):
     def _on_selection_changed(self):
         sel = self._selected_source_rows()
         if sel:
-            self._btn_batch.setText(f"⚡ {len(sel)} selektierte analysieren")
+            self._btn_batch.setText(f"⚡ {len(sel)} analyse selected")
         else:
-            self._btn_batch.setText("⚡ Batch starten")
+            self._btn_batch.setText("⚡ Start batch")
 
     # ── Batch-Analyse ─────────────────────────────────────────────────────
 
@@ -917,7 +917,7 @@ class ATYBatchScreen(QWidget):
                     break
         if not pending:
             QMessageBox.information(
-                self, "Auswahl", "Keine der markierten Zeilen hat ein TDMS-File.")
+                self, "Selection", "None of the selected rows has a TDMS file.")
             return
         self._save_after = True
         self._start_batch(pending_override=pending)
@@ -962,9 +962,11 @@ class ATYBatchScreen(QWidget):
                 statuses[r.status] = statuses.get(r.status, 0) + 1
             QMessageBox.information(
                 self, "Batch",
-                "Keine Trials zum Verarbeiten gefunden.\n\n"
-                "Tipp: Deaktiviere 'Nur ausstehende' um gespeicherte erneut zu analysieren.\n\n"
-                "Status-Verteilung:\n"
+                "No trials to process found.\n"
+                "\n"
+                "Tip: switch off 'Only pending' to analyse saved ones again.\n"
+                "\n"
+                "Status distribution:\n"
                 + "\n".join(f"  '{k}': {v}" for k, v in sorted(statuses.items())))
             return
 
@@ -1002,7 +1004,7 @@ class ATYBatchScreen(QWidget):
                 arr, ell = read_aty_signal(str(row.tdms_path))
                 mm_pp = read_step_mm_from_tdms(str(row.tdms_path))
                 if arr is None or len(arr) == 0:
-                    raise ValueError("Kein Signal im TDMS-File.")
+                    raise ValueError("No signal in the TDMS file.")
                 if mm_pp is None or mm_pp <= 0:
                     mm_pp = 0.25
 
@@ -1045,8 +1047,8 @@ class ATYBatchScreen(QWidget):
         self._progress.setVisible(False)
         self._btn_retry.setVisible(errors > 0)
         self._lbl_status.setText(
-            f"✅ Fertig – {ok}/{len(pending)} gespeichert"
-            + (f" | ❌ {errors} Fehler" if errors else ""))
+            f"✅ Fertig – {ok}/{len(pending)} saved"
+            + (f" | ❌ {errors} errors" if errors else ""))
 
     def _on_stop(self):
         self._running = False

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- What's new search - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="10" width="276" height="110" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="20" y="18" width="86" height="18" rx="3" fill="#ffffff" stroke="#9bbbe0" stroke-width="1"/>
+  <text x="25" y="31" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">barcode</text>
+  <rect x="20" y="42" width="86" height="22" rx="2" fill="#ffffff" stroke="#eeeeee" stroke-width="1"/>
+  <text x="25" y="52" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#b0b0b0" text-anchor="start">Version 4.7.0</text>
+  <rect x="20" y="66" width="86" height="22" rx="2" fill="#d8e7fa" stroke="#eeeeee" stroke-width="1"/>
+  <text x="25" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start" font-weight="bold">Version 4.6.5</text>
+  <text x="25" y="85" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#39a650" text-anchor="start" font-weight="bold">2 hits</text>
+  <rect x="20" y="90" width="86" height="22" rx="2" fill="#ffffff" stroke="#eeeeee" stroke-width="1"/>
+  <text x="25" y="100" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#b0b0b0" text-anchor="start">Version 4.6.2</text>
+  <text x="116" y="30" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start" font-weight="bold">Version 4.6.5</text>
+  <rect x="116" y="38" width="164" height="32" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="116" y="38" width="4" height="32" rx="0" fill="#39a650"/>
+  <text x="126" y="51" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">Barcode scanner</text>
+  <rect x="126" y="57" width="120" height="4" rx="2" fill="#e2e2e2"/>
+  <rect x="116" y="76" width="164" height="32" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="116" y="76" width="4" height="32" rx="0" fill="#39a650"/>
+  <text x="126" y="89" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">Print barcode labels</text>
+  <rect x="126" y="95" width="120" height="4" rx="2" fill="#e2e2e2"/>
+</svg>

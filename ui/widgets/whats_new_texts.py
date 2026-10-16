@@ -42,7 +42,8 @@ RELEASES = [
                  "Show Experiment → Machine Data → <b>+ Ref</b>", "wn_reference.svg"),
                 ("feature", "Copy trials - with changes",
                  "Choose which trials, how often and in which order, and change values (e.g. air pressure, jet, "
-                 "OF Core/Effect) before copying. Tensions before/after the jet are no longer copied.",
+                 "OF Core/Effect) before copying. Comments and the tensions before/after the jet are not copied - "
+                 "the copies start with them empty.",
                  "Show Experiment → Machine Data → <b>Copy trials</b>", "wn_copy_trials.svg"),
                 ("feature", "D/Y Ratio (T2/T1)",
                  "Calculated automatically from T1 and T2 and shown right below T2 Tension on DTY machines.",
@@ -51,6 +52,12 @@ RELEASES = [
                  "Right-click a parameter name → <b>Hide row</b>. A blue line shows where rows are hidden; click "
                  "it, or use <b>n rows hidden</b>, to show them again. Remembered per machine.",
                  "Show Experiment → Machine Data → right-click a parameter name", "wn_hide_rows.svg"),
+                ("feature", "See what is not saved yet",
+                 "Changed cells stay yellow until you save (<b>Save</b> or <b>Ctrl+S</b>). The button shows how many, "
+                 "e.g. <b>Save (3)</b>, and the "
+                 "tab gets a dot. Closing a tab or the program with unsaved changes now asks first - before, they "
+                 "were lost without a word.",
+                 "Show Experiment", "wn_unsaved.svg"),
                 ("feature", "Typo check when saving",
                  "Machine settings far outside the usual range of this machine (e.g. 35 instead of 3.5 bar) are "
                  "listed before saving. You can go back or save anyway.",
@@ -75,8 +82,17 @@ RELEASES = [
                  "Round <b>?</b> button on these screens", "wn_help.svg"),
                 ("feature", "Help search - \"Where do I find…?\"",
                  "Type your question in your own words and get the matching help page - in English, German or "
-                 "Spanish. <b>Take me there</b> opens the screen. Users with AI access can also <b>Ask AI</b>.",
+                 "Spanish. <b>Take me there</b> opens the screen.",
                  "Sidebar → <b>Help (F1)</b> or the F1 key", "wn_help_search.svg"),
+                ("feature", "Search in What's new",
+                 "Know a feature exists but not when it came? Type a word in the search field above the version "
+                 "list - all versions are searched at once, in English, German and Spanish. Versions with hits show "
+                 "how many; click one to jump to it.",
+                 "Sidebar → Account → <b>What's new</b> → search field", "wn_whats_new_search.svg"),
+                ("feature", "What's new as PDF",
+                 "Save a version's news as a PDF - to print it or send it to colleagues. Each topic stays together "
+                 "on one page.",
+                 "Sidebar → Account → <b>What's new</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
                 ("h", "Backlog and All Experiments"),
                 ("feature", "Backlog on wide screens",
                  "On big monitors all four columns stand side by side and use the full height.",
@@ -85,6 +101,11 @@ RELEASES = [
                  "A deleted trial series can be restored for 90 days. Whoever may move a series in the Backlog may "
                  "delete it (in To Be Cleaned: superusers only).",
                  "Sidebar → Superuser → <b>Recycle Bin</b>", "wn_recycle_bin.svg"),
+                ("feature", "Look inside the Recycle Bin",
+                 "Not sure what a deleted series contains? Double-click it: it opens read only in Show Experiment. "
+                 "A yellow bar lets you <b>Restore for good</b>, put it <b>Back to Recycle Bin</b> or "
+                 "<b>Delete permanently</b>. Closing the tab puts it back - with its original deletion date.",
+                 "Sidebar → Superuser → <b>Recycle Bin</b> → double-click a series", "wn_recycle_preview.svg"),
                 ("feature", "All Experiments uses the whole window",
                  "The list fills the full width and height of the window - the last columns are visible without "
                  "scrolling sideways - and is shown larger on big screens.",
@@ -99,10 +120,13 @@ RELEASES = [
                  "<b>New spool(s)</b> starts with an empty selection and afterwards jumps right to the new spools. "
                  "They go to the label queue automatically (tick box in the dialog).",
                  "Yarn Stock → <b>New spool(s)</b>", "wn_new_spools.svg"),
-                ("feature", "Stock take",
-                 "Check a rack spool by spool: scan each label. Spools in another place are moved right away, "
-                 "missing ones are only booked out when you finish - after asking.",
-                 "Yarn Stock → Rack lookup → <b>Start stock take…</b>", "wn_stock_take.svg"),
+                ("feature", "Stock take - location by location",
+                 "A superuser starts a stock take round (and can leave out single locations). Every location is a "
+                 "tile: grey = open, green = all fine, orange = differences. Click one and scan its spools (no label? "
+                 "double-click it in the list). "
+                 "<b>Results</b> shows what was found where, exportable to Excel. Spools in another place are moved "
+                 "right away, missing ones are only booked out when you finish - after asking.",
+                 "Yarn Stock → Rack lookup → <b>Stock take…</b>", "wn_stock_take.svg"),
                 ("feature", "Spool history",
                  "Every change of a spool is recorded: created, changed, moved, booked out, stock take. Without a "
                  "selection you see the whole batch, including used-up spools.",
@@ -111,6 +135,12 @@ RELEASES = [
                  "In <i>Go to spool #</i> you can scan the spool label instead of typing the number. And Yarn Stock "
                  "now asks before unsaved spool changes are lost. Help in three languages: round button top right.",
                  "Yarn Stock → <b>Go to spool #</b>", None),
+                ("h", "General"),
+                ("feature", "All texts in English",
+                 "Messages, buttons, menus and status texts that were still in German are now in English everywhere - "
+                 "e.g. the right-click menu in the Backlog says <b>Reassign yarn…</b>. Lab terms such as Kurzhocker or "
+                 "Langwelle stay as they are.",
+                 "Whole program", None),
             ],
             # ═══════════════════════════════ DE ═══════════════════════════════
             "de": [
@@ -121,8 +151,8 @@ RELEASES = [
                  "Show Experiment → Machine Data → <b>+ Ref</b>", "wn_reference.svg"),
                 ("feature", "Versuche kopieren - mit Änderungen",
                  "Wählen, welche Versuche wie oft und in welcher Reihenfolge kopiert werden, und Werte (z.&nbsp;B. "
-                 "Luftdruck, Düse, OF Core/Effect) vor dem Kopieren ändern. Fadenspannungen vor/nach Jet werden "
-                 "nicht mehr mitkopiert.",
+                 "Luftdruck, Düse, OF Core/Effect) vor dem Kopieren ändern. Kommentare und Fadenspannungen "
+                 "vor/nach Jet werden nicht mitkopiert - die Kopien starten damit leer.",
                  "Show Experiment → Machine Data → <b>Copy trials</b>", "wn_copy_trials.svg"),
                 ("feature", "D/Y Ratio (T2/T1)",
                  "Wird bei DTY-Maschinen automatisch aus T1 und T2 berechnet und direkt unter T2 Tension angezeigt.",
@@ -131,6 +161,12 @@ RELEASES = [
                  "Rechtsklick auf einen Parameternamen → <b>Hide row</b>. Eine blaue Linie zeigt, wo Zeilen fehlen; "
                  "ein Klick darauf oder <b>n rows hidden</b> holt sie zurück. Gemerkt pro Maschine.",
                  "Show Experiment → Machine Data → Rechtsklick auf Parameternamen", "wn_hide_rows.svg"),
+                ("feature", "Sehen, was noch nicht gespeichert ist",
+                 "Geänderte Zellen bleiben gelb, bis gespeichert ist (<b>Save</b> oder <b>Strg+S</b>). Der Knopf zeigt "
+                 "die Anzahl, z.&nbsp;B. "
+                 "<b>Save (3)</b>, und der Tab bekommt einen Punkt. Wer einen Tab oder das Programm mit "
+                 "ungespeicherten Änderungen schliesst, wird jetzt gefragt - vorher gingen sie wortlos verloren.",
+                 "Show Experiment", "wn_unsaved.svg"),
                 ("feature", "Tippfehler-Prüfung beim Speichern",
                  "Maschineneinstellungen weit ausserhalb des Üblichen dieser Maschine (z.&nbsp;B. 35 statt 3.5 bar) "
                  "werden vor dem Speichern aufgelistet. Zurück zum Korrigieren oder trotzdem speichern.",
@@ -156,9 +192,17 @@ RELEASES = [
                  "Runder <b>?</b>-Knopf in diesen Screens", "wn_help.svg"),
                 ("feature", "Hilfe-Suche - \"Wo finde ich…?\"",
                  "Die Frage in eigenen Worten eintippen und die passende Hilfe-Seite bekommen - auf Englisch, "
-                 "Deutsch oder Spanisch. <b>Take me there</b> öffnet den Screen. Benutzer mit KI-Zugang können "
-                 "zusätzlich <b>Ask AI</b> nutzen.",
+                 "Deutsch oder Spanisch. <b>Take me there</b> öffnet den Screen.",
                  "Sidebar → <b>Help (F1)</b> oder Taste F1", "wn_help_search.svg"),
+                ("feature", "Suche in \"Was ist neu\"",
+                 "Du weisst, dass es eine Funktion gibt, aber nicht seit wann? Ein Wort ins Suchfeld über der "
+                 "Versionsliste tippen - gesucht wird in allen Versionen gleichzeitig, auf Englisch, Deutsch und "
+                 "Spanisch. Versionen mit Treffern zeigen die Anzahl; ein Klick springt dorthin.",
+                 "Sidebar → Account → <b>What's new</b> → Suchfeld", "wn_whats_new_search.svg"),
+                ("feature", "\"Was ist neu\" als PDF",
+                 "Die Neuheiten einer Version als PDF speichern - zum Ausdrucken oder um sie Kollegen zu schicken. "
+                 "Jedes Thema bleibt zusammen auf einer Seite.",
+                 "Sidebar → Account → <b>What's new</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
                 ("h", "Backlog und All Experiments"),
                 ("feature", "Backlog auf breiten Bildschirmen",
                  "Auf grossen Monitoren stehen alle vier Spalten nebeneinander und nutzen die volle Höhe.",
@@ -167,6 +211,11 @@ RELEASES = [
                  "Eine gelöschte Versuchsserie lässt sich 90 Tage lang wiederherstellen. Löschen darf, wer die Serie "
                  "im Backlog verschieben darf (in To Be Cleaned nur Superuser).",
                  "Sidebar → Superuser → <b>Recycle Bin</b>", "wn_recycle_bin.svg"),
+                ("feature", "Im Papierkorb nachschauen",
+                 "Unsicher, was in einer gelöschten Serie steckt? Doppelklick darauf: Sie öffnet sich schreibgeschützt "
+                 "in Show Experiment. Im gelben Balken wählst du <b>Restore for good</b>, <b>Back to Recycle Bin</b> "
+                 "oder <b>Delete permanently</b>. Tab schliessen legt sie zurück - mit dem ursprünglichen Löschdatum.",
+                 "Sidebar → Superuser → <b>Recycle Bin</b> → Doppelklick auf eine Serie", "wn_recycle_preview.svg"),
                 ("feature", "All Experiments nutzt das ganze Fenster",
                  "Die Liste füllt die volle Breite und Höhe des Fensters - die letzten Spalten sind ohne seitliches "
                  "Scrollen sichtbar - und wird auf grossen Bildschirmen grösser dargestellt.",
@@ -181,10 +230,12 @@ RELEASES = [
                  "<b>New spool(s)</b> beginnt mit leerer Auswahl und springt danach direkt zu den neuen Spulen. "
                  "Diese kommen automatisch in die Label queue (Häkchen im Dialog).",
                  "Yarn Stock → <b>New spool(s)</b>", "wn_new_spools.svg"),
-                ("feature", "Inventur",
-                 "Ein Regal Spule für Spule prüfen: jedes Etikett scannen. Spulen an einem anderen Platz werden "
-                 "sofort umgelagert, fehlende erst beim Abschluss ausgebucht - nach Rückfrage.",
-                 "Yarn Stock → Rack lookup → <b>Start stock take…</b>", "wn_stock_take.svg"),
+                ("feature", "Inventur - Platz für Platz",
+                 "Ein Superuser startet eine Inventur-Runde (und kann einzelne Plätze auslassen). Jeder Lagerplatz "
+                 "ist eine Kachel: grau = offen, grün = alles stimmt, orange = Abweichungen. Draufklicken und die "
+                 "Spulen scannen (kein Etikett? in der Liste doppelklicken). <b>Results</b> zeigt, was wo gefunden wurde, als Excel exportierbar. Spulen an einem "
+                 "anderen Platz werden sofort umgelagert, fehlende erst beim Abschluss ausgebucht - nach Rückfrage.",
+                 "Yarn Stock → Rack lookup → <b>Stock take…</b>", "wn_stock_take.svg"),
                 ("feature", "Spulen-Verlauf",
                  "Jede Änderung an einer Spule wird festgehalten: angelegt, geändert, umgelagert, ausgebucht, "
                  "Inventur. Ohne Auswahl sieht man die ganze Batch, auch aufgebrauchte Spulen.",
@@ -194,6 +245,12 @@ RELEASES = [
                  "Stock fragt jetzt nach, bevor ungespeicherte Spulen-Änderungen verloren gehen. Hilfe in drei "
                  "Sprachen: runder Knopf oben rechts.",
                  "Yarn Stock → <b>Go to spool #</b>", None),
+                ("h", "Allgemein"),
+                ("feature", "Alle Texte auf Englisch",
+                 "Meldungen, Knöpfe, Menüs und Statustexte, die noch deutsch waren, sind jetzt überall englisch - "
+                 "z.&nbsp;B. heisst das Rechtsklick-Menü im Backlog <b>Reassign yarn…</b>. Laborbegriffe wie Kurzhocker "
+                 "oder Langwelle bleiben, wie sie sind.",
+                 "Ganzes Programm", None),
             ],
             # ═══════════════════════════════ ES ═══════════════════════════════
             "es": [
@@ -204,7 +261,8 @@ RELEASES = [
                  "Show Experiment → Machine Data → <b>+ Ref</b>", "wn_reference.svg"),
                 ("feature", "Copiar ensayos - con cambios",
                  "Elige qué ensayos, cuántas veces y en qué orden, y cambia valores (p.&nbsp;ej. presión de aire, "
-                 "tobera, OF Core/Effect) antes de copiar. Las tensiones antes/después del jet ya no se copian.",
+                 "tobera, OF Core/Effect) antes de copiar. Los comentarios y las tensiones antes/después del jet no "
+                 "se copian: las copias empiezan con ellos vacíos.",
                  "Show Experiment → Machine Data → <b>Copy trials</b>", "wn_copy_trials.svg"),
                 ("feature", "D/Y Ratio (T2/T1)",
                  "Se calcula automáticamente a partir de T1 y T2 y se muestra justo debajo de T2 Tension en "
@@ -214,6 +272,12 @@ RELEASES = [
                  "Clic derecho en el nombre de un parámetro → <b>Hide row</b>. Una línea azul indica dónde faltan "
                  "filas; un clic en ella o <b>n rows hidden</b> las vuelve a mostrar. Se recuerda por máquina.",
                  "Show Experiment → Machine Data → clic derecho en el nombre del parámetro", "wn_hide_rows.svg"),
+                ("feature", "Ver lo que aún no está guardado",
+                 "Las celdas cambiadas quedan en amarillo hasta que guardas (<b>Save</b> o <b>Ctrl+S</b>). El botón "
+                 "muestra cuántas, p.&nbsp;ej. "
+                 "<b>Save (3)</b>, y la pestaña recibe un punto. Al cerrar una pestaña o el programa con cambios sin "
+                 "guardar, ahora se pregunta antes; hasta ahora se perdían sin aviso.",
+                 "Show Experiment", "wn_unsaved.svg"),
                 ("feature", "Control de errores al guardar",
                  "Los ajustes de máquina muy fuera de lo habitual para esta máquina (p.&nbsp;ej. 35 en vez de "
                  "3.5 bar) se muestran antes de guardar. Puedes volver a corregir o guardar igualmente.",
@@ -238,9 +302,17 @@ RELEASES = [
                  "Botón redondo <b>?</b> en estas pantallas", "wn_help.svg"),
                 ("feature", "Búsqueda en la ayuda - \"¿Dónde encuentro…?\"",
                  "Escribe tu pregunta con tus propias palabras y obtén la página de ayuda adecuada, en inglés, alemán "
-                 "o español. <b>Take me there</b> abre la pantalla. Los usuarios con acceso a IA también pueden usar "
-                 "<b>Ask AI</b>.",
+                 "o español. <b>Take me there</b> abre la pantalla.",
                  "Barra lateral → <b>Help (F1)</b> o la tecla F1", "wn_help_search.svg"),
+                ("feature", "Buscar en Novedades",
+                 "¿Sabes que existe una función pero no desde cuándo? Escribe una palabra en el campo de búsqueda "
+                 "encima de la lista de versiones: se busca en todas las versiones a la vez, en inglés, alemán y "
+                 "español. Las versiones con resultados muestran cuántos; un clic salta a ellos.",
+                 "Barra lateral → Account → <b>What's new</b> → campo de búsqueda", "wn_whats_new_search.svg"),
+                ("feature", "Novedades en PDF",
+                 "Guarda las novedades de una versión como PDF, para imprimirlas o enviarlas a compañeros. Cada "
+                 "tema queda junto en una sola página.",
+                 "Barra lateral → Account → <b>What's new</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
                 ("h", "Backlog y All Experiments"),
                 ("feature", "Backlog en pantallas anchas",
                  "En monitores grandes las cuatro columnas se muestran una al lado de otra con toda la altura.",
@@ -249,6 +321,12 @@ RELEASES = [
                  "Una serie de ensayos borrada se puede recuperar durante 90 días. Puede borrar quien puede mover la "
                  "serie en el Backlog (en To Be Cleaned solo superusuarios).",
                  "Barra lateral → Superuser → <b>Recycle Bin</b>", "wn_recycle_bin.svg"),
+                ("feature", "Mirar dentro de la papelera",
+                 "¿No sabes qué contiene una serie borrada? Haz doble clic: se abre en Show Experiment solo para "
+                 "lectura. En la barra amarilla eliges <b>Restore for good</b>, <b>Back to Recycle Bin</b> o "
+                 "<b>Delete permanently</b>. Cerrar la pestaña la devuelve a la papelera, con su fecha de borrado "
+                 "original.",
+                 "Barra lateral → Superuser → <b>Recycle Bin</b> → doble clic en una serie", "wn_recycle_preview.svg"),
                 ("feature", "All Experiments usa toda la ventana",
                  "La lista ocupa todo el ancho y alto de la ventana - las últimas columnas se ven sin desplazarse "
                  "hacia los lados - y se muestra más grande en pantallas grandes.",
@@ -263,10 +341,12 @@ RELEASES = [
                  "<b>New spool(s)</b> empieza sin selección y después salta directamente a las bobinas nuevas. "
                  "Estas pasan automáticamente a la cola de etiquetas (casilla en el diálogo).",
                  "Yarn Stock → <b>New spool(s)</b>", "wn_new_spools.svg"),
-                ("feature", "Inventario",
-                 "Revisa una estantería bobina por bobina escaneando cada etiqueta. Las bobinas en otro lugar se "
-                 "reubican al momento; las que faltan solo se dan de baja al terminar, tras preguntar.",
-                 "Yarn Stock → Rack lookup → <b>Start stock take…</b>", "wn_stock_take.svg"),
+                ("feature", "Inventario - ubicación por ubicación",
+                 "Un superusuario inicia una ronda de inventario (y puede excluir ubicaciones). Cada ubicación es una "
+                 "casilla: gris = pendiente, verde = todo correcto, naranja = diferencias. Haz clic en una y escanea "
+                 "sus bobinas (¿sin etiqueta? doble clic en la lista). <b>Results</b> muestra qué se encontró dónde, exportable a Excel. Las bobinas en otro "
+                 "lugar se reubican al momento; las que faltan solo se dan de baja al terminar, tras preguntar.",
+                 "Yarn Stock → Rack lookup → <b>Stock take…</b>", "wn_stock_take.svg"),
                 ("feature", "Historial de bobinas",
                  "Se registra cada cambio de una bobina: creada, cambiada, reubicada, dada de baja, inventario. Sin "
                  "selección se ve todo el lote, incluidas las bobinas agotadas.",
@@ -276,6 +356,12 @@ RELEASES = [
                  "pregunta ahora antes de perder cambios no guardados. Ayuda en tres idiomas: botón redondo arriba "
                  "a la derecha.",
                  "Yarn Stock → <b>Go to spool #</b>", None),
+                ("h", "General"),
+                ("feature", "Todos los textos en inglés",
+                 "Los mensajes, botones, menús y textos de estado que aún estaban en alemán ahora están en inglés en "
+                 "todas partes - p.&nbsp;ej. el menú contextual del Backlog dice <b>Reassign yarn…</b>. Los términos de "
+                 "laboratorio como Kurzhocker o Langwelle se mantienen.",
+                 "Todo el programa", None),
             ],
         },
     },
@@ -288,3 +374,14 @@ WHERE_LABEL = {"en": "Where:", "de": "Wo:", "es": "Dónde:"}
 VERSION_LABEL = {"en": "Version", "de": "Version", "es": "Versión"}
 CURRENT_LABEL = {"en": "in progress", "de": "in Arbeit", "es": "en curso"}
 CLOSE = {"en": "Close", "de": "Schliessen", "es": "Cerrar"}
+SEARCH_PLACEHOLDER = {"en": "Search all versions…", "de": "Alle Versionen durchsuchen…",
+                      "es": "Buscar en todas las versiones…"}
+SEARCH_RESULTS = {"en": "{n} result(s) for \"{q}\"", "de": "{n} Treffer für \"{q}\"",
+                  "es": "{n} resultado(s) para \"{q}\""}
+SEARCH_NONE = {"en": "Nothing found for \"{q}\". Try another word - English, German and Spanish all work.",
+               "de": "Nichts gefunden für \"{q}\". Versuche ein anderes Wort - Englisch, Deutsch und Spanisch gehen.",
+               "es": "No se encontró nada para \"{q}\". Prueba otra palabra - sirven inglés, alemán y español."}
+HITS_LABEL = {"en": "hits", "de": "Treffer", "es": "resultados"}
+PDF_TOOLTIP = {"en": "Save the shown version as PDF (e.g. to print or send it)",
+               "de": "Die angezeigte Version als PDF speichern (z. B. zum Drucken oder Verschicken)",
+               "es": "Guardar la versión mostrada como PDF (p. ej. para imprimirla o enviarla)"}

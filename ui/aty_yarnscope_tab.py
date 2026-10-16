@@ -228,7 +228,7 @@ def _create_aty_yarnscope_tab_if_needed(self):
     self._aty_hist_table.verticalHeader().setDefaultSectionSize(22)
     self._aty_hist_table.verticalHeader().setVisible(False)
     dist_v.addWidget(self._aty_hist_table, 1)
-    self._aty_sub_tabs.addTab(dist_w, "Verteilung")
+    self._aty_sub_tabs.addTab(dist_w, "Distribution")
     self._aty_feature_combo.currentIndexChanged.connect(lambda _: _aty_redraw_histogram(self))
 
     # ── Sub-Tab 1: Garnspiegel ────────────────────────────────────────────
@@ -362,7 +362,7 @@ def _create_aty_yarnscope_tab_if_needed(self):
         "number combining frequency, height, and width, self-normalizing so it stays in a readable range "
         "instead of a raw &micro;m&middot;mm figure.<br>"
         "<b>Bin1/Bin2 (Kurzhocker/Langwelle)</b> = same 100&nbsp;&micro;m/mm height&#8202;/&#8202;length split as the "
-        "Verteilung tab, recomputed on these (more accurate) loops &ndash; so the percentages won't exactly "
+        "Distribution tab, recomputed on these (more accurate) loops &ndash; so the percentages won't exactly "
         "match that tab's numbers.<br>"
         "<b>Core CV @1m / @20m</b> = core unevenness at two length scales (meter-to-meter vs. tens-of-metres "
         "drift) &ndash; a simplified take on the classic \"CV at different cut lengths\" idea.<br>"
@@ -617,12 +617,10 @@ def _create_aty_yarnscope_tab_if_needed(self):
 
     # ── Bin-Erklärung ─────────────────────────────────────────────────────
     lbl_bin_info = QLabel(
-        "<b>Kurzhocker (Bin 1):</b> kurze, steile Dickstelle – das Garn ist auf "
-        "wenigen Millimetern deutlich dicker als normal. Entsteht typischerweise "
-        "durch Schlaufen oder Knoten im ATY-Prozess.  "
-        "<b>Langwelle (Bin 2):</b> lange, flache Dickstelle – das Garn ist über "
-        "a longer section slightly thicker. Typical for irregularities "
-        "im Garnzug oder Luftdruck."
+        "<b>Short bump (bin 1):</b> short, steep thick place – the yarn is clearly thicker than normal "
+        "over a few millimetres. Typically caused by loops or knots in the ATY process.\u2002\u2002<b>Long "
+        "wave (bin 2):</b> long, flat thick place – the yarn is slightly thicker over a longer section. "
+        "Typical for irregularities in yarn tension or air pressure."
     )
     lbl_bin_info.setStyleSheet(
         "color:#999; font-size:10px; background:#181818;"
@@ -646,7 +644,7 @@ def _create_aty_yarnscope_tab_if_needed(self):
     self._aty_btn_analyze.setFixedHeight(30); self._aty_btn_analyze.setEnabled(False)
     self._aty_btn_analyze.clicked.connect(lambda: _aty_on_analyze(self))
     brow.addWidget(self._aty_btn_analyze)
-    self._aty_btn_save = QPushButton("In DB speichern")
+    self._aty_btn_save = QPushButton("Save to DB")
     self._aty_btn_save.setStyleSheet(
         "QPushButton{background:#2e7d32;color:#fff;border-radius:4px;"
         "font-size:12px;padding:4px 12px;border:none;}"
@@ -721,7 +719,7 @@ def _aty_build_control_panel(self):
     self._aty_spin_start.setStyleSheet("QDoubleSpinBox{background:#2a2a2a;color:#ddd;border:1px solid #444;padding:2px 4px;font-size:11px;}")
     row1.addWidget(self._aty_spin_start)
 
-    row1.addWidget(_lbl("Zeilen:"))
+    row1.addWidget(_lbl("Rows:"))
     self._aty_spin_turns = QSpinBox()
     self._aty_spin_turns.setRange(1,20); self._aty_spin_turns.setValue(10)
     self._aty_spin_turns.setFixedWidth(50)
@@ -803,7 +801,7 @@ def _aty_build_control_panel(self):
             return btn
 
         # ── Sichtbarkeit ──────────────────────────────────────────────────
-        vis_box = QGroupBox("Sichtbarkeit (Di/Dü ein-/ausschalten)")
+        vis_box = QGroupBox("Visibility (show/hide thick/thin places)")
         vis_box.setStyleSheet(
             "QGroupBox{color:#aaa;font-size:11px;border:1px solid #444;"
             "border-radius:3px;margin-top:4px;}"
@@ -811,7 +809,7 @@ def _aty_build_control_panel(self):
         vg = QGridLayout(vis_box); vg.setSpacing(3)
         lbl_di = QLabel("Dick:"); lbl_di.setStyleSheet("color:#ffaaaa;font-size:10px;")
         vg.addWidget(lbl_di, 0, 0)
-        lbl_du = QLabel("Dünn:"); lbl_du.setStyleSheet("color:#aaaaff;font-size:10px;")
+        lbl_du = QLabel("Thin:"); lbl_du.setStyleSheet("color:#aaaaff;font-size:10px;")
         vg.addWidget(lbl_du, 1, 0)
         for i, k in enumerate(di_keys):
             chk = QCheckBox(k)
@@ -849,7 +847,7 @@ def _aty_build_control_panel(self):
             cg.addWidget(_make_color_btn("Di", k), 0, 2 + i*2)
 
         # Dü-Zeile
-        cg.addWidget(QLabel("Dü:"), 1, 0)
+        cg.addWidget(QLabel("Thin:"), 1, 0)
         for i, k in enumerate(due_keys):
             lbl = QLabel(k); lbl.setStyleSheet("color:#ccc;font-size:9px;")
             cg.addWidget(lbl, 1, 1 + i*2)
@@ -996,7 +994,7 @@ def _aty_on_trial_selected(self, row: int):
         self._aty_lbl_file.setText(f"📄 {tdms.name}")
         self._aty_btn_analyze.setEnabled(True)
     else:
-        self._aty_lbl_file.setText(f"V{vno} – kein TDMS-File")
+        self._aty_lbl_file.setText(f"V{vno} – no TDMS file")
         self._aty_btn_analyze.setEnabled(False)
     if tid is not None and tid in self._aty_cache:
         entry = self._aty_cache[tid]
@@ -1637,7 +1635,7 @@ def _aty_on_analyze(self):
         arr, ell = read_aty_signal(str(tdms))
         mm_pp = float(read_step_mm_from_tdms(str(tdms)) or 0.25)
         if arr is None or len(arr) == 0:
-            self._aty_lbl_status.setText("Fehler: Kein Signal.")
+            self._aty_lbl_status.setText("Error: no signal.")
             return
 
         self._aty_lbl_status.setText("Analysiere Dickstellen…")
@@ -1673,7 +1671,7 @@ def _aty_on_analyze(self):
 
     except Exception as e:
         traceback.print_exc()
-        self._aty_lbl_status.setText(f"Fehler: {e}")
+        self._aty_lbl_status.setText(f"Error: {e}")
     finally:
         self._aty_btn_analyze.setEnabled(True)
 
@@ -1991,7 +1989,7 @@ def _aty_update_metrics(self, db_vals: dict):
             vv = float(v)
             return f"{vv:,.{dec}f}".replace(",","'") if math.isfinite(vv) else "-"
         except: return "-"
-    l1 = f"Laenge: {_f('TotalLen_m')} m  |  Kurzhocker: {_f('N_B1')} /100m  |  Langwelle: {_f('N_B2')} /100m"
+    l1 = f"Length: {_f('TotalLen_m')} m  |  Kurzhocker: {_f('N_B1')} /100m  |  Langwelle: {_f('N_B2')} /100m"
     l2 = f"Ø Len B1: {_f('AvgLen_B1',2)} mm  |  Ø Len B2: {_f('AvgLen_B2',2)} mm  |  Ø Hgt B1: {_f('AvgHeight_B1',1)} um  |  Ø Hgt B2: {_f('AvgHeight_B2',1)} um"
     try: self._aty_lbl_metrics.setText(l1 + "\n" + l2)
     except: pass
@@ -2018,8 +2016,8 @@ def _aty_redraw_histogram(self):
     ax.bar(centers-width/2, c1, width=width, color="#e07b00", alpha=0.85, label="Bin 1 – Kurzhocker")
     ax.bar(centers+width/2, c2, width=width, color="#0e8a8a", alpha=0.85, label="Bin 2 – Langwelle")
     ax.set_xlabel(label, color="#aaa", fontsize=7)
-    ax.set_ylabel("Anzahl / 100 m", color="#aaa", fontsize=7)
-    ax.set_title(f"Verteilung: {label}", color="#ccc", fontsize=8)
+    ax.set_ylabel("Count / 100 m", color="#aaa", fontsize=7)
+    ax.set_title(f"Distribution: {label}", color="#ccc", fontsize=8)
     ax.tick_params(colors="#888", labelsize=6)
     for sp in ax.spines.values(): sp.set_color("#444")
     ax.legend(fontsize=6, framealpha=0.5, facecolor="#222", edgecolor="#555", labelcolor="#ddd")
@@ -2074,9 +2072,9 @@ def _aty_on_save(self):
             self._aty_btn_save.setEnabled(False)
             _aty_populate_trial_list(self)
         else:
-            self._aty_lbl_status.setText("Speichern fehlgeschlagen.")
+            self._aty_lbl_status.setText("Saving failed.")
     except Exception as e:
-        self._aty_lbl_status.setText(f"Fehler: {e}")
+        self._aty_lbl_status.setText(f"Error: {e}")
 
 def _aty_open_batch(self):
     try:
@@ -2097,7 +2095,7 @@ def _aty_open_batch(self):
         QTimer.singleShot(50, mw.aty_batch._init_series_state)
     except Exception as e:
         from PySide6.QtWidgets import QMessageBox
-        QMessageBox.critical(self, "ATY Batch", f"Fehler: {e}")
+        QMessageBox.critical(self, "ATY Batch", f"Error: {e}")
 
 
 # ---------------------------------------------------------------------------

@@ -40,10 +40,10 @@ def _fmt_time(created) -> str:
         dt = datetime.fromisoformat(str(created)[:19].replace("T", " ")) \
             if isinstance(created, str) else created
         s = int((datetime.now() - dt).total_seconds())
-        if s < 60:   return "Gerade eben"
-        if s < 3600: return f"vor {s // 60} Min."
-        if s < 86400: return f"vor {s // 3600} Std."
-        if s < 7 * 86400: return f"vor {s // 86400} Tag(en)"
+        if s < 60:   return "Just now"
+        if s < 3600: return f"{s // 60} min ago"
+        if s < 86400: return f"{s // 3600} h ago"
+        if s < 7 * 86400: return f"{s // 86400} day(s) ago"
         return dt.strftime("%d.%m.%Y %H:%M")
     except Exception:
         return str(created)[:16]
@@ -270,7 +270,7 @@ class NotificationPanel(QWidget):
         self._badge.setVisible(False)
         hl.addWidget(self._badge, 0, Qt.AlignVCenter)
 
-        self._btn_all = QPushButton("Alle gelesen")
+        self._btn_all = QPushButton("All read")
         self._btn_all.setStyleSheet(
             "QPushButton{background:rgba(255,255,255,0.13);"
             "border:1px solid rgba(255,255,255,0.28);border-radius:7px;"
@@ -337,14 +337,14 @@ class NotificationPanel(QWidget):
 
         # Header-Badge
         if unread > 0:
-            self._badge.setText(f"{unread} neu")
+            self._badge.setText(f"{unread} new")
             self._badge.setVisible(True)
         else:
             self._badge.setVisible(False)
         self._btn_all.setVisible(unread > 0)
 
         if not notifications:
-            lbl = QLabel("Keine Notifications vorhanden.")
+            lbl = QLabel("No notifications.")
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet(
                 f"color:{_C_SUB};font-size:13px;padding:36px 16px;"
@@ -367,7 +367,7 @@ class NotificationPanel(QWidget):
 
             scroll_h = min(len(notifications) * _ITEM_H + 8, _MAX_SCROLL_H)
             self._scroll.setFixedHeight(scroll_h)
-            self._footer_lbl.setText(f"{unread} ungelesen · {len(notifications)} gesamt")
+            self._footer_lbl.setText(f"{unread} ungelesen · {len(notifications)} total")
 
         self._items_widget = container
         self._scroll.setWidget(container)
@@ -388,12 +388,12 @@ class NotificationPanel(QWidget):
                 if isinstance(
                     self._items_widget.layout().itemAt(i).widget(), _NotifItem)
             )
-            self._footer_lbl.setText(f"{unread} ungelesen · {total} gesamt")
+            self._footer_lbl.setText(f"{unread} ungelesen · {total} total")
             if unread == 0:
                 self._badge.setVisible(False)
                 self._btn_all.setVisible(False)
             else:
-                self._badge.setText(f"{unread} neu")
+                self._badge.setText(f"{unread} new")
         except Exception:
             pass
 

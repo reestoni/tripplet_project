@@ -628,7 +628,7 @@ class CreateExperimentScreen(QWidget):
         # Default: number is auto-generated
         self.txtExperimentNumber.setReadOnly(True)
         self.txtExperimentNumber.setPlaceholderText(
-            "wird automatisch vergeben (000)")
+            "assigned automatically (000)")
 
         # Legacy import mode: allow manual Experiment ID entry (e.g. 2019-73-002)
         if self.mode == "legacy":
@@ -825,7 +825,7 @@ class CreateExperimentScreen(QWidget):
         self.treeJet = QTreeWidget()
         self.treeJet.setHeaderHidden(False)
         self.treeJet.setColumnCount(8)
-        self.treeJet.setHeaderLabels(["Jet", "Luftbohrung\n(mm)", "Winkel Luftbohrung\n(°)", "Garnkanal-Breite\n(mm)", "Luftverbrauch\n(Nm³/h)", "Entwicklungsname", "Titer Range", "Ideal Titer"])
+        self.treeJet.setHeaderLabels(["Jet", "Luftbohrung\n(mm)", "Winkel Luftbohrung\n(°)", "Yarn channel width\n(mm)", "Luftverbrauch\n(Nm³/h)", "Entwicklungsname", "Titer Range", "Ideal Titer"])
         self.treeJet.setIndentation(18)
         self.treeJet.setExpandsOnDoubleClick(True)
         self.treeJet.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -950,7 +950,7 @@ class CreateExperimentScreen(QWidget):
         # Button-Leiste unter tblJets
         jets_btn_row = QHBoxLayout()
         jets_btn_row.setSpacing(6)
-        self.butJetCopy = QPushButton("Markierte kopieren")
+        self.butJetCopy = QPushButton("Copy selected")
         self.butJetMoveUp = QPushButton("Up")
         self.butJetMoveDown = QPushButton("Down")
         for b in (self.butJetCopy, self.butJetMoveUp, self.butJetMoveDown):
@@ -1553,7 +1553,7 @@ class CreateExperimentScreen(QWidget):
         resolved = self._resolve_experiments_table_and_columns()
         if not resolved:
             QMessageBox.warning(self, "Existing Experiment",
-                                "Experimente‑Tabelle/Spalten nicht gefunden.")
+                                "Experiments table/columns not found.")
             return
         table, cols = resolved
         try:
@@ -1588,7 +1588,7 @@ class CreateExperimentScreen(QWidget):
                 self.cmbExistingExperiment.setCurrentIndex(-1)
         except Exception as e:
             QMessageBox.critical(self, "Existing Experiment",
-                                 f"Fehler beim Laden:\n{e}")
+                                 f"Error while loading:\n{e}")
 
     def _load_trials_for_selection(self, exp_id: int, series_id: int):
         # UI leeren
@@ -1676,7 +1676,7 @@ class CreateExperimentScreen(QWidget):
         table = "tblTrialSeries"
         if not table_exists(table):
             QMessageBox.warning(self, "Trial Series",
-                                "Tabelle 'tblTrialSeries' nicht gefunden.")
+                                "Table 'tblTrialSeries' not found.")
             return
         cmap = get_columns_map(table)
         col_id = resolve_field(["ID"], cmap) or "ID"
@@ -2189,14 +2189,14 @@ class CreateExperimentScreen(QWidget):
         table = "tblMaschine"
         if not table_exists(table):
             QMessageBox.warning(
-                self, "Machine", "Tabelle 'tblMaschine' nicht gefunden.")
+                self, "Machine", "Table 'tblMaschine' not found.")
             return
         cmap = get_columns_map(table)
         col_id = resolve_field(["ID"], cmap) or "ID"
         col_name = resolve_field(["Maschine", "Machine", "Name"], cmap)
         if not col_name:
             QMessageBox.warning(
-                self, "Machine", "Spalte 'Maschine' nicht gefunden.")
+                self, "Machine", "Column 'Maschine' not found.")
             return
 
         # Optionales Joker-Flag erkennen (tblMaschine.IsJoker)
@@ -2242,7 +2242,7 @@ class CreateExperimentScreen(QWidget):
         table = "tblLabMachines"
         if not table_exists(table):
             QMessageBox.warning(self, "Lab Machines",
-                                "Tabelle 'tblLabMachines' nicht gefunden.")
+                                "Table 'tblLabMachines' not found.")
             return
 
         cmap = get_columns_map(table)
@@ -2631,7 +2631,7 @@ class CreateExperimentScreen(QWidget):
         selected_trial_ids = self._get_checked_trial_ids()
         if has_per_trial and not selected_trial_ids:
             QMessageBox.information(
-                self, "Save", "Bitte mindestens einen Trial anhaken.")
+                self, "Save", "Please tick at least one trial.")
             return
 
         try:
@@ -2767,14 +2767,13 @@ class CreateExperimentScreen(QWidget):
             if any(jet_air_stats.values()):
                 if jet_air_stats["physical_jets"] == 0:
                     msg_lines.append(
-                        "Jet Air Consumption: keine physische Düse (JetID) in dieser Series gefunden — "
-                        "es wurden keine Zeilen angelegt.")
+                        "Jet Air Consumption: no physical jet (JetID) found in this series — no rows were created.")
                 else:
                     msg_lines.append(
-                        f"Jet Air Consumption: {jet_air_stats['created']} Zeile(n) erstellt, "
-                        f"{jet_air_stats['skipped_exists']} bereits vorhanden, "
-                        f"{jet_air_stats['physical_jets']} physische Düse(n) gefunden"
-                        + (f", {jet_air_stats['no_user']} übersprungen (kein User)"
+                        f"Jet Air Consumption: {jet_air_stats['created']} row(s) created, "
+                        f"{jet_air_stats['skipped_exists']} already there, "
+                        f"{jet_air_stats['physical_jets']} physical jet(s) found"
+                        + (f", {jet_air_stats['no_user']} skipped (no user)"
                            if jet_air_stats['no_user'] else "") + ".")
             QMessageBox.information(self, "Saved", "\n".join(msg_lines))
         except Exception as e:
@@ -2806,7 +2805,7 @@ class CreateExperimentScreen(QWidget):
         # Trial-Tabelle + Spalten-Map
         trial_table = "tblTrial"
         if not table_exists(trial_table):
-            QMessageBox.critical(self, "Save", "Tabelle 'tblTrial' nicht gefunden.")
+            QMessageBox.critical(self, "Save", "Table 'tblTrial' not found.")
             return
         tr_cols = get_columns_map(trial_table)
         tr_sid     = resolve_field(["TrialSeriesID", "SerieID", "SeriesID"], tr_cols) or "TrialSeriesID"
@@ -3008,14 +3007,14 @@ class CreateExperimentScreen(QWidget):
             else:
                 QMessageBox.information(
                     self, "Gespeichert",
-                    f"{len(new_trial_ids)} Trial(s) erfolgreich angelegt.")
+                    f"{len(new_trial_ids)} trial(s) created.")
 
         except Exception as e:
             try:
                 cn.rollback()
             except Exception:
                 pass
-            QMessageBox.critical(self, "Fehler", f"Trials konnten nicht angelegt werden:\n{e}")
+            QMessageBox.critical(self, "Error", f"The trials could not be created:\n{e}")
 
 
     def _check_safe(self):
@@ -3248,7 +3247,7 @@ class CreateExperimentScreen(QWidget):
             self.txtExperimentNumber.clear()
             self.strExperimentData[3] = ""
             QMessageBox.warning(self, "Experiment Number",
-                                "Experimente‑Tabelle bzw. Spalten nicht gefunden.")
+                                "Experiments table or columns not found.")
             return
         table, cols = resolved
         try:
@@ -3278,7 +3277,7 @@ class CreateExperimentScreen(QWidget):
             self.txtExperimentNumber.clear()
             self.strExperimentData[3] = ""
             QMessageBox.warning(self, "Experiment Number",
-                                f"Fehler beim Lesen aus {table}:\n{e}")
+                                f"Error reading from {table}:\n{e}")
 
     def _resolve_next_free_experiment_number(self, cur, exp_table: str, cols: dict,
                                               year: str, pg, ot, preferred_no_txt: str) -> str:
@@ -3818,7 +3817,7 @@ class CreateExperimentScreen(QWidget):
         table = "tblMachineFields"
         if not table_exists(table):
             QMessageBox.warning(
-                self, "Machine", "Tabelle 'tblMachineFields' nicht gefunden.")
+                self, "Machine", "Table 'tblMachineFields' not found.")
             self._check_machine()
             self._check_safe()
             return
@@ -4166,7 +4165,7 @@ class CreateExperimentScreen(QWidget):
             if raw == "":
                 QMessageBox.information(
                     self, "Lab Machine",
-                    f"Bitte eine oder mehrere {caption}-Werte angeben (kommagetrennt, z.B. 4, 5, 6).")
+                    f"Please enter one or more {caption} values (comma-separated, e.g. 4, 5, 6).")
                 return
             parts = [p.strip() for p in raw.replace(";", ",").split(",") if p.strip() != ""]
             vals: List[float] = []
@@ -4179,7 +4178,7 @@ class CreateExperimentScreen(QWidget):
             if bad:
                 QMessageBox.warning(
                     self, "Lab Machine",
-                    f"Ungültige Werte: {', '.join(bad)}. Bitte nur Zahlen, kommagetrennt.")
+                    f"Invalid values: {', '.join(bad)}. Numbers only, comma-separated.")
                 return
             if not vals:
                 return
@@ -4294,7 +4293,7 @@ class CreateExperimentScreen(QWidget):
             if raw == "":
                 # Safety (Button sollte eigentlich disabled sein)
                 QMessageBox.information(
-                    self, "Lab Machine", "Bitte Additional-Wert angeben.")
+                    self, "Lab Machine", "Please enter an additional value.")
                 return
             try:
                 add_val = float(raw.replace(",", "."))
@@ -4578,14 +4577,14 @@ class CreateExperimentScreen(QWidget):
         exp_res = self._resolve_experiments_table_and_columns()
         if not exp_res:
             QMessageBox.critical(
-                self, "Save", "Experimente‑Tabelle nicht gefunden/inkomplett.")
+                self, "Save", "Experiments table not found/incomplete.")
             return
         exp_table, exp_cols = exp_res
 
         ts_table = "tblTrialSeries"
         if not table_exists(ts_table):
             QMessageBox.critical(
-                self, "Save", "Tabelle 'tblTrialSeries' nicht gefunden.")
+                self, "Save", "Table 'tblTrialSeries' not found.")
             return
         ts_cols = get_columns_map(ts_table)
         ts_exp = resolve_field(
@@ -4596,7 +4595,7 @@ class CreateExperimentScreen(QWidget):
         trial_table = "tblTrial"
         if not table_exists(trial_table):
             QMessageBox.critical(
-                self, "Save", "Tabelle 'tblTrial' nicht gefunden.")
+                self, "Save", "Table 'tblTrial' not found.")
             return
         tr_cols = get_columns_map(trial_table)
         tr_sid = resolve_field(
@@ -5682,7 +5681,7 @@ class CreateExperimentScreen(QWidget):
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Prefill Jets",
-                                f"Jets konnten nicht geladen werden:\n{e}")
+                                f"The jets could not be loaded:\n{e}")
         # Focus tabs & recompute icons
         try:
             self.tabs.setCurrentIndex(2)  # Jet tab

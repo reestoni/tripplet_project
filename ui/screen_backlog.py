@@ -851,7 +851,7 @@ class BacklogDnDTable(QTableWidget):
         act_rename = menu.addAction("Rename trial series…")
         act_rename.setEnabled(can_rename)
         menu.addSeparator()
-        act_yarn = menu.addAction("🧵  Garn neu zuweisen…")
+        act_yarn = menu.addAction("🧵  Reassign yarn…")
         act_yarn.setEnabled(can_reassign)
         act_machine = menu.addAction("⚙️  Change machine…")
         act_machine.setEnabled(can_reassign)
@@ -885,25 +885,25 @@ class BacklogDnDTable(QTableWidget):
             self._ctx_change_status(int(series_id), it)
         elif chosen == act_rename:
             if not can_rename:
-                QMessageBox.warning(self, "Keine Berechtigung",
+                QMessageBox.warning(self, "No permission",
                                     "You do not have permission to rename this trial series.")
                 return
             self._ctx_rename_trialseries(int(series_id), it)
         elif chosen == act_yarn:
             if not can_reassign:
-                QMessageBox.warning(self, "Keine Berechtigung",
+                QMessageBox.warning(self, "No permission",
                                     "Only superusers may change the yarn of a trial series.")
                 return
             self._ctx_reassign_yarn(int(series_id), it)
         elif chosen == act_machine:
             if not can_reassign:
-                QMessageBox.warning(self, "Keine Berechtigung",
+                QMessageBox.warning(self, "No permission",
                                     "Only superusers may change the machine of a trial series.")
                 return
             self._ctx_reassign_machine(int(series_id), it)
         elif chosen == act_delete:
             if not can_delete:
-                QMessageBox.warning(self, "Keine Berechtigung",
+                QMessageBox.warning(self, "No permission",
                                     "Only superusers may delete a trial series.")
                 return
             exp_pk = it.data(ROLE_EXP_PK)
@@ -1168,12 +1168,12 @@ class BacklogDnDTable(QTableWidget):
                 [series_id],
             )
         except Exception as e:
-            QMessageBox.critical(self, "Fehler",
-                                 f"Garndaten konnten nicht geladen werden:\n{e}")
+            QMessageBox.critical(self, "Error",
+                                 f"Yarn data could not be loaded:\n{e}")
             return
 
         if not yarn_rows:
-            QMessageBox.information(self, "Keine Garndaten",
+            QMessageBox.information(self, "No yarn data",
                                     "This trial series has no yarn entries.")
             return
 
@@ -1193,7 +1193,7 @@ class BacklogDnDTable(QTableWidget):
 
         # ── Dialog aufbauen ───────────────────────────────────────────────
         dlg = QDialog(self)
-        dlg.setWindowTitle(f"Garn neu zuweisen — {series_name}")
+        dlg.setWindowTitle(f"Reassign yarn — {series_name}")
         dlg.setMinimumWidth(600)
         dlg.setMinimumHeight(300)
         lay = QVBoxLayout(dlg)
@@ -1208,7 +1208,7 @@ class BacklogDnDTable(QTableWidget):
 
         # Spalten: Ply-Label | Aktuelles Garn | Neues Garn | Löschen
         tbl = QTableWidget(0, 4, dlg)
-        tbl.setHorizontalHeaderLabels(["Ply", "Aktuelles Garn", "Neues Garn", ""])
+        tbl.setHorizontalHeaderLabels(["Ply", "Current yarn", "New yarn", ""])
         hdr = tbl.horizontalHeader()
         hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         hdr.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -1266,7 +1266,7 @@ class BacklogDnDTable(QTableWidget):
                 active = [r for r in rows_state if not r["deleted"]]
                 if len(active) <= 1:
                     QMessageBox.warning(dlg, "Not possible",
-                                        "Es muss mindestens ein Ply vorhanden bleiben.")
+                                        "At least one ply must remain.")
                     return
                 s["deleted"] = True
                 for col in range(tbl.columnCount()):
@@ -1437,8 +1437,8 @@ class BacklogDnDTable(QTableWidget):
                             changes_made += 1
 
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Speichern",
-                                 f"Garndaten konnten nicht gespeichert werden:\n{e}")
+            QMessageBox.critical(self, "Error while saving",
+                                 f"Yarn data could not be saved:\n{e}")
             return
 
         # ── Feature-Tracking ──────────────────────────────────────────────
@@ -1454,7 +1454,7 @@ class BacklogDnDTable(QTableWidget):
 
         if changes_made:
             QMessageBox.information(
-                self, "Garn aktualisiert",
+                self, "Yarn updated",
                 f"{changes_made} change(s) saved successfully."
             )
         else:
@@ -1483,8 +1483,8 @@ class BacklogDnDTable(QTableWidget):
             cur_machine_id   = int(row[0]["MachineID"]) if row and row[0]["MachineID"] else None
             cur_machine_name = str(row[0]["MachineName"] or "") if row else ""
         except Exception as e:
-            QMessageBox.critical(self, "Fehler",
-                                 f"Maschinendaten konnten nicht geladen werden:\n{e}")
+            QMessageBox.critical(self, "Error",
+                                 f"Machine data could not be loaded:\n{e}")
             return
 
         # Alle Maschinen laden
@@ -1495,8 +1495,8 @@ class BacklogDnDTable(QTableWidget):
             machines = []
 
         if not machines:
-            QMessageBox.information(self, "Keine Maschinen",
-                                    "Keine Maschinen in der Datenbank gefunden.")
+            QMessageBox.information(self, "No machines",
+                                    "No machines found in the database.")
             return
 
         machine_ids   = [int(r["ID"]) for r in machines]
@@ -1509,7 +1509,7 @@ class BacklogDnDTable(QTableWidget):
 
         lbl = QLabel(
             f"<b>{series_name}</b><br>"
-            f"Aktuelle Maschine: <i>{cur_machine_name or '—'}</i>"
+            f"Current machine: <i>{cur_machine_name or '—'}</i>"
         )
         lbl.setWordWrap(True)
         lay.addWidget(lbl)
@@ -1545,8 +1545,8 @@ class BacklogDnDTable(QTableWidget):
                 [new_machine_id, series_id],
             )
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Speichern",
-                                 f"Maschine konnte nicht gespeichert werden:\n{e}")
+            QMessageBox.critical(self, "Error while saving",
+                                 f"The machine could not be saved:\n{e}")
             return
 
         # Feature-Tracking
@@ -1562,7 +1562,7 @@ class BacklogDnDTable(QTableWidget):
 
         new_name = machine_names[new_idx]
         QMessageBox.information(
-            self, "Maschine aktualisiert",
+            self, "Machine updated",
             f"Machine successfully changed to '{new_name}'."
         )
         try:
@@ -1597,7 +1597,7 @@ class BacklogDnDTable(QTableWidget):
             QMessageBox.critical(
                 self,
                 "Rename trial series",
-                f"Konnte den neuen Namen nicht speichern.\n\n{e}",
+                f"Could not save the new name.\n\n{e}",
             )
             return
 
@@ -2790,7 +2790,7 @@ class BacklogScreen(QWidget):
         try:
             self.on_open_experiment(int(exp_pk), int(series_id), exp_id_txt)
         except Exception as e:
-            QMessageBox.critical(self, "Fehler", str(e))
+            QMessageBox.critical(self, "Error", str(e))
 
     def _load_status_into(self, table: BacklogDnDTable, status_id: int):
         """Lädt alle TrialSeries für einen Status in die gegebene Tabelle."""
@@ -3018,8 +3018,8 @@ class BacklogScreen(QWidget):
         if user_id is None:
             QMessageBox.warning(
                 self,
-                "Keine Berechtigung",
-                "Du bist nicht eingeloggt. Bitte zuerst einloggen.",
+                "No permission",
+                "You are not logged in. Please log in first.",
             )
             return
 
@@ -3043,7 +3043,7 @@ class BacklogScreen(QWidget):
             if not is_owner:
                 QMessageBox.warning(
                     self,
-                    "Keine Berechtigung",
+                    "No permission",
                     "Only the owner or a superuser may change the status. "
                     "Exception: Items with status 'Backlog' may be taken in progress by all users.",
                 )
@@ -3238,7 +3238,7 @@ class MachineSelectDialog(QDialog):
 
         btn_row = QHBoxLayout()
         self._but_ok = QPushButton("OK", self)
-        self._but_cancel = QPushButton("Abbrechen", self)
+        self._but_cancel = QPushButton("Cancel", self)
         self._but_ok.clicked.connect(self.accept)
         self._but_cancel.clicked.connect(self.reject)
         btn_row.addWidget(self._but_ok)
@@ -3301,7 +3301,7 @@ class RenameTrialSeriesDialog(QDialog):
         btn_row.addItem(QSpacerItem(
             0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
         but_ok = QPushButton("OK", self)
-        but_cancel = QPushButton("Abbrechen", self)
+        but_cancel = QPushButton("Cancel", self)
         but_ok.clicked.connect(self.accept)
         but_cancel.clicked.connect(self.reject)
         btn_row.addWidget(but_ok)

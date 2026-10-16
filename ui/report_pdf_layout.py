@@ -38,7 +38,7 @@ _PDF_TEMPLATE_DEFAULTS = {
     "headerFontSize":    "8pt",
     "headerLogoHeight":  "20px",
     "sectionTitleSize":  "11pt",
-    "pageNumberFormat":  "Seite {n} von {total}",
+    "pageNumberFormat":  "Page {n} of {total}",
     "showPageNumbers":   True,
     "showHeader":        True,
     "showCoverMeta":     True,

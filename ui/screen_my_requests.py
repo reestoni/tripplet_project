@@ -326,7 +326,7 @@ class MyRequestsScreen(QWidget):
                 uid = None
 
         if uid in (None, ""):
-            self._lbl_info.setText("Kein User eingeloggt – keine Requests verfuegbar.")
+            self._lbl_info.setText("No user logged in – no requests available.")
             self._tbl.setRowCount(0)
             self._tbl.setColumnCount(0)
             return
@@ -378,7 +378,7 @@ class MyRequestsScreen(QWidget):
                 col_names = [d[0] for d in (cur.description or [])]
         except Exception as e:
             QMessageBox.critical(self, "DB Error", str(e))
-            self._lbl_info.setText("Fehler beim Laden.")
+            self._lbl_info.setText("Error while loading.")
             self._tbl.setRowCount(0)
             self._tbl.setColumnCount(0)
             return
@@ -508,11 +508,10 @@ class MyRequestsScreen(QWidget):
                     tooltip_parts: List[str] = []
                     if has_pending_change:
                         tooltip_parts.append(
-                            "Es liegt ein noch nicht freigegebener Änderungsvorschlag zu diesem "
-                            "Request vor (wartet auf Superuser-Prüfung)."
+                            "There is a change proposal for this request that is not approved yet (waiting for a superuser)."
                         )
                     elif is_new_unreviewed:
-                        tooltip_parts.append("Neuer Request, noch nicht geprüft.")
+                        tooltip_parts.append("New request, not reviewed yet.")
                     if current_status_id == 2 and denial_reason_val:
                         tooltip_parts.append(f"Denial reason: {denial_reason_val}")
                     if tooltip_parts:
@@ -688,12 +687,11 @@ class MyRequestsScreen(QWidget):
                 if has_pending_change:
                     item.setData(Qt.BackgroundRole, pending_bg)
                     item.setToolTip(
-                        "Es liegt ein noch nicht freigegebener Änderungsvorschlag zu diesem "
-                        "Request vor (wartet auf Superuser-Prüfung)."
+                        "There is a change proposal for this request that is not approved yet (waiting for a superuser)."
                     )
                 elif is_new_unreviewed:
                     item.setData(Qt.BackgroundRole, new_bg)
-                    item.setToolTip("Neuer Request, noch nicht geprüft.")
+                    item.setToolTip("New request, not reviewed yet.")
 
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 if c_vis == 0:
@@ -720,7 +718,7 @@ class MyRequestsScreen(QWidget):
 
         uname = (getattr(app_meta, "current_user", {}) or {}).get("username") or ""
         if self._is_superuser:
-            self._lbl_info.setText(f"{len(rows)} Request(s) (Superuser-Ansicht: alle)")
+            self._lbl_info.setText(f"{len(rows)} request(s) (superuser view: all)")
         else:
             self._lbl_info.setText(f"{len(rows)} Request(s) fuer {uname}")
 
@@ -1188,7 +1186,7 @@ class MyRequestsScreen(QWidget):
             if action_assign is not None:
                 menu.addSeparator()
             action_review = menu.addAction("Review Changes…")
-            action_view = menu.addAction("Änderungsvorschlag ansehen/bearbeiten…")
+            action_view = menu.addAction("View/edit change proposal…")
 
         if has_history:
             if action_assign is not None or action_review is not None:
@@ -1238,7 +1236,7 @@ class MyRequestsScreen(QWidget):
             QMessageBox.warning(
                 self,
                 "Experiment zuordnen",
-                "Das Feld 'ExperimentRequestID' wurde in tblExperimente nicht gefunden.\n"
+                "The field 'ExperimentRequestID' was not found in tblExperimente.\n"
                 "Please check the database schema.",
             )
             return
@@ -1264,7 +1262,7 @@ class MyRequestsScreen(QWidget):
                 )
                 exp_rows = cur.fetchall()
         except Exception as e:
-            QMessageBox.critical(self, "Experiment zuordnen", f"Experimente konnten nicht geladen werden:\n{e}")
+            QMessageBox.critical(self, "Experiment zuordnen", f"The experiments could not be loaded:\n{e}")
             return
 
         if not exp_rows:
@@ -1286,8 +1284,8 @@ class MyRequestsScreen(QWidget):
         layout.setSpacing(14)
 
         lbl_hint = QLabel(
-            f"Request <b>#{req_id}</b> einem Experiment zuordnen.<br>"
-            "<small>Es werden nur Experimente ohne bestehenden Request angezeigt.</small>"
+            f"Link request <b>#{req_id}</b> to an experiment.<br>"
+            "<small>Only experiments without a request are shown.</small>"
         )
         lbl_hint.setWordWrap(True)
         layout.addWidget(lbl_hint)
@@ -1313,7 +1311,7 @@ class MyRequestsScreen(QWidget):
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, dlg
         )
         buttons.button(QDialogButtonBox.Ok).setText("Zuordnen")
-        buttons.button(QDialogButtonBox.Cancel).setText("Abbrechen")
+        buttons.button(QDialogButtonBox.Cancel).setText("Cancel")
         buttons.button(QDialogButtonBox.Ok).setEnabled(False)
         layout.addWidget(buttons)
 
@@ -1338,7 +1336,7 @@ class MyRequestsScreen(QWidget):
             self,
             "Confirm assignment",
             f"Link experiment <b>{selected_exp_label}</b> with request <b>#{req_id}</b>?\n\n"
-            f"Der Request-Status wird auf «Experiment» (4) gesetzt.",
+            f"The request status will be set to «Experiment» (4).",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -1364,15 +1362,15 @@ class MyRequestsScreen(QWidget):
                 cn.rollback()
             except Exception:
                 pass
-            QMessageBox.critical(self, "Fehler", f"Zuordnung fehlgeschlagen:\n{e}")
+            QMessageBox.critical(self, "Error", f"Zuordnung fehlgeschlagen:\n{e}")
             return
 
         self._notify_owner_of_request(req_id, "status changed to Experiment")
 
         QMessageBox.information(
             self,
-            "Zuordnung gespeichert",
-            f"Experiment {selected_exp_label} wurde Request #{req_id} zugeordnet.",
+            "Link saved",
+            f"Experiment {selected_exp_label} was linked to request #{req_id} zugeordnet.",
         )
         self.refresh()
 
@@ -1439,7 +1437,7 @@ class MyRequestsScreen(QWidget):
                     self.on_open_experiment(exp_pk, series_pk, exp_id_txt)
                 else:
                     from PySide6.QtWidgets import QMessageBox
-                    QMessageBox.warning(self, "Navigation", "on_open_experiment nicht gesetzt.")
+                    QMessageBox.warning(self, "Navigation", "on_open_experiment is not set.")
 
             if len(series_rows) == 1:
                 # Direkt navigieren
@@ -1472,7 +1470,7 @@ class MyRequestsScreen(QWidget):
                     _navigate(series_pk, series_name)
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Fehler", str(e))
+            QMessageBox.warning(self, "Error", str(e))
 
     def _go_home(self):
         """Navigiert zurück zum Home-Screen."""

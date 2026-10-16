@@ -210,7 +210,7 @@ def _load_pdf_as_pixmap(path: str, page: int = 0) -> "tuple":
         import fitz
         doc = fitz.open(path)
         if page >= len(doc):
-            return None, "Seite %d existiert nicht." % page
+            return None, "Page %d does not exist." % page
         pix = doc[page].get_pixmap(matrix=fitz.Matrix(150/72, 150/72), alpha=False)
         doc.close()
         from PIL import Image as _Image
@@ -218,7 +218,7 @@ def _load_pdf_as_pixmap(path: str, page: int = 0) -> "tuple":
         pm = _pil_to_pixmap(img)
         return (pm, None) if pm and not pm.isNull() else (None, "Konvertierung fehlgeschlagen.")
     except ImportError:
-        return None, "pymupdf nicht installiert. Bitte: pip install pymupdf"
+        return None, "pymupdf is not installed. Please run: pip install pymupdf"
     except Exception as e:
         return None, str(e)
 
@@ -332,7 +332,7 @@ def _load_excel_as_pixmap(path: str, sheet: int = 0) -> "tuple":
                 return None, ".xls Ladefehler: " + str(e)
         else:
             rows_data, sname = _xlsx_read_rows(path, sheet_idx=sheet, max_rows=50)
-        if not rows_data: rows_data = [["(kein Inhalt)"]]
+        if not rows_data: rows_data = [["(no content)"]]
         max_cols = max(len(r) for r in rows_data)
         rows_data = [r + [""] * (max_cols - len(r)) for r in rows_data]
         from PIL import ImageDraw as _IDraw, ImageFont as _IFont
@@ -757,7 +757,7 @@ class _LoadingOverlay(QWidget):
         self._timer.timeout.connect(self._tick)
         self.hide()
 
-    def start(self, text: str = "Lade..."):
+    def start(self, text: str = "Loading..."):
         """Zeigt den Overlay mit dem gegebenen Text und startet die Animation."""
         self._text = text
         self._progress = 0
@@ -797,7 +797,7 @@ class _LoadingOverlay(QWidget):
         # Beschriftung
         p.setPen(QColor(220, 220, 220))
         f = QFont(); f.setPointSize(10); p.setFont(f)
-        text = getattr(self, "_text", "Lade...")
+        text = getattr(self, "_text", "Loading...")
         p.drawText(0, h//2 - 28, w, 24, Qt.AlignCenter, text)
 
         # Balken-Hintergrund
@@ -880,7 +880,7 @@ class _ImageListPanel(QWidget):
         frow = QHBoxLayout()
         frow.setSpacing(4)
         self._sf = QLineEdit()
-        self._sf.setPlaceholderText("Filter (Experiment/Datei)...")
+        self._sf.setPlaceholderText("Filter (experiment/file)...")
         self._sf.setClearButtonEnabled(True)
         self._sf.textChanged.connect(self._filter_tree)
         frow.addWidget(self._sf)
@@ -920,7 +920,7 @@ class _ImageListPanel(QWidget):
         self._db_images_by_id.clear()
         self._loaded_once = True
 
-        self.local_root = QTreeWidgetItem(self.tree, ["📁 Lokale Bilder"])
+        self.local_root = QTreeWidgetItem(self.tree, ["📁 Local images"])
         self.local_root.setExpanded(True)
 
         self._series_groups = _fetch_series_groups()
@@ -929,7 +929,7 @@ class _ImageListPanel(QWidget):
             item = QTreeWidgetItem(self.tree, [name])
             item.setData(0, Qt.UserRole, g)
             item.setForeground(0, QColor("#7ddf9a"))
-            QTreeWidgetItem(item, ["Lade Bilder..."])
+            QTreeWidgetItem(item, ["Loading images..."])
 
         self._filter_tree()
 
@@ -937,7 +937,7 @@ class _ImageListPanel(QWidget):
         data = item.data(0, Qt.UserRole)
         if not isinstance(data, dict) or "TrialSeriesID" not in data:
             return
-        if item.childCount() == 1 and item.child(0).text(0) == "Lade Bilder...":
+        if item.childCount() == 1 and item.child(0).text(0) == "Loading images...":
             item.removeChild(item.child(0))
             images = _fetch_images_for_series(data["TrialSeriesID"])
             for img in images:
@@ -956,17 +956,17 @@ class _ImageListPanel(QWidget):
 
     def _add_local(self):
         if not hasattr(self, "local_root") or self.local_root is None:
-            self.local_root = QTreeWidgetItem(self.tree, ["Lokale Bilder"])
+            self.local_root = QTreeWidgetItem(self.tree, ["Local images"])
             self.tree.insertTopLevelItem(0, self.local_root)
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "Bilder / Dokumente", "",
-            "Alle unterstuetzten Dateien (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp *.vk4 *.pdf *.xlsx *.xlsm *.xls *.docx *.doc);;"
-            "Bilder (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp);;"
+            self, "Images / documents", "",
+            "All supported files (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp *.vk4 *.pdf *.xlsx *.xlsm *.xls *.docx *.doc);;"
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp);;"
             "Keyence VK4 (*.vk4);;"
             "PDF (*.pdf);;"
             "Excel (*.xlsx *.xlsm *.xls);;"
             "Word (*.docx *.doc);;"
-            "Alle Dateien (*.*)",
+            "All files (*.*)",
         )
         for p in paths:
             basename = os.path.basename(p)
@@ -978,9 +978,9 @@ class _ImageListPanel(QWidget):
                 for pg in range(n_pages):
                     self._local_counter -= 1
                     meta = {"ID": self._local_counter,
-                            "OriginalFilename": basename + " - Seite %d" % (pg+1),
+                            "OriginalFilename": basename + " - page %d" % (pg+1),
                             "FullPath": p, "_local": True, "_pdf_page": pg}
-                    child = QTreeWidgetItem(pdf_root, ["  Seite %d" % (pg+1)])
+                    child = QTreeWidgetItem(pdf_root, ["  page %d" % (pg+1)])
                     child.setData(0, Qt.UserRole, meta)
                     child.setForeground(0, QColor("#bbb"))
                 pdf_root.setExpanded(n_pages <= 6)
@@ -1006,10 +1006,10 @@ class _ImageListPanel(QWidget):
                 for pg in range(n_pages):
                     self._local_counter -= 1
                     meta = {"ID": self._local_counter,
-                            "OriginalFilename": basename + " - Seite %d" % (pg+1),
+                            "OriginalFilename": basename + " - page %d" % (pg+1),
                             "FullPath": p, "_local": True,
                             "_word": True, "_word_page": pg}
-                    child = QTreeWidgetItem(word_root, ["  Seite %d" % (pg+1)])
+                    child = QTreeWidgetItem(word_root, ["  page %d" % (pg+1)])
                     child.setData(0, Qt.UserRole, meta)
                     child.setForeground(0, QColor("#bbb"))
                 word_root.setExpanded(n_pages <= 6)
@@ -1324,9 +1324,9 @@ class _FrameCell(QFrame):
             self._loading = True
             is_doc = _is_word(path) or _is_pdf(path) or _is_excel(path)
             if is_doc:
-                label = ("Word wird geladen..." if _is_word(path)
-                         else "PDF wird geladen..." if _is_pdf(path)
-                         else "Excel wird geladen...")
+                label = ("Loading Word..." if _is_word(path)
+                         else "Loading PDF..." if _is_pdf(path)
+                         else "Loading Excel...")
                 self._overlay.resize(self.size())
                 self._overlay.start(label)
             request_meta = {
@@ -1382,7 +1382,7 @@ class _FrameCell(QFrame):
         if pm is None:
             self._overlay.stop()
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Ladefehler", err or "Unbekannter Fehler.")
+            QMessageBox.critical(self, "Ladefehler", err or "Unknown error.")
             self.update()
             return
         rotation = int(request_meta.get("rotation") or 0)
@@ -2766,7 +2766,7 @@ class ImageCompareScreen(QWidget):
         sep_proj.setStyleSheet("color: #555;")
         lay.addWidget(sep_proj)
 
-        btn_proj_save = QPushButton("📁 Projekt speichern")
+        btn_proj_save = QPushButton("📁 Save project")
         btn_proj_save.setFixedHeight(28)
         btn_proj_save.setStyleSheet("QPushButton { background: #2a3a5a; color: #adf; border-radius: 3px; font-size: 11px; } QPushButton:hover { background: #3a5a8a; }")
         btn_proj_save.clicked.connect(self._save_project)
@@ -2984,10 +2984,10 @@ class ImageCompareScreen(QWidget):
         pm = self._grid.render_all_to_pixmap()
         if pm is None or pm.isNull():
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.information(self, "Nichts zu speichern", "Keine Bilder eingeblendet.")
+            QMessageBox.information(self, "Nothing to save", "No images shown.")
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Alle Frames speichern als…", "alle_frames.png",
+            self, "Save all frames as…", "alle_frames.png",
             "PNG (*.png);;JPEG (*.jpg *.jpeg);;BMP (*.bmp);;TIFF (*.tif *.tiff)",
         )
         if not path:
@@ -3000,8 +3000,8 @@ class ImageCompareScreen(QWidget):
     def _save_project(self):
         """Öffnet einen Datei-Dialog und speichert das Projekt als .ttcompare."""
         path, _ = QFileDialog.getSaveFileName(
-            self, "Projekt speichern als…", "compare_projekt.ttcompare",
-            "TrippleT Compare (*.ttcompare);;Alle Dateien (*.*)",
+            self, "Save project as…", "compare_projekt.ttcompare",
+            "TrippleT Compare (*.ttcompare);;All files (*.*)",
         )
         if not path:
             return
@@ -3009,13 +3009,13 @@ class ImageCompareScreen(QWidget):
             self._grid.save_project(path)
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Fehler beim Speichern", str(e))
+            QMessageBox.critical(self, "Error while saving", str(e))
 
     def _load_project(self):
         """Öffnet einen Datei-Dialog und lädt ein .ttcompare-Projekt."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Projekt laden…", "",
-            "TrippleT Compare (*.ttcompare);;Alle Dateien (*.*)",
+            "TrippleT Compare (*.ttcompare);;All files (*.*)",
         )
         if not path:
             return
@@ -3024,12 +3024,12 @@ class ImageCompareScreen(QWidget):
             if missing:
                 from PySide6.QtWidgets import QMessageBox
                 QMessageBox.warning(
-                    self, "Fehlende Bilder",
-                    "Folgende Bilddateien wurden nicht gefunden:\n\n" + "\n".join(missing),
+                    self, "Missing images",
+                    "These image files were not found:\n\n" + "\n".join(missing),
                 )
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Fehler beim Laden", str(e))
+            QMessageBox.critical(self, "Error while loading", str(e))
 
     def _update_vk4_toolbar(self):
         """Zeigt/versteckt die VK4-Kanal-Buttons je nach selektiertem Bild."""

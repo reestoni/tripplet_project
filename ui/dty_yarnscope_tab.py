@@ -366,11 +366,11 @@ def _ys_process_wave_reality_check(x_values, y_values, bin_width_m: float = 0.05
     median_r2 = float(np.median(r_squared))
     if (len(windows) >= 5 and fraction_significant >= 0.70 and lambda_cv is not None
             and lambda_cv <= 0.20 and median_r2 >= 0.20):
-        verdict = "robuster Wellenhinweis"
+        verdict = "robust wave evidence"
     elif fraction_significant >= 0.30:
-        verdict = "uneinheitlicher Hinweis"
+        verdict = "inconsistent evidence"
     else:
-        verdict = "nicht belegt"
+        verdict = "not supported"
     return {
         "windows": len(windows), "significant": significant,
         "lambda_median": float(np.median(wavelengths)), "lambda_cv": lambda_cv,
@@ -386,15 +386,14 @@ def _ys_update_process_wave_card(label, analysis, enabled):
     if not enabled:
         return
     if analysis is None:
-        label.setText("<b style=\"color:#ffd166\">Prozesswelle</b><br>"
-                      "Für diese Fenstergröße sind nicht genügend Daten vorhanden.")
+        label.setText('<b style="color:#ffd166">Process wave</b><br>Not enough data for this window size.')
         return
     label.setText(
         '<b style="color:#ffd166">Prozesswelle</b> &nbsp; '
-        f'<span style="color:#aaa">Raster {analysis["bin_width"]:.2f} m · '
-        f'Fenster {analysis["span"]:.1f} m</span><br>'
-        f'Dominante Wellenlänge <b>{analysis["wavelength"]:.2f} m</b> &nbsp; '
-        f'Sinusamplitude <b>{analysis["amplitude"]:.2f} µm</b> &nbsp; '
+        f'<span style="color:#aaa">Grid {analysis["bin_width"]:.2f} m · '
+        f'Window {analysis["span"]:.1f} m</span><br>'
+        f'Dominant wavelength <b>{analysis["wavelength"]:.2f} m</b> &nbsp; '
+        f'Sine amplitude <b>{analysis["amplitude"]:.2f} µm</b> &nbsp; '
         f'Sinus-Fit R² <b>{analysis["r_squared"]:.2f}</b> &nbsp; '
         f'Spektralanteil <b>{analysis["spectral_share"] * 100:.0f} %</b><br>'
         f'Drift <b>{analysis["drift"]:.2f} µm/m</b> &nbsp; '
@@ -410,7 +409,7 @@ def _ys_update_trend_metric_card(label, title, color, enabled, positions, values
         return
     metrics = _ys_trend_metrics(positions, values)
     if metrics is None:
-        label.setText(f'<b style="color:{color}">{title}</b><br>Keine Trendwerte im sichtbaren Fenster.')
+        label.setText(f'<b style="color:{color}">{title}</b><br>No trend values in the visible window.')
         return
 
     def _number(value, decimals=1, suffix=""):
@@ -425,9 +424,9 @@ def _ys_update_trend_metric_card(label, title, color, enabled, positions, values
         f'P5–P95 <b>{_number(metrics["p5_p95"])} µm</b> &nbsp; '
         f'MAD <b>{_number(metrics["mad"])} µm</b><br>'
         f'Drift <b>{_number(metrics["slope"], 2, " µm/m")}</b> &nbsp; '
-        f'Δ Ende <b>{_number(metrics["end_delta"])} µm</b> &nbsp; '
-        f'Wellenlänge <b>{_number(metrics["wavelength"], 2, " m")}</b> &nbsp; '
-        f'Wellen-CV <b>{_number(wave_cv, 0, " %")}</b><br>'
+        f'Δ end <b>{_number(metrics["end_delta"])} µm</b> &nbsp; '
+        f'Wavelength <b>{_number(metrics["wavelength"], 2, " m")}</b> &nbsp; '
+        f'Wave CV <b>{_number(wave_cv, 0, " %")}</b><br>'
         f'Peak–Tal Median <b>{_number(metrics["peak_to_peak"])} µm</b> &nbsp; '
         f'P95 <b>{_number(metrics["peak_to_peak_p95"])} µm</b>')
 
@@ -704,7 +703,7 @@ def _create_yarnscope_tab_if_needed(self):
     self._ys_spin_start.installEventFilter(self._ys_focus_filter)
     ctrl_row.addWidget(self._ys_spin_start)
 
-    ctrl_row.addWidget(QLabel("Fenster [m]:"))
+    ctrl_row.addWidget(QLabel("Window [m]:"))
     self._ys_spin_window = QDoubleSpinBox()
     self._ys_spin_window.setRange(0.1, 100.0);
     self._ys_spin_window.setSingleStep(0.1)
@@ -731,8 +730,8 @@ def _create_yarnscope_tab_if_needed(self):
 
     self._ys_chk_delta_trend = QCheckBox("Mitte Offenstelle–Knoten")
     self._ys_chk_delta_trend.setToolTip(
-        "Zeigt die rollende Mittellinie zwischen Offenstellenhöhe und der Höhe "
-        "des jeweils folgenden Knotens im Segmentmittel-Plot.")
+        "Shows the rolling centre line between the height of an open spot and the height of the following "
+        "knot in the segment mean plot.")
     self._ys_chk_delta_trend.setChecked(False)
     trend_row.addWidget(self._ys_chk_delta_trend)
     trend_row.addWidget(QLabel("Rollung:"))
@@ -749,8 +748,7 @@ def _create_yarnscope_tab_if_needed(self):
     self._ys_spin_delta_roll.setFixedWidth(70)
     self._ys_spin_delta_roll.setStyleSheet("background:#222; color:#ddd; border:1px solid #444;")
     self._ys_spin_delta_roll.setToolTip(
-        "Breite des gleitenden Mittelwerts – wahlweise in Metern oder "
-        "in aufeinanderfolgenden Offenstelle–Knoten-Paaren.")
+        "Width of the moving average – in metres or in consecutive open spot–knot pairs.")
     self._ys_spin_delta_roll.setEnabled(False)
     self._ys_combo_delta_roll_mode.setEnabled(False)
     self._ys_spin_delta_roll.valueChanged.connect(
@@ -776,8 +774,8 @@ def _create_yarnscope_tab_if_needed(self):
 
     self._ys_chk_peak_valley_trend = QCheckBox("Mitte Peak–Tal")
     self._ys_chk_peak_valley_trend.setToolTip(
-        "Zeigt die rollende Mittellinie zwischen einem lokalen Peak und dem "
-        "direkt darauffolgenden Tal im Segmentmittel-Plot.")
+        "Shows the rolling centre line between a local peak and the following valley in the segment "
+        "mean plot.")
     self._ys_chk_peak_valley_trend.setChecked(False)
     trend_row.addWidget(self._ys_chk_peak_valley_trend)
     trend_row.addWidget(QLabel("Rollung:"))
@@ -794,8 +792,7 @@ def _create_yarnscope_tab_if_needed(self):
     self._ys_spin_peak_valley_roll.setFixedWidth(70)
     self._ys_spin_peak_valley_roll.setStyleSheet("background:#222; color:#ddd; border:1px solid #444;")
     self._ys_spin_peak_valley_roll.setToolTip(
-        "Breite des gleitenden Mittelwerts – wahlweise in Metern oder "
-        "in aufeinanderfolgenden Peak–Tal-Paaren.")
+        "Width of the moving average – in metres or in consecutive peak–valley pairs.")
     self._ys_spin_peak_valley_roll.setEnabled(False)
     self._ys_combo_peak_valley_roll_mode.setEnabled(False)
     self._ys_spin_peak_valley_roll.valueChanged.connect(
@@ -820,11 +817,10 @@ def _create_yarnscope_tab_if_needed(self):
     trend_row.addWidget(self._ys_spin_peak_valley_roll)
     trend_row.addSpacing(14)
 
-    self._ys_chk_opening_trend = QCheckBox("Öffnungsstellen-Trend")
+    self._ys_chk_opening_trend = QCheckBox("Open spot trend")
     self._ys_chk_opening_trend.setToolTip(
-        "Zeigt die rollende Mittellinie NUR über die grünen Öffnungsstellen-"
-        "Segmentmittel im Segmentmittel-Plot, ohne Knoten-Anteil (anders als "
-        "'Mitte Offenstelle–Knoten', das Offenstelle UND Knoten mischt).")
+        "Shows the rolling centre line ONLY over the green open spot segment means in the segment "
+        "mean plot, without knots (unlike 'Centre open spot–knot', which mixes open spots AND knots).")
     self._ys_chk_opening_trend.setChecked(False)
     trend_row.addWidget(self._ys_chk_opening_trend)
     trend_row.addWidget(QLabel("Rollung:"))
@@ -841,8 +837,7 @@ def _create_yarnscope_tab_if_needed(self):
     self._ys_spin_opening_roll.setFixedWidth(70)
     self._ys_spin_opening_roll.setStyleSheet("background:#222; color:#ddd; border:1px solid #444;")
     self._ys_spin_opening_roll.setToolTip(
-        "Breite des gleitenden Mittelwerts – wahlweise in Metern oder in "
-        "aufeinanderfolgenden Öffnungsstellen.")
+        "Width of the moving average – in metres or in consecutive open spots.")
     self._ys_spin_opening_roll.setEnabled(False)
     self._ys_combo_opening_roll_mode.setEnabled(False)
     self._ys_spin_opening_roll.valueChanged.connect(
@@ -890,11 +885,10 @@ def _create_yarnscope_tab_if_needed(self):
 
     process_wave_row = QHBoxLayout()
     process_wave_row.setSpacing(8)
-    self._ys_chk_process_wave = QCheckBox("Prozesswelle analysieren")
+    self._ys_chk_process_wave = QCheckBox("Analyse process wave")
     self._ys_chk_process_wave.setToolTip(
-        "Ermittelt eine räumlich gebinnte Mittellinie, deren dominante Welle "
-        "und einen Sinus-Fit. Für einen belastbaren Vergleich ein längeres "
-        "Fenster (z. B. 30–100 m) verwenden.")
+        "Determines a spatially binned centre line, its dominant wave and a sine fit. Use a longer "
+        "window (e.g. 30–100 m) for a reliable comparison.")
     self._ys_chk_process_wave.setChecked(False)
     process_wave_row.addWidget(self._ys_chk_process_wave)
     process_wave_row.addWidget(QLabel("Raster [m]:"))
@@ -908,8 +902,8 @@ def _create_yarnscope_tab_if_needed(self):
     self._ys_spin_process_wave_bin.setStyleSheet("background:#222; color:#ddd; border:1px solid #444;")
     self._ys_spin_process_wave_bin.setEnabled(False)
     self._ys_spin_process_wave_bin.setToolTip(
-        "Räumliche Binbreite für die Prozessmittel-Linie. Kleinere Werte "
-        "zeigen mehr Details, größere Werte glätten stärker.")
+        "Spatial bin width for the process mean line. Smaller values show more detail, larger values "
+        "smooth more.")
     self._ys_spin_process_wave_bin.valueChanged.connect(
         lambda _value: self._ys_replot_timer.start(1000))
     self._ys_spin_process_wave_bin.editingFinished.connect(_replot_roll_after_edit)
@@ -1001,32 +995,30 @@ def _create_yarnscope_tab_if_needed(self):
     self._ys_chk_compare_normalized = QCheckBox("Auf Median normieren")
     self._ys_chk_compare_normalized.setChecked(True)
     self._ys_chk_compare_normalized.setToolTip(
-        "Zentriert jeden Trial auf seinen Prozessmittel-Median, damit die "
-        "Form und nicht der absolute Dickenunterschied verglichen wird.")
+        "Centres each trial on its process mean median, so the shape is compared and not the absolute "
+        "difference in thickness.")
     self._ys_chk_compare_normalized.setStyleSheet("QCheckBox,QCheckBox:disabled{color:#fff;}")
     compare_left_layout.addWidget(self._ys_chk_compare_normalized)
-    self._ys_chk_compare_show_process_mean = QCheckBox("Prozessmittel anzeigen")
+    self._ys_chk_compare_show_process_mean = QCheckBox("Show process mean")
     self._ys_chk_compare_show_process_mean.setChecked(False)
     self._ys_chk_compare_show_process_mean.setToolTip(
-        "Blendet die gebinnte Ausgangslinie zusätzlich ein. Für einen klaren "
-        "Vergleich mehrerer Trials ist sie standardmäßig ausgeblendet.")
+        "Also shows the binned base line. It is hidden by default for a clear comparison of several "
+        "trials.")
     self._ys_chk_compare_show_process_mean.setStyleSheet("QCheckBox,QCheckBox:disabled{color:#fff;}")
     compare_left_layout.addWidget(self._ys_chk_compare_show_process_mean)
-    self._ys_chk_compare_show_drift = QCheckBox("Driftlinien anzeigen")
+    self._ys_chk_compare_show_drift = QCheckBox("Show drift lines")
     self._ys_chk_compare_show_drift.setChecked(False)
     self._ys_chk_compare_show_drift.setToolTip(
-        "Zeigt pro Trial die lineare Regression über das gesamte sichtbare "
-        "Fenster. Sie entspricht der Kennzahl Drift in µm/m.")
+        "Shows the linear regression over the whole visible window per trial. It corresponds to the "
+        "drift value in µm/m.")
     self._ys_chk_compare_show_drift.setStyleSheet("QCheckBox,QCheckBox:disabled{color:#fff;}")
     compare_left_layout.addWidget(self._ys_chk_compare_show_drift)
-    self._ys_chk_compare_open_trend = QCheckBox("Öffnungsstellen-Trend")
+    self._ys_chk_compare_open_trend = QCheckBox("Open spot trend")
     self._ys_chk_compare_open_trend.setChecked(False)
     self._ys_chk_compare_open_trend.setToolTip(
-        "Zeigt pro Trial die rollende Mittellinie NUR über die grünen "
-        "Öffnungsstellen-Segmentmittel (wie im Segmentmittel-Tab), ohne "
-        "Knoten-Anteil. Für Trials, die noch nicht im Segmentmittel-Tab "
-        "analysiert wurden, wird die Klassifikation beim Vergleichen "
-        "einmalig nachgerechnet (kann etwas dauern).")
+        "Shows per trial the rolling centre line ONLY over the green open spot segment means (as "
+        "in the segment mean tab), without knots. For trials not analysed in the segment mean tab "
+        "yet, the classification is calculated once when comparing (may take a moment).")
     self._ys_chk_compare_open_trend.setStyleSheet("QCheckBox,QCheckBox:disabled{color:#fff;}")
     compare_left_layout.addWidget(self._ys_chk_compare_open_trend)
     open_trend_roll_row = QHBoxLayout()
@@ -1045,8 +1037,7 @@ def _create_yarnscope_tab_if_needed(self):
     self._ys_spin_compare_open_roll.setFixedWidth(70)
     self._ys_spin_compare_open_roll.setStyleSheet("background:#222; color:#ddd; border:1px solid #444;")
     self._ys_spin_compare_open_roll.setToolTip(
-        "Breite des gleitenden Mittelwerts – wahlweise in Metern oder in "
-        "aufeinanderfolgenden Öffnungsstellen.")
+        "Width of the moving average – in metres or in consecutive open spots.")
     open_trend_roll_row.addWidget(self._ys_spin_compare_open_roll)
     compare_left_layout.addLayout(open_trend_roll_row)
 
@@ -1068,7 +1059,7 @@ def _create_yarnscope_tab_if_needed(self):
     self._ys_btn_run_comparison.setObjectName("GreenBtn")
     self._ys_btn_run_comparison.clicked.connect(lambda: _ys_run_process_comparison(self))
     compare_left_layout.addWidget(self._ys_btn_run_comparison)
-    self._ys_lbl_compare_status = QLabel("Wähle zwei bis sechs Trials – Auswertung immer über die gesamte Messstrecke.")
+    self._ys_lbl_compare_status = QLabel("Choose two to six trials – always evaluated over the whole measured length.")
     self._ys_lbl_compare_status.setWordWrap(True)
     self._ys_lbl_compare_status.setStyleSheet("color:#aaa;font-size:11px;")
     compare_left_layout.addWidget(self._ys_lbl_compare_status)
@@ -1265,7 +1256,7 @@ def _ys_populate_compare_trial_list(self):
             continue
         vno = trial.get("Versuchsnummer") or trial.get("versuchsnummer") or 0
         tdms = _ys_find_tdms(sid, int(vno)) if sid else None
-        item = QListWidgetItem(f"V{int(vno):03d}" + ("" if tdms else "  (kein TDMS)"))
+        item = QListWidgetItem(f"V{int(vno):03d}" + ("" if tdms else "  (no TDMS)"))
         item.setData(Qt.UserRole, {"trial_id": trial_id, "vno": int(vno), "tdms": tdms})
         item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
         item.setCheckState(Qt.Checked if trial_id in checked_ids else Qt.Unchecked)
@@ -1289,16 +1280,16 @@ def _ys_run_process_comparison(self):
             if item.checkState() == Qt.Checked:
                 selected.append(item.data(Qt.UserRole) or {})
     if len(selected) < 2:
-        self._ys_lbl_compare_status.setText("Bitte mindestens zwei Trials auswählen.")
+        self._ys_lbl_compare_status.setText("Please choose at least two trials.")
         return
     if len(selected) > 6:
-        self._ys_lbl_compare_status.setText("Bitte maximal sechs Trials gleichzeitig vergleichen.")
+        self._ys_lbl_compare_status.setText("Please compare at most six trials at once.")
         return
 
     bin_width = float(self._ys_spin_process_wave_bin.value()
                       if self._ys_spin_process_wave_bin else 0.05)
     self._ys_btn_run_comparison.setEnabled(False)
-    self._ys_lbl_compare_status.setText("Lade und analysiere vollständige Messstrecken…")
+    self._ys_lbl_compare_status.setText("Loading and analysing the whole measured lengths…")
 
     class _Sigs(QObject):
         done = _Signal(object, str)
@@ -1330,7 +1321,7 @@ def _ys_run_process_comparison(self):
                         y_raw = read_dty_signal(str(path))
                         dx_mm = float(read_step_mm_from_tdms(str(path)) or 0.25)
                     if y_raw is None or len(y_raw) == 0:
-                        raise ValueError("Kein Signal")
+                        raise ValueError("No signal")
                     y = np.asarray(y_raw, dtype=float)
                     # Vergleichswerte sind absichtlich unabhängig von der
                     # aktuellen Fensteransicht: immer die ganze Messstrecke.
@@ -1338,7 +1329,7 @@ def _ys_run_process_comparison(self):
                     x = np.arange(len(y)) * dx_mm / 1000.0
                     analysis = _ys_analyze_process_wave(x, yseg, self._bin_m)
                     if analysis is None:
-                        raise ValueError("Fenster zu kurz oder unvollständige Daten")
+                        raise ValueError("Window too short or incomplete data")
                     reality = _ys_process_wave_reality_check(x, yseg, self._bin_m)
 
                     # Öffnungsstellen-Trend (Nutzerwunsch 2026-09-08): braucht
@@ -1377,12 +1368,12 @@ def _ys_on_process_comparison_done(self, results, errors: str):
     self._ys_compare_results = results
     _ys_draw_process_comparison(self, results)
     if results:
-        status = (f"{len(results)} Trial(s) verglichen – Kennzahlen über die gesamte "
-                  "Messstrecke, Robustheitscheck in unabhängigen 10-m-Abschnitten.")
+        status = (f"{len(results)} trial(s) compared – values over the whole measured "
+                  "length, robustness check in independent 10 m sections.")
         if errors:
-            status += f" Übersprungen: {errors}"
+            status += f" Skipped: {errors}"
     else:
-        status = "Keine vergleichbaren Ergebnisse. " + errors
+        status = "No comparable results. " + errors
     self._ys_lbl_compare_status.setText(status)
 
 
@@ -1435,7 +1426,7 @@ def _ys_draw_process_comparison(self, results):
                 trend_y, _roll_label = _ys_roll_trend(seg_x, seg_y, open_roll_mode, open_roll_amount)
                 ax.plot(seg_x, np.asarray(trend_y) - offset, color=color,
                         linewidth=1.6, linestyle=":",
-                        label=f'{result["label"]} Öffnungsstellen-Trend')
+                        label=f'{result["label"]} open spot trend')
 
         table.insertRow(row)
         visibility_icon = "assets/images/visible_on.png" if visible else "assets/images/visible_off.png"
@@ -1444,7 +1435,7 @@ def _ys_draw_process_comparison(self, results):
         visibility_button.setIcon(QIcon(resource_path(visibility_icon)))
         visibility_button.setIconSize(QSize(18, 18))
         visibility_button.setToolTip(
-            "Trial im Diagramm ausblenden" if visible else "Trial im Diagramm einblenden")
+            "Hide trial in the chart" if visible else "Show trial in the chart")
         visibility_button.setStyleSheet(
             "QPushButton{background:#303030;color:#ddd;border:1px solid #555;border-radius:3px;}"
             "QPushButton:hover{background:#444;}")
@@ -1467,7 +1458,7 @@ def _ys_draw_process_comparison(self, results):
                 reality["verdict"],
             ]
         else:
-            reality_values = ["—", "—", "—", "—", "zu wenig Daten"]
+            reality_values = ["—", "—", "—", "—", "not enough data"]
         values = [
             result["label"], f'{result["median"]:.1f}',
             f'{analysis["wavelength"]:.2f}', f'{analysis["amplitude"]:.2f}',
@@ -1481,18 +1472,18 @@ def _ys_draw_process_comparison(self, results):
                 item.setForeground(QColor(color))
             elif col == 14:
                 verdict_colors = {
-                    "robuster Wellenhinweis": "#7ddf9a",
-                    "uneinheitlicher Hinweis": "#ffd166",
-                    "nicht belegt": "#ff7b7b",
+                    "robust wave evidence": "#7ddf9a",
+                    "inconsistent evidence": "#ffd166",
+                    "not supported": "#ff7b7b",
                 }
                 item.setForeground(QColor(verdict_colors.get(value, "#aaa")))
             table.setItem(row, col, item)
 
     if results:
-        ax.set_title("Sinus-Fits der Prozesswellen" if not show_process_mean
-                     else "Prozessmittel und Sinus-Fits", color="#ddd", fontsize=11)
+        ax.set_title("Sine fits of the process waves" if not show_process_mean
+                     else "Process mean and sine fits", color="#ddd", fontsize=11)
         ax.set_xlabel("Position [m]", color="#aaa", fontsize=9)
-        ax.set_ylabel("Abweichung vom Median [µm]" if normalized else "Garndicke [µm]",
+        ax.set_ylabel("Deviation from median [µm]" if normalized else "Garndicke [µm]",
                       color="#aaa", fontsize=9)
         start_m = float(self._ys_spin_start.value() if self._ys_spin_start else 0.0)
         window_m = float(self._ys_spin_window.value() if self._ys_spin_window else 3.0)
@@ -1504,7 +1495,7 @@ def _ys_draw_process_comparison(self, results):
         ax.legend(loc="upper right", fontsize=7, ncol=2,
                   facecolor="#202020", edgecolor="#555", labelcolor="#ddd")
     else:
-        ax.text(0.5, 0.5, "Mindestens zwei Trials auswählen und vergleichen.",
+        ax.text(0.5, 0.5, "Choose at least two trials and compare.",
                 transform=ax.transAxes, ha="center", va="center", color="#888")
     table.resizeColumnsToContents()
     canvas.draw_idle()
@@ -1560,14 +1551,14 @@ def _ys_on_trial_selected(self, row: int):
         self._ys_lbl_file.setText(f"📄 {tdms.name}")
         self._ys_btn_analyze.setEnabled(True)
     else:
-        self._ys_lbl_file.setText(f"V{vno} – kein TDMS-File im Ordner")
+        self._ys_lbl_file.setText(f"V{vno} – no TDMS file in the folder")
         self._ys_btn_analyze.setEnabled(False)
     # Cache-Treffer: sofort anzeigen, kein Klick auf Analysieren noetig
     if tid is not None and tid in self._ys_cache:
         res, vals = self._ys_cache[tid]
         self._ys_last_res = res
         self._ys_last_vals = vals
-        self._ys_lbl_status.setText("Analyse aus Cache.")
+        self._ys_lbl_status.setText("Analysis from cache.")
         self._ys_btn_save.setEnabled(tid is not None)
         _ys_update_metrics(self, vals)
         _ys_replot(self)
@@ -1597,7 +1588,7 @@ def _ys_on_analyze(self):
         res, vals = self._ys_cache[tid]
         self._ys_last_res = res
         self._ys_last_vals = vals
-        self._ys_lbl_status.setText("Analyse aus Cache.")
+        self._ys_lbl_status.setText("Analysis from cache.")
         self._ys_btn_save.setEnabled(True)
         _ys_update_metrics(self, vals)
         _ys_replot(self)
@@ -1628,7 +1619,7 @@ def _ys_on_analyze(self):
                 y = read_dty_signal(str(self._p))
                 dx_mm = read_step_mm_from_tdms(str(self._p)) or 0.25
                 if y is None or len(y) == 0:
-                    self._s.done.emit({}, "Kein Signal im TDMS-File.")
+                    self._s.done.emit({}, "No signal in the TDMS file.")
                     return
                 res = analyze_series(np.asarray(y, dtype=float), float(dx_mm), 3)
                 res["_y_raw"] = y  # numpy-Array direkt behalten (kein .tolist() → kein teurer Copy)
@@ -1645,7 +1636,7 @@ def _ys_on_analyze(self):
 def _ys_on_analysis_done(self, res: dict, err: str):
     self._ys_btn_analyze.setEnabled(True)
     if err:
-        self._ys_lbl_status.setText(f"Fehler: {err}");
+        self._ys_lbl_status.setText(f"Error: {err}");
         return
     self._ys_last_res = res
     self._ys_lbl_status.setText("Extrahiere Kennzahlen…")
@@ -1697,7 +1688,7 @@ def _ys_on_extract_done(self, vals: dict):
         if v is not None:
             stab_info.append(f"{label}: {v:.1f}%")
     stab_str = "   ".join(stab_info) if stab_info else ""
-    status = "Analyse fertig." + (f"  |  Stab: {stab_str}" if stab_str else "")
+    status = "Analysis finished." + (f"  |  Stab: {stab_str}" if stab_str else "")
     self._ys_lbl_status.setText(status)
     self._ys_btn_save.setEnabled(self._ys_current_trial_id is not None)
     _ys_update_metrics(self, vals)
@@ -1890,13 +1881,13 @@ def _ys_draw_plots(self, res: dict, vals: dict):
             process_wave = _ys_analyze_process_wave(x_axis, y_smooth, bin_width)
 
         _ys_update_trend_metric_card(
-            getattr(self, "_ys_lbl_open_knot_metrics", None), "Mitte Öffnung–Knoten",
+            getattr(self, "_ys_lbl_open_knot_metrics", None), "Centre open spot–knot",
             "#56d7d0", open_knot_enabled, open_knot_trend_x, open_knot_trend_y)
         _ys_update_trend_metric_card(
             getattr(self, "_ys_lbl_peak_valley_metrics", None), "Mitte Peak–Tal",
             "#ff6bb5", peak_valley_enabled, peak_valley_trend_x, peak_valley_trend_y)
         _ys_update_trend_metric_card(
-            getattr(self, "_ys_lbl_opening_metrics", None), "Öffnungsstellen-Trend",
+            getattr(self, "_ys_lbl_opening_metrics", None), "Open spot trend",
             "#8de6a0", opening_enabled, opening_trend_x, opening_trend_y)
         _ys_update_process_wave_card(
             getattr(self, "_ys_lbl_process_wave_metrics", None), process_wave,
@@ -1965,7 +1956,7 @@ def _ys_draw_plots(self, res: dict, vals: dict):
             if open_knot_trend_x:
                 ax.plot(
                     open_knot_trend_x, open_knot_trend_y, color="#56d7d0", linewidth=1.8,
-                    label=f"Mitte Öffnung–Knoten (roll. Ø {open_knot_roll_label})")
+                    label=f"Centre open spot–knot (rolling Ø {open_knot_roll_label})")
             if peak_valley_trend_x:
                 ax.plot(
                     peak_valley_trend_x, peak_valley_trend_y, color="#ff6bb5", linewidth=1.8,
@@ -1973,7 +1964,7 @@ def _ys_draw_plots(self, res: dict, vals: dict):
             if opening_trend_x:
                 ax.plot(
                     opening_trend_x, opening_trend_y, color="#8de6a0", linewidth=1.8,
-                    label=f"Öffnungsstellen-Trend (roll. Ø {opening_roll_label})")
+                    label=f"Open spot trend (rolling Ø {opening_roll_label})")
 
         handles, labels = ax.get_legend_handles_labels()
         seen2 = set();
@@ -2011,7 +2002,7 @@ def _ys_draw_plots(self, res: dict, vals: dict):
 
     except Exception as e:
         import traceback
-        lbl = QLabel(f"Plot-Fehler: {e}")
+        lbl = QLabel(f"Plot error: {e}")
         lbl.setStyleSheet("color:#ff6060; padding:8px;")
         self._ys_plot_layout.addWidget(lbl)
 
@@ -2025,14 +2016,14 @@ def _ys_on_save(self):
         from ui.screen_tdms_batch import _save_analysis_to_db
         ok = _save_analysis_to_db(tid, vals)
     except Exception as e:
-        self._ys_lbl_status.setText(f"Fehler: {e}");
+        self._ys_lbl_status.setText(f"Error: {e}");
         return
     if ok:
         self._ys_lbl_status.setText("Gespeichert.")
         self._ys_btn_save.setEnabled(False)
         _ys_populate_trial_list(self)
     else:
-        self._ys_lbl_status.setText("Speichern fehlgeschlagen.")
+        self._ys_lbl_status.setText("Saving failed.")
 
 
 def _ys_open_batch(self):
@@ -2070,7 +2061,7 @@ def _ys_open_batch(self):
         QTimer.singleShot(50, mw.tdms_batch._init_series_state)
     except Exception as e:
         from PySide6.QtWidgets import QMessageBox
-        QMessageBox.critical(self, "Batch", f"Fehler: {e}")
+        QMessageBox.critical(self, "Batch", f"Error: {e}")
 
 
 def _ys_draw_garnspiegel(self, res: dict, vals: dict = None):
@@ -2264,5 +2255,5 @@ def _ys_on_refresh(self):
             self.load_record(exp_pk, series_pk, exp_id)
     except Exception as e:
         from PySide6.QtWidgets import QMessageBox
-        QMessageBox.warning(self, 'Fehler', str(e))
+        QMessageBox.warning(self, 'Error', str(e))
 

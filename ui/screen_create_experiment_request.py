@@ -519,7 +519,7 @@ class ExperimentRequestImagesDialog(QDialog):
         d = item.data(Qt.UserRole) or {}
         src = str(d.get("FullPath") or "")
         if not src or not os.path.isfile(src):
-            QMessageBox.warning(self, "Save As", "Datei nicht gefunden:\n" + src)
+            QMessageBox.warning(self, "Save As", "File not found:\n" + src)
             return
 
         orig = str(d.get("OriginalFilename") or os.path.basename(src))
@@ -530,7 +530,7 @@ class ExperimentRequestImagesDialog(QDialog):
             import shutil
             shutil.copy2(src, dst)
         except Exception as e:
-            QMessageBox.critical(self, "Save As", f"Fehler beim Speichern:\n{e}")
+            QMessageBox.critical(self, "Save As", f"Error while saving:\n{e}")
 
     def keyPressEvent(self, event):  # noqa: N802
         """Delete-Taste löscht selektierte Dateien."""
@@ -1512,18 +1512,18 @@ class ExperimentRequestPdfsDialog(QDialog):
         d = item.data(Qt.UserRole) or {}
         src = str(d.get("FullPath") or "")
         if not src or not os.path.isfile(src):
-            QMessageBox.warning(self, "Save As", "Datei nicht gefunden:\n" + src)
+            QMessageBox.warning(self, "Save As", "File not found:\n" + src)
             return
 
         orig = str(d.get("OriginalFilename") or os.path.basename(src))
-        dst, _ = QFileDialog.getSaveFileName(self, "Save As", orig, "PDF-Dateien (*.pdf);;Alle Dateien (*)")
+        dst, _ = QFileDialog.getSaveFileName(self, "Save As", orig, "PDF files (*.pdf);;All files (*)")
         if not dst:
             return
         try:
             import shutil
             shutil.copy2(src, dst)
         except Exception as e:
-            QMessageBox.critical(self, "Save As", f"Fehler beim Speichern:\n{e}")
+            QMessageBox.critical(self, "Save As", f"Error while saving:\n{e}")
 
     def _set_zoom(self, z: float) -> None:
         z = max(0.25, min(4.0, float(z)))
@@ -1618,7 +1618,7 @@ class ExperimentRequestPdfsDialog(QDialog):
             self.btn_page_up.setEnabled(False)
             self.btn_page_down.setEnabled(False)
             self.lbl_page.setText("")
-            lbl = QLabel("PDF konnte nicht angezeigt werden.")
+            lbl = QLabel("The PDF could not be shown.")
             lbl.setAlignment(Qt.AlignCenter)
             self._viewer_layout.addWidget(lbl, 1)
 
@@ -1646,7 +1646,7 @@ class ExperimentRequestPdfsDialog(QDialog):
         exists = bool(full_path_norm) and os.path.exists(full_path_norm)
 
         if not full_path_norm or not exists:
-            lbl = QLabel("PDF konnte nicht geladen werden.")
+            lbl = QLabel("The PDF could not be loaded.")
             lbl.setAlignment(Qt.AlignCenter)
             self._viewer_layout.addWidget(lbl, 1)
             return
@@ -1695,7 +1695,7 @@ class ExperimentRequestPdfsDialog(QDialog):
                 print("[PDF] QtWebEngine fallback failed:", e)
             except Exception:
                 pass
-            lbl = QLabel("PDF konnte nicht angezeigt werden.")
+            lbl = QLabel("The PDF could not be shown.")
             lbl.setAlignment(Qt.AlignCenter)
             self._viewer_layout.addWidget(lbl, 1)
             return
@@ -2653,7 +2653,7 @@ class CreateExperimentRequestScreen(QWidget):
         created_by = self._current_user_id()
         if created_by in (None, ""):
             raise RuntimeError(
-                "CreatedBy/UserID konnte nicht ermittelt werden. Bitte neu anmelden."
+                "CreatedBy/UserID could not be determined. Please log in again."
             )
 
         # Wir sammeln aktuelle Formwerte (falls schon etwas ausgefuellt ist),
@@ -2703,7 +2703,7 @@ class CreateExperimentRequestScreen(QWidget):
                 new_id = values.get("ID")
 
         if new_id in (None, 0, ""):
-            raise RuntimeError("ExperimentRequestID konnte nach dem Insert nicht ermittelt werden.")
+            raise RuntimeError("ExperimentRequestID could not be determined after the insert.")
 
         self._edit_request_id = new_id
         return new_id
@@ -2719,7 +2719,7 @@ class CreateExperimentRequestScreen(QWidget):
         """Erzeugt einen Datensatz in tblExperimentRequestImage."""
         created_by = self._current_user_id()
         if created_by in (None, ""):
-            raise RuntimeError("CreatedBy/UserID konnte nicht ermittelt werden.")
+            raise RuntimeError("CreatedBy/UserID could not be determined.")
 
         sql = (
             "INSERT INTO [tblExperimentRequestImage] "
@@ -2763,15 +2763,15 @@ class CreateExperimentRequestScreen(QWidget):
                 os.makedirs(target_dir, exist_ok=True)
             except PermissionError as e:
                 raise RuntimeError(
-                    "[WinError 5] Zugriff verweigert beim Erstellen des Zielordners. "
-                    "Das ist ein Berechtigungsproblem auf dem Share/NTFS.\n\n"
-                    f"Pfad: {target_dir}\n\n"
+                    "[WinError 5] Access denied while creating the target folder. "
+                    "This is a permission problem on the share/NTFS.\n\n"
+                    f"Path: {target_dir}\n\n"
                     "Please ensure that the Windows user (or the account running TrippleT) "
-                    f"Schreibrechte auf {REQUEST_IMAGES_BASE_DIR} hat.\n\n"
-                    f"Original-Fehler: {e}"
+                    f"has write permission on {REQUEST_IMAGES_BASE_DIR}.\n\n"
+                    f"Original error: {e}"
                 )
             except Exception as e:
-                raise RuntimeError(f"Zielordner konnte nicht erstellt werden: {target_dir}\n{e}")
+                raise RuntimeError(f"Target folder could not be created: {target_dir}\n{e}")
 
             stored_any = 0
             errors: List[str] = []
@@ -2819,7 +2819,7 @@ class CreateExperimentRequestScreen(QWidget):
     def _load_schema_and_build_form(self):
         try:
             if not _table_exists(self._table):
-                raise RuntimeError(f"Tabelle nicht gefunden: {self._table}")
+                raise RuntimeError(f"Table not found: {self._table}")
             self._cols = _get_table_columns(self._table)
         except Exception as e:
             QMessageBox.critical(self, "DB Error", str(e))
@@ -2831,7 +2831,7 @@ class CreateExperimentRequestScreen(QWidget):
             self._add_field_row(col)
 
         if not self._widgets:
-            self._form_layout.addRow(QLabel("(Keine Felder gefunden)"), QLabel(""))
+            self._form_layout.addRow(QLabel("(No fields found)"), QLabel(""))
 
     # ---------------- Load existing request (Edit) ----------------
 
@@ -2847,7 +2847,7 @@ class CreateExperimentRequestScreen(QWidget):
                 cur.execute(f"SELECT * FROM [{self._table}] WHERE [ID]=?", [request_id])
                 row = cur.fetchone()
                 if not row:
-                    QMessageBox.warning(self, "Nicht gefunden", "Der gewaehlte Request wurde nicht gefunden.")
+                    QMessageBox.warning(self, "Not found", "The selected request was not found.")
                     return
                 col_names = [d[0] for d in (cur.description or [])]
         except Exception as e:
@@ -3401,11 +3401,11 @@ class CreateExperimentRequestScreen(QWidget):
                     if not has_text(w):
                         missing.append(label)
 
-                msg = "Please fill in at least title, reason for experiment, task, evaluation parameters and test conditions ausfüllen."
+                msg = "Please fill in at least title, reason for experiment, task, evaluation parameters and test conditions."
                 if missing:
-                    msg += "\n\nFehlt noch: " + ", ".join(missing)
+                    msg += "\n\nStill missing: " + ", ".join(missing)
 
-                QMessageBox.warning(self, "Fehlende Angaben", msg)
+                QMessageBox.warning(self, "Missing information", msg)
                 return
 
             is_insert = self._edit_request_id in (None, "")
@@ -3416,7 +3416,7 @@ class CreateExperimentRequestScreen(QWidget):
                 QMessageBox.critical(
                     self,
                     "Login fehlt",
-                    "CreatedBy konnte nicht gesetzt werden, weil keine User-ID gefunden wurde. Bitte neu anmelden.",
+                    "CreatedBy could not be set because no user ID was found. Please log in again.",
                 )
                 return
 
@@ -3428,7 +3428,7 @@ class CreateExperimentRequestScreen(QWidget):
 
                 cols = [k for k, v in values.items() if v is not None]
                 if not cols:
-                    QMessageBox.warning(self, "Hinweis", "Keine Werte zum Speichern.")
+                    QMessageBox.warning(self, "Note", "Nothing to save.")
                     return
 
                 placeholders = ",".join(["?"] * len(cols))
@@ -3444,7 +3444,7 @@ class CreateExperimentRequestScreen(QWidget):
                     except Exception:
                         pass
 
-                QMessageBox.information(self, "Gespeichert", "Experiment Request wurde gespeichert.")
+                QMessageBox.information(self, "Gespeichert", "Experiment request saved.")
                 self._go_experiment_request()
             else:
                 # Nichts geaendert? Dann gar nichts schreiben - kein Status-
@@ -3469,7 +3469,7 @@ class CreateExperimentRequestScreen(QWidget):
                     # (nicht mehr zwangsweise auf 1 zuruecksetzen, siehe
                     # Bugreport).
                     if not cols:
-                        QMessageBox.warning(self, "Hinweis", "Keine Werte zum Speichern.")
+                        QMessageBox.warning(self, "Note", "Nothing to save.")
                         return
 
                     # A superuser directly editing a LIVE row (no copy
@@ -3498,7 +3498,7 @@ class CreateExperimentRequestScreen(QWidget):
                         except Exception:
                             pass
 
-                    QMessageBox.information(self, "Gespeichert", "Experiment Request wurde aktualisiert.")
+                    QMessageBox.information(self, "Gespeichert", "Experiment request updated.")
                     self._go_experiment_request()
                 else:
                     # Normaler Nutzer bearbeitet ein bereits gespeichertes
@@ -3515,9 +3515,8 @@ class CreateExperimentRequestScreen(QWidget):
                     QMessageBox.information(
                         self,
                         "Zur Pruefung eingereicht",
-                        "Deine Aenderungen wurden als Vorschlag gespeichert und warten auf "
-                        "die Freigabe durch einen Superuser. Der bestehende Request bleibt "
-                        "bis dahin unveraendert.",
+                        "Your changes were saved as a proposal and are waiting for approval by a superuser. Until "
+                        "then the existing request stays unchanged.",
                     )
                     self._go_experiment_request()
 

@@ -63,14 +63,14 @@ def statimat_import_impl(self) -> None:
 
     sid = getattr(self, "_series_pk", None)
     if sid in (None, ""):
-        QMessageBox.information(self, "Statimat import", "Keine TrialSeries geladen.")
+        QMessageBox.information(self, "Statimat import", "No trial series loaded.")
         return
 
     # Build allow-list from attached PDFs
     try:
         attached = self._fetch_series_pdfs(sid)
     except Exception as e:
-        QMessageBox.warning(self, "Statimat import", f"Konnte PDF-Liste nicht laden:\n{e}")
+        QMessageBox.warning(self, "Statimat import", f"Could not load the PDF list:\n{e}")
         return
 
     allowed = set()
@@ -200,7 +200,7 @@ def statimat_import_impl(self) -> None:
 
     for pdf_idx, pdf_path in enumerate(chosen):
         prog = QProgressDialog(
-            f"Lese {os.path.basename(pdf_path)}…", "Abbrechen",
+            f"Lese {os.path.basename(pdf_path)}…", "Cancel",
             0, len(chosen), self
         )
         prog.setWindowTitle("Statimat import")
@@ -254,10 +254,10 @@ def statimat_import_impl(self) -> None:
             is_ds = (geraet == 'STATIMAT DS')
             is_m = (geraet == 'STATIMAT M')
             if is_ds and not stat_ds_table:
-                skipped.append(f"{os.path.basename(pdf_path)}: Statimat-DS Tabelle nicht gefunden.")
+                skipped.append(f"{os.path.basename(pdf_path)}: Statimat DS table not found.")
                 continue
             if is_m and not stat_m_table:
-                skipped.append(f"{os.path.basename(pdf_path)}: Statimat-M Tabelle nicht gefunden.")
+                skipped.append(f"{os.path.basename(pdf_path)}: Statimat M table not found.")
                 continue
 
             target_table = stat_ds_table if is_ds else stat_m_table
@@ -278,7 +278,7 @@ def statimat_import_impl(self) -> None:
                     trial_id = _trial_id_for_spool(cur, int(spool_no))
                     if not trial_id:
                         skipped.append(
-                            f"{os.path.basename(pdf_path)} / Spule {spool_no}: Kein passender Trial gefunden.")
+                            f"{os.path.basename(pdf_path)} / spool {spool_no}: no matching trial found.")
                         continue
 
                     # Upsert statimat row
@@ -389,13 +389,13 @@ def statimat_import_impl(self) -> None:
                 )
         except Exception:
             pass  # Tracking darf nie den Import-Flow stoeren
-    msg = f"Import fertig.\n\nImportierte Spulen: {imported}"
+    msg = f"Import finished.\n\nImported spools: {imported}"
     if skipped:
         msg += "\n\nSkipped:\n" + "\n".join(skipped[:50])
         if len(skipped) > 50:
             msg += f"\n... ({len(skipped) - 50} weitere)"
     if errors:
-        msg += "\n\nFehler:\n" + "\n".join(errors[:50])
+        msg += "\n\nErrors:\n" + "\n".join(errors[:50])
         if len(errors) > 50:
             msg += f"\n... ({len(errors) - 50} weitere)"
 
@@ -426,14 +426,14 @@ def itemat_import_impl(self) -> None:
 
     sid = getattr(self, "_series_pk", None)
     if sid in (None, ""):
-        QMessageBox.information(self, "Itemat import", "Keine TrialSeries geladen.")
+        QMessageBox.information(self, "Itemat import", "No trial series loaded.")
         return
 
     # Ziel-Tabelle prüfen
     itemat_table = "tblLaborItematLab"
     if not table_exists(itemat_table):
         QMessageBox.warning(self, "Itemat import",
-                            f"Tabelle '{itemat_table}' nicht gefunden.")
+                            f"Tabelle '{itemat_table}' not found.")
         return
 
     # Angehängte PDFs laden
@@ -441,7 +441,7 @@ def itemat_import_impl(self) -> None:
         attached = self._fetch_series_pdfs(sid)
     except Exception as e:
         QMessageBox.warning(self, "Itemat import",
-                            f"Konnte PDF-Liste nicht laden:\n{e}")
+                            f"Could not load the PDF list:\n{e}")
         return
 
     if not attached:
@@ -519,7 +519,7 @@ def itemat_import_impl(self) -> None:
         try:
             # Progress-Dialog
             prog = QProgressDialog(
-                f"Lese {os.path.basename(pdf_path)}…", "Abbrechen", 0, 100, self
+                f"Lese {os.path.basename(pdf_path)}…", "Cancel", 0, 100, self
             )
             prog.setWindowTitle("Itemat import")
             prog.setWindowModality(Qt.WindowModal)
@@ -538,10 +538,10 @@ def itemat_import_impl(self) -> None:
             prog.close()
 
         except InterruptedError:
-            skipped.append(f"{os.path.basename(pdf_path)}: Abgebrochen.")
+            skipped.append(f"{os.path.basename(pdf_path)}: cancelled.")
             continue
         except Exception as e:
-            errors.append(f"{os.path.basename(pdf_path)}: Parser-Fehler: {e}")
+            errors.append(f"{os.path.basename(pdf_path)}: parser error: {e}")
             continue
 
         with get_connection() as cn:
@@ -551,8 +551,8 @@ def itemat_import_impl(self) -> None:
                 versuch_nr = rec.get("versuch_nr")
                 if not versuch_nr:
                     skipped.append(
-                        f"{os.path.basename(pdf_path)} / Seite {rec['page']}: "
-                        f"Versuchsnummer nicht bestimmbar."
+                        f"{os.path.basename(pdf_path)} / page {rec['page']}: "
+                        f"trial number could not be determined."
                     )
                     continue
 
@@ -566,7 +566,7 @@ def itemat_import_impl(self) -> None:
                 if not row or row[0] is None:
                     skipped.append(
                         f"{os.path.basename(pdf_path)} / V{versuch_nr}: "
-                        f"Kein passender Trial gefunden."
+                        f"no matching trial found."
                     )
                     continue
 
@@ -690,13 +690,13 @@ def itemat_import_impl(self) -> None:
         except Exception:
             pass
 
-    msg = f"Itemat import fertig.\n\nImportierte Versuche: {imported}"
+    msg = f"Itemat import finished.\n\nImported trials: {imported}"
     if skipped:
         msg += "\n\nSkipped:\n" + "\n".join(skipped[:50])
         if len(skipped) > 50:
             msg += f"\n... ({len(skipped) - 50} weitere)"
     if errors:
-        msg += "\n\nFehler:\n" + "\n".join(errors[:50])
+        msg += "\n\nErrors:\n" + "\n".join(errors[:50])
         if len(errors) > 50:
             msg += f"\n... ({len(errors) - 50} weitere)"
 

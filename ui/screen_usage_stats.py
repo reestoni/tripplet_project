@@ -105,7 +105,7 @@ class UsageRankingChart(FigureCanvas):
     def update_data(self, rows: List[Dict]):
         self.ax.clear()
         if not rows:
-            self.ax.text(0.5, 0.5, "Noch keine Daten", ha="center", va="center", transform=self.ax.transAxes)
+            self.ax.text(0.5, 0.5, "No data yet", ha="center", va="center", transform=self.ax.transAxes)
             self.draw()
             return
 
@@ -134,7 +134,7 @@ class LoginTimelineChart(FigureCanvas):
     def update_data(self, rows: List[Dict]):
         self.ax.clear()
         if not rows:
-            self.ax.text(0.5, 0.5, "Noch keine Daten", ha="center", va="center", transform=self.ax.transAxes)
+            self.ax.text(0.5, 0.5, "No data yet", ha="center", va="center", transform=self.ax.transAxes)
             self.draw()
             return
 
@@ -152,11 +152,13 @@ HELP_COLUMNS = ["Kind", "Question", "Result", "Count", "Users", "LastUsed"]
 # Reihenfolge = Handlungsbedarf (oben, was in Hilfe/Synonymen fehlt)
 HELP_KINDS = [
     ("help_search_noresult", "No result"),
+    ("help_whatsnew_noresult", "What's new: no result"),
     ("help_feedback_down", "Not helpful"),
     ("help_ai_error", "AI error"),
     ("help_search_noclick", "Searched, nothing opened"),
     ("help_ai_ask", "Asked AI"),
     ("help_search_open", "Opened"),
+    ("help_whatsnew_search", "What's new: searched"),
     ("help_feedback_up", "Helpful"),
 ]
 
@@ -293,7 +295,7 @@ class UsageStatsScreen(QWidget):
 
     def reload_data(self):
         if not table_exists("tblUsageLog"):
-            self.status_label.setText("tblUsageLog nicht gefunden auf diesem DB-Modus.")
+            self.status_label.setText("tblUsageLog not found in this DB mode.")
             return
 
         try:
@@ -330,7 +332,7 @@ class UsageStatsScreen(QWidget):
                 "FROM tblUsageLog WHERE EventType = 'feature' AND EventName LIKE 'help\\_%'"
             )
         except Exception as e:
-            QMessageBox.critical(self, "Fehler", f"Konnte Nutzungsstatistiken nicht laden:\n{e}")
+            QMessageBox.critical(self, "Error", f"Could not load the usage statistics:\n{e}")
             return
 
         self.chart_ranking.update_data(ranking)
@@ -346,7 +348,7 @@ class UsageStatsScreen(QWidget):
             t.resizeColumnsToContents()
 
         self.status_label.setText(
-            f"{len(logins)} Nutzer mit Logins · {len(screens)} Screens · {len(features)} Feature-Events"
+            f"{len(logins)} users with logins · {len(screens)} Screens · {len(features)} Feature-Events"
         )
 
     def _go_home(self):

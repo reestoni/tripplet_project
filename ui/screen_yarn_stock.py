@@ -905,10 +905,10 @@ class YarnStockScreen(QWidget):
         self.txt_rack.textChanged.connect(self._apply_rack_filter)
         rack_hdr.addWidget(self.txt_rack)
         rack_hdr.addStretch(1)
-        self.btn_stock_take = QPushButton("Start stock take…", objectName="GreenBtn")
+        self.btn_stock_take = QPushButton("Stock take…", objectName="GreenBtn")
         self.btn_stock_take.setToolTip(
-            "Compare a rack or slot with what is physically there: scan the spools, "
-            "fix differences, and handle missing spools.")
+            "Stock take round: see which locations are checked and which are still open, "
+            "scan the spools location by location, and get a summary of what was found where.")
         self.btn_stock_take.clicked.connect(self._on_stock_take)
         rack_hdr.addWidget(self.btn_stock_take)
         btn_rack_export = QPushButton("Export to Excel", objectName="GreyBtn")
@@ -1790,10 +1790,15 @@ class YarnStockScreen(QWidget):
             return
         if not self._confirm_pending_changes():
             return
-        self.reload_data()  # frischer Stand als Soll-Liste
-        from ui.widgets.stock_take_dialog import StockTakeDialog
-        dlg = StockTakeDialog(getattr(self, "_all_spools", []), getattr(self, "_yarn_name_map", {}),
-                              location_prefix=self.txt_rack.text(), parent=self)
+        # Inventur-Runde (Uebersicht pro Lagerplatz, ui/widgets/stock_take_round_dialog.py);
+        # die Spulen werden vor jeder Platz-Pruefung frisch geladen (= Soll-Liste).
+        from ui.widgets.stock_take_round_dialog import StockTakeRoundDialog
+
+        def _fresh_spools():
+            self.reload_data()
+            return getattr(self, "_all_spools", []), getattr(self, "_yarn_name_map", {})
+        dlg = StockTakeRoundDialog(_fresh_spools, writable=self._writable,
+                                   single_location_prefix=self.txt_rack.text(), parent=self)
         dlg.exec()
         if dlg.changed:
             self.reload_data()

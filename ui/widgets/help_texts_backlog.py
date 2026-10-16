@@ -63,8 +63,8 @@ TEXTS = {
                  ["Right-click the card → " + M("Rename trial series…") + "."],
                  "Requires access level 2 or higher."),
                 ("task", "Change machine or yarn, or delete a series",
-                 ["Right-click the card → " + M("Change machine…") + ", " + M("Garn neu zuweisen…")
-                  + " (reassign yarn) or " + M("Delete trial series…") + "."],
+                 ["Right-click the card → " + M("Change machine…") + ", " + M("Reassign yarn…")
+                  + " or " + M("Delete trial series…") + "."],
                  "Machine and yarn: superusers only. Deleting: whoever may move the card (see <i>Rules</i>; in "
                  "To Be Cleaned superusers only). "
                  "A deleted series can be restored by a superuser for 90 days: Sidebar → <i>Superuser</i> → "
@@ -116,7 +116,7 @@ TEXTS = {
                     [M("Open in New Tab") + " / " + M("Open in New Window") + " / "
                      + M("Change priority…") + " / " + M("Change status…"), "Everyone (status rules above apply)"],
                     [M("Rename trial series…"), "Access level 2 or higher"],
-                    [M("Garn neu zuweisen…") + " / " + M("Change machine…"), "Superusers only"],
+                    [M("Reassign yarn…") + " / " + M("Change machine…"), "Superusers only"],
                     [M("Delete trial series…"), "Whoever may move the card (see above); in To Be Cleaned superusers only"],
                 ]),
                 ("h", "Retests"),
@@ -168,7 +168,7 @@ TEXTS = {
                  ["Rechtsklick auf die Karte → " + M("Rename trial series…") + "."],
                  "Erfordert Access Level 2 oder höher."),
                 ("task", "Maschine oder Garn ändern, oder eine Serie löschen",
-                 ["Rechtsklick auf die Karte → " + M("Change machine…") + ", " + M("Garn neu zuweisen…")
+                 ["Rechtsklick auf die Karte → " + M("Change machine…") + ", " + M("Reassign yarn…")
                   + " oder " + M("Delete trial series…") + "."],
                  "Maschine und Garn: nur Superuser. Löschen: wer die Karte verschieben darf (siehe <i>Regeln</i>; "
                  "in To Be Cleaned nur Superuser). "
@@ -221,7 +221,7 @@ TEXTS = {
                     [M("Open in New Tab") + " / " + M("Open in New Window") + " / "
                      + M("Change priority…") + " / " + M("Change status…"), "Alle (es gelten die Status-Regeln oben)"],
                     [M("Rename trial series…"), "Access Level 2 oder höher"],
-                    [M("Garn neu zuweisen…") + " / " + M("Change machine…"), "Nur Superuser"],
+                    [M("Reassign yarn…") + " / " + M("Change machine…"), "Nur Superuser"],
                     [M("Delete trial series…"), "Wer die Karte verschieben darf (siehe oben); in To Be Cleaned nur Superuser"],
                 ]),
                 ("h", "Nachmessungen (Retest)"),
@@ -273,8 +273,8 @@ TEXTS = {
                  ["Clic derecho en la tarjeta → " + M("Rename trial series…") + "."],
                  "Requiere nivel de acceso 2 o superior."),
                 ("task", "Cambiar máquina o hilo, o borrar una serie",
-                 ["Clic derecho en la tarjeta → " + M("Change machine…") + ", " + M("Garn neu zuweisen…")
-                  + " (reasignar hilo) o " + M("Delete trial series…") + "."],
+                 ["Clic derecho en la tarjeta → " + M("Change machine…") + ", " + M("Reassign yarn…")
+                  + " o " + M("Delete trial series…") + "."],
                  "Máquina e hilo: solo superusuarios. Borrar: quien puede mover la tarjeta (ver <i>Reglas</i>; "
                  "en To Be Cleaned solo superusuarios). "
                  "Un superusuario puede recuperar una serie borrada durante 90 días: barra lateral → "
@@ -326,7 +326,7 @@ TEXTS = {
                     [M("Open in New Tab") + " / " + M("Open in New Window") + " / "
                      + M("Change priority…") + " / " + M("Change status…"), "Todos (se aplican las reglas de estado de arriba)"],
                     [M("Rename trial series…"), "Nivel de acceso 2 o superior"],
-                    [M("Garn neu zuweisen…") + " / " + M("Change machine…"), "Solo superusuarios"],
+                    [M("Reassign yarn…") + " / " + M("Change machine…"), "Solo superusuarios"],
                     [M("Delete trial series…"), "Quien puede mover la tarjeta (ver arriba); en To Be Cleaned solo superusuarios"],
                 ]),
                 ("h", "Repeticiones (retest)"),

@@ -91,7 +91,7 @@ class ScoreBarChart(QWidget):
         if not self._data:
             p = QPainter(self)
             p.setPen(QColor("#888"))
-            p.drawText(self.rect(), Qt.AlignCenter, "Keine Daten")
+            p.drawText(self.rect(), Qt.AlignCenter, "No data")
             return
 
         p = QPainter(self)
@@ -169,7 +169,7 @@ class ParallelCoordChart(QWidget):
             p = QPainter(self)
             p.setPen(QColor("#888"))
             p.drawText(self.rect(), Qt.AlignCenter,
-                       "Keine Daten oder keine Weighted/Distance Targets definiert")
+                       "No data or no weighted/distance targets defined")
             return
 
         p = QPainter(self)
@@ -316,17 +316,17 @@ class FilterRow(QWidget):
         row.addWidget(self._op)
 
         self._v1 = QLineEdit()
-        self._v1.setPlaceholderText("Wert")
+        self._v1.setPlaceholderText("Value")
         self._v1.setFixedWidth(65)
         row.addWidget(self._v1)
 
-        self._lbl_bis = QLabel("bis")
+        self._lbl_bis = QLabel("to")
         self._lbl_bis.setStyleSheet("color:#888;font-size:11px;")
         self._lbl_bis.setFixedWidth(16)
         row.addWidget(self._lbl_bis)
 
         self._v2 = QLineEdit()
-        self._v2.setPlaceholderText("Wert")
+        self._v2.setPlaceholderText("Value")
         self._v2.setFixedWidth(65)
         row.addWidget(self._v2)
 
@@ -346,7 +346,7 @@ class FilterRow(QWidget):
         self._selected_ids    = []
         self._selected_labels = []
 
-        self._btn_select = QPushButton("Alle / Auswahl ▾")
+        self._btn_select = QPushButton("All / selection ▾")
         self._btn_select.setFixedHeight(24)
         self._btn_select.setMinimumWidth(160)
         self._btn_select.setStyleSheet(
@@ -433,7 +433,7 @@ class FilterRow(QWidget):
 
     def _update_btn_text(self):
         if not self._selected_labels:
-            self._btn_select.setText("Alle / Auswahl ▾")
+            self._btn_select.setText("All / selection ▾")
         elif len(self._selected_labels) <= 2:
             self._btn_select.setText(", ".join(self._selected_labels) + " ▾")
         else:
@@ -523,17 +523,17 @@ class TargetRow(QWidget):
         row1.addWidget(self._op)
 
         self._v1 = QLineEdit()
-        self._v1.setPlaceholderText("Wert")
+        self._v1.setPlaceholderText("Value")
         self._v1.setFixedWidth(65)
         row1.addWidget(self._v1)
 
-        self._lbl_bis = QLabel("bis")
+        self._lbl_bis = QLabel("to")
         self._lbl_bis.setStyleSheet("color:#888;font-size:11px;")
         self._lbl_bis.setFixedWidth(16)
         row1.addWidget(self._lbl_bis)
 
         self._v2 = QLineEdit()
-        self._v2.setPlaceholderText("Wert")
+        self._v2.setPlaceholderText("Value")
         self._v2.setFixedWidth(65)
         row1.addWidget(self._v2)
 
@@ -577,7 +577,7 @@ class TargetRow(QWidget):
         row2_lay.addWidget(QLabel("Richtung:", styleSheet="color:#aaa;font-size:11px;"))
         self._direction = QComboBox()
         self._direction.addItem("higher is better", "higher")
-        self._direction.addItem("tiefer ist besser", "lower")
+        self._direction.addItem("lower is better", "lower")
         self._direction.addItem("genau treffen",     "exact")
         self._direction.setFixedWidth(130)
         row2_lay.addWidget(self._direction)
@@ -872,8 +872,8 @@ class AdhocFieldDialog:
         lay.setSpacing(10)
 
         lay.addWidget(QLabel(
-            "Select a table and column. The field will be used directly.\n"
-            "und bei Bedarf automatisch in tblRequirementField registriert.",
+            "Select a table and column. The field will be used directly\n"
+            "and registered in tblRequirementField automatically if needed.",
             styleSheet="color:#aaa; font-size:11px;"
         ))
 
@@ -894,7 +894,7 @@ class AdhocFieldDialog:
 
         # Spalten-Dropdown
         row_col = QHBoxLayout()
-        row_col.addWidget(QLabel("Spalte:     "))
+        row_col.addWidget(QLabel("Column:     "))
         combo_col = QComboBox()
         combo_col.setMinimumWidth(260)
         row_col.addWidget(combo_col)
@@ -906,7 +906,7 @@ class AdhocFieldDialog:
         row_lbl.addWidget(QLabel("Label:      "))
         edit_lbl = QLineEdit()
         edit_lbl.setMinimumWidth(260)
-        edit_lbl.setPlaceholderText("Leer lassen = Spaltenname verwenden")
+        edit_lbl.setPlaceholderText("Leave empty = use the column name")
         row_lbl.addWidget(edit_lbl)
         row_lbl.addStretch()
         lay.addLayout(row_lbl)
@@ -955,7 +955,7 @@ class AdhocFieldDialog:
                     dtype = c["DATA_TYPE"]
                     combo_col.addItem(f"{cname}  [{dtype}]", cname)
             except Exception as ex:
-                combo_col.addItem(f"Fehler: {ex}", None)
+                combo_col.addItem(f"Error: {ex}", None)
 
         combo_tbl.currentIndexChanged.connect(_load_columns)
         _load_columns(0)
@@ -1463,7 +1463,7 @@ class QuickScanScreen(QWidget):
         btn_clear.clicked.connect(self._clear_all)
         lh_lay.addWidget(btn_clear)
 
-        btn_load_rs = QPushButton("📂 Laden")
+        btn_load_rs = QPushButton("📂 Load")
         btn_load_rs.setToolTip("Gespeichertes Ruleset laden")
         btn_load_rs.setFixedHeight(24)
         btn_load_rs.setStyleSheet(
@@ -1474,8 +1474,8 @@ class QuickScanScreen(QWidget):
         btn_load_rs.clicked.connect(self._load_ruleset_dialog)
         lh_lay.addWidget(btn_load_rs)
 
-        btn_save_rs = QPushButton("💾 Speichern")
-        btn_save_rs.setToolTip("Aktuelles Ruleset speichern")
+        btn_save_rs = QPushButton("💾 Save")
+        btn_save_rs.setToolTip("Save the current ruleset")
         btn_save_rs.setFixedHeight(24)
         btn_save_rs.setStyleSheet(
             "QPushButton { background:#1e4a2d; color:#e2e8f0; border:1px solid #39A650;"
@@ -1629,7 +1629,7 @@ class QuickScanScreen(QWidget):
             adv_lbl.setStyleSheet("font-size:13px; font-weight:bold;")
             adv_hdr.addWidget(adv_lbl)
             adv_hdr.addStretch()
-            self._btn_qs_advisor = QPushButton("🦉 Athena wecken")
+            self._btn_qs_advisor = QPushButton("🦉 Wake Athena")
             self._btn_qs_advisor.setObjectName("GreenBtn")
             self._btn_qs_advisor.setFixedHeight(30)
             self._btn_qs_advisor.setMinimumWidth(170)
@@ -1649,7 +1649,7 @@ class QuickScanScreen(QWidget):
             adv_hdr.addWidget(self._btn_qs_advisor_reset)
             adv_lay.addLayout(adv_hdr)
 
-            hint = QLabel("~ CHF 0.02 pro Analyse  ·  Anthropic API  ·  Kein Training")
+            hint = QLabel("~ CHF 0.02 per analysis  ·  Anthropic API  ·  no training")
             hint.setStyleSheet("color:#666; font-size:10px;")
             adv_lay.addWidget(hint)
 
@@ -1673,13 +1673,15 @@ class QuickScanScreen(QWidget):
                 "border-radius:6px; padding:12px;"
             )
             self._qs_advisor_output.setPlaceholderText(
-                "Please run a Quick Scan first, then start the analysis.\n\n"
-                "Athena analysiert die Top 25 Treffer:\n"
-                "  • Welche Jets / Serien am besten abschneiden und warum\n"
-                "  • Welche Rules knapp verfehlt werden\n"
-                "  • Was die Top-Performer gemeinsam haben\n"
-                "  • Concrete recommendations for the next trial\n\n"
-                "Nach der Analyse kannst du Folgefragen stellen."
+                "Please run a Quick Scan first, then start the analysis.\n"
+                "\n"
+                "Athena analyses the top 25 hits:\n"
+                "  • Which jets / series perform best and why\n"
+                "  • Which rules are narrowly missed\n"
+                "  • What the top performers have in common\n"
+                "  • Concrete recommendations for the next trial\n"
+                "\n"
+                "After the analysis you can ask follow-up questions."
             )
             qs_out_lay.addWidget(self._qs_advisor_output)
             adv_lay.addWidget(qs_output_container, 1)
@@ -1705,7 +1707,7 @@ class QuickScanScreen(QWidget):
             self._qs_chat_input = QTextEdit()
             self._qs_chat_input.setFixedHeight(52)
             self._qs_chat_input.setPlaceholderText(
-                "z.B. «Was haben die Top-3 gemeinsam?» oder «Warum scheitert Rule X so oft?»"
+                "e.g. «What do the top 3 have in common?» or «Why does rule X fail so often?»"
             )
             self._qs_chat_input.setStyleSheet(
                 "background:#111827; color:#e5e7eb; font-size:12px;"
@@ -1739,7 +1741,7 @@ class QuickScanScreen(QWidget):
 
         rl.addWidget(self._tabs, 1)
 
-        self._lbl_status = QLabel("Filter und Targets waehlen, dann Run.",
+        self._lbl_status = QLabel("Choose filters and targets, then Run.",
             styleSheet="color:#888;font-size:11px;padding:4px 12px;")
         rl.addWidget(self._lbl_status)
 
@@ -1774,12 +1776,12 @@ class QuickScanScreen(QWidget):
 
         filters, targets = self._get_all()
         if not filters and not targets:
-            QMessageBox.information(self, "Ruleset speichern",
-                "Keine Filter oder Targets gesetzt.")
+            QMessageBox.information(self, "Save ruleset",
+                "No filters or targets set.")
             return
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("Ruleset speichern")
+        dlg.setWindowTitle("Save ruleset")
         dlg.setMinimumWidth(380)
         lay = QVBoxLayout(dlg)
         lay.setSpacing(10)
@@ -1793,7 +1795,7 @@ class QuickScanScreen(QWidget):
         lay.addWidget(QLabel("Beschreibung (optional):"))
         desc_edit = QTextEdit()
         desc_edit.setFixedHeight(70)
-        desc_edit.setPlaceholderText("Kurze Beschreibung des Rulesets...")
+        desc_edit.setPlaceholderText("Short description of the ruleset...")
         lay.addWidget(desc_edit)
 
         btns = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -1806,7 +1808,7 @@ class QuickScanScreen(QWidget):
 
         name = name_edit.text().strip()
         if not name:
-            QMessageBox.warning(self, "Ruleset speichern", "Bitte einen Namen eingeben.")
+            QMessageBox.warning(self, "Save ruleset", "Please enter a name.")
             return
         desc = desc_edit.toPlainText().strip()
 
@@ -1870,11 +1872,11 @@ class QuickScanScreen(QWidget):
                         [sort_order * 10 + int(dir_code), set_id, field_id, sort_order]
                     )
 
-            QMessageBox.information(self, "Ruleset gespeichert",
-                f"«{name}» wurde gespeichert ({len(all_rows)} Regeln).")
+            QMessageBox.information(self, "Ruleset saved",
+                f"«{name}» was saved ({len(all_rows)} Regeln).")
 
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Speichern", str(e))
+            QMessageBox.critical(self, "Error while saving", str(e))
 
     def _load_ruleset_dialog(self):
         """Zeigt alle gespeicherten Rulesets und lädt das gewählte in die UI."""
@@ -1890,12 +1892,12 @@ class QuickScanScreen(QWidget):
                 []
             )
         except Exception as e:
-            QMessageBox.critical(self, "DB Fehler", str(e))
+            QMessageBox.critical(self, "DB error", str(e))
             return
 
         if not sets:
             QMessageBox.information(self, "Load ruleset",
-                "Keine gespeicherten Rulesets gefunden.")
+                "No saved rulesets found.")
             return
 
         dlg = QDialog(self)
@@ -1942,7 +1944,7 @@ class QuickScanScreen(QWidget):
                 execute("UPDATE tblrequirementset SET is_active=0 WHERE set_id=%s", [sid])
                 lst.takeItem(lst.currentRow())
             except Exception as ex:
-                QMessageBox.critical(dlg, "Fehler", str(ex))
+                QMessageBox.critical(dlg, "Error", str(ex))
         btn_delete.clicked.connect(_delete)
         btn_row.addWidget(btn_delete)
         btn_row.addStretch()
@@ -1983,7 +1985,7 @@ class QuickScanScreen(QWidget):
                 [set_id]
             )
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Laden", str(e))
+            QMessageBox.critical(self, "Error while loading", str(e))
             return
 
         if not rules:
@@ -2135,7 +2137,7 @@ class QuickScanScreen(QWidget):
                 "WHERE is_active=1 ORDER BY sort_order, field_label", [])
             self._all_fields = rows or []
         except Exception as e:
-            QMessageBox.warning(self, "DB Fehler", str(e))
+            QMessageBox.warning(self, "DB error", str(e))
             return
         self._populate_combo(self._combo_filter)
         self._populate_combo(self._combo_target)
@@ -2193,7 +2195,7 @@ class QuickScanScreen(QWidget):
             self._del(r, "target")
         self._table.setRowCount(0)
         self._lbl_title.setText("Resultate")
-        self._lbl_status.setText("Filter und Targets waehlen, dann Run.")
+        self._lbl_status.setText("Choose filters and targets, then Run.")
 
     def _get_all(self):
         filters = [r.get_filter() for r in self._filter_rows]
@@ -2203,7 +2205,7 @@ class QuickScanScreen(QWidget):
     def _show_sql(self):
         filters, targets = self._get_all()
         if not filters and not targets:
-            QMessageBox.information(self, "Show SQL", "Keine Filter/Targets ausgefuellt.")
+            QMessageBox.information(self, "Show SQL", "No filters/targets filled in.")
             return
         txt = self._evaluator.build_debug_info(filters, targets)
         dlg = QMessageBox(self)
@@ -2216,17 +2218,17 @@ class QuickScanScreen(QWidget):
         filters, targets = self._get_all()
         if not filters and not targets:
             QMessageBox.information(self, "Quick Scan",
-                "Bitte mindestens einen Filter oder Target eingeben.")
+                "Please enter at least one filter or target.")
             return
-        self._lbl_status.setText("Suche laeuft ...")
+        self._lbl_status.setText("Searching ...")
         self._table.setRowCount(0)
         self._score_chart.set_data([])
         self.repaint()
         try:
             results, w_targets, d_targets = self._evaluator.run(filters, targets)
         except Exception as e:
-            QMessageBox.critical(self, "Fehler", str(e))
-            self._lbl_status.setText("Fehler.")
+            QMessageBox.critical(self, "Error", str(e))
+            self._lbl_status.setText("Error.")
             return
         self._show_results(results, filters, targets, w_targets, d_targets)
 
@@ -2238,7 +2240,7 @@ class QuickScanScreen(QWidget):
             ("trial_nr",      "Trial #"),
             ("series_name",   "Series"),
             ("jet_name",      "Jet"),
-            ("yarn_name",     "Garn"),
+            ("yarn_name",     "Yarn"),
             ("titer",         "Titer"),
             ("filamente",     "Fil."),
         ]
@@ -2262,7 +2264,7 @@ class QuickScanScreen(QWidget):
 
         if not results:
             self._lbl_title.setText("Resultate – 0 Treffer")
-            self._lbl_status.setText("Keine Treffer gefunden.")
+            self._lbl_status.setText("No hits found.")
             self._table.setRowCount(0)
             return
 
@@ -2348,7 +2350,8 @@ class QuickScanScreen(QWidget):
         api_key = load_api_key()
         if not api_key:
             self._qs_advisor_output.setPlainText(
-                "⚠️  Kein API Key gefunden.\n\n"
+                "⚠️  No API key found.\n"
+                "\n"
                 "C:\\ProgramData\\TrippleT\\ai_secrets.json\n"
                 '{"anthropic_api_key": "sk-ant-..."}'
             )
@@ -2401,7 +2404,7 @@ Replace "Trial overview" with "Top-5 matches" (only the best 5 in detail)."""
         self._qs_chat_input.clear()
         self._btn_qs_advisor.setEnabled(False)
         self._btn_qs_advisor_send.setEnabled(False)
-        self._qs_advisor_status.setText("⏳  Athena denkt nach...")
+        self._qs_advisor_status.setText("⏳  Athena is thinking...")
 
         current_text = self._qs_advisor_output.toPlainText()
         separator = "\n\n" + "─" * 60 + "\n"
@@ -2523,7 +2526,7 @@ Antworte fokussiert und präzise. Format: 🔍 Befund | ⚠️ Ursache | ✅ Emp
                     for row in sorted(itemat_rows, key=lambda x: x.get("tension") or 0)
                 ]
             else:
-                entry["lab_itemat"] = "⚠️ keine Itemat-Daten"
+                entry["lab_itemat"] = "⚠️ no Itemat data"
 
             stat_m = lab.get("statimat_m")
             if stat_m:
@@ -2565,7 +2568,7 @@ Antworte fokussiert und präzise. Format: 🔍 Befund | ⚠️ Ursache | ✅ Emp
     def _on_qs_advisor_result(self, text: str):
         self._qs_advisor_output.setPlainText(text)
         self._qs_advisor_status.setText(
-            "✅  Analyse abgeschlossen  ·  Du kannst jetzt Fragen stellen"
+            "✅  Analysis finished  ·  You can ask questions now"
         )
         # Ersten Turn in History speichern
         self._qs_advisor_history = [
@@ -2606,14 +2609,14 @@ Antworte fokussiert und präzise. Format: 🔍 Befund | ⚠️ Ursache | ✅ Emp
         if current.endswith("⏳ ..."):
             current = current[:-len("⏳ ...")]
         self._qs_advisor_output.setPlainText(
-            current + f"\n\n❌  Fehler:\n{error_msg}" if current
-            else f"❌  Fehler:\n\n{error_msg}"
+            current + f"\n\n❌  Error:\n{error_msg}" if current
+            else f"❌  Error:\n\n{error_msg}"
         )
-        self._qs_advisor_status.setText("❌  Fehler")
+        self._qs_advisor_status.setText("❌  Error")
 
     def _on_qs_advisor_finished(self):
         self._btn_qs_advisor.setEnabled(bool(self._last_top25))
-        self._btn_qs_advisor.setText("🦉 Athena wecken")
+        self._btn_qs_advisor.setText("🦉 Wake Athena")
         self._btn_qs_advisor_send.setEnabled(bool(self._qs_advisor_history))
         if hasattr(self, "_qs_athena"):
             self._qs_athena.stop_working()
@@ -2710,7 +2713,7 @@ class _QsAdvisorWorker(QThread):
                 if b.get("type") == "text"
             ).strip()
 
-            self.result_ready.emit(text or "Keine Antwort erhalten.")
+            self.result_ready.emit(text or "No answer received.")
 
         except _urllib_err.HTTPError as e:
             body = ""

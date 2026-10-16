@@ -751,7 +751,7 @@ class _ReportBridge(QObject):
             safe  = re.sub(r'\s+', '_', safe)
             dflt  = f"SmartChart_{safe}_{now.strftime('%Y%m%d')}.pdf"
             out_path, _ = QFileDialog.getSaveFileName(
-                self._screen, "PDF Report speichern",
+                self._screen, "Save PDF report",
                 str(_pl.Path(_docs) / dflt), "PDF Files (*.pdf)"
             )
             if not out_path:
@@ -1161,7 +1161,7 @@ class _ReportBridge(QObject):
     def jsError(self, message: str) -> None:
         logger.error("JS ERROR: %s", message)
         from PySide6.QtWidgets import QMessageBox
-        QMessageBox.critical(self._screen, "JS Fehler", message)
+        QMessageBox.critical(self._screen, "JS error", message)
 
     @Slot()
     def getFreeQueryMeta(self) -> None:
@@ -1743,7 +1743,7 @@ class ReportScreen(QWidget):
             self._web.page().setWebChannel(self._channel)
             content_layout.addWidget(self._web)
         else:
-            fallback = QLabel("⚠️  PySide6-WebEngine nicht installiert.\npip install PySide6-WebEngine")
+            fallback = QLabel("⚠️  PySide6-WebEngine is not installed.\npip install PySide6-WebEngine")
             fallback.setAlignment(Qt.AlignCenter)
             fallback.setStyleSheet("font-size:14px; color:#c0392b; padding:40px;")
             content_layout.addWidget(fallback)

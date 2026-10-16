@@ -991,7 +991,7 @@ class ManageUserScreen(QWidget):
                 id_col = h
 
         if not username_col:
-            QMessageBox.critical(self, 'API Key', 'Username-Spalte nicht gefunden.')
+            QMessageBox.critical(self, 'API Key', 'Username column not found.')
             return
 
         sel_rows = self._source_selection_rows()
@@ -999,7 +999,7 @@ class ManageUserScreen(QWidget):
             self._set_status('Erst einen User selektieren.')
             return
         if len(sel_rows) != 1:
-            QMessageBox.information(self, 'API Key', 'Bitte genau einen User selektieren.')
+            QMessageBox.information(self, 'API Key', 'Please select exactly one user.')
             return
 
         src_row  = sel_rows[0]
@@ -1012,7 +1012,8 @@ class ManageUserScreen(QWidget):
         if not master_key:
             QMessageBox.critical(
                 self, 'API Key',
-                'MASTER_KEY nicht gefunden.\n\n'
+                'MASTER_KEY not found.\n'
+                '\n'
                 'secrets.enc missing or invalid.'
             )
             return
@@ -1070,7 +1071,7 @@ class ManageUserScreen(QWidget):
                 dlg.reject()
                 self._set_status(f'API key for {username} removed.')
             except Exception as e:
-                QMessageBox.critical(dlg, 'Fehler', str(e))
+                QMessageBox.critical(dlg, 'Error', str(e))
 
         btn_clear.clicked.connect(_do_clear)
 
@@ -1079,7 +1080,7 @@ class ManageUserScreen(QWidget):
 
         api_key = key_input.text().strip()
         if not api_key:
-            QMessageBox.warning(self, 'API Key', 'API Key darf nicht leer sein.')
+            QMessageBox.warning(self, 'API Key', 'The API key must not be empty.')
             return
         if not api_key.startswith('sk-ant-'):
             QMessageBox.warning(self, 'API Key', 'Invalid format – must start with "sk-ant-".')
@@ -1111,8 +1112,8 @@ class ManageUserScreen(QWidget):
             )
             self._set_status(f'API key for {username} set.')
         except Exception as e:
-            QMessageBox.critical(self, 'DB-Fehler', str(e))
-            self._set_status(f'Fehler: {e}', error=True)
+            QMessageBox.critical(self, 'DB error', str(e))
+            self._set_status(f'Error: {e}', error=True)
 
     def _on_delete(self):
         """Löscht die selektierten Benutzer nach Bestätigung aus der DB."""

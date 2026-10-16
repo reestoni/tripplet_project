@@ -92,7 +92,7 @@
     <text x="150" y="418" fill="#2b2b2b">Rack (e.g. "C"):</text>
     <rect x="246" y="404" width="40" height="22" rx="3" fill="#ffffff" stroke="#999999"/>
     <text x="256" y="419" fill="#2b2b2b">E</text>
-    <rect x="718" y="404" width="106" height="22" rx="3" fill="#39a650"/><text x="771" y="419" text-anchor="middle" fill="#ffffff">Start stock take…</text>
+    <rect x="718" y="404" width="106" height="22" rx="3" fill="#39a650"/><text x="771" y="419" text-anchor="middle" fill="#ffffff">Stock take…</text>
     <rect x="830" y="404" width="92" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb"/>
     <text x="876" y="419" text-anchor="middle" fill="#2b2b2b">Export to Excel</text>
     <rect x="56" y="432" width="866" height="20" fill="#ffffff"/>

@@ -1241,7 +1241,7 @@ def run_stab_models(vals: dict, progress_cb=None) -> dict:
                 else:
                     if progress_cb:
                         try:
-                            progress_cb(f"Lade Modell {fn}…")
+                            progress_cb(f"Loading model {fn}…")
                         except Exception:
                             pass
                     pkg = joblib.load(str(p))

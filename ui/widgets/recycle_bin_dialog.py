@@ -1,5 +1,7 @@
 """recycle_bin_dialog.py - Sidebar -> Superuser -> "Recycle Bin": deleted
-trial series, restorable for db.recycle_bin.RETENTION_DAYS days."""
+trial series, restorable for db.recycle_bin.RETENTION_DAYS days.
+Double-click / "Open in Show Experiment": look at the series first
+(ui/recycle_preview.py)."""
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
@@ -18,7 +20,8 @@ class RecycleBinDialog(QDialog):
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel(
             f"Deleted trial series can be restored here for {recycle_bin.RETENTION_DAYS} days, "
-            "with all trials, plies, lab values, images/PDF entries and notes."))
+            "with all trials, plies, lab values, images/PDF entries and notes. "
+            "Double-click a series to look at it in Show Experiment first."))
         self.tbl = QTableWidget(0, 5)
         self.tbl.setHorizontalHeaderLabels(["Deleted", "By", "What", "Name", "Contents"])
         self.tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -29,8 +32,13 @@ class RecycleBinDialog(QDialog):
         hh.setSectionResizeMode(QHeaderView.ResizeToContents)
         hh.setSectionResizeMode(3, QHeaderView.Stretch)
         self.tbl.itemSelectionChanged.connect(self._update_buttons)
+        self.tbl.cellDoubleClicked.connect(lambda *_a: self._preview())
         lay.addWidget(self.tbl, 1)
         row = QHBoxLayout()
+        self.btn_preview = QPushButton("Open in Show Experiment")
+        self.btn_preview.setToolTip("Look at the series before you decide (double-click works, too)")
+        self.btn_preview.clicked.connect(self._preview)
+        row.addWidget(self.btn_preview)
         self.btn_restore = QPushButton("Restore")
         self.btn_restore.clicked.connect(self._restore)
         row.addWidget(self.btn_restore)
@@ -50,6 +58,7 @@ class RecycleBinDialog(QDialog):
             self.tbl.setRowCount(0)
             self.btn_restore.setEnabled(False)
             self.btn_delete.setEnabled(False)
+            self.btn_preview.setEnabled(False)
             QMessageBox.information(self, "Recycle Bin",
                                     "The recycle bin is not set up in this database (or you are offline).")
             return
@@ -76,6 +85,16 @@ class RecycleBinDialog(QDialog):
         on = self._current() is not None
         self.btn_restore.setEnabled(on)
         self.btn_delete.setEnabled(on)
+        self.btn_preview.setEnabled(on and (e := self._current()) is not None
+                                    and (e.get("ObjectType") or "") == "trial series")
+
+    def _preview(self) -> None:
+        e = self._current()
+        if e is None or (e.get("ObjectType") or "") != "trial series":
+            return
+        from ui.recycle_preview import RecyclePreview
+        if RecyclePreview(e).start(self):
+            self.accept()  # the series is now open in its own tab
 
     def _restore(self) -> None:
         e = self._current()

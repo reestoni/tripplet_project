@@ -115,7 +115,7 @@ def _extract_page_text(pdf_path: str) -> List[str]:
     try:
         import pdfplumber
     except ImportError as e:
-        raise RuntimeError("pdfplumber ist nicht installiert. Installieren: pip install pdfplumber") from e
+        raise RuntimeError("pdfplumber is not installed. Please run: pip install pdfplumber") from e
 
     page_texts: List[str] = []
     with pdfplumber.open(pdf_path) as pdf:

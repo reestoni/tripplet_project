@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 from db.trial_reference import format_trial_number
 
 # Never offered: measured on the run, copies start empty (see
-# screen_show_experiment._TENSION_COLS_NOT_COPIED).
+# screen_show_experiment._col_not_copied(), which also empties the comments).
 _SKIP_COLS = {
     "yarntensionbeforejet", "yarntensionafterjet", "tensionbeforejet_core",
     "tensionafterjetinside", "tensionafterjetoutside",

@@ -37,7 +37,9 @@ TEXTS = {
                 ("task", "Enter or change a value",
                  ["Click the cell (7) and type the value, or double-click to edit it. Press Enter.",
                   f"Click {B('Save')} or press Ctrl+S."],
-                 "If you leave the screen with unsaved changes, TrippleT asks whether to save them. "
+                 "Changed cells stay <b>yellow</b> until you save; the button shows how many, e.g. "
+                 f"{B('Save (3)')}, and the tab gets a dot (●). If you leave the screen, close the tab or the "
+                 "program with unsaved changes, TrippleT asks whether to save them. "
                  "With access level 1 the screen is read-only."),
                 ("task", "Set the same value for many trials",
                  ["In <i>Machine Data</i> or <i>R&amp;D Machine Data</i>, right-click the parameter name in the "
@@ -102,8 +104,8 @@ TEXTS = {
                   "pressure or jet; on ATY also OF Core / OF Effect). Changed cells are highlighted. "
                   "<i>Show all fields</i> shows the other machine settings.",
                   f"Click {B('Copy n trials')}."],
-                 "Machine settings and plies are copied. Lab values and the yarn tensions before/after the "
-                 "jet of the copies stay empty. The new trials are added at the end and highlighted in the "
+                 "Machine settings and plies are copied. Lab values, comments and the yarn tensions before/after "
+                 "the jet of the copies stay empty. The new trials are added at the end and highlighted in the "
                  "table. Values per ply (e.g. T1/T2 tension) are changed afterwards in the table or in "
                  "<i>Manage plies</i>. Reference samples are never copied."),
                 ("task", "Add a reference sample (e.g. a customer's original spool)",
@@ -195,7 +197,9 @@ TEXTS = {
                 ("task", "Einen Wert eingeben oder ändern",
                  ["Die Zelle (7) anklicken und den Wert eintippen, oder doppelklicken zum Bearbeiten. Enter drücken.",
                   f"Auf {B('Save')} klicken oder Strg+S drücken."],
-                 "Verlässt du den Bildschirm mit ungespeicherten Änderungen, fragt TrippleT, ob gespeichert werden soll. "
+                 "Geänderte Zellen bleiben <b>gelb</b>, bis gespeichert ist; der Knopf zeigt die Anzahl, z.&nbsp;B. "
+                 f"{B('Save (3)')}, und der Tab bekommt einen Punkt (●). Verlässt du den Bildschirm oder schliesst "
+                 "den Tab oder das Programm mit ungespeicherten Änderungen, fragt TrippleT, ob gespeichert werden soll. "
                  "Mit Access Level 1 ist der Bildschirm nur lesbar."),
                 ("task", "Denselben Wert für viele Versuche setzen",
                  ["In <i>Machine Data</i> oder <i>R&amp;D Machine Data</i> mit Rechtsklick auf den Parameternamen in der "
@@ -263,8 +267,8 @@ TEXTS = {
                   "oder Jet; bei ATY auch OF Core / OF Effect). Geänderte Zellen werden hervorgehoben. "
                   "<i>Show all fields</i> zeigt die übrigen Maschineneinstellungen.",
                   f"Auf {B('Copy n trials')} klicken."],
-                 "Maschineneinstellungen und Plies werden kopiert. Die Laborwerte und die Fadenspannungen vor/nach "
-                 "Jet der Kopien bleiben leer. Die neuen Versuche werden hinten angehängt und in der Tabelle "
+                 "Maschineneinstellungen und Plies werden kopiert. Die Laborwerte, Kommentare und die "
+                 "Fadenspannungen vor/nach Jet der Kopien bleiben leer. Die neuen Versuche werden hinten angehängt und in der Tabelle "
                  "markiert. Werte pro Ply (z.&nbsp;B. T1/T2-Spannung) werden danach in der Tabelle oder in "
                  "<i>Manage plies</i> geändert. Referenzmuster werden nie mitkopiert."),
                 ("task", "Ein Referenzmuster hinzufügen (z.&nbsp;B. Originalspule eines Kunden)",
@@ -359,7 +363,9 @@ TEXTS = {
                 ("task", "Introducir o cambiar un valor",
                  ["Haz clic en la celda (7) y escribe el valor, o haz doble clic para editarlo. Pulsa Enter.",
                   f"Haz clic en {B('Save')} o pulsa Ctrl+S."],
-                 "Si sales de la pantalla con cambios sin guardar, TrippleT pregunta si quieres guardarlos. "
+                 "Las celdas cambiadas quedan en <b>amarillo</b> hasta que guardas; el botón muestra cuántas, p.&nbsp;ej. "
+                 f"{B('Save (3)')}, y la pestaña recibe un punto (●). Si sales de la pantalla o cierras la pestaña o el "
+                 "programa con cambios sin guardar, TrippleT pregunta si quieres guardarlos. "
                  "Con nivel de acceso 1 la pantalla es de solo lectura."),
                 ("task", "Poner el mismo valor en muchos ensayos",
                  ["En <i>Machine Data</i> o <i>R&amp;D Machine Data</i>, clic derecho en el nombre del parámetro en la "
@@ -426,8 +432,8 @@ TEXTS = {
                   "otra presión de aire u otro jet; en ATY también OF Core / OF Effect). Las celdas cambiadas se "
                   "resaltan. <i>Show all fields</i> muestra los demás ajustes de máquina.",
                   f"Haz clic en {B('Copy n trials')}."],
-                 "Se copian los ajustes de máquina y los plies. Los valores de laboratorio y las tensiones del "
-                 "hilo antes/después del jet de las copias quedan vacíos. Los ensayos nuevos se añaden al final y "
+                 "Se copian los ajustes de máquina y los plies. Los valores de laboratorio, los comentarios y las "
+                 "tensiones del hilo antes/después del jet de las copias quedan vacíos. Los ensayos nuevos se añaden al final y "
                  "se resaltan en la tabla. Los valores por ply (p.&nbsp;ej. tensión T1/T2) se cambian después en la "
                  "tabla o en <i>Manage plies</i>. Las muestras de referencia nunca se copian."),
                 ("task", "Añadir una muestra de referencia (p.&nbsp;ej. la bobina original de un cliente)",

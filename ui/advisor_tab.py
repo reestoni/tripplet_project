@@ -88,7 +88,7 @@ def _build_advisor_tab(self):
     lay.addLayout(hdr)
 
     # Kosten-Hinweis
-    hint = QLabel("~ CHF 0.02 pro Analyse  ·  Anthropic API  ·  7 Tage Retention  ·  Kein Training")
+    hint = QLabel("~ CHF 0.02 per analysis  ·  Anthropic API  ·  7 days retention  ·  no training")
     hint.setStyleSheet("color: #555; font-size: 10px;")
     lay.addWidget(hint)
 
@@ -134,14 +134,16 @@ def _build_advisor_tab(self):
         "strong, b { color: #f9fafb; }"
     )
     self._advisor_output.setPlaceholderText(
-        "Klicke «Athena wecken» um eine KI-Auswertung dieser TrialSeries zu erhalten.\n\n"
-        "Athena analysiert:\n"
-        "  • Jet-Geometrien aller Trials (Luftbohrung, GarnkanalBreite, Winkel, ...)\n"
-        "  • Itemat Lab / Itemat Plus (FPm, Stability pro Tension)\n"
-        "  • YarnScope / DTYoMat (Knotenklassen, ML-Prognosen Stab_03/06/10/13)\n"
-        "  • Statimat Reissfestigkeit und Dehnung\n"
-        "  • Gespeicherte Ruleset-Evaluationen (falls vorhanden)\n\n"
-        "Nach der Analyse kannst du Folgefragen stellen."
+        "Click «Wake Athena» to get an AI evaluation of this trial series.\n"
+        "\n"
+        "Athena analyses:\n"
+        "  • jet geometries of all trials (air hole, yarn channel width, angles, ...)\n"
+        "  • Itemat Lab / Itemat Plus (FPm, stability per tension)\n"
+        "  • YarnScope / DTYoMat (knot classes, ML forecasts Stab_03/06/10/13)\n"
+        "  • Statimat tenacity and elongation\n"
+        "  • saved ruleset evaluations (if any)\n"
+        "\n"
+        "After the analysis you can ask follow-up questions."
     )
     output_lay.addWidget(self._advisor_output)
     lay.addWidget(output_container, 1)
@@ -222,14 +224,18 @@ def _run_advisor(self):
     if not api_key:
         self._advisor_output_md = ""
         self._advisor_output.setPlainText(
-            "⚠️  Kein API Key gefunden.\n\n"
-            "Bitte ai_secrets.json anlegen:\n\n"
-            "    Pfad: C:\\ProgramData\\TrippleT\\ai_secrets.json\n\n"
-            "    Inhalt:\n"
-            '    {\n'
+            "⚠️  No API key found.\n"
+            "\n"
+            "Please create ai_secrets.json:\n"
+            "\n"
+            "    Path: C:\\ProgramData\\TrippleT\\ai_secrets.json\n"
+            "\n"
+            "    Content:\n"
+            "    {\n"
             '        "anthropic_api_key": "sk-ant-api03-..."\n'
-            '    }\n\n'
-            "API Key erstellen: https://console.anthropic.com/"
+            "    }\n"
+            "\n"
+            "Create an API key: https://console.anthropic.com/"
         )
         return
 
@@ -239,7 +245,7 @@ def _run_advisor(self):
     self._btn_advisor_run.setEnabled(False)
     self._btn_advisor_run.setText("🦉 Athena thinking…")
     self._btn_advisor_send.setEnabled(False)
-    self._advisor_status.setText("⏳  Daten werden geladen und analysiert...")
+    self._advisor_status.setText("⏳  Loading and analysing data...")
     self._advisor_output_md = ""
     self._advisor_output.setPlainText("")
     if hasattr(self, "_athena"):
@@ -272,7 +278,7 @@ def _send_advisor_question(self):
     self._advisor_chat_input.clear()
     self._btn_advisor_run.setEnabled(False)
     self._btn_advisor_send.setEnabled(False)
-    self._advisor_status.setText("⏳  Athena denkt nach...")
+    self._advisor_status.setText("⏳  Athena is thinking...")
 
     # Aktuelle Antwort in Output anhängen (User-Frage sichtbar machen)
     current_text = self._advisor_output_md
@@ -364,7 +370,7 @@ def _load_latest_advisor_report(self) -> None:
         {"role": "assistant", "content": text},
     ]
     created = rows[0].get("CreatedAt")
-    self._advisor_status.setText(f"📄  Gespeicherter Report geladen ({created})  ·  You can ask follow-up questions")
+    self._advisor_status.setText(f"📄  Saved report loaded ({created})  ·  You can ask follow-up questions")
     self._btn_advisor_send.setEnabled(True)
 
 
@@ -433,10 +439,10 @@ def _on_advisor_error(self, error_msg: str):
     if current.endswith("⏳ ..."):
         current = current[: -len("⏳ ...")]
     self._advisor_output_md = (
-        current + f"\n\n❌  Fehler:\n{error_msg}" if current else f"❌  Fehler:\n\n{error_msg}"
+        current + f"\n\n❌  Error:\n{error_msg}" if current else f"❌  Error:\n\n{error_msg}"
     )
     _set_advisor_markdown(self._advisor_output, self._advisor_output_md)
-    self._advisor_status.setText("❌  Fehler")
+    self._advisor_status.setText("❌  Error")
 
 
 def _on_advisor_finished(self):

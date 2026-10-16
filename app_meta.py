@@ -98,3 +98,7 @@ open_quick_search = None   # callable or None
 # Globale Hilfe-Suche (Sidebar "Help" / F1) - von MainWindow gesetzt, siehe
 # ui/widgets/help_search.py. None = noch nicht registriert.
 open_help_search = None    # callable or None
+
+# Papierkorb-Vorschau (ui/recycle_preview.py) - von MainWindow gesetzt:
+# (exp_pk, series_pk, experiment_id, setup(screen)) -> None
+open_show_experiment_preview = None

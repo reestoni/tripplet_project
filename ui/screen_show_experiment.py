@@ -98,7 +98,7 @@ from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal, QObject, QEvent, QSize, QRect, QRegularExpression
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal, QObject, QEvent, QSize, QRect, QRegularExpression, QTimer
 from PySide6.QtGui import QShortcut, QKeySequence, QPainter, QPen, QBrush, QFont, QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QWidget,
@@ -828,7 +828,7 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
     def _build_and_load(self) -> None:
         """Baut das Formular auf und lädt alle Request-Daten aus der DB."""
         if not er_table_exists(self._table):
-            QMessageBox.critical(self, "DB Error", f"Tabelle nicht gefunden: {self._table}")
+            QMessageBox.critical(self, "DB Error", f"Table not found: {self._table}")
             return
 
         cols = er_get_table_columns(self._table)
@@ -839,7 +839,7 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
                 cur.execute(f"SELECT * FROM [{self._table}] WHERE [ID]=?", [self._request_id])
                 row = cur.fetchone()
                 if not row:
-                    QMessageBox.warning(self, "Nicht gefunden", "Der verknuepfte Request wurde nicht gefunden.")
+                    QMessageBox.warning(self, "Not found", "The linked request was not found.")
                     return
                 names = [d[0] for d in (cur.description or [])]
                 data = {names[i]: row[i] for i in range(len(names))}
@@ -1144,6 +1144,16 @@ _TENSION_COLS_NOT_COPIED = {
     "tensionafterjetinside",
     "tensionafterjetoutside",
 }
+# Comments (tblTrialSettings.Comment, comment2..4, per ply) belong to the run
+# they were written for - a copy starts with them empty (Nutzerwunsch
+# 2026-10-16). Any column "comment" / "commentN" in tblTrial or tblTrialSettings.
+_COMMENT_COL_RE = re.compile(r"^comment\d*$")
+
+
+def _col_not_copied(col: str) -> bool:
+    """True for columns a trial copy starts with empty (tensions, comments)."""
+    cl = str(col).lower()
+    return cl in _TENSION_COLS_NOT_COPIED or bool(_COMMENT_COL_RE.match(cl))
 
 
 @dataclass
@@ -1207,6 +1217,24 @@ def _alert_icon(kind: str, cb: bool):
     icon = QIcon(pm)
     _ALERT_ICONS[key] = icon
     return icon
+
+
+# Recycle bin preview (ui/recycle_preview.py): number of Show Experiment
+# screens currently showing a series taken out of the recycle bin. Only then
+# do the models look up their table's screen - no cost otherwise.
+RECYCLE_PREVIEWS_OPEN = [0]
+
+
+def _model_in_recycle_preview(model) -> bool:
+    """True if the table showing `model` (FrozenFirstColumnTable sets
+    _ffct_owner) sits in a Show Experiment screen in recycle bin preview."""
+    ref = getattr(model, "_ffct_owner", None)
+    w = ref() if ref is not None else None
+    while w is not None:
+        if getattr(w, "_recycle_preview", None) is not None:
+            return True
+        w = w.parentWidget()
+    return False
 
 
 class PivotEditModel(QAbstractTableModel):
@@ -1463,8 +1491,25 @@ class PivotEditModel(QAbstractTableModel):
         """Löscht alle Zellen-Alerts."""
         self._cell_alerts.clear()
 
+    # Unsaved cells (Nutzerwunsch 2026-10-16): light yellow until saved.
+    _DIRTY_BG = QColor("#FFF1A8")
+    _DIRTY_TIP = "Changed - not saved yet"
+
+    def dirty_cells(self) -> set:
+        """{(data row, data col)} of cells changed since the last save. _dirty
+        is appended to in many places and replaced/cleared on save - cached
+        by (list identity, length) so data() stays cheap."""
+        d = self._dirty
+        key = (id(d), len(d))
+        if getattr(self, "_dirty_key", None) != key:
+            self._dirty_key = key
+            self._dirty_set = {(r, c) for r, c, *_ in d}
+        return self._dirty_set
+
     def _ctx_is_readonly(self) -> bool:
         """Gibt True zurück wenn der Screen im Read-Only-Modus ist."""
+        if RECYCLE_PREVIEWS_OPEN[0] and _model_in_recycle_preview(self):
+            return True
         try:
             lvl = int(getattr(app_meta, "access_level", lambda: 0)() or 0)
         except Exception:
@@ -1663,6 +1708,8 @@ class PivotEditModel(QAbstractTableModel):
                     return self._CB_RED_BG if _cb else QColor("#FFD0D0")  # helles Rot
                 if _cell_alert == "orange":
                     return self._CB_ORANGE_BG if _cb else QColor("#FFE5B4")  # helles Orange
+                if c > 0 and self._dirty and (dr, c - 1) in self.dirty_cells():
+                    return self._DIRTY_BG
                 _xb = self._cross_bg(r, c)
                 if _xb is not None:
                     return _xb
@@ -1691,6 +1738,8 @@ class PivotEditModel(QAbstractTableModel):
             return Qt.AlignCenter if c > 0 else (Qt.AlignVCenter | Qt.AlignLeft)
         if role == Qt.ToolTipRole and c > 0:
             tip = self._cell_tooltips.get((dr, c - 1))
+            if self._dirty and (dr, c - 1) in self.dirty_cells():
+                tip = f"{tip}\n{self._DIRTY_TIP}" if tip else self._DIRTY_TIP
             return tip if tip else None
         return None
 
@@ -2801,7 +2850,7 @@ class _MachineContextMenuFilter(QObject):
             menu.addSeparator()
             cg_visible = getattr(self._screen, '_custom_group_visible', False)
             act_cg = menu.addAction(
-                "Custom Group ausblenden" if cg_visible else "Custom Group anzeigen"
+                "Hide Custom Group" if cg_visible else "Show Custom Group"
             )
             chosen = menu.exec(event.globalPos())
             if act_fill and chosen == act_fill:
@@ -3458,7 +3507,7 @@ class ShowExperimentScreen(QWidget):
             lv = r.get("Luftverbrauch")
             if lb is not None: lines.append(f"Luftbohrung:          {_fmt(lb, 'mm')}")
             if wlb is not None: lines.append(f"Winkel Luftbohrung:   {_fmt(wlb, '°')}")
-            if gb is not None: lines.append(f"Garnkanal-Breite:     {_fmt(gb, 'mm')}")
+            if gb is not None: lines.append(f"Yarn channel width:   {_fmt(gb, 'mm')}")
             if lv is not None: lines.append(f"Luftverbrauch:        {_fmt(lv, 'Nm³/h')}")
             en = r.get("Entwicklungsname")
             if en is not None and str(en).strip(): lines.append(f"Entwicklungsname:     {en}")
@@ -3546,6 +3595,18 @@ class ShowExperimentScreen(QWidget):
     # ---------- PUBLIC API ----------
 
     def load_record(self, exp_pk: int, series_pk: int, experiment_id: str):
+        # Unsaved changes of the series shown before (e.g. left via the
+        # sidebar, then another series opened from the Backlog) were lost
+        # silently - ask Save / Discard first (Nutzerwunsch 2026-10-16).
+        if self._has_unsaved():
+            n = self.unsaved_count()
+            prev = getattr(self, "_experiment_id_txt", "") or ""
+            if QMessageBox.question(
+                    self, "Unsaved changes",
+                    f"Show Experiment {prev} still has {n} unsaved change{'s' if n != 1 else ''}.\n\n"
+                    f"Save {'it' if n == 1 else 'them'} before opening {experiment_id}?",
+                    QMessageBox.Save | QMessageBox.Discard, QMessageBox.Save) == QMessageBox.Save:
+                self._save_all()
         self._ys_cache = {}  # Neue Series -> Cache leeren
         self._machine_cache = {}  # Machine-Cache immer neu aufbauen (verhindert Stale-Fields)
         # Discard any not-yet-run deferred tab populates from a PREVIOUS
@@ -3706,6 +3767,13 @@ class ShowExperimentScreen(QWidget):
         # `root` nach `content_layout` (siehe unten) - FooterBar bleibt
         # bewusst auf `root`, spannt also volle Breite unter Sidebar+Inhalt.
         self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
+        self._content_layout = content_layout
+        self._recycle_preview = None  # ui/recycle_preview.py: read-only look into the recycle bin
+        # Unsaved changes indicator (Save (n), tab dot, yellow cells): the
+        # models' _dirty lists change in many places, so a light poll while
+        # the screen is visible is more robust than signals at every site.
+        self._unsaved_shown = -1
+        self._unsaved_timer = None  # created on first show (_build_ui imports QTimer locally further down)
 
         # Titelzeile (dunkler Balken + Save)
         tools = QFrame()
@@ -3987,7 +4055,7 @@ class ShowExperimentScreen(QWidget):
         from PySide6.QtWidgets import QRadioButton, QButtonGroup
         self._rb_single = QRadioButton("Single Plies")
         self._rb_groups = QRadioButton("Groups")
-        self._rb_compact = QRadioButton("Kompakt")
+        self._rb_compact = QRadioButton("Compact")
         self._rb_single.setChecked(True)
         self._mat_mode_group = QButtonGroup(self._mat_filter_bar)
         self._mat_mode_group.addButton(self._rb_single, 0)
@@ -4217,16 +4285,43 @@ class ShowExperimentScreen(QWidget):
         Important: This screen can be constructed before app_meta is fully
         initialised. Therefore we re-check when the screen is shown.
         """
+        lvl = 0
         try:
             lvl = int(getattr(app_meta, "access_level", lambda: 0)() or 0)
-            return lvl
+        except Exception:
+            try:
+                user = getattr(app_meta, "current_user", {}) or {}
+                lvl = int(user.get("access_level") or user.get("AccessLevel") or 0)
+            except Exception:
+                lvl = 0
+        if getattr(self, "_recycle_preview", None) is not None:
+            return min(lvl, 1)  # recycle bin preview: read only, like AccessLevel 1
+        return lvl
+
+    def set_recycle_preview(self, controller, banner: Optional[QWidget]) -> None:
+        """Recycle bin preview on/off (ui/recycle_preview.py): read only plus
+        a banner with the decision buttons above the title bar."""
+        was = self._recycle_preview is not None
+        self._recycle_preview = controller
+        RECYCLE_PREVIEWS_OPEN[0] += (controller is not None) - was
+        old = getattr(self, "_recycle_banner", None)
+        if old is not None:
+            old.hide()
+            old.setParent(None)
+            old.deleteLater()
+        self._recycle_banner = banner
+        if banner is not None:
+            self._content_layout.insertWidget(0, banner)
+        try:
+            self._sync_save_button_access()
         except Exception:
             pass
-        try:
-            user = getattr(app_meta, "current_user", {}) or {}
-            return int(user.get("access_level") or user.get("AccessLevel") or 0)
-        except Exception:
-            return 0
+        self.update()
+
+    def on_tab_closed(self) -> None:
+        """Called by TabbedNavigator when the tab holding this screen closes."""
+        if self._recycle_preview is not None:
+            self._recycle_preview.tab_closed()
 
     def _refresh_sidebar(self):
         """Baut die Sidebar-Navigation neu auf, falls sich der Access-Level
@@ -4243,7 +4338,7 @@ class ShowExperimentScreen(QWidget):
             if hasattr(self, "btn_save") and self.btn_save:
                 self.btn_save.setEnabled(bool(can_write))
                 if not can_write:
-                    self.btn_save.setToolTip("Nur Lesen (AccessLevel 1)")
+                    self.btn_save.setToolTip("Read only (AccessLevel 1)")
                 else:
                     self.btn_save.setToolTip("")
 
@@ -4273,7 +4368,90 @@ class ShowExperimentScreen(QWidget):
             # If anything goes wrong, keep button enabled and let _save_all guard.
             pass
 
+    UNSAVED_MARK = "● "
+
+    def unsaved_count(self) -> int:
+        """Number of changed, not yet saved cells over all tables."""
+        n = 0
+        for _name, model in self._iter_save_models():
+            try:
+                n += len({(r, c) for r, c, *_ in getattr(model, "_dirty", [])})
+            except Exception:
+                continue
+        return n
+
+    def _update_unsaved_indicator(self) -> None:
+        n = self.unsaved_count()
+        if n != self._unsaved_shown:
+            was = self._unsaved_shown
+            self._unsaved_shown = n
+            if n:
+                self.btn_save.setText(f"Save ({n})")
+                self.btn_save.setToolTip(f"{n} unsaved change{'s' if n != 1 else ''} (yellow cells) - Ctrl+S")
+                self.btn_save.setStyleSheet("QPushButton{background:#E8890C; color:white; font-weight:700;}"
+                                            "QPushButton:hover{background:#C97508;}")
+            else:
+                self.btn_save.setText("Save")
+                self.btn_save.setToolTip("")
+                self.btn_save.setStyleSheet("")
+            if was > 0 and n == 0:  # saved/discarded -> repaint the yellow cells away
+                for t in self.findChildren(FrozenFirstColumnTable):
+                    for v in (t.top_left, t.top_right, t.bottom_left, t.bottom_right):
+                        v.viewport().update()
+        self._apply_unsaved_tab_mark(n > 0)
+
+    def _apply_unsaved_tab_mark(self, dirty: bool) -> None:
+        """'● ' in front of this screen's tab label while something is unsaved
+        (re-applied on every tick - the tab label is rewritten on navigation)."""
+        try:
+            from ui.widgets.tab_container import TabbedNavigator
+            stack = self.parentWidget()
+            nav = stack
+            while nav is not None and not isinstance(nav, TabbedNavigator):
+                nav = nav.parentWidget()
+            if nav is None or stack is None or getattr(stack, "currentWidget", lambda: None)() is not self:
+                return
+            idx = nav.indexOf(stack)
+            if idx < 0:
+                return
+            text = nav.tabText(idx)
+            base = text[len(self.UNSAVED_MARK):] if text.startswith(self.UNSAVED_MARK) else text
+            want = (self.UNSAVED_MARK + base) if dirty else base
+            if want != text:
+                nav.setTabText(idx, want)
+        except RuntimeError:
+            pass
+
+    def confirm_close_with_unsaved(self) -> bool:
+        """Asks Save / Discard / Cancel if something is unsaved. True = go on."""
+        if not self._has_unsaved():
+            return True
+        n = self.unsaved_count()
+        res = QMessageBox.question(
+            self, "Unsaved changes",
+            f"There {'is' if n == 1 else 'are'} {n} unsaved change{'s' if n != 1 else ''} "
+            f"(yellow cells) in Show Experiment {getattr(self, '_experiment_id_txt', '') or ''}.\n\n"
+            "Save before closing?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Save)
+        if res == QMessageBox.Cancel:
+            return False
+        if res == QMessageBox.Save:
+            self._save_all()
+            return not self._has_unsaved()  # saving refused (e.g. typo check "go back")
+        return True
+
+    def hideEvent(self, event):
+        if self._unsaved_timer is not None:
+            self._unsaved_timer.stop()
+        return super().hideEvent(event)
+
     def showEvent(self, event):
+        if self._unsaved_timer is None:
+            self._unsaved_timer = QTimer(self)
+            self._unsaved_timer.setInterval(400)
+            self._unsaved_timer.timeout.connect(self._update_unsaved_indicator)
+        self._unsaved_timer.start()
+        self._update_unsaved_indicator()
         # Ensure button is enabled/disabled with up-to-date user state.
         try:
             self._sync_save_button_access()
@@ -4485,7 +4663,7 @@ class ShowExperimentScreen(QWidget):
                 except Exception:
                     pass
         except Exception as e:
-            QMessageBox.warning(self, 'Fehler', str(e))
+            QMessageBox.warning(self, 'Error', str(e))
 
     def _confirm_plausible_values(self) -> bool:
         """False = the user wants to correct unusual values first."""
@@ -4531,16 +4709,8 @@ class ShowExperimentScreen(QWidget):
         return False
 
     def _save_all(self):
-        # Access level 1: read-only
-        try:
-            lvl = int(getattr(app_meta, "access_level", lambda: 0)() or 0)
-        except Exception:
-            try:
-                user = getattr(app_meta, "current_user", {}) or {}
-                lvl = int(user.get("access_level") or user.get("AccessLevel") or 0)
-            except Exception:
-                lvl = 0
-        if lvl <= 1:
+        # Access level 1 (or recycle bin preview): read-only
+        if self._get_access_level() <= 1:
             return
 
         total = 0
@@ -4914,7 +5084,7 @@ class ShowExperimentScreen(QWidget):
             if not txt:
                 txt = "—"
         except Exception as e:
-            txt = f"— (Fehler beim Laden: {e})"
+            txt = f"— (error while loading: {e})"
         if hasattr(self, "lbl_material_value"):
             self.lbl_material_value.setText(txt)
 
@@ -5058,7 +5228,7 @@ class ShowExperimentScreen(QWidget):
         _analyze_and_save_garnspiegel)."""
         created_by = self._current_user_id()
         if created_by in (None, ""):
-            raise RuntimeError("CreatedBy/UserID konnte nicht ermittelt werden.")
+            raise RuntimeError("CreatedBy/UserID could not be determined.")
 
         sql = (
             "INSERT INTO [tblTrialSeriesImage] "
@@ -5126,7 +5296,7 @@ class ShowExperimentScreen(QWidget):
         ExperimentRequestImagesDialog._can_delete())."""
         sid = self._series_pk
         if sid in (None, ""):
-            QMessageBox.warning(self, "Upload", "Keine TrialSeries ausgewaehlt.")
+            QMessageBox.warning(self, "Upload", "No trial series selected.")
             return
 
         try:
@@ -5146,15 +5316,15 @@ class ShowExperimentScreen(QWidget):
                 os.makedirs(target_dir, exist_ok=True)
             except PermissionError as e:
                 raise RuntimeError(
-                    "[WinError 5] Zugriff verweigert beim Erstellen des Zielordners. "
-                    "Das ist ein Berechtigungsproblem auf dem Share/NTFS.\n\n"
-                    f"Pfad: {target_dir}\n\n"
-                    "Bitte sicherstellen, dass der Windows-User (oder der Account, unter dem TrippleT laeuft) "
-                    f"Schreibrechte auf {TRIALSERIES_IMAGES_BASE_DIR} hat.\n\n"
-                    f"Original-Fehler: {e}"
+                    "[WinError 5] Access denied while creating the target folder. "
+                    "This is a permission problem on the share/NTFS.\n\n"
+                    f"Path: {target_dir}\n\n"
+                    "Please ensure that the Windows user (or the account running TrippleT) "
+                    f"has write permission on {TRIALSERIES_IMAGES_BASE_DIR}.\n\n"
+                    f"Original error: {e}"
                 )
             except Exception as e:
-                raise RuntimeError(f"Zielordner konnte nicht erstellt werden: {target_dir}\n{e}")
+                raise RuntimeError(f"Target folder could not be created: {target_dir}\n{e}")
 
             stored_any = 0
             errors: List[str] = []
@@ -5445,7 +5615,7 @@ class ShowExperimentScreen(QWidget):
     ) -> None:
         created_by = self._current_user_id()
         if created_by in (None, ""):
-            raise RuntimeError("CreatedBy/UserID konnte nicht ermittelt werden.")
+            raise RuntimeError("CreatedBy/UserID could not be determined.")
 
         sql = (
             "INSERT INTO [tblTrialSeriesPDF] "
@@ -5474,7 +5644,7 @@ class ShowExperimentScreen(QWidget):
         ExperimentRequestPdfsDialog._can_delete())."""
         sid = self._series_pk
         if sid in (None, ""):
-            QMessageBox.warning(self, "Upload", "Keine TrialSeries ausgewaehlt.")
+            QMessageBox.warning(self, "Upload", "No trial series selected.")
             return
 
         try:
@@ -5494,15 +5664,15 @@ class ShowExperimentScreen(QWidget):
                 os.makedirs(target_dir, exist_ok=True)
             except PermissionError as e:
                 raise RuntimeError(
-                    "[WinError 5] Zugriff verweigert beim Erstellen des Zielordners. "
-                    "Das ist ein Berechtigungsproblem auf dem Share/NTFS.\n\n"
-                    f"Pfad: {target_dir}\n\n"
-                    "Bitte sicherstellen, dass der Windows-User (oder der Account, unter dem TrippleT laeuft) "
-                    f"Schreibrechte auf {TRIALSERIES_PDFS_BASE_DIR} hat.\n\n"
-                    f"Original-Fehler: {e}"
+                    "[WinError 5] Access denied while creating the target folder. "
+                    "This is a permission problem on the share/NTFS.\n\n"
+                    f"Path: {target_dir}\n\n"
+                    "Please ensure that the Windows user (or the account running TrippleT) "
+                    f"has write permission on {TRIALSERIES_PDFS_BASE_DIR}.\n\n"
+                    f"Original error: {e}"
                 )
             except Exception as e:
-                raise RuntimeError(f"Zielordner konnte nicht erstellt werden: {target_dir}\n{e}")
+                raise RuntimeError(f"Target folder could not be created: {target_dir}\n{e}")
 
             stored_any = 0
             errors: List[str] = []
@@ -5605,7 +5775,7 @@ class ShowExperimentScreen(QWidget):
                 continue
             seen_plies.add(ply)
             yid = r.get("YarnID")
-            name = (r.get("YarnName") or "").strip() or "(ohne Name)"
+            name = (r.get("YarnName") or "").strip() or "(no name)"
             result.append((ply, yid, name))
 
         def _ply_sort_key(triple):
@@ -5994,8 +6164,8 @@ class ShowExperimentScreen(QWidget):
                 values.append(series_id)
             elif cl == "versuchsnummer":
                 values.append(new_versuchsnummer)
-            elif cl in _TENSION_COLS_NOT_COPIED:
-                values.append(None)  # measured on the new run
+            elif _col_not_copied(cl):
+                values.append(None)  # measured / commented on the new run
             else:
                 values.append(src_map.get(col))
 
@@ -6435,7 +6605,7 @@ class ShowExperimentScreen(QWidget):
         if callable(getattr(self, "on_add_trials", None)):
             self.on_add_trials(self._exp_pk, self._series_pk, getattr(self, "_experiment_id_txt", ""))
         else:
-            QMessageBox.information(self, "Info", "Navigation nicht konfiguriert.")
+            QMessageBox.information(self, "Info", "Navigation is not configured.")
 
     def _clone_lab_rows_for_trial(self, cur, src_trial_id: int, new_trial_id: int) -> None:
         """Klont alle Labor-Datensätze von src_trial_id auf new_trial_id.
@@ -6558,8 +6728,8 @@ class ShowExperimentScreen(QWidget):
 
         Alle Felder (inkl. Ply-Parameter wie 1stHeaterT1/T2, YarnTensionT1/T2 usw.)
         werden 1:1 übernommen. Nur ID und TrialID werden neu gesetzt; die
-        gemessenen Fadenspannungen vor/nach Jet bleiben leer
-        (_TENSION_COLS_NOT_COPIED).
+        gemessenen Fadenspannungen vor/nach Jet und die Kommentare bleiben
+        leer (_col_not_copied()).
         """
         if not _db_table_exists("tbltrialsettings"):
             return
@@ -6585,8 +6755,7 @@ class ShowExperimentScreen(QWidget):
 
         for row in rows:
             row_map = dict(zip(col_names, row))
-            values = [None if c.lower() in _TENSION_COLS_NOT_COPIED else row_map.get(c)
-                      for c in insert_cols]
+            values = [None if _col_not_copied(c) else row_map.get(c) for c in insert_cols]
 
             cols_for_insert = ["TrialID"] + list(insert_cols)
             vals_for_insert = [new_trial_id] + values
@@ -6868,11 +7037,10 @@ class ShowExperimentScreen(QWidget):
         hdr1 = QHBoxLayout()
         hdr1.addWidget(QLabel("<b>Air Consumption</b>"))
         hdr1.addStretch(1)
-        btn_sync_jets = QPushButton("Physische Düsen synchronisieren")
+        btn_sync_jets = QPushButton("Sync physical jets")
         btn_sync_jets.setToolTip(
-            "Gleicht diese Tabelle mit den aktuell in den Trials hinterlegten "
-            "Duesen/Plates ab (z.B. nachdem JetID/JetPlate eines Trials "
-            "nachtraeglich geaendert wurde).")
+            "Matches this table with the jets/plates currently set in the trials (e.g. after the jet "
+            "or plate of a trial was changed later).")
         btn_sync_jets.clicked.connect(self._sync_jet_air_physical_jets)
         hdr1.addWidget(btn_sync_jets)
         hdr1.addWidget(QLabel("Einheit:"))
@@ -6901,11 +7069,11 @@ class ShowExperimentScreen(QWidget):
         hdr2.addWidget(QLabel("<b>Atmospheric Pressure (mbar)</b>"))
         hdr2.addStretch(1)
         self.txt_jet_air_atm_fill = QLineEdit()
-        self.txt_jet_air_atm_fill.setPlaceholderText("Wert für alle Zellen")
+        self.txt_jet_air_atm_fill.setPlaceholderText("Value for all cells")
         self.txt_jet_air_atm_fill.setFixedWidth(140)
         self.txt_jet_air_atm_fill.setValidator(
             QRegularExpressionValidator(QRegularExpression(r"^\s*[+-]?\d+(?:[.,]\d+)?\s*$"), self))
-        btn_atm_fill = QPushButton("Für alle übernehmen")
+        btn_atm_fill = QPushButton("Apply to all")
         btn_atm_fill.clicked.connect(lambda: self._fill_all_jet_air("model_jet_air_atm", self.txt_jet_air_atm_fill))
         hdr2.addWidget(self.txt_jet_air_atm_fill)
         hdr2.addWidget(btn_atm_fill)
@@ -6928,11 +7096,11 @@ class ShowExperimentScreen(QWidget):
         hdr3.addWidget(QLabel("<b>Air Temperature (°C)</b>"))
         hdr3.addStretch(1)
         self.txt_jet_air_temp_fill = QLineEdit()
-        self.txt_jet_air_temp_fill.setPlaceholderText("Wert für alle Zellen")
+        self.txt_jet_air_temp_fill.setPlaceholderText("Value for all cells")
         self.txt_jet_air_temp_fill.setFixedWidth(140)
         self.txt_jet_air_temp_fill.setValidator(
             QRegularExpressionValidator(QRegularExpression(r"^\s*[+-]?\d+(?:[.,]\d+)?\s*$"), self))
-        btn_temp_fill = QPushButton("Für alle übernehmen")
+        btn_temp_fill = QPushButton("Apply to all")
         btn_temp_fill.clicked.connect(lambda: self._fill_all_jet_air("model_jet_air_temp", self.txt_jet_air_temp_fill))
         hdr3.addWidget(self.txt_jet_air_temp_fill)
         hdr3.addWidget(btn_temp_fill)
@@ -6961,8 +7129,8 @@ class ShowExperimentScreen(QWidget):
         if self.model_jet_air is not None and getattr(self.model_jet_air, "_dirty", None):
             resp = QMessageBox.question(
                 self, "Einheit wechseln",
-                "Es gibt ungespeicherte Änderungen im Air-Consumption-Grid.\n"
-                "Beim Einheitenwechsel gehen diese verloren. Fortfahren?",
+                "There are unsaved changes in the air consumption table.\n"
+                "They will be lost when switching the unit. Continue?",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if resp != QMessageBox.Yes:
                 self.cmb_jet_air_unit.blockSignals(True)
@@ -7199,8 +7367,8 @@ class ShowExperimentScreen(QWidget):
         pressures = sorted({float(r["AirPressure"]) for r in rows if r.get("AirPressure") is not None})
         if not current_jets or not pressures:
             QMessageBox.information(
-                self, "Physische Düsen synchronisieren",
-                "Keine Duesen/Druckstufen gefunden - Sync nicht möglich.")
+                self, "Sync physical jets",
+                "No jets/pressure levels found - sync not possible.")
             return
 
         def _plate_key(p):
@@ -7229,8 +7397,8 @@ class ShowExperimentScreen(QWidget):
 
         if not to_insert and not orphan_combo_rows:
             QMessageBox.information(
-                self, "Physische Düsen synchronisieren",
-                "Bereits synchron - keine Änderungen notwendig.")
+                self, "Sync physical jets",
+                "Already in sync - no changes needed.")
             return
 
         jet_ids = sorted({jid for jid, _ in current_jets} | {c[0] for c in orphan_combo_rows})
@@ -7246,7 +7414,7 @@ class ShowExperimentScreen(QWidget):
 
         msg_lines = []
         if to_insert:
-            msg_lines.append(f"{len(to_insert)} fehlende Zeile(n) werden ergänzt (leer, Werte danach eintragen).")
+            msg_lines.append(f"{len(to_insert)} missing row(s) will be added (empty, enter the values afterwards).")
 
         delete_ids: List[int] = []
         if orphan_combo_rows:
@@ -7261,14 +7429,14 @@ class ShowExperimentScreen(QWidget):
                     for r in rr
                 )
                 if has_data:
-                    msg_lines.append(f"  - {jname} / Plate {plate or '-'} (hat Messwerte - wird NICHT gelöscht)")
+                    msg_lines.append(f"  - {jname} / Plate {plate or '-'} (has measured values - will NOT be deleted)")
                 else:
-                    msg_lines.append(f"  - {jname} / Plate {plate or '-'} (leer - wird gelöscht)")
+                    msg_lines.append(f"  - {jname} / Plate {plate or '-'} (empty - will be deleted)")
                     delete_ids.extend(r["ID"] for r in rr)
 
         resp = QMessageBox.question(
-            self, "Physische Düsen synchronisieren",
-            "\n".join(msg_lines) + "\n\nFortfahren?",
+            self, "Sync physical jets",
+            "\n".join(msg_lines) + "\n\nContinue?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if resp != QMessageBox.Yes:
             return
@@ -7292,7 +7460,7 @@ class ShowExperimentScreen(QWidget):
             return
 
         self._build_jet_air_tab()
-        QMessageBox.information(self, "Physische Düsen synchronisieren", "Synchronisierung abgeschlossen.")
+        QMessageBox.information(self, "Sync physical jets", "Synchronisierung abgeschlossen.")
 
     # ---------- Statimat M (nur sichtbar wenn Daten) ----------
 
@@ -9195,11 +9363,11 @@ class ShowExperimentScreen(QWidget):
         # ParamsVersion (a string) is metadata, not a numeric row to edit here.
         col_db = [c for k, c in DB_COLUMN_MAP.items() if k != "params_version"]
         row_titles: List[str] = [
-            "Laenge (m)", "Globaler Mittelwert (um)", "Kern (um)", "Kern-CV (%)",
-            "Differenz Kern vs. Mittelwert (%)", "Kern-CV @1m (%)", "Kern-CV @20m (%)",
-            "Anzahl Schlaufen", "Frequenz (1/m)", "Ø Abstand (mm)", "Abstand-CV (%)",
-            "Hoehe Median (um)", "Hoehe Mittelwert (um)", "Hoehe P95 (um)", "Hoehe P99 (um)", "Hoehe Max (um)",
-            "Rel. Hoehe Median (%)", "Rel. Hoehe Mittelwert (%)", "Rel. Hoehe P90 (%)",
+            "Laenge (m)", "Global mean (um)", "Kern (um)", "Kern-CV (%)",
+            "Difference core vs. mean (%)", "Kern-CV @1m (%)", "Kern-CV @20m (%)",
+            "Number of loops", "Frequenz (1/m)", "Ø Abstand (mm)", "Abstand-CV (%)",
+            "Hoehe Median (um)", "Height mean (um)", "Hoehe P95 (um)", "Hoehe P99 (um)", "Hoehe Max (um)",
+            "Rel. Hoehe Median (%)", "Rel. height mean (%)", "Rel. Hoehe P90 (%)",
             "Rel. Hoehe P95 (%)", "Rel. Hoehe P99 (%)", "Rel. Hoehe Max (%)",
             "Bulk Index (%)", "Kurzhocker Anteil (%)", "Langwelle Anteil (%)",
             "Kurzhocker Dichte (1/m)", "Langwelle Dichte (1/m)",

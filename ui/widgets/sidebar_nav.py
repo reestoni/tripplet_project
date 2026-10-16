@@ -482,7 +482,7 @@ def build_experiment_requests_group(
         on_open_my_requests, tab_capable=True, open_in_new_tab=open_in_new_tab)
     cnt = get_pending_request_changes_count()
     wrapped, badge = wrap_with_badge(btn_my_requests, cnt)
-    wrapped.setToolTip("Requests/Änderungsvorschläge warten auf Freigabe" if cnt else "")
+    wrapped.setToolTip("Requests/change proposals waiting for approval" if cnt else "")
     sidebar.add_item(wrapped)
 
     return {"my_requests_badge": badge}

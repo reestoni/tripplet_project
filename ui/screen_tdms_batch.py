@@ -224,7 +224,7 @@ _COL_OA_BIN_18 = 145
 _COL_OA_BIN_19 = 146
 _COL_OA_BIN_20 = 147
 
-_HEADERS = ['Series', 'Trial', 'TrialID', 'Datei', 'Status', 'FPm', 'CV_FP', 'AvgFP', 'StdDevFP', 'AvgKL', 'CV_KL', 'StdDevKL', 'maxKL', 'AvgOL', 'CV_OL', 'StdDevOL', 'maxOL', 'AKnots', 'BKnots', 'CKnots', 'SkewKL', 'SkewOL', 'RapportCV', 'RapportCVLocal', 'KL_AC1', 'KL_AC2', 'KL_AC3', 'KL_TailRatio', 'OL_TailRatio', 'KA_OA_Ratio', 'KL_AsymMean', 'KL_AsymCV', 'KurtKL', 'KurtOL', 'ThicknessDrift', 'SpectralEnergyLow', 'SpectralEnergyMid', 'SpectralEnergyHigh', 'CKnot_ClusterMean', 'CKnot_ClusterMax', 'Stab_03', 'Stab_06', 'Stab_10', 'Stab_13', 'Stab_03_model', 'Stab_06_model', 'Stab_10_model', 'Stab_13_model', 'a_knots', 'b_knots', 'c_knots', 'd_knots', 'e_knots', 'f_knots', 'g_knots', 'h_knots', 'i_knots', 'j_knots', 'k_knots', 'l_knots', 'm_knots', 'n_knots', 'o_knots', 'p_knots', 'q_knots', 'r_knots', 's_knots', 't_knots', 'kl_bin_1', 'kl_bin_2', 'kl_bin_3', 'kl_bin_4', 'kl_bin_5', 'kl_bin_6', 'kl_bin_7', 'kl_bin_8', 'kl_bin_9', 'kl_bin_10', 'ol_bin_1', 'ol_bin_2', 'ol_bin_3', 'ol_bin_4', 'ol_bin_5', 'ol_bin_6', 'ol_bin_7', 'ol_bin_8', 'ol_bin_9', 'ol_bin_10', 'Fallhöhe1', 'Fallhöhe2', 'Fallhöhe3', 'Fallhöhe4', 'Fallhöhe5', 'Fallhöhe6', 'Fallhöhe7', 'Fallhöhe8', 'Fallhöhe9', 'Fallhöhe10', 'Winkelsegment1', 'Winkelsegment2', 'Winkelsegment3', 'Winkelsegment4', 'Winkelsegment5', 'Winkelsegment6', 'Winkelsegment7', 'Winkelsegment8', 'Winkelsegment9', 'Winkelsegment10', 'ka_bin_1', 'ka_bin_2', 'ka_bin_3', 'ka_bin_4', 'ka_bin_5', 'ka_bin_6', 'ka_bin_7', 'ka_bin_8', 'ka_bin_9', 'ka_bin_10', 'ka_bin_11', 'ka_bin_12', 'ka_bin_13', 'ka_bin_14', 'ka_bin_15', 'ka_bin_16', 'ka_bin_17', 'ka_bin_18', 'ka_bin_19', 'ka_bin_20', 'oa_bin_1', 'oa_bin_2', 'oa_bin_3', 'oa_bin_4', 'oa_bin_5', 'oa_bin_6', 'oa_bin_7', 'oa_bin_8', 'oa_bin_9', 'oa_bin_10', 'oa_bin_11', 'oa_bin_12', 'oa_bin_13', 'oa_bin_14', 'oa_bin_15', 'oa_bin_16', 'oa_bin_17', 'oa_bin_18', 'oa_bin_19', 'oa_bin_20']
+_HEADERS = ['Series', 'Trial', 'TrialID', 'File', 'Status', 'FPm', 'CV_FP', 'AvgFP', 'StdDevFP', 'AvgKL', 'CV_KL', 'StdDevKL', 'maxKL', 'AvgOL', 'CV_OL', 'StdDevOL', 'maxOL', 'AKnots', 'BKnots', 'CKnots', 'SkewKL', 'SkewOL', 'RapportCV', 'RapportCVLocal', 'KL_AC1', 'KL_AC2', 'KL_AC3', 'KL_TailRatio', 'OL_TailRatio', 'KA_OA_Ratio', 'KL_AsymMean', 'KL_AsymCV', 'KurtKL', 'KurtOL', 'ThicknessDrift', 'SpectralEnergyLow', 'SpectralEnergyMid', 'SpectralEnergyHigh', 'CKnot_ClusterMean', 'CKnot_ClusterMax', 'Stab_03', 'Stab_06', 'Stab_10', 'Stab_13', 'Stab_03_model', 'Stab_06_model', 'Stab_10_model', 'Stab_13_model', 'a_knots', 'b_knots', 'c_knots', 'd_knots', 'e_knots', 'f_knots', 'g_knots', 'h_knots', 'i_knots', 'j_knots', 'k_knots', 'l_knots', 'm_knots', 'n_knots', 'o_knots', 'p_knots', 'q_knots', 'r_knots', 's_knots', 't_knots', 'kl_bin_1', 'kl_bin_2', 'kl_bin_3', 'kl_bin_4', 'kl_bin_5', 'kl_bin_6', 'kl_bin_7', 'kl_bin_8', 'kl_bin_9', 'kl_bin_10', 'ol_bin_1', 'ol_bin_2', 'ol_bin_3', 'ol_bin_4', 'ol_bin_5', 'ol_bin_6', 'ol_bin_7', 'ol_bin_8', 'ol_bin_9', 'ol_bin_10', 'Fallhöhe1', 'Fallhöhe2', 'Fallhöhe3', 'Fallhöhe4', 'Fallhöhe5', 'Fallhöhe6', 'Fallhöhe7', 'Fallhöhe8', 'Fallhöhe9', 'Fallhöhe10', 'Winkelsegment1', 'Winkelsegment2', 'Winkelsegment3', 'Winkelsegment4', 'Winkelsegment5', 'Winkelsegment6', 'Winkelsegment7', 'Winkelsegment8', 'Winkelsegment9', 'Winkelsegment10', 'ka_bin_1', 'ka_bin_2', 'ka_bin_3', 'ka_bin_4', 'ka_bin_5', 'ka_bin_6', 'ka_bin_7', 'ka_bin_8', 'ka_bin_9', 'ka_bin_10', 'ka_bin_11', 'ka_bin_12', 'ka_bin_13', 'ka_bin_14', 'ka_bin_15', 'ka_bin_16', 'ka_bin_17', 'ka_bin_18', 'ka_bin_19', 'ka_bin_20', 'oa_bin_1', 'oa_bin_2', 'oa_bin_3', 'oa_bin_4', 'oa_bin_5', 'oa_bin_6', 'oa_bin_7', 'oa_bin_8', 'oa_bin_9', 'oa_bin_10', 'oa_bin_11', 'oa_bin_12', 'oa_bin_13', 'oa_bin_14', 'oa_bin_15', 'oa_bin_16', 'oa_bin_17', 'oa_bin_18', 'oa_bin_19', 'oa_bin_20']
 
 # DB-Felder Liste für Scan-Query und Display
 _DB_FIELDS = ['FPm', 'CV_FP', 'AvgFP', 'StdDevFP', 'AvgKL', 'CV_KL', 'StdDevKL', 'maxKL', 'AvgOL', 'CV_OL', 'StdDevOL', 'maxOL', 'AKnots', 'BKnots', 'CKnots', 'SkewKL', 'SkewOL', 'RapportCV', 'RapportCVLocal', 'KL_AC1', 'KL_AC2', 'KL_AC3', 'KL_TailRatio', 'OL_TailRatio', 'KA_OA_Ratio', 'KL_AsymMean', 'KL_AsymCV', 'KurtKL', 'KurtOL', 'ThicknessDrift', 'SpectralEnergyLow', 'SpectralEnergyMid', 'SpectralEnergyHigh', 'CKnot_ClusterMean', 'CKnot_ClusterMax', 'Stab_03', 'Stab_06', 'Stab_10', 'Stab_13', 'Stab_03_model', 'Stab_06_model', 'Stab_10_model', 'Stab_13_model', 'a_knots', 'b_knots', 'c_knots', 'd_knots', 'e_knots', 'f_knots', 'g_knots', 'h_knots', 'i_knots', 'j_knots', 'k_knots', 'l_knots', 'm_knots', 'n_knots', 'o_knots', 'p_knots', 'q_knots', 'r_knots', 's_knots', 't_knots', 'kl_bin_1', 'kl_bin_2', 'kl_bin_3', 'kl_bin_4', 'kl_bin_5', 'kl_bin_6', 'kl_bin_7', 'kl_bin_8', 'kl_bin_9', 'kl_bin_10', 'ol_bin_1', 'ol_bin_2', 'ol_bin_3', 'ol_bin_4', 'ol_bin_5', 'ol_bin_6', 'ol_bin_7', 'ol_bin_8', 'ol_bin_9', 'ol_bin_10', 'Fallhöhe1', 'Fallhöhe2', 'Fallhöhe3', 'Fallhöhe4', 'Fallhöhe5', 'Fallhöhe6', 'Fallhöhe7', 'Fallhöhe8', 'Fallhöhe9', 'Fallhöhe10', 'Winkelsegment1', 'Winkelsegment2', 'Winkelsegment3', 'Winkelsegment4', 'Winkelsegment5', 'Winkelsegment6', 'Winkelsegment7', 'Winkelsegment8', 'Winkelsegment9', 'Winkelsegment10', 'ka_bin_1', 'ka_bin_2', 'ka_bin_3', 'ka_bin_4', 'ka_bin_5', 'ka_bin_6', 'ka_bin_7', 'ka_bin_8', 'ka_bin_9', 'ka_bin_10', 'ka_bin_11', 'ka_bin_12', 'ka_bin_13', 'ka_bin_14', 'ka_bin_15', 'ka_bin_16', 'ka_bin_17', 'ka_bin_18', 'ka_bin_19', 'ka_bin_20', 'oa_bin_1', 'oa_bin_2', 'oa_bin_3', 'oa_bin_4', 'oa_bin_5', 'oa_bin_6', 'oa_bin_7', 'oa_bin_8', 'oa_bin_9', 'oa_bin_10', 'oa_bin_11', 'oa_bin_12', 'oa_bin_13', 'oa_bin_14', 'oa_bin_15', 'oa_bin_16', 'oa_bin_17', 'oa_bin_18', 'oa_bin_19', 'oa_bin_20']
@@ -232,10 +232,10 @@ _DB_FIELDS = ['FPm', 'CV_FP', 'AvgFP', 'StdDevFP', 'AvgKL', 'CV_KL', 'StdDevKL',
 
 # Status-Werte
 ST_NO_FILE   = "—"
-ST_PENDING   = "ausstehend"
+ST_PENDING   = "pending"
 ST_RUNNING   = "running…"
-ST_SAVED     = "✅ gespeichert"
-ST_ERROR     = "❌ Fehler"
+ST_SAVED     = "✅ saved"
+ST_ERROR     = "❌ error"
 ST_ANALYZED  = "🔍 analysiert"
 
 
@@ -482,7 +482,7 @@ class TDMSFolderScanner:
                 rows.append(TrialRow(
                     series_id=sid, series_name=sname,
                     trial_no=vno, trial_id=None,
-                    tdms_path=fpath, status="⚠️ kein Trial",
+                    tdms_path=fpath, status="⚠️ no trial",
                 ))
 
         rows.sort(key=lambda r: (r.series_id, r.trial_no))
@@ -547,12 +547,12 @@ class _ScanWorker(QRunnable):
         try:
             sig = self._signals
 
-            sig.status.emit("Scanne TDMS-Ordner…")
+            sig.status.emit("Scanning TDMS folder…")
             tdms_map = TDMSFolderScanner._build_tdms_map()
             n_files = len(tdms_map)
-            sig.status.emit(f"TDMS-Ordner gelesen: {n_files} Dateien gefunden.")
+            sig.status.emit(f"TDMS folder read: {n_files} files found.")
 
-            sig.status.emit("Lade Serien und Trials aus DB…")
+            sig.status.emit("Loading series and trials from DB…")
             ph = ",".join(["?"] * len(self._series_ids))
             series_rows = []
             try:
@@ -584,7 +584,7 @@ class _ScanWorker(QRunnable):
             except Exception:
                 pass
             n_trials = len(trial_rows)
-            sig.status.emit(f"DB geladen: {n_trials} Trials.")
+            sig.status.emit(f"DB loaded: {n_trials} Trials.")
 
             trial_ids = [
                 int(tr.get("ID") if isinstance(tr, dict) else tr[0])
@@ -595,13 +595,13 @@ class _ScanWorker(QRunnable):
             saved_vals: dict = {}
             if trial_ids:
                 sig.status.emit(
-                    f"Lade gespeicherte Resultate ({len(trial_ids)} Trials)…"
+                    f"Loading saved results ({len(trial_ids)} Trials)…"
                 )
                 saved_ids, saved_vals = TDMSFolderScanner._fetch_saved(
                     trial_ids, fields_only=not self._load_db_vals
                 )
                 sig.status.emit(
-                    f"Gespeicherte Resultate geladen: {len(saved_ids)} bereits analysiert."
+                    f"Saved results loaded: {len(saved_ids)} already analysed."
                 )
 
             # TrialRow-Objekte bauen
@@ -636,9 +636,9 @@ class _ScanWorker(QRunnable):
 
             n_pend = sum(1 for r in rows if r.status == ST_PENDING)
             sig.status.emit(
-                f"Scan fertig: {len(rows)} Trials | "
-                f"{len([r for r in rows if r.tdms_path])} mit TDMS | "
-                f"{n_pend} ausstehend"
+                f"Scan finished: {len(rows)} Trials | "
+                f"{len([r for r in rows if r.tdms_path])} with TDMS | "
+                f"{n_pend} pending"
             )
             sig.done.emit(rows)
 
@@ -671,7 +671,7 @@ class _AnalysisWorker(QRunnable):
             y     = read_dty_signal(str(self._path))
             dx_mm = read_step_mm_from_tdms(str(self._path))
             if y is None or len(y) == 0:
-                self._signals.finished.emit(self._idx, {}, "Kein Signal im TDMS-File.")
+                self._signals.finished.emit(self._idx, {}, "No signal in the TDMS file.")
                 return
             if dx_mm is None or dx_mm <= 0:
                 dx_mm = 0.25  # Fallback
@@ -885,7 +885,7 @@ class _BatchTableModel(QAbstractTableModel):
         if row.status == ST_ANALYZED: return QColor("#f0c040")
         if row.status == ST_ERROR:    return QColor("#ff6060")
         if row.status == ST_NO_FILE:  return QColor("#555")
-        if row.status == "⚠️ kein Trial": return QColor("#f0a040")
+        if row.status == "⚠️ no trial": return QColor("#f0a040")
         return QColor("#ddd")
 
     def update_row(self, idx: int):
@@ -1002,16 +1002,16 @@ class TDMSBatchScreen(QWidget):
 
         # Filter-Zeile
         frow = QHBoxLayout(); frow.setSpacing(8)
-        self._chk_only_pending = QCheckBox("Nur ausstehende")
+        self._chk_only_pending = QCheckBox("Only pending")
         self._chk_only_pending.setChecked(True)
         self._chk_only_pending.stateChanged.connect(self._refresh_proxy)
         frow.addWidget(self._chk_only_pending)
-        self._chk_only_files = QCheckBox("Nur mit TDMS-File")
+        self._chk_only_files = QCheckBox("Only with TDMS file")
         self._chk_only_files.setChecked(True)
         self._chk_only_files.stateChanged.connect(self._refresh_proxy)
         frow.addWidget(self._chk_only_files)
         frow.addStretch()
-        self._btn_scan = QPushButton("🔄 Ordner scannen")
+        self._btn_scan = QPushButton("🔄 Scan folder")
         self._btn_scan.setObjectName("GreenBtn"); self._btn_scan.setFixedHeight(28)
         self._btn_scan.clicked.connect(self._on_scan)
         frow.addWidget(self._btn_scan)
@@ -1062,13 +1062,13 @@ class TDMSBatchScreen(QWidget):
             "QProgressBar::chunk{background:#39A650;border-radius:4px;}")
         brow.addWidget(self._progress, 1)
         brow.addStretch()
-        self._btn_sel = QPushButton("☑ Nur Auswahl")
-        self._btn_sel.setToolTip("Nur markierte Zeilen analysieren (Ctrl+Klick / Shift+Klick)")
+        self._btn_sel = QPushButton("☑ Selection only")
+        self._btn_sel.setToolTip("Analyse selected rows only (Ctrl+click / Shift+click)")
         self._btn_sel.setFixedHeight(32)
         self._btn_sel.setEnabled(False)
         self._btn_sel.clicked.connect(self._on_batch_selection)
         brow.addWidget(self._btn_sel)
-        self._btn_batch = QPushButton("⚡ Batch starten")
+        self._btn_batch = QPushButton("⚡ Start batch")
         self._btn_batch.setObjectName("GreenBtn")
         self._btn_batch.setFixedHeight(32)
         self._btn_batch.setStyleSheet(
@@ -1079,7 +1079,7 @@ class TDMSBatchScreen(QWidget):
         self._btn_batch.setEnabled(False)
         self._btn_batch.clicked.connect(self._on_batch)
         brow.addWidget(self._btn_batch)
-        self._btn_retry = QPushButton("🔁 Fehler wiederholen")
+        self._btn_retry = QPushButton("🔁 Retry errors")
         self._btn_retry.setFixedHeight(30)
         self._btn_retry.setStyleSheet(
             "QPushButton{background:#5a2a2a;color:#f88;border-radius:4px;"
@@ -1222,7 +1222,7 @@ class TDMSBatchScreen(QWidget):
         self._btn_toggle_all.setVisible(self._insider_mode)
         self._rebuild_series_list_widget()
         if self._insider_mode:
-            self._lbl_status.setText("🔓 Insider-Modus – alle Serien sichtbar (Scan zum Laden)")
+            self._lbl_status.setText("🔓 Insider mode – all series visible (scan to load)")
         else:
             self._lbl_status.setText("Bereit.")
             # Zurück zur locked series: neu scannen mit DB-Vals
@@ -1254,9 +1254,9 @@ class TDMSBatchScreen(QWidget):
         sel = self._selected_source_rows()
         if sel:
             n = len(sel)
-            self._btn_batch.setText(f"⚡ {n} selektierte analysieren")
+            self._btn_batch.setText(f"⚡ {n} analyse selected")
         else:
-            self._btn_batch.setText("⚡ Batch starten")
+            self._btn_batch.setText("⚡ Start batch")
 
     def _on_scan(self):
         checked = self._checked_series_ids()
@@ -1284,9 +1284,9 @@ class TDMSBatchScreen(QWidget):
         self._refresh_proxy()
         n_files = sum(1 for r in rows if r.tdms_path)
         n_pend  = sum(1 for r in rows if r.status == ST_PENDING)
-        mode_hint = " (nur Status)" if self._insider_mode else ""
+        mode_hint = " (status only)" if self._insider_mode else ""
         self._lbl_status.setText(
-            f"{len(rows)} Trials | {n_files} mit TDMS | {n_pend} ausstehend{mode_hint}")
+            f"{len(rows)} Trials | {n_files} with TDMS | {n_pend} pending{mode_hint}")
         self._btn_scan.setEnabled(True)
         self._btn_batch.setEnabled(n_files > 0)
         # Auswahl-Button: aktiviert sobald Daten geladen sind
@@ -1300,7 +1300,7 @@ class TDMSBatchScreen(QWidget):
     def _on_scan_error(self, msg: str):
         self._btn_scan.setEnabled(True)
         self._btn_batch.setEnabled(False)
-        QMessageBox.critical(self, "Scan-Fehler", msg)
+        QMessageBox.critical(self, "Scan error", msg)
 
     def _refresh_proxy(self):
         only_pend  = self._chk_only_pending.isChecked()
@@ -1377,9 +1377,9 @@ class TDMSBatchScreen(QWidget):
             for r in target_rows:
                 statuses[r.status] = statuses.get(r.status, 0) + 1
             QMessageBox.information(self, "Batch",
-                f"Keine Trials zum Verarbeiten gefunden.\n\n"
-                f"Tipp: Deaktiviere 'Nur ausstehende' um gespeicherte erneut zu analysieren.\n\n"
-                f"Status-Verteilung:\n"
+                f"No trials to process found.\n\n"
+                f"Tip: switch off 'Only pending' to analyse saved ones again.\n\n"
+                f"Status distribution:\n"
                 + "\n".join(f"  '{k}': {v}" for k, v in sorted(statuses.items())))
             return
 
@@ -1422,7 +1422,7 @@ class TDMSBatchScreen(QWidget):
                 y     = read_dty_signal(str(row.tdms_path))
                 dx_mm = read_step_mm_from_tdms(str(row.tdms_path))
                 if y is None or len(y) == 0:
-                    raise ValueError("Kein Signal im TDMS-File.")
+                    raise ValueError("No signal in the TDMS file.")
                 if dx_mm is None or dx_mm <= 0:
                     dx_mm = 0.25
 
@@ -1469,8 +1469,8 @@ class TDMSBatchScreen(QWidget):
         self._progress.setVisible(False)
         self._btn_retry.setVisible(errors > 0)
         self._lbl_status.setText(
-            f"✅ Fertig – {ok}/{len(pending)} gespeichert"
-            + (f" | ❌ {errors} Fehler" if errors else "")
+            f"✅ Fertig – {ok}/{len(pending)} saved"
+            + (f" | ❌ {errors} errors" if errors else "")
         )
 
     def _on_stop(self):
@@ -1484,10 +1484,10 @@ class TDMSBatchScreen(QWidget):
     def _on_selection_changed(self):
         n = len(self._table.selectionModel().selectedRows())
         if n > 0:
-            self._btn_sel.setText(f"☑ Auswahl ({n})")
+            self._btn_sel.setText(f"☑ Selection ({n})")
             self._btn_sel.setEnabled(True)
         else:
-            self._btn_sel.setText("☑ Nur Auswahl")
+            self._btn_sel.setText("☑ Selection only")
 
     def _on_batch(self):
         self._save_after = True
@@ -1511,7 +1511,7 @@ class TDMSBatchScreen(QWidget):
                     pending.append(i)
                     break
         if not pending:
-            QMessageBox.information(self, "Auswahl", "Keine der markierten Zeilen hat ein TDMS-File.")
+            QMessageBox.information(self, "Selection", "None of the selected rows has a TDMS file.")
             return
         self._save_after = True
         self._start_batch(pending_override=pending)

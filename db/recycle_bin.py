@@ -210,10 +210,15 @@ def _summary(groups) -> str:
     return f"{n_trials} trial{'s' if n_trials != 1 else ''}, {n_lab} lab row{'s' if n_lab != 1 else ''}"
 
 
-def delete_series(series_id: int, label: str = "") -> int:
+def delete_series(series_id: int, label: str = "", *, deleted_at: Optional[datetime.datetime] = None,
+                  deleted_by: Optional[int] = None, replaces_bin_id: Optional[int] = None) -> int:
     """Copies the series into the recycle bin and deletes it - one
     transaction. Returns the recycle bin ID. Raises on error (nothing
-    deleted then)."""
+    deleted then).
+
+    Back into the bin after a preview (ui/recycle_preview.py): deleted_at/
+    deleted_by keep the original values (the 90 days don't start again) and
+    replaces_bin_id removes the old, meanwhile restored entry."""
     from db.connection import get_connection
     from db.series_permissions import can_delete_series, can_move_series_now
     import app_meta
@@ -221,7 +226,8 @@ def delete_series(series_id: int, label: str = "") -> int:
         # last line of defence - the screens check this before already
         raise RecycleBinError("You may only delete a series you are allowed to move in the Backlog "
                               "(in To Be Cleaned: superusers only).")
-    uid = (app_meta.current_user or {}).get("id")
+    uid = deleted_by if deleted_by is not None else (app_meta.current_user or {}).get("id")
+    when = deleted_at or datetime.datetime.now().replace(microsecond=0)
     with get_connection() as cn:
         cur = cn.cursor()
         try:
@@ -231,9 +237,10 @@ def delete_series(series_id: int, label: str = "") -> int:
             cur.execute(
                 "INSERT INTO tblRecycleBin (DeletedAt, DeletedBy, ObjectType, ObjectID, Label, Summary, Payload) "
                 "VALUES (?,?,?,?,?,?,?)",
-                (datetime.datetime.now().replace(microsecond=0), uid, "trial series", int(series_id),
-                 (label or "")[:255], _summary(groups), payload))
+                (when, uid, "trial series", int(series_id), (label or "")[:255], _summary(groups), payload))
             bin_id = cur.lastrowid
+            if replaces_bin_id is not None:
+                cur.execute("DELETE FROM tblRecycleBin WHERE ID = ?", (int(replaces_bin_id),))
             for table, rows in reversed(groups):
                 ids = [r["ID"] for r in rows if r.get("ID") is not None]
                 for k in range(0, len(ids), 500):
@@ -249,7 +256,8 @@ def delete_series(series_id: int, label: str = "") -> int:
             raise
     try:
         from db.usage_log import log_usage_event
-        log_usage_event("feature", "recycle_bin_delete", str(series_id))
+        log_usage_event("feature", "recycle_bin_rebin" if replaces_bin_id is not None else "recycle_bin_delete",
+                        str(series_id))
     except Exception:
         pass
     return int(bin_id) if bin_id is not None else 0
@@ -268,6 +276,29 @@ def list_entries() -> List[Dict[str, Any]]:
         "TRIM(CONCAT(COALESCE(u.FirstName,''), ' ', COALESCE(u.LastName,''))) AS UserName "
         "FROM tblRecycleBin b LEFT JOIN tblUser u ON u.ID = b.DeletedBy "
         "WHERE b.RestoredAt IS NULL ORDER BY b.DeletedAt DESC")
+
+
+def entry_info(bin_id: int) -> Optional[Dict[str, Any]]:
+    """Everything a preview needs about an entry, without the payload rows:
+    ID, DeletedAt, DeletedBy, ObjectID (series ID), Label, RestoredAt,
+    ExperimentPK (from the stored series row)."""
+    from db.connection import fetch_all
+    rows = fetch_all("SELECT ID, DeletedAt, DeletedBy, ObjectID, Label, RestoredAt, Payload "
+                     "FROM tblRecycleBin WHERE ID = ?", [int(bin_id)])
+    if not rows:
+        return None
+    r = rows[0]
+    info = {k: r.get(k) for k in ("ID", "DeletedAt", "DeletedBy", "ObjectID", "Label", "RestoredAt")}
+    info["ExperimentPK"] = None
+    try:
+        for g in json.loads(r.get("Payload") or "{}").get("groups", []):
+            if g.get("table", "").lower() == "tbltrialseries" and g.get("rows"):
+                row = {k.lower(): v for k, v in g["rows"][0].items()}
+                info["ExperimentPK"] = _dec(row.get("experimentid"))
+                break
+    except Exception:
+        pass
+    return info
 
 
 def restore(bin_id: int) -> str:

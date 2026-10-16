@@ -221,7 +221,7 @@ class MachineDataTab(QtWidgets.QWidget):
         row_trial.addWidget(self._lbl_trial, 1)
 
         row_machine = QtWidgets.QHBoxLayout()
-        row_machine.addWidget(QtWidgets.QLabel("Maschine:"))
+        row_machine.addWidget(QtWidgets.QLabel("Machine:"))
         self._lbl_machine = QtWidgets.QLabel("–")
         self._lbl_machine.setTextInteractionFlags(Qt.TextSelectableByMouse)
         row_machine.addWidget(self._lbl_machine, 1)
@@ -349,7 +349,7 @@ class MachineDataTab(QtWidgets.QWidget):
             self._lbl_materials.setText("–")
 
     def set_experiment_id(self, value):
-        self._lbl_exp.setText(value if value else "nichts gefunden")
+        self._lbl_exp.setText(value if value else "nothing found")
 
 
 # DB fetch helper (nutzt Projekt-Connection; Fallback: leer)
@@ -1310,7 +1310,7 @@ class GarnPanel(QtWidgets.QGroupBox):
             else:
                 total_txt = f"{total_m:.1f} m"
 
-            self.knitted_info.setText(f"Anzeige: {effective} Reihen × 40 cm = {total_txt} Garn")
+            self.knitted_info.setText(f"Anzeige: {effective} Reihen × 40 cm = {total_txt} yarn")
         except Exception:
             pass
 
@@ -1646,21 +1646,21 @@ class GarnPanel(QtWidgets.QGroupBox):
         # Dateizeile
         file_row = QtWidgets.QHBoxLayout()
         file_row.setSpacing(6)
-        self.lbl_file = QtWidgets.QLabel("— keine Datei —")
+        self.lbl_file = QtWidgets.QLabel("— no file —")
         self.lbl_file.setMinimumWidth(300)
         self.lbl_file.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
         self.lbl_dataset_info = QtWidgets.QLabel("–")
         self.lbl_dataset_info.setStyleSheet("color: #888;")
         self.lbl_dataset_info.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.btn_load = QtWidgets.QPushButton("Daten laden")
+        self.btn_load = QtWidgets.QPushButton("Load data")
         self.btn_load.clicked.connect(self.load_data)
         file_row.addWidget(QtWidgets.QLabel("testdata:"))
         file_row.addWidget(self.lbl_file, 4)
         file_row.addSpacing(12)
         file_row.addWidget(self.lbl_dataset_info, 0)
         file_row.addStretch(1)
-        self.btn_load_folder = QtWidgets.QPushButton("Ordner laden…")
+        self.btn_load_folder = QtWidgets.QPushButton("Load folder…")
         self.btn_load_folder.setToolTip(
             "Select and load file from target folder")
         self.btn_load_folder.clicked.connect(self.open_file_browser_dialog)
@@ -2010,7 +2010,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         unev_layout.setSpacing(6)
 
         self.uneven_info = QtWidgets.QLabel(
-            "Anzahl aneinanderliegende Ereignisse (Runs) je Klasse – basierend auf den Prozent-Schwellen aus der Matrix.")
+            "Number of adjacent events (runs) per class – based on the percent thresholds of the matrix.")
         self.uneven_info.setWordWrap(True)
 
         self.uneven_table = QtWidgets.QTableWidget(0, 7)
@@ -2056,7 +2056,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         self.lbl_di = QtWidgets.QLabel("Dickstellen – Matrix (pro 100 m)")
         self.table_di = self._make_matrix_table(
             vertical_labels=["+10–<20 %", "+20–<30 %", "≥ +30 %"])
-        self.lbl_due = QtWidgets.QLabel("Dünnstellen – Matrix (pro 100 m)")
+        self.lbl_due = QtWidgets.QLabel("Thin places – matrix (per 100 m)")
         self.table_due = self._make_matrix_table(
             vertical_labels=["–10–<20 %", "–20–<30 %", "≤ –30 %"])
         mv.addWidget(self.lbl_di)
@@ -2086,7 +2086,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         mv.addLayout(btn_row)
         # --- Schwellenwerte-Editor (global für alle Panels) ---
         self.group_thresh = QtWidgets.QGroupBox(
-            "Schwellenwerte (global, zur Laufzeit)")
+            "Thresholds (global, at runtime)")
         grid_t = QtWidgets.QGridLayout(self.group_thresh)
         # Di-Thresholds table
         self.table_di_thr = QtWidgets.QTableWidget(2, 3)
@@ -2108,7 +2108,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         self.table_due_thr.verticalHeader().setDefaultSectionSize(28)
         grid_t.addWidget(QtWidgets.QLabel("Dickstellen (Di)"), 0, 0)
         grid_t.addWidget(self.table_di_thr, 1, 0)
-        grid_t.addWidget(QtWidgets.QLabel("Dünnstellen (Dü)"), 0, 1)
+        grid_t.addWidget(QtWidgets.QLabel("Thin places"), 0, 1)
         grid_t.addWidget(self.table_due_thr, 1, 1)
         mv.addWidget(self.group_thresh)
         self._init_color_editor(mv)
@@ -2243,7 +2243,7 @@ class GarnPanel(QtWidgets.QGroupBox):
     def _init_visibility_editor(self, layout_parent):
         """Checkboxen je Klasse (Di/Dü) zum Ein-/Ausschalten der Farbcodierung."""
         self.group_visibility = QtWidgets.QGroupBox(
-            "Sichtbarkeit der Klassen (Matrix & Overlays)")
+            "Visibility of the classes (matrix & overlays)")
         grid = QtWidgets.QGridLayout(self.group_visibility)
         grid.setHorizontalSpacing(8)
         grid.setVerticalSpacing(6)
@@ -2257,7 +2257,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         self._chk_due = {}
 
         grid.addWidget(QtWidgets.QLabel("Dickstellen (Di)"), 0, 0, 1, 3)
-        grid.addWidget(QtWidgets.QLabel("Dünnstellen (Dü)"), 0, 3, 1, 3)
+        grid.addWidget(QtWidgets.QLabel("Thin places"), 0, 3, 1, 3)
 
         for idx, key in enumerate(di_keys):
             r = 1 + idx // 3
@@ -2380,7 +2380,7 @@ class GarnPanel(QtWidgets.QGroupBox):
     def _init_color_editor(self, layout_parent):
         # Farben-Editor (kompakter Grid mit Buttons)
         self.group_colors = QtWidgets.QGroupBox(
-            "Farben (Di/Dü) – live änderbar")
+            "Colours (thick/thin) – change live")
         self.group_colors.setVisible(False)
         grid = QtWidgets.QGridLayout(self.group_colors)
         grid.setHorizontalSpacing(8)
@@ -2415,7 +2415,7 @@ class GarnPanel(QtWidgets.QGroupBox):
             grid.addWidget(btn, 1 + (j-1)//3*2, ((j-1) % 3)*2 + 1, 1, 1)
 
         row_off = 1 + ((len(di_keys)-1)//3)*2 + 1
-        grid.addWidget(QtWidgets.QLabel("Dünnstellen (Dü)"), row_off, 0, 1, 1)
+        grid.addWidget(QtWidgets.QLabel("Thin places"), row_off, 0, 1, 1)
         for j, k in enumerate(due_keys, start=1):
             btn = make_btn(COLOR_STATE.due_colors.get(k, DUE_COLORS.get(k)))
             btn.clicked.connect(lambda _=False, kk=k,
@@ -2538,7 +2538,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         self.combo_files.clear()
         files = self._list_testdata_files()
         if not files:
-            self.combo_files.addItem("— keine TDMS-Dateien —", userData=None)
+            self.combo_files.addItem("— no TDMS files —", userData=None)
             self.combo_files.setEnabled(False)
         else:
             self.combo_files.setEnabled(True)
@@ -2557,7 +2557,7 @@ class GarnPanel(QtWidgets.QGroupBox):
             last_dir = DEFAULT_IMPORT_DIR
 
         dlg = FileBrowserDialog(self, folder=(
-            last_dir if last_dir else None), title="Ordner laden…")
+            last_dir if last_dir else None), title="Load folder…")
         try:
             result = dlg.exec()
             accepted = (result == QtWidgets.QDialog.Accepted)
@@ -2621,12 +2621,12 @@ class GarnPanel(QtWidgets.QGroupBox):
         path = getattr(self, "current_file_path", None)
         if not path:
             QtWidgets.QMessageBox.warning(
-                self, "Hinweis", "Bitte zuerst eine TDMS-Datei laden.")
+                self, "Note", "Please load a TDMS file first.")
             return
         p = Path(path)
         if not p.exists():
             QtWidgets.QMessageBox.critical(
-                self, "Fehler", f"Datei nicht gefunden:\n{p}")
+                self, "Error", f"File not found:\n{p}")
             return
         try:
             arr = _read_first_numeric_tdms_channel(p)
@@ -2652,11 +2652,11 @@ class GarnPanel(QtWidgets.QGroupBox):
                     pass
         except Exception as e:
             QtWidgets.QMessageBox.critical(
-                self, "Fehler beim Einlesen", f"TDMS konnte nicht geladen werden:\n{e}")
+                self, "Error while reading", f"The TDMS file could not be loaded:\n{e}")
             return
         if arr is None:
             QtWidgets.QMessageBox.critical(
-                self, "Fehler", "Kein numerischer Kanal in dieser TDMS-Datei gefunden.")
+                self, "Error", "No numeric channel found in this TDMS file.")
             return
         self.series_um = np.asarray(arr, dtype=float)
         total_points = self.series_um.size
@@ -2668,7 +2668,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         if available_turns < 1:
             QtWidgets.QMessageBox.critical(
                 self,
-                "Zu wenige Daten",
+                "Not enough data",
                 f"Found: {total_points} points, required: at least {pps} points (1 × 200 mm)."
             )
             return
@@ -2822,11 +2822,11 @@ class GarnPanel(QtWidgets.QGroupBox):
             self.machine_tab.set_trial_id(locals().get(
                 'versuchs') if locals().get('versuchs') is not None else trial_id)
             if exists and (not machine_name):
-                self.machine_tab.set_machine_name('Maschine nicht gefunden')
+                self.machine_tab.set_machine_name('Machine not found')
             else:
                 self.machine_tab.set_machine_name(machine_name)
             if exists and (trial_id is not None) and (not jet_name):
-                self.machine_tab.set_jet_name('Jet nicht gefunden')
+                self.machine_tab.set_jet_name('Jet not found')
             else:
                 self.machine_tab.set_jet_name(jet_name)
             self.machine_tab.set_materials(materials)
@@ -3136,11 +3136,11 @@ class GarnPanel(QtWidgets.QGroupBox):
                 if length_m > 0:
                     self.uneven_info.setText(
                         f"Number of consecutive events (runs) per class – per 100 m (series length: {length_m:.1f} m).\n"
-                        "Basierend auf den Prozent-Schwellen aus der Matrix.")
+                        "Based on the percent thresholds of the matrix.")
                 else:
                     self.uneven_info.setText(
-                        "Anzahl aneinanderliegende Ereignisse (Runs) je Klasse – pro 100 m.\n"
-                        "Basierend auf den Prozent-Schwellen aus der Matrix.")
+                        "Number of adjacent events (runs) per class – per 100 m.\n"
+                        "Based on the percent thresholds of the matrix.")
             except Exception:
                 pass
 
@@ -3658,7 +3658,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         lines.append("")
         lines.append("— Ausschnitt (2 m) —")
         lines.append(f"Mittel-Dicke: {mean_mm:.4f} mm ({mean_um:.1f} µm)")
-        lines.append(f"Std-Abweichung: {std_mm:.4f} mm ({std_um:.2f} µm)")
+        lines.append(f"Std. deviation: {std_mm:.4f} mm ({std_um:.2f} µm)")
         lines.append(f"CV: {cv_percent:.2f} %")
         lines.append(f"Min. Dicke: {min_mm:.4f} mm ({min_mm*1000:.1f} µm)")
         lines.append(f"Max. Dicke: {max_mm:.4f} mm ({max_mm*1000:.1f} µm)")
@@ -3668,7 +3668,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         lines.append("")
         lines.append("— Gesamte Serie —")
         lines.append(f"Mittel-Dicke: {f_mean_mm:.4f} mm ({f_mean_um:.1f} µm)")
-        lines.append(f"Std-Abweichung: {f_std_mm:.4f} mm ({f_std_um:.2f} µm)")
+        lines.append(f"Std. deviation: {f_std_mm:.4f} mm ({f_std_um:.2f} µm)")
         lines.append(f"CV: {f_cv:.2f} %")
         lines.append(f"Min. Dicke: {f_min_mm:.4f} mm ({f_min_mm*1000:.1f} µm)")
         lines.append(f"Max. Dicke: {f_max_mm:.4f} mm ({f_max_mm*1000:.1f} µm)")
@@ -3719,7 +3719,7 @@ class GarnPanel(QtWidgets.QGroupBox):
 
         try:
             self.stats_box.setToolTip(
-                f"""MET (Mean Excess Thickness): Average thickness of points outside the core band\n    – also wie stark das Garn an den Rändern vom stabilen Bereich abweicht (in µm pro Punkt).\n    Eine hohe MET weist auf ausgeprägte Ausreisser hin (dicke oder dünne Abschnitte).\n\nFrequenz: Anteil der Messpunkte, die ausserhalb des Kernbandes liegen (in %).\n    Diese Kennzahl beschreibt, wie häufig solche Ausreisser auftreten – \n    unabhängig von deren Stärke.\n\nHKI (Heberlein Kennzahl Index): Dimensionslose Vergleichszahl, berechnet aus der\n    Summe der Exzess-Flächen relativ zu einer robusten Spannweite.\n    Sie kombiniert Häufigkeit und Stärke der Abweichungen zu einer einzigen, \n    normierten Kennzahl. Ein hoher HKI deutet auf ein unruhiges oder \n    inhomogenes Garnprofil hin, während ein tiefer Wert auf ein gleichmässiges \n    und stabiles Garn hindeutet.\n\nHAI (Heberlein ATY Index): Dimensionsloser, titerunabhängiger Index über robuste z-Skalierung (Median/MAD).\n    1) z = (y - Median) / (1.4826*MAD)\n    2) Exzess nur ausserhalb des Kernbandes: E = max(|z| - k, 0)\n    3) HAI = 100 × (Anteil ausserhalb) × Mittelwert(E)\n    k ist dein σ-Faktor und aktuell k = {getattr(self, 'sigma_factor', 1.0):g}.\n\nDefinition Kernband:\n    Median ± {getattr(self, 'sigma_factor', 1.0):g}× Standardabweichung (σ) der Dicke in µm.\n\nAnwendung:\n    - MET → Stärke einzelner Abweichungen\n    - Frequenz → Häufigkeit von Abweichungen\n    - HKI → Gesamtqualität, normiert auf robuste Spannweite\n    - HAI → Vergleich ATY-Garne (dimensionslos, feinheitsunabhängig)\n""")
+                f"""MET (Mean Excess Thickness): Average thickness of points outside the core band\n    – i.e. how much the yarn deviates from the stable range at the edges (in µm per point).\n    A high MET points to pronounced outliers (thick or thin sections).\n\nFrequency: share of measuring points outside the core band (in %).\n    It describes how often such outliers occur – \n    regardless of their size.\n\nHKI (Heberlein Kennzahl Index): dimensionless comparison value, calculated from the\n    sum of the excess areas relative to a robust range.\n    It combines frequency and size of the deviations into a single, \n    normalised value. A high HKI points to a restless or \n    inhomogeneous yarn profile, a low value to an even \n    and stable yarn.\n\nHAI (Heberlein ATY Index): dimensionless index independent of the titer, via robust z-scaling (median/MAD).\n    1) z = (y - median) / (1.4826*MAD)\n    2) excess only outside the core band: E = max(|z| - k, 0)\n    3) HAI = 100 × (share outside) × mean(E)\n    k is your σ factor, currently k = {getattr(self, 'sigma_factor', 1.0):g}.\n\nDefinition Kernband:\n    Median ± {getattr(self, 'sigma_factor', 1.0):g}× standard deviation (σ) of the thickness in µm.\n\nUse:\n    - MET → size of single deviations\n    - Frequency → how often deviations occur\n    - HKI → overall quality, normalised to a robust range\n    - HAI → comparing ATY yarns (dimensionless, independent of fineness)\n""")
         except Exception:
             pass
 

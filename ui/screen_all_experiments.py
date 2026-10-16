@@ -886,7 +886,7 @@ class AllExperimentsScreen(QWidget):
                         w.blockSignals(True)
                         w.setCurrentIndex(idx2)
                         w.blockSignals(False)
-                errors.append((row, PermissionError("Keine Schreibrechte (Read-Only).")))
+                errors.append((row, PermissionError("No write permission (read-only).")))
                 continue
 
             current_username = self._effective_username()
@@ -979,8 +979,8 @@ class AllExperimentsScreen(QWidget):
         if errors:
             first_row, first_err = errors[0]
             self._notify("critical", "Save status",
-                         f"{len(errors)} Zeile(n) konnten nicht gespeichert werden.\n"
-                         f"Erster Fehler (Zeile {first_row + 1}):\n{first_err}")
+                         f"{len(errors)} row(s) could not be saved.\n"
+                         f"First error (row {first_row + 1}):\n{first_err}")
         else:
             self._notify("info", "Save status", "All changed statuses were saved successfully.")
 
@@ -1063,7 +1063,7 @@ class AllExperimentsScreen(QWidget):
                     combo.blockSignals(True)
                     combo.setCurrentIndex(idx)
                     combo.blockSignals(False)
-            self._notify("warning", "No permission", "Du hast keine Schreibrechte (Read-Only).")
+            self._notify("warning", "No permission", "You have no write permission (read-only).")
             return
 
         current_username = self._effective_username()
@@ -1213,7 +1213,7 @@ class AllExperimentsScreen(QWidget):
             return
         lbl = QLabel()
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setToolTip("Attachment vorhanden")
+        lbl.setToolTip("Has attachments")
         lbl.setPixmap(pm)
         self.table.setCellWidget(row, col, lbl)
 
@@ -1250,7 +1250,7 @@ class AllExperimentsScreen(QWidget):
             return
         lbl = QLabel()
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setToolTip("Notes vorhanden")
+        lbl.setToolTip("Has notes")
         lbl.setPixmap(pm)
         self.table.setCellWidget(row, col, lbl)
 
@@ -2547,7 +2547,7 @@ class MachineSelectionDialog(QDialog):
 
         btn_row = QHBoxLayout()
         self._but_ok = QPushButton("OK", self)
-        self._but_cancel = QPushButton("Abbrechen", self)
+        self._but_cancel = QPushButton("Cancel", self)
         self._but_ok.clicked.connect(self.accept)
         self._but_cancel.clicked.connect(self.reject)
         btn_row.addWidget(self._but_ok)

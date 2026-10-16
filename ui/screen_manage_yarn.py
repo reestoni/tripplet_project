@@ -1337,7 +1337,7 @@ class ManageYarnScreen(QWidget):
             self._on_new_yarn()
             return
         QMessageBox.information(
-            self, 'New Yarn', "'New Yarn' ist derzeit nicht verfügbar.")
+            self, 'New Yarn', "'New Yarn' is currently not available.")
 
     def _on_row_double_clicked(self, index):
         """Doppelklick: auf einer Detailzeile (Serie/Versuch) nichts - die
