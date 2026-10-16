@@ -1,4 +1,6 @@
-"""whats_new.py - "What's new" per version, Nutzerwunsch 2026-10-15.
+"""whats_new.py - "What's new" per version, Nutzerwunsch 2026-10-15. Shown to
+the users as "Fresh off the Spool" (name since 2026-10-16, WINDOW_TITLE);
+code, files and usage events keep the old internal name whats_new.
 
 Window: versions on the left (number + date, NEW for versions the user has
 not seen yet), the new features of the chosen version on the right as cards
@@ -9,7 +11,7 @@ a) Seen once automatically: after login the window opens if the user has
    not seen the newest version yet; that version is then stored per user
    ("whats_new_seen" in the display settings, tblUser.DisplaySettings -
    follows the login to every PC; without that column QSettings on this PC).
-b) Any time again: Sidebar -> Account -> "What's new". Button "PDF" saves
+b) Any time again: Sidebar -> Account -> "Fresh off the Spool". Button "PDF" saves
    the shown version as PDF (ui/whats_new_pdf.py, one section per page).
 c) Search (field above the version list): finds feature cards across all
    versions, in all three languages and with the help-search synonyms
@@ -37,12 +39,30 @@ from PySide6.QtWidgets import (
 )
 
 from ui.widgets.whats_new_texts import (
-    CLOSE, CURRENT_LABEL, HITS_LABEL, NEW_BADGE, PDF_TOOLTIP, RELEASES, SEARCH_NONE, SEARCH_PLACEHOLDER, SEARCH_RESULTS,
+    CLOSE, CURRENT_LABEL, HITS_LABEL, NEW_BADGE, PDF_TOOLTIP, RELEASES, SUBTITLE, SEARCH_NONE, SEARCH_PLACEHOLDER, SEARCH_RESULTS,
     VERSION_LABEL, VERSIONS_TITLE, WHERE_LABEL, WINDOW_TITLE,
 )
 
 SKETCH_DIR = "assets/images/whats_new"
 SKETCH_W, SKETCH_H = 300, 130
+# the magazine logo (window head, PDF masthead); a sketch may also be a .png
+LOGO = f"{SKETCH_DIR}/fresh_off_the_spool.png"
+
+
+def logo_pixmap(max_w: int, max_h: int, dpr: float = 1.0):
+    """The logo scaled into max_w x max_h (sharp on high-DPI screens), None if missing."""
+    from PySide6.QtGui import QPixmap
+    from ui.widgets.multilang_help import resource_path
+    return _fit(QPixmap(resource_path(LOGO)), max_w, max_h, dpr)
+
+
+def _fit(pm, max_w: int, max_h: int, dpr: float):
+    if pm.isNull():
+        return None
+    dpr = max(1.0, float(dpr or 1.0))
+    pm = pm.scaled(int(max_w * dpr), int(max_h * dpr), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    pm.setDevicePixelRatio(dpr)
+    return pm
 
 
 # ── versions ─────────────────────────────────────────────────────────────
@@ -193,7 +213,18 @@ def feature_card(title: str, text: str, where: str, sketch: Optional[str], lang:
     col.addWidget(w)
     col.addStretch(1)
     lay.addLayout(col, 1)
-    if sketch:
+    if sketch and sketch.lower().endswith(".png"):
+        from PySide6.QtGui import QPixmap
+        from ui.widgets.multilang_help import resource_path
+        pm = _fit(QPixmap(resource_path(f"{SKETCH_DIR}/{sketch}")), SKETCH_W, SKETCH_H, card.devicePixelRatioF())
+        if pm is not None:
+            img = QLabel()
+            img.setPixmap(pm)
+            img.setFixedSize(SKETCH_W, SKETCH_H)
+            img.setAlignment(Qt.AlignCenter)
+            lay.addWidget(img, 0, Qt.AlignTop)
+            card.setMinimumHeight(SKETCH_H + 22)
+    elif sketch:
         from ui.widgets.multilang_help import svg_widget
         try:
             lay.addWidget(svg_widget(f"{SKETCH_DIR}/{sketch}", {}, SKETCH_W, SKETCH_H), 0, Qt.AlignTop)
@@ -219,16 +250,23 @@ class WhatsNewDialog(QDialog):
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 8, 10, 12)
-        top = QHBoxLayout()
-        self.lbl_title = QLabel()
+        # left column: logo above search + versions; right column: subtitle +
+        # flags in one slim row, the version with its tabs right below
+        self.lbl_title = QLabel()  # the logo; plain text if the picture is missing
         self.lbl_title.setStyleSheet("font-size:20px; font-weight:700;")
-        top.addWidget(self.lbl_title)
+        self._logo = logo_pixmap(210, 100, self.devicePixelRatioF())
+        if self._logo is not None:
+            self.lbl_title.setPixmap(self._logo)
+        self.lbl_subtitle = QLabel()  # "What's new in TrippleT" next to the flags
+        self.lbl_subtitle.setStyleSheet("font-size:13px; color:#666666; padding-left:20px;")
+        top = QHBoxLayout()
+        top.addWidget(self.lbl_subtitle, 0, Qt.AlignVCenter)
         flag_row, self._flag_buttons = build_flag_row(self.set_language, self)
         top.addLayout(flag_row, 1)
-        outer.addLayout(top)
 
         body = QHBoxLayout()
         left = QVBoxLayout()
+        left.addWidget(self.lbl_title)
         self.lbl_versions = QLabel()
         self.lbl_versions.setStyleSheet("font-weight:700; color:#565656;")
         self.search = QLineEdit()
@@ -258,7 +296,7 @@ class WhatsNewDialog(QDialog):
         self.scroll, self._page = scroll_page()  # search results (one list)
         self._release_view = QWidget()          # one version: title + a tab per section
         rv = QVBoxLayout(self._release_view)
-        rv.setContentsMargins(20, 12, 8, 0)
+        rv.setContentsMargins(20, 2, 8, 0)
         rv.setSpacing(8)
         from ui.widgets.multilang_help import heading
         self.lbl_release = heading("")
@@ -274,7 +312,10 @@ class WhatsNewDialog(QDialog):
         self.right = QStackedWidget()
         self.right.addWidget(self._release_view)
         self.right.addWidget(self.scroll)
-        body.addWidget(self.right, 1)
+        right_col = QVBoxLayout()
+        right_col.addLayout(top)
+        right_col.addWidget(self.right, 1)
+        body.addLayout(right_col, 1)
         outer.addLayout(body, 1)
 
         row = QHBoxLayout()
@@ -301,7 +342,10 @@ class WhatsNewDialog(QDialog):
     def _apply_language(self) -> None:
         lang = self._lang
         self.setWindowTitle(WINDOW_TITLE[lang])
-        self.lbl_title.setText(WINDOW_TITLE[lang])
+        if self._logo is None:
+            self.lbl_title.setText(WINDOW_TITLE[lang])
+        self.lbl_title.setToolTip(WINDOW_TITLE[lang])
+        self.lbl_subtitle.setText(SUBTITLE[lang])
         self.lbl_versions.setText(VERSIONS_TITLE[lang])
         self.btn_close.setText(CLOSE[lang])
         self.btn_pdf.setToolTip(PDF_TOOLTIP[lang])

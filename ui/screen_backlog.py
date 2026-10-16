@@ -55,6 +55,9 @@ from ui.screen_create_experiment import table_exists, get_columns_map, resolve_f
 from ui.screen_show_experiment import _ExperimentRequestReadOnlyDialog
 from db.connection import fetch_all, execute, update_trialseries_name
 
+import logging
+logger = logging.getLogger(__name__)
+
 # 5%-Zufalls-Easter-Egg (schlafende Athena-Eule) - 2026-08-27 aus
 # ui/screen_home.py hierher umgezogen (Nutzerwunsch: "da wir nun quasi home
 # 'abgeschossen' haben" - Backlog ist seit 2026-08-26 der eigentliche
@@ -498,6 +501,17 @@ class CardRowDelegate(QStyledItemDelegate):
         return super().sizeHint(option, index).expandedTo(QSize(0, 46))
 
 
+def encode_dnd_mime(series_ids, status_id: int) -> bytes:
+    """Drag data of one or more cards: "12,15,18|4" (old format "12|4" = one card)."""
+    return f"{','.join(str(int(i)) for i in series_ids)}|{int(status_id)}".encode("utf-8")
+
+
+def decode_dnd_mime(raw: bytes):
+    """-> ([series ids], old status id)."""
+    ids_txt, status_txt = raw.decode("utf-8").split("|", 1)
+    return [int(x) for x in ids_txt.split(",") if x.strip()], int(status_txt)
+
+
 class BacklogDnDTable(QTableWidget):
     """Drag-and-Drop-fähige Tabelle für eine Backlog-Status-Spalte.
 
@@ -523,7 +537,9 @@ class BacklogDnDTable(QTableWidget):
         self._drag_row_original_brush = None  # type: ignore
 
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        # Ctrl+click / Shift+click select several cards - dragging one of them
+        # moves all (e.g. many from "To Be Cleaned" to "Archived" at once)
+        self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setDragEnabled(True)
         self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
@@ -637,32 +653,47 @@ class BacklogDnDTable(QTableWidget):
             self.setStyleSheet(self._base_style)
 
     def _set_drag_row_feedback(self, on: bool):
-        """Dimmt die gezogene Zeile während des Drags."""
-        """Visuelles Feedback: aktuell 'gehaltene' Zeile im Ursprungstisch markieren."""
-        row = self.currentRow()
-        if row < 0:
-            return
-        it = self.item(row, 0)
-        if it is None:
-            return
-
+        """Visuelles Feedback: die gezogenen Karten im Ursprungstisch markieren."""
         if on:
             if self._drag_row_original_brush is not None:
                 return
-            self._drag_row_original_brush = it.background()
-            it.setBackground(QColor("#FFF8E1"))
+            self._drag_row_original_brush = {}
+            for row in self._drag_rows():
+                it = self.item(row, 0)
+                if it is not None:
+                    self._drag_row_original_brush[row] = it.background()
+                    it.setBackground(QColor("#FFF8E1"))
         else:
             if self._drag_row_original_brush is None:
                 return
-            it.setBackground(self._drag_row_original_brush)
+            for row, brush in self._drag_row_original_brush.items():
+                it = self.item(row, 0)
+                if it is not None:
+                    it.setBackground(brush)
             self._drag_row_original_brush = None
+
+    def _drag_rows(self) -> list:
+        """Rows that move: all selected cards if the held card is one of
+        them, else only the held card."""
+        cur = self.currentRow()
+        rows = sorted({i.row() for i in self.selectionModel().selectedRows()})
+        if cur >= 0 and cur not in rows:
+            return [cur]
+        return rows or ([cur] if cur >= 0 else [])
 
     def _build_drag_pixmap(self) -> QPixmap:
         """Erstellt ein Vorschau-Pixmap für die gezogene Karte."""
         """Erzeugt eine gut sichtbare 'Ghost'-Karte für den Drag (identisch zur Karte)."""
+        rows = self._drag_rows()
         row = self.currentRow()
         it = self.item(row, 0)
-        if it is None:
+        if len(rows) > 1:
+            names = [(self.item(r, 0).data(ROLE_SERIES_NAME) or "").strip()
+                     for r in rows if self.item(r, 0) is not None]
+            title = f"{len(rows)} series"
+            subtitle = ",  ".join(n for n in names if n)
+            meta = ""
+        elif it is None:
             title = "TrialSeries"
             subtitle = ""
             meta = ""
@@ -736,14 +767,18 @@ class BacklogDnDTable(QTableWidget):
         return item.data(ROLE_SERIES_ID)
 
     def startDrag(self, supportedActions):
-        """Startet den Qt-Drag mit Serien-ID als Mime-Daten."""
-        series_id = self._selected_series_id()
-        if series_id is None:
+        """Startet den Qt-Drag mit den Serien-IDs als Mime-Daten ("id,id|status")."""
+        ids = []
+        for row in self._drag_rows():
+            it = self.item(row, 0)
+            sid = it.data(ROLE_SERIES_ID) if it is not None else None
+            if sid is not None:
+                ids.append(int(sid))
+        if not ids:
             return
 
         mime = QMimeData()
-        mime.setData(self.MIME_TYPE,
-                     f"{int(series_id)}|{self._status_id}".encode("utf-8"))
+        mime.setData(self.MIME_TYPE, encode_dnd_mime(ids, self._status_id))
 
         drag = QDrag(self)
         drag.setMimeData(mime)
@@ -793,10 +828,7 @@ class BacklogDnDTable(QTableWidget):
             return super().dropEvent(event)
 
         try:
-            raw = bytes(md.data(self.MIME_TYPE)).decode("utf-8")
-            series_id_txt, old_status_txt = raw.split("|", 1)
-            series_id = int(series_id_txt)
-            old_status_id = int(old_status_txt)
+            series_ids, old_status_id = decode_dnd_mime(bytes(md.data(self.MIME_TYPE)))
         except Exception:
             event.ignore()
             return
@@ -806,8 +838,8 @@ class BacklogDnDTable(QTableWidget):
             return
 
         try:
-            self._screen._handle_dnd_move(
-                series_id, old_status_id, self._status_id)
+            self._screen._handle_dnd_move_many(
+                series_ids, old_status_id, self._status_id)
             event.acceptProposedAction()
         except Exception:
             event.ignore()
@@ -2001,10 +2033,7 @@ class ArchivedPanel(QWidget):
         if not md.hasFormat(_MIME_TYPE):
             return super().dropEvent(event)
         try:
-            raw = bytes(md.data(_MIME_TYPE)).decode("utf-8")
-            series_id_txt, old_status_txt = raw.split("|", 1)
-            series_id    = int(series_id_txt)
-            old_status_id = int(old_status_txt)
+            series_ids, old_status_id = decode_dnd_mime(bytes(md.data(_MIME_TYPE)))
         except Exception:
             event.ignore()
             return
@@ -2013,7 +2042,7 @@ class ArchivedPanel(QWidget):
             return
         if self._screen is not None:
             try:
-                self._screen._handle_dnd_move(series_id, old_status_id, 5)
+                self._screen._handle_dnd_move_many(series_ids, old_status_id, 5)
                 event.acceptProposedAction()
             except Exception:
                 event.ignore()
@@ -2993,17 +3022,57 @@ class BacklogScreen(QWidget):
     # -------------------------------------------------
     # STATUS ÄNDERN / DRAG&DROP
     # -------------------------------------------------
-    def _handle_dnd_move(self, series_id: int, old_status_id: int, new_status_id: int):
-        """Wird von Drag&Drop-Tabellen aufgerufen."""
+    def _handle_dnd_move_many(self, series_ids, old_status_id: int, new_status_id: int):
+        """Drop of one or more cards (Ctrl/Shift+click selection). Same rules
+        per card as _handle_dnd_move; one confirmation, one reload, one
+        summary of the cards that could not be moved."""
+        series_ids = list(dict.fromkeys(int(i) for i in series_ids))
+        if len(series_ids) <= 1:
+            for sid in series_ids:
+                self._handle_dnd_move(sid, old_status_id, new_status_id)
+            return
+        names = {1: "Backlog", 2: "In Progress", 3: "Done", 4: "To Be Cleaned", 5: "Archived"}
+        if QMessageBox.question(
+                self, "Move series",
+                f"Move {len(series_ids)} series to '{names.get(new_status_id, new_status_id)}'?",
+                QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Yes) != QMessageBox.Yes:
+            return
+        problems = []
+        moved = 0
+        for sid in series_ids:
+            try:
+                if self._handle_dnd_move(sid, old_status_id, new_status_id, reload=False, problems=problems):
+                    moved += 1
+            except Exception as e:  # one failing card must not stop the others
+                logger.exception("Backlog: move of series %s failed", sid)
+                problems.append(f"Series {sid} could not be moved ({type(e).__name__}).")
+        self.reload_all()
+        if problems:
+            reasons = "\n".join(f"- {m}" for m in dict.fromkeys(problems))
+            QMessageBox.information(
+                self, "Move series",
+                (f"{moved} of {len(series_ids)} series moved. The others stay where they are:"
+                 if moved else f"None of the {len(series_ids)} series could be moved:") + f"\n\n{reasons}")
+
+    def _handle_dnd_move(self, series_id: int, old_status_id: int, new_status_id: int,
+                         reload: bool = True, problems: list = None) -> bool:
+        """Wird von Drag&Drop-Tabellen aufgerufen. True = verschoben.
+        problems: list -> reasons are collected there instead of one message box each."""
+        def _deny(parent, title, msg):
+            if problems is not None:
+                problems.append(msg)
+            else:
+                QMessageBox.warning(parent, title, msg)
+
         user_id = self._get_effective_user_id()
 
         if user_id is None:
-            QMessageBox.warning(
+            _deny(
                 self,
                 "No permission",
                 "You are not logged in. Please log in first.",
             )
-            return
+            return False
 
         access_level = self._effective_access_level()
         is_super = access_level >= 4
@@ -3023,25 +3092,25 @@ class BacklogScreen(QWidget):
                 is_owner = False
 
             if not is_owner:
-                QMessageBox.warning(
+                _deny(
                     self,
                     "No permission",
                     "Only the owner or a superuser may change the status. "
                     "Exception: Items with status 'Backlog' may be taken in progress by all users.",
                 )
-                return
+                return False
 
 
         # Wechsel nach/von Archived (5) nur für Superuser.
         # Ausnahme: "To Be Cleaned" -> "Archived" ist für alle Write-User erlaubt.
         if (old_status_id == 5 or new_status_id == 5) and not is_tbc_to_archived:
             if not is_super:
-                QMessageBox.warning(
+                _deny(
                     self,
                     "No permission",
                     "Only superusers may set or remove the 'Archived' status.",
                 )
-                return
+                return False
 
         # -> To Be Cleaned (4): always superuser-only, regardless of the old status.
         # Important for retest flags (db/retest_flags.py): a flagged series lands
@@ -3049,21 +3118,21 @@ class BacklogScreen(QWidget):
         # jump 1 -> 4 slip through under the "Backlog" exception above - exactly
         # the checkpoint where open flags get resolved must stay superuser-exclusive.
         if new_status_id == 4 and old_status_id != 4 and not is_super:
-            QMessageBox.warning(
+            _deny(
                 self,
                 "No permission",
                 "Only superusers may move a series to 'To Be Cleaned'.",
             )
-            return
+            return False
 
         # To Be Cleaned (4) → Backlog/In Progress/Done: nur Superuser
         if old_status_id == 4 and new_status_id in (1, 2, 3) and not is_super:
-            QMessageBox.warning(
+            _deny(
                 self,
                 "No permission",
                 "Only superusers may move a series back from 'To Be Cleaned'.",
             )
-            return
+            return False
 
         # Joker-Maschine Regel: von Backlog weg nur mit Nicht-Joker-Maschine
         new_machine_id = None
@@ -3071,10 +3140,10 @@ class BacklogScreen(QWidget):
             if self._series_has_joker_machine(series_id):
                 dlg = MachineSelectDialog(self)
                 if dlg.exec() != QDialog.Accepted:
-                    return
+                    return False
                 new_machine_id = dlg.get_selected_machine_id()
                 if new_machine_id is None:
-                    return
+                    return False
 
         self._update_backlog_status(
             series_id, new_status_id, old_status_id, user_id, new_machine_id)
@@ -3087,7 +3156,9 @@ class BacklogScreen(QWidget):
             except Exception:
                 pass
 
-        self.reload_all()
+        if reload:
+            self.reload_all()
+        return True
 
     def _series_has_joker_machine(self, series_id) -> bool:
         sql = """

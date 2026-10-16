@@ -434,6 +434,12 @@ class SidebarPanel(QWidget):
             self._layout.addWidget(widget)
         self._items.append(widget)
 
+    def end_section(self):
+        """Following add_item() calls go to the top level again (always
+        visible), not into the last collapsible section - e.g. the pinned
+        Help/Recent lines above Account (2026-10-16)."""
+        self._current_section = None
+
     def add_spacing(self, px: int):
         """Fügt einen Abstand auf oberster Ebene ein (zwischen Sektionen,
         nicht Teil einer Sektion - bleibt daher unabhängig vom Klapp-Zustand

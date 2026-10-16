@@ -153,13 +153,13 @@ HELP_COLUMNS = ["Kind", "Question", "Result", "Count", "Users", "LastUsed"]
 # Reihenfolge = Handlungsbedarf (oben, was in Hilfe/Synonymen fehlt)
 HELP_KINDS = [
     ("help_search_noresult", "No result"),
-    ("help_whatsnew_noresult", "What's new: no result"),
+    ("help_whatsnew_noresult", "Fresh off the Spool: no result"),
     ("help_feedback_down", "Not helpful"),
     ("help_ai_error", "AI error"),
     ("help_search_noclick", "Searched, nothing opened"),
     ("help_ai_ask", "Asked AI"),
     ("help_search_open", "Opened"),
-    ("help_whatsnew_search", "What's new: searched"),
+    ("help_whatsnew_search", "Fresh off the Spool: searched"),
     ("help_feedback_up", "Helpful"),
 ]
 

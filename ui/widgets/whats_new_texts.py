@@ -98,17 +98,22 @@ RELEASES = [
                  "Type your question in your own words and get the matching help page - in English, German or "
                  "Spanish. <b>Take me there</b> opens the screen.",
                  "Sidebar → <b>Help (F1)</b> or the F1 key", "wn_help_search.svg"),
-                ("feature", "Search in What's new",
+                ("feature", "Search in Fresh off the Spool",
                  "Know a feature exists but not when it came? Type a word in the search field above the version "
                  "list - all versions are searched at once, in English, German and Spanish. Versions with hits show "
                  "how many; click one to jump to it. Each version is now split into tabs by area, e.g. "
                  "<i>Show Experiment (8)</i>.",
-                 "Sidebar → Account → <b>What's new</b> → search field", "wn_whats_new_search.svg"),
-                ("feature", "What's new as PDF",
+                 "Sidebar → Account → <b>Fresh off the Spool</b> → search field", "wn_whats_new_search.svg"),
+                ("feature", "Fresh off the Spool as PDF",
                  "Save a version's news as a PDF - to print it or send it to colleagues. Each topic stays together "
                  "on one page.",
-                 "Sidebar → Account → <b>What's new</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
+                 "Sidebar → Account → <b>Fresh off the Spool</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
                 ("h", "Backlog and All Experiments"),
+                ("feature", "Move several cards at once",
+                 "Hold <b>Ctrl</b> and click the cards (or <b>Shift+click</b> for a whole range), then drag one of "
+                 "them - all selected cards move together, e.g. from <i>To Be Cleaned</i> to <i>Archived</i>. "
+                 "TrippleT asks once and tells you if a card was not allowed to move.",
+                 "Backlog → <b>Ctrl+click</b> the cards → drag", "wn_backlog_multi_move.svg"),
                 ("feature", "Backlog on wide screens",
                  "On big monitors all four columns stand side by side and use the full height.",
                  "Backlog", "wn_wide_backlog.svg"),
@@ -151,8 +156,12 @@ RELEASES = [
                  "now asks before unsaved spool changes are lost. Help in three languages: round button top right.",
                  "Yarn Stock → <b>Go to spool #</b>", None),
                 ("h", "General"),
+                ("feature", "Fresh off the Spool: what's new in TrippleT",
+                 "All new features of every version in one place: one tab per area, searchable and as PDF. "
+                 "It opens by itself once after a new version - and anytime in the sidebar.",
+                 "Sidebar → Account → <b>Fresh off the Spool</b>", "fresh_off_the_spool.png"),
                 ("feature", "Recent series",
-                 "The series you opened last are one click away: <b>Recent</b> in the sidebar (under Help). "
+                 "The series you opened last are one click away: <b>Recent</b> in the sidebar (at the bottom, above Account). "
                  "Click one to open it, <b>Ctrl+click</b> opens it in a new tab. The list follows you to every PC.",
                  "Sidebar → <b>Recent</b>", None),
                 ("feature", "Athena answers in your language",
@@ -237,17 +246,23 @@ RELEASES = [
                  "Die Frage in eigenen Worten eintippen und die passende Hilfe-Seite bekommen - auf Englisch, "
                  "Deutsch oder Spanisch. <b>Take me there</b> öffnet den Screen.",
                  "Sidebar → <b>Help (F1)</b> oder Taste F1", "wn_help_search.svg"),
-                ("feature", "Suche in \"Was ist neu\"",
+                ("feature", "Suche in Fresh off the Spool",
                  "Du weisst, dass es eine Funktion gibt, aber nicht seit wann? Ein Wort ins Suchfeld über der "
                  "Versionsliste tippen - gesucht wird in allen Versionen gleichzeitig, auf Englisch, Deutsch und "
                  "Spanisch. Versionen mit Treffern zeigen die Anzahl; ein Klick springt dorthin. Jede Version ist "
                  "jetzt in Reiter nach Bereich aufgeteilt, z.&nbsp;B. <i>Show Experiment (8)</i>.",
-                 "Sidebar → Account → <b>What's new</b> → Suchfeld", "wn_whats_new_search.svg"),
-                ("feature", "\"Was ist neu\" als PDF",
+                 "Sidebar → Account → <b>Fresh off the Spool</b> → Suchfeld", "wn_whats_new_search.svg"),
+                ("feature", "Fresh off the Spool als PDF",
                  "Die Neuheiten einer Version als PDF speichern - zum Ausdrucken oder um sie Kollegen zu schicken. "
                  "Jedes Thema bleibt zusammen auf einer Seite.",
-                 "Sidebar → Account → <b>What's new</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
+                 "Sidebar → Account → <b>Fresh off the Spool</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
                 ("h", "Backlog und All Experiments"),
+                ("feature", "Mehrere Karten auf einmal verschieben",
+                 "<b>Strg</b> gedrückt halten und die Karten anklicken (oder <b>Umschalt+Klick</b> für einen ganzen "
+                 "Bereich), dann eine davon ziehen - alle markierten Karten wandern mit, z. B. von <i>To Be "
+                 "Cleaned</i> nach <i>Archived</i>. TrippleT fragt einmal nach und sagt, falls eine Karte nicht "
+                 "verschoben werden durfte.",
+                 "Backlog → Karten mit <b>Strg+Klick</b> markieren → ziehen", "wn_backlog_multi_move.svg"),
                 ("feature", "Backlog auf breiten Bildschirmen",
                  "Auf grossen Monitoren stehen alle vier Spalten nebeneinander und nutzen die volle Höhe.",
                  "Backlog", "wn_wide_backlog.svg"),
@@ -290,8 +305,12 @@ RELEASES = [
                  "Sprachen: runder Knopf oben rechts.",
                  "Yarn Stock → <b>Go to spool #</b>", None),
                 ("h", "Allgemein"),
+                ("feature", "Fresh off the Spool: Neues in TrippleT",
+                 "Alle Neuerungen jeder Version an einem Ort: ein Reiter pro Bereich, durchsuchbar und als PDF. "
+                 "Öffnet sich nach einer neuen Version einmal von selbst - und jederzeit in der Sidebar.",
+                 "Sidebar → Account → <b>Fresh off the Spool</b>", "fresh_off_the_spool.png"),
                 ("feature", "Zuletzt geöffnete Serien",
-                 "Die zuletzt geöffneten Serien sind einen Klick entfernt: <b>Recent</b> in der Sidebar (unter Help). "
+                 "Die zuletzt geöffneten Serien sind einen Klick entfernt: <b>Recent</b> in der Sidebar (unten, über Account). "
                  "Klick öffnet sie, <b>Strg+Klick</b> in einem neuen Tab. Die Liste folgt dir auf jeden PC.",
                  "Sidebar → <b>Recent</b>", None),
                 ("feature", "Athena antwortet in deiner Sprache",
@@ -376,17 +395,22 @@ RELEASES = [
                  "Escribe tu pregunta con tus propias palabras y obtén la página de ayuda adecuada, en inglés, alemán "
                  "o español. <b>Take me there</b> abre la pantalla.",
                  "Barra lateral → <b>Help (F1)</b> o la tecla F1", "wn_help_search.svg"),
-                ("feature", "Buscar en Novedades",
+                ("feature", "Buscar en Fresh off the Spool",
                  "¿Sabes que existe una función pero no desde cuándo? Escribe una palabra en el campo de búsqueda "
                  "encima de la lista de versiones: se busca en todas las versiones a la vez, en inglés, alemán y "
                  "español. Las versiones con resultados muestran cuántos; un clic salta a ellos. Cada versión se "
                  "divide ahora en pestañas por área, p.&nbsp;ej. <i>Show Experiment (8)</i>.",
-                 "Barra lateral → Account → <b>What's new</b> → campo de búsqueda", "wn_whats_new_search.svg"),
-                ("feature", "Novedades en PDF",
+                 "Barra lateral → Account → <b>Fresh off the Spool</b> → campo de búsqueda", "wn_whats_new_search.svg"),
+                ("feature", "Fresh off the Spool en PDF",
                  "Guarda las novedades de una versión como PDF, para imprimirlas o enviarlas a compañeros. Cada "
                  "tema queda junto en una sola página.",
-                 "Barra lateral → Account → <b>What's new</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
+                 "Barra lateral → Account → <b>Fresh off the Spool</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
                 ("h", "Backlog y All Experiments"),
+                ("feature", "Mover varias tarjetas a la vez",
+                 "Mantén <b>Ctrl</b> y haz clic en las tarjetas (o <b>Mayús+clic</b> para un rango), luego arrastra "
+                 "una de ellas: todas las marcadas se mueven juntas, p. ej. de <i>To Be Cleaned</i> a "
+                 "<i>Archived</i>. TrippleT pregunta una vez y avisa si alguna tarjeta no se podía mover.",
+                 "Backlog → <b>Ctrl+clic</b> en las tarjetas → arrastrar", "wn_backlog_multi_move.svg"),
                 ("feature", "Backlog en pantallas anchas",
                  "En monitores grandes las cuatro columnas se muestran una al lado de otra con toda la altura.",
                  "Backlog", "wn_wide_backlog.svg"),
@@ -430,8 +454,12 @@ RELEASES = [
                  "a la derecha.",
                  "Yarn Stock → <b>Go to spool #</b>", None),
                 ("h", "General"),
+                ("feature", "Fresh off the Spool: novedades de TrippleT",
+                 "Todas las novedades de cada versión en un solo lugar: una pestaña por área, con búsqueda y en PDF. "
+                 "Se abre sola una vez tras cada nueva versión, y en cualquier momento desde la barra lateral.",
+                 "Barra lateral → Account → <b>Fresh off the Spool</b>", "fresh_off_the_spool.png"),
                 ("feature", "Series recientes",
-                 "Las últimas series que abriste están a un clic: <b>Recent</b> en la barra lateral (debajo de Help). "
+                 "Las últimas series que abriste están a un clic: <b>Recent</b> en la barra lateral (abajo, encima de Account). "
                  "Un clic la abre, <b>Ctrl+clic</b> en una pestaña nueva. La lista te acompaña en cualquier PC.",
                  "Barra lateral → <b>Recent</b>", None),
                 ("feature", "Athena responde en tu idioma",
@@ -453,7 +481,10 @@ RELEASES = [
     },
 ]
 
-WINDOW_TITLE = {"en": "What's new", "de": "Was ist neu", "es": "Novedades"}
+# "Fresh off the Spool" = the name of the release notes magazine (2026-10-16,
+# before: "What's new"); English in every language like the button names.
+WINDOW_TITLE = {"en": "Fresh off the Spool", "de": "Fresh off the Spool", "es": "Fresh off the Spool"}
+SUBTITLE = {"en": "What's new in TrippleT", "de": "Neues in TrippleT", "es": "Novedades de TrippleT"}
 VERSIONS_TITLE = {"en": "Versions", "de": "Versionen", "es": "Versiones"}
 NEW_BADGE = {"en": "NEW", "de": "NEU", "es": "NUEVO"}
 WHERE_LABEL = {"en": "Where:", "de": "Wo:", "es": "Dónde:"}

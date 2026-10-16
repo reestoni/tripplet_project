@@ -180,6 +180,23 @@ for i, t in enumerate(("Backlog", "In Progress", "Done", "To Be Cleaned")):
         s.text(x + 32, 88, "Archived", 7, "#ffffff", True, "middle")
 save(s, "wn_wide_backlog.svg")
 
+s = new("Move several cards")
+s.rect(12, 12, 118, 106, "#ffffff", LINE, 4)
+s.rect(12, 12, 118, 16, "#4a4a4a", None, 4)
+s.text(71, 24, "To Be Cleaned", 9, "#ffffff", True, "middle")
+for k in range(4):
+    sel = k != 2
+    s.rect(18, 34 + k * 20, 106, 16, "#d8e7fa" if sel else "#ffffff", BLUE if sel else "#dddddd", 3)
+    s.rect(24, 40 + k * 20, 60 if k % 2 else 74, 4, "#9aa7b5", None, 2)
+s.text(71, 126, "Ctrl+click", 9, NAVY, True, "middle")
+s.arrow_right(136, 64, 168, BLUE)
+s.rect(172, 12, 116, 106, "#ffffff", LINE, 4)
+s.rect(172, 12, 116, 16, "#4a4a4a", None, 4)
+s.text(230, 24, "Archived", 9, "#ffffff", True, "middle")
+s.rect(182, 48, 96, 32, "#ffffff", BLUE, 6, 1.5)
+s.text(230, 69, "3 series", 11, NAVY, True, "middle")
+save(s, "wn_backlog_multi_move.svg")
+
 s = new("Recycle Bin")
 s.rect(12, 10, 276, 110, "#ffffff", LINE, 6)
 s.text(22, 28, "Recycle Bin", 11, INK, True)
@@ -324,7 +341,7 @@ save(s, "wn_whats_new_search.svg")
 
 s = new("What's new as PDF")
 s.rect(12, 10, 120, 110, "#ffffff", LINE, 6)
-s.text(20, 28, "What's new", 10, INK, True)
+s.text(20, 28, "Fresh off the Spool", 9, INK, True)
 for r in range(3):
     s.rect(20, 34 + r * 19, 104, 15, "#ffffff", LINE, 3)
     s.rect(20, 34 + r * 19, 3, 15, GREEN, None, 0)

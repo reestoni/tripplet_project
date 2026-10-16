@@ -45,6 +45,91 @@ import app_meta
 
 logger = logging.getLogger(__name__)
 
+# ── Smart Chart: advanced filters ─────────────────────────────────────────
+# Machine of a trial - joined once per query under the alias MC (filter,
+# group by and the machine_name column all use this one join).
+MACHINE_JOIN = ("LEFT JOIN tblTrialSeries AS TSR_MC ON TSR_MC.ID = T.TrialSeriesID "
+                "LEFT JOIN tblMaschine AS MC ON MC.ID = TSR_MC.MachineID")
+_ADV_OPS = {"=", "!=", "<>", ">", "<", ">=", "<=", "LIKE", "NOT LIKE", "IN", "IS NULL", "IS NOT NULL"}
+_ADV_DIRECT = {"tbltrial": "T", "tbljets": "J", "tblmaschine": "MC"}  # already in every query
+_ADV_JOINED = {"tbljetrohling": "LEFT JOIN tbljetrohling AS adv_tbljetrohling ON adv_tbljetrohling.ID = J.Rohling"}
+
+
+def _is_ident(name: str) -> bool:
+    import re
+    return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name or ""))
+
+
+def _adv_allowed_fields() -> Optional[set]:
+    """(table lower, field lower) of tblSmartChartAllowedField, None if unknown."""
+    try:
+        from db.connection import fetch_all
+        return {(str(r["TableName"]).lower(), str(r["FieldName"]).lower())
+                for r in fetch_all("SELECT TableName, FieldName FROM tblSmartChartAllowedField")}
+    except Exception:
+        return None
+
+
+def advanced_filter_sql(filters, allowed: Optional[set] = None):
+    """Advanced filters of the Smart Chart -> (where_parts, params, joins).
+
+    tbltrial / tbljets / tblmaschine use the joins every query has (T, J, MC),
+    tbljetrohling goes via the jet. Every other table (the lab tables) is
+    matched per trial with EXISTS on TrialID - a trial with several
+    measurements (e.g. 6 ITEMAT LAB rows) then shows up once, not 6 times;
+    "IS NULL" there means "no value measured". Table/field must be a plain
+    name and, if the list is known, in tblSmartChartAllowedField; unknown
+    operators are dropped - nothing from the page goes into the SQL unchecked.
+    """
+    where, params, joins = [], [], []
+    for af in filters or []:
+        tbl = str(af.get("table") or "")
+        fld = str(af.get("field") or "")
+        op = str(af.get("op") or "=").upper()
+        val = af.get("value")
+        vals = af.get("values") or []
+        if not (_is_ident(tbl) and _is_ident(fld)) or op not in _ADV_OPS:
+            logger.warning("Smart Chart: advanced filter ignored: %r", af)
+            continue
+        key = tbl.lower()
+        if allowed is not None and (key, fld.lower()) not in allowed:
+            logger.warning("Smart Chart: field not allowed: %s.%s", tbl, fld)
+            continue
+
+        def cond(col):
+            if op in ("IS NULL", "IS NOT NULL"):
+                return f"{col} {op}", []
+            if op == "IN":
+                return (f"{col} IN ({','.join('?' for _ in vals)})", list(vals)) if vals else (None, [])
+            if val is None or str(val).strip() == "":
+                return None, []
+            if op in ("LIKE", "NOT LIKE"):
+                return f"{col} {op} ?", [f"%{val}%"]
+            try:
+                v = float(val)
+            except (TypeError, ValueError):
+                v = val
+            return f"{col} {op} ?", [v]
+
+        if key in _ADV_DIRECT or key in _ADV_JOINED:
+            if key in _ADV_JOINED and _ADV_JOINED[key] not in joins:
+                joins.append(_ADV_JOINED[key])
+            alias = _ADV_DIRECT.get(key) or f"adv_{key}"
+            sql, p = cond(f"{alias}.{fld}")
+            if sql:
+                where.append(sql)
+                params.extend(p)
+            continue
+        sub = f"SELECT 1 FROM {tbl} AS adv WHERE adv.TrialID = T.ID"
+        if op == "IS NULL":
+            where.append(f"NOT EXISTS ({sub} AND adv.{fld} IS NOT NULL)")
+            continue
+        sql, p = cond(f"adv.{fld}")
+        if sql:
+            where.append(f"EXISTS ({sub} AND {sql})")
+            params.extend(p)
+    return where, params, joins
+
 
 # ---------------------------------------------------------------------------
 # Bridge: Python <-> JavaScript fuer Freifeld-Nachladen
@@ -204,10 +289,7 @@ class _ReportBridge(QObject):
                     "GROUP BY GTS.TrialID"
                     ") AS YarnFilter ON YarnFilter.TrialID = T.ID"
                 ),
-                'machine': (
-                    "LEFT JOIN tblTrialSeries AS TSR2 ON TSR2.ID = T.TrialSeriesID "
-                    "LEFT JOIN tblMaschine AS MC ON MC.ID = TSR2.MachineID"
-                ),
+                'machine': MACHINE_JOIN,
             }
             LOOKUP_FIELDS  = {'jet': 'J.Jet', 'yarn': 'YarnFilter.yarn_label2', 'machine': 'MC.Maschine'}
             NUMERIC_FIELDS = {'air_pressure': 'T.AirPressure', 'overfeed': 'T.Shaft2x_OF', 'speed': 'T.SpeedShaft2', 'jet_plate': 'T.JetPlate'}
@@ -248,10 +330,6 @@ class _ReportBridge(QObject):
             # db/trial_reference.py) are not trials - never part of it.
             where_parts.append(exclude_references_sql("T"))
 
-            joins_sql = "LEFT JOIN tbljets AS J ON J.ID = T.JetID"
-            if extra_joins:
-                joins_sql += " " + " ".join(extra_joins)
-            where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
             # Map group_by key to SQL expression
             # Add required JOINs for group_by field
             # Yarn uses a subquery to avoid TrialSettings duplicate rows
@@ -264,11 +342,8 @@ class _ReportBridge(QObject):
                     "GROUP BY GTS.TrialID"
                     ") AS YarnSub ON YarnSub.TrialID = T.ID"
                 )
-            elif group_by == 'machine' and not any('tblMaschine AS MC' in j for j in extra_joins):
-                extra_joins.append(
-                    "LEFT JOIN tblTrialSeries AS TSR2 ON TSR2.ID = T.TrialSeriesID "
-                    "LEFT JOIN tblMaschine AS MC ON MC.ID = TSR2.MachineID"
-                )
+            elif group_by == 'machine' and MACHINE_JOIN not in extra_joins:
+                extra_joins.append(MACHINE_JOIN)
             elif group_by == 'series_name':
                 extra_joins.append("LEFT JOIN tblTrialSeries AS TS3 ON TS3.ID = T.TrialSeriesID")
 
@@ -316,44 +391,20 @@ class _ReportBridge(QObject):
                     ") AS YarnSub ON YarnSub.TrialID = T.ID"
                 )
 
-            # Advanced Filters verarbeiten
+            # Advanced filters (were added after the WHERE was already built -
+            # their values had no placeholder and the query failed, 2026-10-16)
             adv_filters = _json.loads(adv_filters_json) if adv_filters_json else []
-            _adv_join_tables = set()
-            for af in adv_filters:
-                tbl = str(af.get('table',''))
-                fld = str(af.get('field',''))
-                op  = str(af.get('op','='))
-                val = af.get('value')
-                vals = af.get('values',[])
-                if not tbl or not fld: continue
-                # JOIN für Fremdtabellen (nicht tbltrial) hinzufügen
-                if tbl.lower() not in ('tbltrial','') and tbl not in _adv_join_tables:
-                    _adv_join_tables.add(tbl)
-                    id_col = 'TrialID' if tbl.lower() != 'tbltrial' else 'ID'
-                    extra_joins.append(f"LEFT JOIN {tbl} AS adv_{tbl} ON adv_{tbl}.{id_col} = T.ID")
-                tbl_alias = f"adv_{tbl}" if tbl.lower() != 'tbltrial' else 'T'
-                col_ref = f"{tbl_alias}.{fld}"
-                if op == 'IS NULL':
-                    where_parts.append(f"{col_ref} IS NULL")
-                elif op == 'IN' and vals:
-                    ph = ','.join(['?' for _ in vals])
-                    where_parts.append(f"{col_ref} IN ({ph})")
-                    params.extend(vals)
-                elif op == 'LIKE' and val is not None:
-                    where_parts.append(f"{col_ref} LIKE ?")
-                    params.append(f"%{val}%")
-                elif val is not None:
-                    where_parts.append(f"{col_ref} {op} ?")
-                    try: params.append(float(val))
-                    except: params.append(val)
+            if adv_filters:
+                adv_where, adv_params, adv_joins = advanced_filter_sql(adv_filters, _adv_allowed_fields())
+                where_parts.extend(adv_where)
+                params.extend(adv_params)
+                extra_joins.extend(j for j in adv_joins if j not in extra_joins)
 
             joins_sql = "LEFT JOIN tbljets AS J ON J.ID = T.JetID"
-            # machine_name JOIN immer dabei
-            _mc_join = "LEFT JOIN tblTrialSeries AS TSR_MC ON TSR_MC.ID = T.TrialSeriesID LEFT JOIN tblMaschine AS MC ON MC.ID = TSR_MC.MachineID"
-            if _mc_join not in (extra_joins or []):
-                extra_joins.append(_mc_join)
-            if extra_joins:
-                joins_sql += " " + " ".join(extra_joins)
+            if MACHINE_JOIN not in extra_joins:  # machine_name column - always
+                extra_joins.append(MACHINE_JOIN)
+            joins_sql += " " + " ".join(extra_joins)
+            where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
 
             sql = (
                 "SELECT T.ID AS trial_id, T.Versuchsnummer AS trial_nr, "
@@ -447,16 +498,17 @@ class _ReportBridge(QObject):
                     row[ydef["key"]] = float(val) if val is not None else None
                 rows.append(row)
 
-            labels = list(set(r.get("jet_name","?") for r in rows))
-            raw_labels = list(set(r.get("group_label","NULL") for r in base_rows[:5]))
-            print("SC_LABELS:", group_by, labels[:10], "RAW:", raw_labels, flush=True)
-            print("SC_SQL:", sql[:400], flush=True)
-            print("SC_KEYS:", list(base_rows[0].keys()) if base_rows else [], flush=True)
             js = "receiveQueryResult(" + _json.dumps(rows) + ", " + str(len(rows)) + ");"
             if self._screen._web:
                 self._screen._web.page().runJavaScript(js)
         except Exception as e:
-            logger.error("runVisualQuery: %s", e)
+            logger.exception("runVisualQuery: %s", e)
+            # don't leave the page on "Loading..." with an old chart
+            if self._screen._web:
+                self._screen._web.page().runJavaScript(
+                    "receiveQueryResult([], 0);"
+                    "document.getElementById('result-info').textContent="
+                    + json.dumps("The query could not be run - check the filters and try again.") + ";")
 
 
     @Slot(str)

@@ -34,7 +34,7 @@ TEXTS = {
                 ("p", "Show Experiment shows one trial series: all trials side by side, with machine settings and "
                       "lab results. Numbers (1)–(7) refer to the <i>Screen guide</i> tab."),
                 ("task", "Open a series I used recently",
-                 ["In the sidebar, click <b>Recent</b> (under Help).",
+                 ["In the sidebar, click <b>Recent</b> (at the bottom, above Account).",
                   "Click the series. Ctrl+click opens it in a new tab."],
                  "The last 8 series you opened, newest first - on every PC you log in."),
                 ("h", "Entering data"),
@@ -198,7 +198,7 @@ TEXTS = {
                 ("p", "Show Experiment zeigt eine Versuchsserie: alle Versuche nebeneinander, mit Maschineneinstellungen "
                       "und Laborresultaten. Die Nummern (1)–(7) verweisen auf den Tab <i>Bildschirm</i>."),
                 ("task", "Eine kürzlich geöffnete Serie wieder öffnen",
-                 ["In der Sidebar auf <b>Recent</b> klicken (unter Help).",
+                 ["In der Sidebar auf <b>Recent</b> klicken (unten, über Account).",
                   "Die Serie anklicken. Strg+Klick öffnet sie in einem neuen Tab."],
                  "Die letzten 8 geöffneten Serien, neueste zuerst - auf jedem PC, an dem du dich anmeldest."),
                 ("h", "Daten erfassen"),
@@ -368,7 +368,7 @@ TEXTS = {
                       "ajustes de máquina y los resultados de laboratorio. Los números (1)–(7) se refieren a la "
                       "pestaña <i>Pantalla</i>."),
                 ("task", "Abrir una serie usada hace poco",
-                 ["En la barra lateral, haz clic en <b>Recent</b> (debajo de Help).",
+                 ["En la barra lateral, haz clic en <b>Recent</b> (abajo, encima de Account).",
                   "Haz clic en la serie. Ctrl+clic la abre en una pestaña nueva."],
                  "Las últimas 8 series que abriste, la más reciente primero, en cualquier PC donde inicies sesión."),
                 ("h", "Introducir datos"),

@@ -766,7 +766,7 @@ def open_recent_series(e: dict, parent: Optional[QWidget] = None) -> None:
 
 
 def build_pinned_recent(sidebar: SidebarPanel) -> QPushButton:
-    """One line "Recent" under Help (2026-10-16) - deliberately not a whole
+    """One line "Recent" at the bottom, above Account (2026-10-16) - deliberately not a whole
     section, the sidebar should stay calm."""
     holder: dict = {}
     btn = icon_btn("Recent", "recent.png", "SidebarItem", lambda: show_recent_menu(holder["btn"]))
@@ -778,7 +778,7 @@ def build_pinned_recent(sidebar: SidebarPanel) -> QPushButton:
 
 
 def build_pinned_help(sidebar: SidebarPanel) -> QPushButton:
-    """Fester Eintrag "Help" direkt unter Search (2026-10-13): Hilfe-Suche
+    """Fester Eintrag "Help" (2026-10-13; seit 2026-10-16 unten über Account): Hilfe-Suche
     ueber alle Kontext-Hilfen ("wo finde ich…?"), auch per F1."""
     btn_help = icon_btn("Help (F1)", "help_tour.png", "SidebarItem", trigger_help_search)
     btn_help.setToolTip("Where do I find…? Search all help pages")
@@ -855,7 +855,7 @@ def build_utility_group(sidebar: SidebarPanel, *, on_logout: Optional[Callable] 
         except Exception:
             pass
         show_whats_new(sidebar.window())
-    btn_new = green_btn("What's new", _open_whats_new)
+    btn_new = green_btn("Fresh off the Spool", _open_whats_new)  # = "What's new" (renamed 2026-10-16)
     sidebar.add_item(btn_new)
 
     btn_logout = green_btn("Log Out", on_logout)
@@ -924,8 +924,6 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
     # nicht versteckt in account... direkt über die search hin").
     bell_refs = build_pinned_bell(sidebar)
     build_pinned_search(sidebar)
-    build_pinned_help(sidebar)
-    build_pinned_recent(sidebar)
     sidebar.add_separator()
 
     sidebar.add_section_header("experiment_white.png", "Navigation", expanded=True)
@@ -995,6 +993,13 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
         sidebar.add_separator()
 
     sidebar.add_stretch()
+
+    # Help (F1) and Recent at the bottom, right above Account (Nutzerwunsch
+    # 2026-10-16) - pinned (always visible), not part of a section.
+    sidebar.end_section()
+    build_pinned_help(sidebar)
+    build_pinned_recent(sidebar)
+    sidebar.add_separator()
 
     utility_refs = build_utility_group(sidebar, on_logout=cb.get("on_logout"))
 

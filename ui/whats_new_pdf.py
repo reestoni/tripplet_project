@@ -1,7 +1,9 @@
 """whats_new_pdf.py - one "What's new" version as PDF (button "PDF" in the
 What's new window, ui/whats_new.py), Nutzerwunsch 2026-10-16.
 
-A4 portrait, header with logo + version, the feature cards as in the window
+A4 portrait; page 1 with the "Fresh off the Spool" logo as masthead
+(subtitle, version, date next to it), the other pages with a small header
+(name + version); the feature cards as in the window
 (text left, sketch right, green bar). A section (heading + its cards) never
 breaks across pages: it starts on a new page if it doesn't fit (KeepTogether).
 Only a section taller than a whole page is split - and then between cards,
@@ -19,7 +21,7 @@ import os
 import re
 from typing import Dict, Optional, Tuple
 
-from ui.widgets.whats_new_texts import RELEASES, VERSION_LABEL, WHERE_LABEL, WINDOW_TITLE
+from ui.widgets.whats_new_texts import RELEASES, SUBTITLE, VERSION_LABEL, WHERE_LABEL, WINDOW_TITLE
 from ui.widgets.friendly_error import show_error
 
 ACCENT = "#39A650"
@@ -75,12 +77,27 @@ def _markup(text: str, unicode_ok: bool) -> str:
     return "".join(out)
 
 
+def _resource(rel: str) -> Optional[str]:
+    try:
+        from ui.widgets.multilang_help import resource_path
+        p = resource_path(rel)
+        return p if os.path.isfile(p) else None
+    except Exception:
+        return None
+
+
 def _sketch_png(name: str) -> Optional[io.BytesIO]:
     from PySide6.QtCore import QBuffer, QByteArray, QIODevice
     from PySide6.QtGui import QColor, QImage, QPainter
     from PySide6.QtSvg import QSvgRenderer
     from ui.whats_new import SKETCH_DIR, SKETCH_H, SKETCH_W
     from ui.widgets.multilang_help import resource_path
+    if name.lower().endswith(".png"):  # raster sketch (e.g. the logo) - as it is
+        try:
+            with open(resource_path(f"{SKETCH_DIR}/{name}"), "rb") as fh:
+                return io.BytesIO(fh.read())
+        except OSError:
+            return None
     try:
         with open(resource_path(f"{SKETCH_DIR}/{name}"), encoding="utf-8") as fh:
             src = fh.read()
@@ -119,7 +136,8 @@ def export_release_pdf(release_idx: int, lang: str, path: str) -> int:
         BaseDocTemplate, Frame, Image as RLImage, KeepTogether, PageTemplate, Paragraph, Spacer, Table,
         TableStyle,
     )
-    from ui.whats_new import SKETCH_H, SKETCH_W, release_version, release_when
+    from reportlab.lib.utils import ImageReader
+    from ui.whats_new import LOGO, SKETCH_H, SKETCH_W, release_version, release_when
 
     regular, bold, uni = _fonts()
     release = RELEASES[release_idx]
@@ -139,6 +157,7 @@ def export_release_pdf(release_idx: int, lang: str, path: str) -> int:
     PW, PH = A4
     ml = mr = 16 * mm
     mt, mb = 26 * mm, 16 * mm
+    mt1 = 35 * mm  # page 1: masthead with the logo
     frame_w = PW - ml - mr
     sketch_w = 62 * mm
     sketch_h = sketch_w * SKETCH_H / SKETCH_W
@@ -151,7 +170,10 @@ def export_release_pdf(release_idx: int, lang: str, path: str) -> int:
                          s_w)]
         png = _sketch_png(sketch) if sketch else None
         if png is not None:
-            data = [[col, RLImage(png, width=sketch_w, height=sketch_h)]]
+            iw, ih = ImageReader(png).getSize()
+            png.seek(0)
+            scale = min(sketch_w / iw, sketch_h / ih)  # keep the aspect (raster sketches)
+            data = [[col, RLImage(png, width=iw * scale, height=ih * scale)]]
             widths = [frame_w - sketch_w - 2 * gap, sketch_w + gap]
         else:
             data = [[col]]
@@ -174,7 +196,11 @@ def export_release_pdf(release_idx: int, lang: str, path: str) -> int:
 
     def flush():
         if section:
-            story.append(KeepTogether(list(section)))
+            if story:
+                story.append(KeepTogether(list(section)))
+            else:  # first section starts right under the masthead (no empty page 1) - card by card
+                story.append(KeepTogether(section[:2]))  # heading + first card together
+                story.extend(section[2:])
             story.append(Spacer(1, 4 * mm))
             section.clear()
 
@@ -190,22 +216,12 @@ def export_release_pdf(release_idx: int, lang: str, path: str) -> int:
             section.append(Paragraph(_markup(block[1], uni), s_p))
     flush()
 
-    logo = None
-    try:
-        from ui.widgets.multilang_help import resource_path
-        lp = resource_path("assets/images/heb_logo.png")
-        if os.path.isfile(lp):
-            logo = lp
-    except Exception:
-        pass
+    logo = _resource("assets/images/heb_logo.png")
+    mag_logo = _resource(LOGO)
 
-    def on_page(canvas, doc):
-        canvas.saveState()
-        y_top = PH - 12 * mm
-        x = ml
+    def company_logo(canvas, y_top):
         if logo:
             try:
-                from reportlab.lib.utils import ImageReader
                 ir = ImageReader(logo)
                 iw, ih = ir.getSize()
                 h = 5 * mm
@@ -213,6 +229,45 @@ def export_release_pdf(release_idx: int, lang: str, path: str) -> int:
                                  mask="auto")
             except Exception:
                 pass
+
+    def footer(canvas, doc):
+        canvas.setFont(regular, 8)
+        canvas.setFillColor(colors.HexColor("#888888"))
+        canvas.drawRightString(PW - mr, 9 * mm, str(doc.page))
+
+    def on_first_page(canvas, doc):
+        if not mag_logo:
+            return on_page(canvas, doc)
+        canvas.saveState()
+        y_top = PH - 10 * mm
+        company_logo(canvas, y_top)
+        ir = ImageReader(mag_logo)
+        iw, ih = ir.getSize()
+        h = 19 * mm  # same band as the company logo (top right)
+        w = h * iw / ih
+        canvas.drawImage(ir, ml - 2 * mm, PH - 8 * mm - h, width=w, height=h, mask="auto")
+        x = ml + w + 4 * mm
+        y = PH - 15 * mm
+        canvas.setFont(bold, 14)
+        canvas.setFillColor(colors.HexColor(NAVY))
+        canvas.drawString(x, y, SUBTITLE[lang])
+        canvas.setFont(regular, 11)
+        canvas.setFillColor(colors.HexColor("#2b2b2b"))
+        canvas.drawString(x, y - 5.5 * mm, f"{VERSION_LABEL[lang]} {version}")
+        canvas.setFont(regular, 9)
+        canvas.setFillColor(colors.HexColor("#565656"))
+        canvas.drawString(x, y - 10 * mm, when)
+        canvas.setStrokeColor(colors.HexColor(ACCENT))
+        canvas.setLineWidth(1.5)
+        canvas.line(ml, PH - mt1 + 5 * mm, PW - mr, PH - mt1 + 5 * mm)
+        footer(canvas, doc)
+        canvas.restoreState()
+
+    def on_page(canvas, doc):
+        canvas.saveState()
+        y_top = PH - 12 * mm
+        x = ml
+        company_logo(canvas, y_top)
         canvas.setFont(bold, 14)
         canvas.setFillColor(colors.HexColor(NAVY))
         canvas.drawString(x, y_top - 1 * mm, f"TrippleT · {title}" if uni else f"TrippleT - {title}")
@@ -222,16 +277,18 @@ def export_release_pdf(release_idx: int, lang: str, path: str) -> int:
         canvas.setStrokeColor(colors.HexColor(ACCENT))
         canvas.setLineWidth(1.5)
         canvas.line(ml, PH - 20 * mm, PW - mr, PH - 20 * mm)
-        canvas.setFont(regular, 8)
-        canvas.setFillColor(colors.HexColor("#888888"))
-        canvas.drawRightString(PW - mr, 9 * mm, str(doc.page))
+        footer(canvas, doc)
         canvas.restoreState()
 
     doc = BaseDocTemplate(path, pagesize=A4, leftMargin=ml, rightMargin=mr, topMargin=mt, bottomMargin=mb,
                           title=f"TrippleT {title}", author="TrippleT")
     frame = Frame(ml, mb, frame_w, PH - mt - mb, id="body", leftPadding=0, rightPadding=0,
                   topPadding=0, bottomPadding=0)
-    doc.addPageTemplates([PageTemplate(id="page", frames=[frame], onPage=on_page)])
+    first_mt = mt1 if mag_logo else mt
+    frame1 = Frame(ml, mb, frame_w, PH - first_mt - mb, id="body1", leftPadding=0, rightPadding=0,
+                   topPadding=0, bottomPadding=0)
+    doc.addPageTemplates([PageTemplate(id="first", frames=[frame1], onPage=on_first_page, autoNextPageTemplate="page"),
+                          PageTemplate(id="page", frames=[frame], onPage=on_page)])
     doc.build(story)
     return doc.page
 
