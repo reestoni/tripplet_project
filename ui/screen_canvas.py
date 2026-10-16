@@ -430,7 +430,7 @@ def _load_excel_as_pixmap(path: str, sheet: int = 0) -> "tuple":
 
         pm = _pil_to_pixmap(img)
         if pm is None or pm.isNull():
-            return None, "Konvertierung fehlgeschlagen."
+            return None, "The image could not be converted."
         return pm, None
     except Exception as e:
         return None, str(e)
@@ -503,7 +503,7 @@ def _word_to_pdf_buf(path: str) -> "tuple":
         buf.seek(0)
         return buf, None
     except Exception as e:
-        return None, "Fallback fehlgeschlagen: " + str(e)
+        return None, "The image could not be read: " + str(e)
 
 
 def _word_page_count(path: str) -> int:
@@ -2323,7 +2323,7 @@ class CanvasScreen(QWidget):
                                     "font-size:11px;}QPushButton:hover{background:#3a5a8a;}")
         btn_proj_save.clicked.connect(self._save_project); lay.addWidget(btn_proj_save)
 
-        btn_proj_load = QPushButton("📂 Projekt laden"); btn_proj_load.setFixedHeight(28)
+        btn_proj_load = QPushButton("📂 Load project"); btn_proj_load.setFixedHeight(28)
         btn_proj_load.setStyleSheet("QPushButton{background:#2a3a5a;color:#adf;border-radius:3px;"
                                     "font-size:11px;}QPushButton:hover{background:#3a5a8a;}")
         btn_proj_load.clicked.connect(self._load_project); lay.addWidget(btn_proj_load)
@@ -2594,7 +2594,7 @@ class CanvasScreen(QWidget):
     def _load_project(self):
         """Öffnet Dialog und lädt ein .ttcanvas-Projekt."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Projekt laden...", "",
+            self, "Load project…", "",
             "TrippleT Canvas (*.ttcanvas);;All files (*.*)")
         if not path:
             return

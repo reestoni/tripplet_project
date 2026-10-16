@@ -1464,7 +1464,7 @@ class QuickScanScreen(QWidget):
         lh_lay.addWidget(btn_clear)
 
         btn_load_rs = QPushButton("📂 Load")
-        btn_load_rs.setToolTip("Gespeichertes Ruleset laden")
+        btn_load_rs.setToolTip("Load a saved ruleset")
         btn_load_rs.setFixedHeight(24)
         btn_load_rs.setStyleSheet(
             "QPushButton { background:#2d4a6b; color:#e2e8f0; border:1px solid #4a7fa5;"

@@ -98,7 +98,7 @@ from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal, QObject, QEvent, QSize, QRect, QRegularExpression, QTimer
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal, QObject, QEvent, QSize, QRect, QRegularExpression, QTimer, QItemSelectionModel
 from PySide6.QtGui import QShortcut, QKeySequence, QPainter, QPen, QBrush, QFont, QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QWidget,
@@ -136,6 +136,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QSizePolicy,
 )
+from ui.widgets.friendly_error import show_error
 
 # Basisordner fuer TrialSeries-Bilder
 # - PROD: Netzlaufwerk (gemeinsame Ablage)
@@ -1478,6 +1479,8 @@ class PivotEditModel(QAbstractTableModel):
         self._readonly = {r + n_new for r in self._readonly} | set(range(n_new))
         # Shift dirty indices
         self._dirty = [(r + n_new, c, v) for r, c, v in self._dirty]
+        if getattr(self, "_undo_mgr", None) is not None:
+            self._undo_mgr.clear()  # row numbers changed - old undo steps would hit the wrong rows
         self.layoutChanged.emit()
 
     def set_cell_alert(self, row: int, col: int, style: str) -> None:
@@ -1494,6 +1497,17 @@ class PivotEditModel(QAbstractTableModel):
     # Unsaved cells (Nutzerwunsch 2026-10-16): light yellow until saved.
     _DIRTY_BG = QColor("#FFF1A8")
     _DIRTY_TIP = "Changed - not saved yet"
+
+    def _set_dirty_value(self, r: int, c: int, new: str) -> None:
+        """The one place that changes a cell value as an unsaved edit:
+        matrix + _dirty, and an undo step (Ctrl+Z, _UndoManager) if the
+        screen attached one."""
+        old = self._matrix[r][c]
+        self._matrix[r][c] = new
+        self._dirty.append((r, c, new))
+        mgr = getattr(self, "_undo_mgr", None)
+        if mgr is not None:
+            mgr.record(self, r, c, old, new)
 
     def dirty_cells(self) -> set:
         """{(data row, data col)} of cells changed since the last save. _dirty
@@ -1777,8 +1791,7 @@ class PivotEditModel(QAbstractTableModel):
         r, c = index.row() - self._n_hdr, index.column() - 1
         if self._matrix[r][c] == normalized:
             return True
-        self._matrix[r][c] = normalized
-        self._dirty.append((r, c, normalized))
+        self._set_dirty_value(r, c, normalized)
         self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
         return True
 
@@ -2145,8 +2158,7 @@ class MachinePivotModel(PivotEditModel):
                     new_val = "" if hid is None else str(hid)
                     if self._matrix[r][c] == new_val:
                         return True
-                    self._matrix[r][c] = new_val
-                    self._dirty.append((r, c, new_val))
+                    self._set_dirty_value(r, c, new_val)
                     self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
                     return True
                 return False
@@ -2166,8 +2178,7 @@ class MachinePivotModel(PivotEditModel):
                     new_val = "" if jet_id is None else str(jet_id)
                     if current == new_val:
                         return True
-                    self._matrix[r][c] = new_val
-                    self._dirty.append((r, c, new_val))
+                    self._set_dirty_value(r, c, new_val)
                     self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
                     return True
                 return False
@@ -2520,7 +2531,7 @@ class _ManagePliesDialog(QDialog):
         try:
             yarn_id = get_or_create_shadow_yarn(trial_id)
         except Exception as e:
-            QMessageBox.critical(self, "Trial Ply", f"Could not create yarn entry for this trial:\n{e}")
+            show_error(self, "Trial Ply", "The yarn entry for this trial could not be created.", e)
             return
         if yarn_id is None:
             QMessageBox.warning(self, "Trial Ply", "Could not find this trial.")
@@ -2652,7 +2663,7 @@ class _ManagePliesDialog(QDialog):
                         )
                 cn.commit()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not add ply:\n{e}")
+            show_error(self, "Error", "The ply could not be added.", e)
             return
 
         self._load()
@@ -2735,7 +2746,7 @@ class _ManagePliesDialog(QDialog):
                             (tid, ply_label))
                 cn.commit()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not remove ply:\n{e}")
+            show_error(self, "Error", "The ply could not be removed.", e)
             return
 
         if skipped:
@@ -2977,6 +2988,95 @@ class _RDHousingTooltipFilter(QObject):
         html = f'<img src="{img_path}" style="max-width:320px; max-height:320px;" />'
         QToolTip.showText(event.globalPos(), html, view)
         return True
+
+
+class _UndoManager:
+    """Ctrl+Z / Ctrl+Y for unsaved cell edits in Show Experiment
+    (Nutzerwunsch 2026-10-16). Every change goes through
+    PivotEditModel._set_dirty_value() -> record(). All changes made in one
+    go (typing one cell, a paste, Delete on a selection, a fill) form one
+    step: a step stays open until the event loop runs again. Undo puts the
+    old value back and drops the matching _dirty entry, so a cell that is
+    back at its saved value is not yellow any more. Cleared after saving
+    and when another series is loaded."""
+
+    def __init__(self, screen):
+        import weakref
+        self._screen = weakref.ref(screen)
+        self._undo: List[List[tuple]] = []
+        self._redo: List[List[tuple]] = []
+        self._group: Optional[List[tuple]] = None
+        self._replaying = False
+
+    def record(self, model, r: int, c: int, old, new) -> None:
+        if self._replaying:
+            return
+        import weakref
+        if self._group is None:
+            self._group = []
+            self._undo.append(self._group)
+            QTimer.singleShot(0, self._close_group)
+        self._group.append((weakref.ref(model), r, c, old, new))
+        self._redo.clear()
+
+    def _close_group(self) -> None:
+        self._group = None
+
+    def clear(self) -> None:
+        self._undo.clear()
+        self._redo.clear()
+        self._group = None
+
+    def can_undo(self) -> bool:
+        return bool(self._undo)
+
+    def can_redo(self) -> bool:
+        return bool(self._redo)
+
+    def _apply(self, entries, to_new: bool) -> int:
+        n, first = 0, None
+        self._replaying = True
+        try:
+            for ref, r, c, old, new in entries:
+                m = ref()
+                if m is None or not (0 <= r < len(m._matrix) and 0 <= c < len(m._matrix[r])):
+                    continue
+                if to_new:
+                    m._matrix[r][c] = new
+                    m._dirty.append((r, c, new))
+                else:
+                    m._matrix[r][c] = old
+                    for i in range(len(m._dirty) - 1, -1, -1):  # drop the entry this edit added
+                        if m._dirty[i][0] == r and m._dirty[i][1] == c:
+                            del m._dirty[i]
+                            break
+                idx = m.index(r + m._n_hdr, c + 1)
+                m.dataChanged.emit(idx, idx)
+                n += 1
+                if first is None:
+                    first = (m, idx)
+        finally:
+            self._replaying = False
+        scr = self._screen()
+        if first is not None and scr is not None:
+            scr._reveal_cell(*first)
+        return n
+
+    def undo(self) -> int:
+        self._group = None
+        if not self._undo:
+            return 0
+        step = self._undo.pop()
+        self._redo.append(step)
+        return self._apply(list(reversed(step)), to_new=False)
+
+    def redo(self) -> int:
+        self._group = None
+        if not self._redo:
+            return 0
+        step = self._redo.pop()
+        self._undo.append(step)
+        return self._apply(step, to_new=True)
 
 
 class ShowExperimentScreen(QWidget):
@@ -3406,6 +3506,41 @@ class ShowExperimentScreen(QWidget):
 
         shortcut.activated.connect(do_paste)
 
+        # Delete / Backspace on selected cells clears them - without double-
+        # clicking into the cell first (Nutzerwunsch 2026-10-16). Only while
+        # the table has the focus (WidgetWithChildrenShortcut), and a cell
+        # editor that is open keeps its own Delete/Backspace (QLineEdit
+        # claims them via ShortcutOverride). Runs through setData like typing,
+        # so the cells turn yellow and are saved with Save / Ctrl+S.
+        for key in (QKeySequence.Delete, QKeySequence(Qt.Key_Backspace)):
+            sc_del = QShortcut(key, table)
+            sc_del.setContext(Qt.WidgetWithChildrenShortcut)
+            sc_del.activated.connect(lambda t=table: self._clear_selected_cells(t))
+
+    def _clear_selected_cells(self, table: QWidget) -> int:
+        """Empties every selected, editable cell of `table` (title column and
+        read-only cells are skipped). Returns the number of cleared cells."""
+        model = getattr(table, "model", lambda: None)()
+        if model is None:
+            return 0
+        sel = table.selectionModel()
+        idxs = list(sel.selectedIndexes()) if sel is not None and sel.hasSelection() else []
+        if not idxs:
+            cur = getattr(table, "currentIndex", lambda: QModelIndex())()
+            idxs = [cur] if cur is not None and cur.isValid() else []
+        cleared = 0
+        for idx in idxs:
+            if idx.column() == 0 or not (model.flags(idx) & Qt.ItemIsEditable):
+                continue
+            if model.data(idx, Qt.EditRole) in (None, ""):
+                continue
+            try:
+                if model.setData(idx, "", Qt.EditRole):
+                    cleared += 1
+            except Exception:
+                continue
+        return cleared
+
     def _register_save_model(self, attr_name: str):
         """Registers a model attribute name for generic save handling.
 
@@ -3416,6 +3551,9 @@ class ShowExperimentScreen(QWidget):
             self._save_model_names = []
         if attr_name not in self._save_model_names:
             self._save_model_names.append(attr_name)
+        _m = getattr(self, attr_name, None)
+        if _m is not None:
+            _m._undo_mgr = getattr(self, "_undo", None)  # Ctrl+Z (_UndoManager)
         # Every per-trial lab model is built with col_titles=self._trial_labels
         # (one column per trial, same order) - highlight reference columns
         # there centrally instead of in each _build_XXX_tab. The machine tabs
@@ -3581,9 +3719,42 @@ class ShowExperimentScreen(QWidget):
         else:
             self._pending_tab_populate[key] = populate_fn
 
+    _LAST_TAB_KEY = "show_experiment/last_tab/{}"
+
+    def _remember_tab(self, index: int) -> None:
+        """Last tab per series (Nutzerwunsch 2026-10-16) - only what the user
+        chose, not the switching while a series loads."""
+        if getattr(self, "_loading_record", False) or index < 0:
+            return
+        sid = getattr(self, "_series_pk", None)
+        if sid is None:
+            return
+        try:
+            from PySide6.QtCore import QSettings
+            QSettings("TrippleT", "TrippleT").setValue(self._LAST_TAB_KEY.format(sid), self.tabs.tabText(index))
+        except Exception:
+            pass
+
+    def _restore_last_tab(self) -> None:
+        sid = getattr(self, "_series_pk", None)
+        if sid is None:
+            return
+        try:
+            from PySide6.QtCore import QSettings
+            want = QSettings("TrippleT", "TrippleT").value(self._LAST_TAB_KEY.format(sid), "", type=str)
+        except Exception:
+            return
+        if not want:
+            return
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i) == want and self.tabs.isTabVisible(i):
+                self.tabs.setCurrentIndex(i)
+                return
+
     def _on_tab_current_changed(self, index: int):
         """Runs a deferred tab's populate_fn (see _defer_or_populate()) the
         first time the user actually switches to it."""
+        self._remember_tab(index)
         widget = self.tabs.widget(index)
         key = self._tab_widget_to_key.get(widget)
         if key is None:
@@ -3607,6 +3778,19 @@ class ShowExperimentScreen(QWidget):
                     f"Save {'it' if n == 1 else 'them'} before opening {experiment_id}?",
                     QMessageBox.Save | QMessageBox.Discard, QMessageBox.Save) == QMessageBox.Save:
                 self._save_all()
+        if getattr(self, "_undo", None) is not None:
+            self._undo.clear()  # undo steps belong to the series shown before
+        self._loading_record = True
+        try:
+            self._load_record_inner(exp_pk, series_pk, experiment_id)
+        finally:
+            self._loading_record = False
+        self._restore_last_tab()  # same tab as last time for this series
+        if self._recycle_preview is None:  # Sidebar -> "Recent" (not for recycle bin previews)
+            from ui import recent_series
+            recent_series.remember(exp_pk, series_pk, experiment_id, getattr(self, "_series_name_txt", ""))
+
+    def _load_record_inner(self, exp_pk: int, series_pk: int, experiment_id: str):
         self._ys_cache = {}  # Neue Series -> Cache leeren
         self._machine_cache = {}  # Machine-Cache immer neu aufbauen (verhindert Stale-Fields)
         # Discard any not-yet-run deferred tab populates from a PREVIOUS
@@ -3666,6 +3850,7 @@ class ShowExperimentScreen(QWidget):
             "SELECT SeriesName, Notes FROM tblTrialSeries WHERE ID = ?", [series_pk])
         series_name = ts[0]["SeriesName"] if ts else ""
         self.lbl_small_title.setText(f"{experiment_id} – {series_name}")
+        self._series_name_txt = series_name
         self.lbl_series_id.setText(f"TrialSeriesID: {series_pk}")
 
         # Fenster-/Tab-Titel: "ExperimentID.SS" (erste 2 Zeichen des
@@ -3774,6 +3959,7 @@ class ShowExperimentScreen(QWidget):
         # the screen is visible is more robust than signals at every site.
         self._unsaved_shown = -1
         self._unsaved_timer = None  # created on first show (_build_ui imports QTimer locally further down)
+        self._init_undo()
 
         # Titelzeile (dunkler Balken + Save)
         tools = QFrame()
@@ -4422,6 +4608,28 @@ class ShowExperimentScreen(QWidget):
         except RuntimeError:
             pass
 
+    def _init_undo(self) -> None:
+        """Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z) for unsaved cell edits. Own
+        method: _build_ui imports QShortcut locally further down, which
+        would shadow the module import there."""
+        self._undo = _UndoManager(self)
+        for key, slot in ((QKeySequence.Undo, self._undo.undo), (QKeySequence.Redo, self._undo.redo),
+                          (QKeySequence("Ctrl+Shift+Z"), self._undo.redo)):
+            sc = QShortcut(key, self)
+            sc.setContext(Qt.WidgetWithChildrenShortcut)  # open cell editors / notes keep their own Ctrl+Z
+            sc.activated.connect(slot)
+
+    def _reveal_cell(self, model, idx) -> None:
+        """After Ctrl+Z / Ctrl+Y: show and select the (first) changed cell."""
+        for t in self.findChildren(FrozenFirstColumnTable):
+            if t.model() is model:
+                try:
+                    t.selectionModel().setCurrentIndex(idx, QItemSelectionModel.ClearAndSelect)
+                    t.bottom_right.scrollTo(idx)
+                except Exception:
+                    pass
+                return
+
     def confirm_close_with_unsaved(self) -> bool:
         """Asks Save / Discard / Cancel if something is unsaved. True = go on."""
         if not self._has_unsaved():
@@ -4824,23 +5032,12 @@ class ShowExperimentScreen(QWidget):
         except Exception:
             pass
 
-        if total == 0:
-            models_info = []
-            for name, m in self._iter_save_models():
-                dirty_count = len(getattr(m, "_dirty", []))
-                models_info.append(f"  {name}: {dirty_count} dirty")
-            model_count = len(list(self._iter_save_models()))
-            names_list = getattr(self, "_save_model_names", [])
-            debug_txt = (
-                    f"Registered model names ({len(names_list)}): {names_list}\n"
-                    f"Models with instance ({model_count}):\n"
-                    + ("\n".join(models_info) if models_info else "  (none)")
-            )
-            QMessageBox.information(
-                self, "Saved – 0 changes",
-                f"0 change(s) written.\n\n{debug_txt}")
-        else:
-            QMessageBox.information(self, "Saved", f"{total} change(s) written to database.")
+        # No "Saved" message box any more (Nutzerwunsch 2026-10-16): the
+        # yellow cells / "Save (n)" / tab dot disappear - that is the
+        # confirmation. Saved values can't be undone with Ctrl+Z.
+        if not self._has_unsaved():
+            self._undo.clear()
+        self._update_unsaved_indicator()
         """Gibt Debug-Info über den Save-Zustand zurück (für Diagnose)."""
         lines = []
         models = list(self._iter_save_models())
@@ -6307,8 +6504,7 @@ class ShowExperimentScreen(QWidget):
                 if template_id is not None:
                     self._clone_lab_rows_for_trial(cur, int(template_id), new_id)
         except Exception as e:
-            QMessageBox.warning(self, "Reference sample",
-                                f"The reference sample could not be added:\n{e}")
+            show_error(self, "Reference sample", "The reference sample could not be added.", e, warning=True)
             return
 
         try:
@@ -6362,7 +6558,7 @@ class ShowExperimentScreen(QWidget):
                     [1 if make_reference else 0, name or None, int(trial_id)],
                 )
         except Exception as e:
-            QMessageBox.warning(self, "Reference sample", f"Could not save:\n{e}")
+            show_error(self, "Reference sample", "The reference sample could not be saved.", e, warning=True)
             return
         try:
             from db.usage_log import log_usage_event
@@ -6384,7 +6580,7 @@ class ShowExperimentScreen(QWidget):
                 [name or None, int(trial_id)],
             )
         except Exception as e:
-            QMessageBox.warning(self, "Reference sample", f"Could not save:\n{e}")
+            show_error(self, "Reference sample", "The reference sample could not be saved.", e, warning=True)
             return
         self._reference_names[int(trial_id)] = name
         # Only tooltips change - re-apply them to all built models.
@@ -6461,11 +6657,7 @@ class ShowExperimentScreen(QWidget):
                                 f"WHERE TrialID = ? AND YarnUseID = ?",
                                 (value, new_id, f.use_id))
         except Exception as e:
-            QMessageBox.warning(
-                self,
-                "Error copying trials",
-                f"The trials could not be copied:\n{e}",
-            )
+            show_error(self, "Error copying trials", "The trials could not be copied.", e, warning=True)
             if not new_ids:
                 return
 
@@ -6594,7 +6786,7 @@ class ShowExperimentScreen(QWidget):
         try:
             generate_label_sheet_pdf(items, tpl, start_index, out_path, draw_cell=_draw_trial_label_cell)
         except Exception as e:
-            QMessageBox.critical(self, "Print Labels", f"Failed to generate PDF: {e}")
+            show_error(self, "Print Labels", "The PDF could not be created.", e)
             return
         QMessageBox.information(self, "Print Labels", f"Saved to:\n{out_path}")
 
@@ -8477,8 +8669,7 @@ class ShowExperimentScreen(QWidget):
                 user_id=self._current_user_id(),
             )
         except Exception as e:
-            QMessageBox.critical(self, "Error",
-                                 f"Could not set the retest flag:\n{e}")
+            show_error(self, "Error", "The retest flag could not be set.", e)
             return
 
         try:

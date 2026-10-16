@@ -15,6 +15,10 @@ c) Search (field above the version list): finds feature cards across all
    versions, in all three languages and with the help-search synonyms
    (search_features()); results grouped by version, the version list shows
    the hit count per version and greys out versions without hits.
+d) One tab per section heading (Show Experiment, Settings, …) with the
+   number of features, e.g. "Show Experiment (8)" (release_sections());
+   search results stay one list over all versions. The PDF export
+   (ui/whats_new_pdf.py) is unchanged - one long document.
 
 Versions: the entry being worked on has "version": "current" and shows
 app_meta.APP_VERSION; compiled versions carry their fixed number and date
@@ -28,8 +32,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout,
-    QWidget,
+    QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QStackedWidget,
+    QTabWidget, QVBoxLayout, QWidget,
 )
 
 from ui.widgets.whats_new_texts import (
@@ -99,6 +103,24 @@ def mark_seen() -> None:
     if cur and display_prefs.current().get("whats_new_seen") != cur:
         display_prefs.update(whats_new_seen=cur)
         display_prefs.save_now()
+
+
+def release_sections(release: Dict[str, Any], lang: str) -> List[Tuple[str, List[tuple]]]:
+    """[(heading, blocks)] - one entry per ("h", …) heading; blocks before
+    the first heading go into the first section (or an untitled one)."""
+    sections: List[Tuple[str, List[tuple]]] = []
+    lead: List[tuple] = []
+    for block in release["texts"][lang]:
+        if block[0] == "h":
+            sections.append((str(block[1]), list(lead) if not sections else []))
+            lead = []
+        elif sections:
+            sections[-1][1].append(block)
+        else:
+            lead.append(block)
+    if lead:  # no heading at all
+        sections.append(("", lead))
+    return sections
 
 
 # ── search ───────────────────────────────────────────────────────────────
@@ -233,8 +255,26 @@ class WhatsNewDialog(QDialog):
         body.addLayout(left)
 
         from ui.widgets.multilang_help import scroll_page
-        self.scroll, self._page = scroll_page()
-        body.addWidget(self.scroll, 1)
+        self.scroll, self._page = scroll_page()  # search results (one list)
+        self._release_view = QWidget()          # one version: title + a tab per section
+        rv = QVBoxLayout(self._release_view)
+        rv.setContentsMargins(20, 12, 8, 0)
+        rv.setSpacing(8)
+        from ui.widgets.multilang_help import heading
+        self.lbl_release = heading("")
+        self.lbl_release.setStyleSheet(self.lbl_release.styleSheet() + "font-size:18px;")
+        rv.addWidget(self.lbl_release)
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        from ui.theme import get_accent
+        self.tabs.setStyleSheet(
+            "QTabBar::tab{padding:6px 12px;}"
+            f"QTabBar::tab:selected{{font-weight:700; border-bottom:3px solid {get_accent()};}}")
+        rv.addWidget(self.tabs, 1)
+        self.right = QStackedWidget()
+        self.right.addWidget(self._release_view)
+        self.right.addWidget(self.scroll)
+        body.addWidget(self.right, 1)
         outer.addLayout(body, 1)
 
         row = QHBoxLayout()
@@ -273,7 +313,7 @@ class WhatsNewDialog(QDialog):
         else:
             self._fill_list()
             if self.lst.count():
-                self._show_release(self.lst.currentRow())
+                self._show_release(self.lst.currentRow(), keep_tab=True)
 
     def _fill_list(self) -> None:
         """Version list; while searching with hit count per version, versions
@@ -340,6 +380,7 @@ class WhatsNewDialog(QDialog):
         if not q:
             self._show_release(self.lst.currentRow())
             return
+        self.right.setCurrentWidget(self.scroll)
         self._clear_page()
         if not self._hits:
             self._page.addWidget(para(SEARCH_NONE[lang].format(q=html.escape(q))))
@@ -370,23 +411,38 @@ class WhatsNewDialog(QDialog):
                 pass
         super().done(result)
 
-    def _show_release(self, idx: int) -> None:
-        from ui.widgets.multilang_help import heading, render_block
-        self._clear_page()
+    def _show_release(self, idx: int, keep_tab: bool = False) -> None:
+        """One version: a tab per section (keep_tab: same tab position, e.g.
+        after switching the language)."""
+        from ui.widgets.multilang_help import render_block, scroll_page
+        self.right.setCurrentWidget(self._release_view)
+        tab = self.tabs.currentIndex() if keep_tab else 0
+        while self.tabs.count():
+            w = self.tabs.widget(0)
+            self.tabs.removeTab(0)
+            w.deleteLater()
         if not (0 <= idx < len(RELEASES)):
+            self.lbl_release.setText("")
             return
         r, lang = RELEASES[idx], self._lang
-        head = heading(f"{VERSION_LABEL[lang]} {release_version(r)}  ·  {release_when(r, lang)}")
-        head.setStyleSheet(head.styleSheet() + "font-size:18px;")
-        self._page.addWidget(head)
-        for block in r["texts"][lang]:
-            if block[0] == "feature":
-                _, title, text, where, sketch = block
-                self._page.addWidget(feature_card(title, text, where, sketch, lang))
-            else:
-                render_block(self._page, block)
-        self._page.addStretch(1)
-        self.scroll.verticalScrollBar().setValue(0)
+        self.lbl_release.setText(f"{VERSION_LABEL[lang]} {release_version(r)}  ·  {release_when(r, lang)}")
+        for title, blocks in release_sections(r, lang):
+            scroll, page = scroll_page()
+            page.setContentsMargins(4, 10, 16, 12)
+            n = 0
+            for block in blocks:
+                if block[0] == "feature":
+                    _, ftitle, text, where, sketch = block
+                    page.addWidget(feature_card(ftitle, text, where, sketch, lang))
+                    n += 1
+                else:
+                    render_block(page, block)
+            page.addStretch(1)
+            label = (title or VERSION_LABEL[lang]).replace("&", "&&")
+            self.tabs.addTab(scroll, f"{label} ({n})" if n else label)
+        self.tabs.tabBar().setVisible(self.tabs.count() > 1)
+        if self.tabs.count():
+            self.tabs.setCurrentIndex(min(max(tab, 0), self.tabs.count() - 1))
 
 
 def show_whats_new(parent=None) -> None:

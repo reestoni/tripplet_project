@@ -118,7 +118,7 @@ def _load_axes_from_db():
     from db.connection import fetch_all, table_exists
 
     if not table_exists("tblSmartChartAxis"):
-        logger.warning("tblSmartChartAxis nicht gefunden — nutze hardcodierte Achsen")
+        logger.warning("tblSmartChartAxis not found - using built-in axes")
         return None, None
 
     try:

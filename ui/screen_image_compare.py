@@ -216,7 +216,7 @@ def _load_pdf_as_pixmap(path: str, page: int = 0) -> "tuple":
         from PIL import Image as _Image
         img = _Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
         pm = _pil_to_pixmap(img)
-        return (pm, None) if pm and not pm.isNull() else (None, "Konvertierung fehlgeschlagen.")
+        return (pm, None) if pm and not pm.isNull() else (None, "The image could not be converted.")
     except ImportError:
         return None, "pymupdf is not installed. Please run: pip install pymupdf"
     except Exception as e:
@@ -375,7 +375,7 @@ def _load_excel_as_pixmap(path: str, sheet: int = 0) -> "tuple":
                 x += cw
             draw.line([(0, y+ROW_H),(total_w, y+ROW_H)], fill=(70,70,70), width=1)
         pm = _pil_to_pixmap(img)
-        return (pm, None) if pm and not pm.isNull() else (None, "Konvertierung fehlgeschlagen.")
+        return (pm, None) if pm and not pm.isNull() else (None, "The image could not be converted.")
     except Exception as e:
         return None, str(e)
 
@@ -430,7 +430,7 @@ def _word_to_pdf_buf(path: str) -> "tuple":
             story.draw(dev); writer.end_page()
         writer.close(); buf.seek(0); return buf, None
     except Exception as e:
-        return None, "Fallback fehlgeschlagen: " + str(e)
+        return None, "The image could not be read: " + str(e)
 
 
 def _word_page_count(path: str) -> int:
@@ -461,7 +461,7 @@ def _load_word_as_pixmap(path: str, page: int = 0) -> "tuple":
         pdf.close()
         img = _Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
         pm = _pil_to_pixmap(img)
-        return (pm, None) if pm and not pm.isNull() else (None, "Konvertierung fehlgeschlagen.")
+        return (pm, None) if pm and not pm.isNull() else (None, "The image could not be converted.")
     except Exception as e:
         return None, str(e)
 
@@ -2772,7 +2772,7 @@ class ImageCompareScreen(QWidget):
         btn_proj_save.clicked.connect(self._save_project)
         lay.addWidget(btn_proj_save)
 
-        btn_proj_load = QPushButton("📂 Projekt laden")
+        btn_proj_load = QPushButton("📂 Load project")
         btn_proj_load.setFixedHeight(28)
         btn_proj_load.setStyleSheet("QPushButton { background: #2a3a5a; color: #adf; border-radius: 3px; font-size: 11px; } QPushButton:hover { background: #3a5a8a; }")
         btn_proj_load.clicked.connect(self._load_project)
@@ -3014,7 +3014,7 @@ class ImageCompareScreen(QWidget):
     def _load_project(self):
         """Öffnet einen Datei-Dialog und lädt ein .ttcompare-Projekt."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Projekt laden…", "",
+            self, "Load project…", "",
             "TrippleT Compare (*.ttcompare);;All files (*.*)",
         )
         if not path:

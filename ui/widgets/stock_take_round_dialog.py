@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from db import stock_take as st
+from ui.widgets.friendly_error import show_error
 
 TILE_W, TILE_H = 82, 50
 _TILE_STYLE = {
@@ -557,7 +558,7 @@ class StockTakeRoundDialog(QDialog):
             try:
                 st.save_check(self._round["ID"], loc, dlg.expected_count(), dlg.outcome_items())
             except Exception as e:
-                QMessageBox.warning(self, "Stock take", f"The result for {loc} could not be saved:\n\n{e}")
+                show_error(self, "Stock take", f"The result for {loc} could not be saved.", e, warning=True)
         self._load(keep_round=True)
 
     def _tile_menu(self, loc: str, pos) -> None:
@@ -600,7 +601,7 @@ class StockTakeRoundDialog(QDialog):
         try:
             locs = st.all_locations()
         except Exception as e:
-            QMessageBox.warning(self, "Start stock take round", f"Could not read the locations:\n\n{e}")
+            show_error(self, "Start stock take round", "The storage locations could not be read.", e, warning=True)
             return
         dlg = StartRoundDialog(locs, self)
         if dlg.exec() != QDialog.Accepted:
@@ -655,7 +656,7 @@ class StockTakeRoundDialog(QDialog):
         try:
             export_excel(path, self._round, self._locs, self._items, *self._spools_for_export())
         except Exception as e:
-            QMessageBox.warning(self, "Export to Excel", f"Could not write the file:\n\n{e}")
+            show_error(self, "Export to Excel", "The Excel file could not be saved.", e, warning=True)
             return
         st._log("stock_take_export", str(self._round["ID"]))
         QMessageBox.information(self, "Export to Excel", f"Saved:\n{path}")

@@ -67,6 +67,7 @@ except ImportError:
 from db.retest_flags import get_open_retest_flags_by_series, resolve_retest_flags_for_series
 from db.trial_reference import exclude_references_sql, format_trial_number
 import app_meta  # enthält current_user
+from ui.widgets.friendly_error import show_error
 
 
 # ----------------------------
@@ -1115,11 +1116,7 @@ class BacklogDnDTable(QTableWidget):
                     pass
 
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Delete trial series",
-                f"Error deleting:\n\n{e}",
-            )
+            show_error(self, "Delete trial series", "The trial series could not be deleted.", e)
             return
 
         # ── Feature tracking ──────────────────────────────────────────────
@@ -1168,8 +1165,7 @@ class BacklogDnDTable(QTableWidget):
                 [series_id],
             )
         except Exception as e:
-            QMessageBox.critical(self, "Error",
-                                 f"Yarn data could not be loaded:\n{e}")
+            show_error(self, "Error", "The yarn data could not be loaded.", e)
             return
 
         if not yarn_rows:
@@ -1437,8 +1433,7 @@ class BacklogDnDTable(QTableWidget):
                             changes_made += 1
 
         except Exception as e:
-            QMessageBox.critical(self, "Error while saving",
-                                 f"Yarn data could not be saved:\n{e}")
+            show_error(self, "Error while saving", "The yarn data could not be saved.", e)
             return
 
         # ── Feature-Tracking ──────────────────────────────────────────────
@@ -1483,8 +1478,7 @@ class BacklogDnDTable(QTableWidget):
             cur_machine_id   = int(row[0]["MachineID"]) if row and row[0]["MachineID"] else None
             cur_machine_name = str(row[0]["MachineName"] or "") if row else ""
         except Exception as e:
-            QMessageBox.critical(self, "Error",
-                                 f"Machine data could not be loaded:\n{e}")
+            show_error(self, "Error", "The machine data could not be loaded.", e)
             return
 
         # Alle Maschinen laden
@@ -1545,8 +1539,7 @@ class BacklogDnDTable(QTableWidget):
                 [new_machine_id, series_id],
             )
         except Exception as e:
-            QMessageBox.critical(self, "Error while saving",
-                                 f"The machine could not be saved:\n{e}")
+            show_error(self, "Error while saving", "The machine could not be saved.", e)
             return
 
         # Feature-Tracking
@@ -1594,11 +1587,7 @@ class BacklogDnDTable(QTableWidget):
         try:
             update_trialseries_name(int(series_id), new_full)
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Rename trial series",
-                f"Could not save the new name.\n\n{e}",
-            )
+            show_error(self, "Rename trial series", "The new name could not be saved.", e)
             return
 
         # Update UI
@@ -1858,7 +1847,7 @@ class _XxGroup(QWidget):
     def _update_header(self):
         arrow = "▼" if self._expanded else "▶"
         n = len(self._visible_rows)
-        self._hdr.setText(f"  {arrow}  {self._xx}   ({n} {'Serie' if n == 1 else 'Serien'})")
+        self._hdr.setText(f"  {arrow}  {self._xx}   ({n} {'series' if n == 1 else 'series'})")
 
     def filter(self, text: str) -> bool:
         text = text.lower().strip()
@@ -1944,7 +1933,7 @@ class _YearGroup(QWidget):
     def _update_header(self):
         arrow = "▼" if self._expanded else "▶"
         n = sum(len(g._visible_rows) for g in self._xx_groups) if self._xx_groups else len(self._rows)
-        self._hdr.setText(f"  {arrow}  {self._year}   ({n} {'Serie' if n == 1 else 'Serien'})")
+        self._hdr.setText(f"  {arrow}  {self._year}   ({n} {'series' if n == 1 else 'series'})")
 
     def filter(self, text: str) -> bool:
         any_visible = False
@@ -2986,14 +2975,7 @@ class BacklogScreen(QWidget):
             open_fn(exp_pk_int, series_pk_int, exp_id_txt)
         except Exception as e:
             try:
-                QMessageBox.critical(
-                    self,
-                    "Error opening",
-                    f"Experiment could not be opened.\n\n"
-                    f"ExperimentID: {exp_id_txt}\n"
-                    f"ExpPK: {exp_pk_int} / SeriesPK: {series_pk_int}\n\n"
-                    f"{e}",
-                )
+                show_error(self, "Error opening", "The experiment could not be opened.", e, details=f"ExperimentID: {exp_id_txt} · ExpPK: {exp_pk_int} / SeriesPK: {series_pk_int}")
             except Exception:
                 pass
 

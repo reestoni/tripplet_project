@@ -246,6 +246,7 @@ except Exception:
 from db.connection import fetch_all, execute, execute_insert, new_global_id, is_offline_mode
 from ui.pathutil import resource_path
 import app_meta
+from ui.widgets.friendly_error import show_error
 
 
 def _canon(s: str) -> str:
@@ -999,7 +1000,7 @@ class MainWindow(QMainWindow):
                 [name])
             new_id = rows[0]["fk_id"] if rows else None
         except Exception as e:
-            QMessageBox.critical(self, "Add value", f"Failed to add: {e}")
+            show_error(self, "Add value", "The value could not be added.", e)
             return None
         if new_id is not None:
             self._fk_maps_cache = self._load_fk_maps_exact()
@@ -1483,6 +1484,7 @@ class MainWindow(QMainWindow):
 
         # Papierkorb-Vorschau: Serie im eigenen Show-Experiment-Tab (ui/recycle_preview.py)
         app_meta.open_show_experiment_preview = self._open_show_experiment_preview
+        app_meta.open_recent_series = self._open_recent_series
 
         # Hilfe-Suche: F1 + Sidebar-Eintrag "Help" (ui/widgets/help_search.py)
         try:
@@ -1695,7 +1697,7 @@ class MainWindow(QMainWindow):
             self._help_dlg = dlg
             dlg.show()
         except Exception as e:
-            QMessageBox.warning(self, "Help", f"Help search could not be opened: {e}")
+            show_error(self, "Help", "The help search could not be opened.", e, warning=True)
 
     def _navigate_to_help_screen(self, screen: str, tab: str) -> None:
         """"Take me there" aus der Hilfe-Suche: oeffnet den passenden Screen.
@@ -2174,14 +2176,7 @@ class MainWindow(QMainWindow):
             self.show_experiment.load_record(exp_pk, series_pk, experiment_id)
         except Exception as e:
             try:
-                QMessageBox.critical(
-                    self,
-                    "Error while opening",
-                    f"The experiment could not be opened.\n\n"
-                    f"ExperimentID: {experiment_id}\n"
-                    f"ExpPK: {exp_pk} / SeriesPK: {series_pk}\n\n"
-                    f"{e}",
-                )
+                show_error(self, "Error while opening", "The experiment could not be opened.", e, details=f"ExperimentID: {experiment_id} · ExpPK: {exp_pk} / SeriesPK: {series_pk}")
             except Exception:
                 pass
 
@@ -2242,14 +2237,7 @@ class MainWindow(QMainWindow):
             screen.load_record(exp_pk, series_pk, experiment_id)
         except Exception as e:
             try:
-                QMessageBox.critical(
-                    self,
-                    "Error while opening",
-                    f"The experiment could not be opened.\n\n"
-                    f"ExperimentID: {experiment_id}\n"
-                    f"ExpPK: {exp_pk} / SeriesPK: {series_pk}\n\n"
-                    f"{e}",
-                )
+                show_error(self, "Error while opening", "The experiment could not be opened.", e, details=f"ExperimentID: {experiment_id} · ExpPK: {exp_pk} / SeriesPK: {series_pk}")
             except Exception:
                 pass
 
@@ -2273,6 +2261,13 @@ class MainWindow(QMainWindow):
             self._load_record_safely(screen, exp_pk, series_pk, experiment_id)
 
         self._tabs.open_in_new_tab(_populate)
+
+    def _open_recent_series(self, exp_pk: int, series_pk: int, experiment_id: str, new_tab: bool = False) -> None:
+        """Sidebar -> "Recent" (ui/recent_series.py): Ctrl+click = new tab."""
+        if new_tab and getattr(self, "_tabs", None) is not None:
+            self._open_show_experiment_in_new_tab(exp_pk, series_pk, experiment_id)
+        else:
+            self._go_show_experiment(exp_pk, series_pk, experiment_id)
 
     def _open_show_experiment_preview(self, exp_pk: int, series_pk: int, experiment_id: str, setup) -> None:
         """Recycle bin preview (ui/recycle_preview.py): fresh Show Experiment
@@ -2496,7 +2491,7 @@ class MainWindow(QMainWindow):
         try:
             screen_widget.load_record(exp_pk, series_pk, experiment_id)
         except Exception as e:
-            QMessageBox.critical(win, "Error", f"Could not open experiment.\n\n{e}")
+            show_error(win, "Error", "The experiment could not be opened.", e)
 
         if not hasattr(self, "_detached_windows"):
             self._detached_windows = []
@@ -2685,8 +2680,7 @@ class MainWindow(QMainWindow):
                 self._create_screen_ref.open_addseries_prefill(
                     exp_pk, series_pk)
         except Exception as e:
-            QMessageBox.critical(self, "Copy TrialSeries",
-                                 f"Vorbelegen fehlgeschlagen:\n{e}")
+            show_error(self, "Copy TrialSeries", "The copy of the trial series could not be prepared.", e)
             return
         try:
             self.setWindowTitle(
@@ -2719,8 +2713,7 @@ class MainWindow(QMainWindow):
             self.manage_yarn.set_permissions(can_delete=full, can_edit_minstock=app_meta.can_edit_min_stock())
             self.stack.setCurrentWidget(self.manage_yarn)
         except Exception as e:
-            QMessageBox.critical(self, "Manage Yarn",
-                                 f"Error while opening: {e}")
+            show_error(self, "Manage Yarn", "The screen could not be opened.", e)
 
     def _go_back_manage_yarn(self):
         self.setWindowTitle("TrippleT – Manage Yarn")
@@ -2923,8 +2916,7 @@ class MainWindow(QMainWindow):
             self.setWindowTitle("TrippleT – Yarn Stock")
             self.stack.setCurrentWidget(self.yarn_stock)
         except Exception as e:
-            QMessageBox.critical(self, "Yarn Stock",
-                                 f"Error while opening: {e}")
+            show_error(self, "Yarn Stock", "The screen could not be opened.", e)
 
     def _go_yarn_stock_from_notification(self, yarn_id: int, charge: str):
         """Von einer Low-Stock-Notification aus: zu Yarn Stock navigieren
@@ -2943,7 +2935,7 @@ class MainWindow(QMainWindow):
                         "are listed in Manage Yarn."
                     )
         except Exception as e:
-            QMessageBox.critical(self, "Yarn Stock", f"Error while jumping to the item: {e}")
+            show_error(self, "Yarn Stock", "Could not jump to the selected item.", e)
 
     def _go_my_requests_from_notification(self, request_id: int):
         """Von einer Experiment-Request-Notification aus (Statuswechsel,

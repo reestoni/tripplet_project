@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from ui.yarnscope.garngraf_canvas import GarnCanvas
 from ui.pathutil import resource_path
+from ui.widgets.friendly_error import show_error
 
 
 # ===========================================================================
@@ -2061,7 +2062,7 @@ def _ys_open_batch(self):
         QTimer.singleShot(50, mw.tdms_batch._init_series_state)
     except Exception as e:
         from PySide6.QtWidgets import QMessageBox
-        QMessageBox.critical(self, "Batch", f"Error: {e}")
+        show_error(self, "Batch", "The batch analysis stopped.", e)
 
 
 def _ys_draw_garnspiegel(self, res: dict, vals: dict = None):

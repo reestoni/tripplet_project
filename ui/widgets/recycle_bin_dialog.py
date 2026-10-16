@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from db import recycle_bin
+from ui.widgets.friendly_error import show_error
 
 
 class RecycleBinDialog(QDialog):
@@ -106,7 +107,7 @@ class RecycleBinDialog(QDialog):
         try:
             label = recycle_bin.restore(int(e["ID"]))
         except Exception as ex:
-            QMessageBox.warning(self, "Restore", f"Could not restore:\n\n{ex}")
+            show_error(self, "Restore", "The series could not be restored.", ex, warning=True)
             return
         refresh_series_lists()
         QMessageBox.information(self, "Restore", f"\"{label}\" is back.")

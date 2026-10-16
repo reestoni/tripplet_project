@@ -73,6 +73,7 @@ from ui.widgets.label_printing import (
     MM, PrintLabelsDialog, fit_text, generate_label_sheet_pdf,
     load_label_template, save_label_template,
 )
+from ui.widgets.friendly_error import show_error
 
 TEMPLATE_NAME = "CustomLabel"
 DESIGN_TABLE = "tblLabelDesign"
@@ -1289,9 +1290,7 @@ class LabelGeneratorScreen(QWidget):
             self._trial_ids_by_nr = trial_ids_by_number(series_id) if header else {}
             self._machine_id = machine_id_for_series(series_id) if header else None
         except Exception as e:
-            QMessageBox.critical(
-                self, "Search",
-                f"Database error while searching Trial Series {series_id}:\n{e}")
+            show_error(self, "Search", f"Trial series {series_id} could not be searched.", e)
             return
 
         # Feld-Dropdown (Static/Field/Counter-Auswahl je Text-Teil) an die
@@ -1367,7 +1366,7 @@ class LabelGeneratorScreen(QWidget):
         try:
             _db_save_design(name, self._collect_elements())
         except Exception as e:
-            QMessageBox.critical(self, "Save design", f"Failed to save: {e}")
+            show_error(self, "Save design", "The label design could not be saved.", e)
             return
         self._reload_design_combo()
         idx = self.cb_designs.findText(name)
@@ -1543,7 +1542,7 @@ class LabelGeneratorScreen(QWidget):
             generate_label_sheet_pdf(
                 items, tpl, start_index, out_path, draw_cell=make_draw_cell(elements))
         except Exception as e:
-            QMessageBox.critical(self, "Generate PDF", f"Failed to generate PDF: {e}")
+            show_error(self, "Generate PDF", "The PDF could not be created.", e)
             return
         QMessageBox.information(self, "Generate PDF", f"Saved to:\n{out_path}")
 

@@ -3666,7 +3666,7 @@ class GarnPanel(QtWidgets.QGroupBox):
         lines.append(
             f"Kernband: {kb_lo_slice:.4f}–{kb_hi_slice:.4f} mm (±{band_delta_slice*1000.0:.1f} µm)")
         lines.append("")
-        lines.append("— Gesamte Serie —")
+        lines.append("— Whole series —")
         lines.append(f"Mittel-Dicke: {f_mean_mm:.4f} mm ({f_mean_um:.1f} µm)")
         lines.append(f"Std. deviation: {f_std_mm:.4f} mm ({f_std_um:.2f} µm)")
         lines.append(f"CV: {f_cv:.2f} %")

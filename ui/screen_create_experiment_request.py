@@ -64,6 +64,7 @@ from ui.widgets.experiment_request_help_dialog import show_experiment_request_he
 
 import datetime
 import shutil
+from ui.widgets.friendly_error import show_error
 
 
 # Felder, die im Formular nicht angezeigt werden sollen
@@ -530,7 +531,7 @@ class ExperimentRequestImagesDialog(QDialog):
             import shutil
             shutil.copy2(src, dst)
         except Exception as e:
-            QMessageBox.critical(self, "Save As", f"Error while saving:\n{e}")
+            show_error(self, "Save As", "The file could not be saved.", e)
 
     def keyPressEvent(self, event):  # noqa: N802
         """Delete-Taste löscht selektierte Dateien."""
@@ -1523,7 +1524,7 @@ class ExperimentRequestPdfsDialog(QDialog):
             import shutil
             shutil.copy2(src, dst)
         except Exception as e:
-            QMessageBox.critical(self, "Save As", f"Error while saving:\n{e}")
+            show_error(self, "Save As", "The file could not be saved.", e)
 
     def _set_zoom(self, z: float) -> None:
         z = max(0.25, min(4.0, float(z)))

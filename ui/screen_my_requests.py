@@ -51,6 +51,7 @@ from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.widgets.experiment_request_help_dialog import show_experiment_request_help
 from ui.screen_create_experiment import table_exists, get_columns_map, resolve_field
+from ui.widgets.friendly_error import show_error
 
 
 class NoScrollComboBox(QComboBox):
@@ -406,7 +407,7 @@ class MyRequestsScreen(QWidget):
         header_labels: List[str] = []
         for _, name in visible_cols:
             if name == "ProjektText":
-                header_labels.append("Projekt")
+                header_labels.append("Project")
             elif name == "CreatedByUser":
                 header_labels.append("Owner")
             else:
@@ -1135,7 +1136,7 @@ class MyRequestsScreen(QWidget):
     # ---------------- Context Menu / Assign Experiment ----------------
 
     def _on_context_menu(self, pos):
-        """Right-click menu - "Experiment zuordnen"/accepting/rejecting a
+        """Right-click menu - "Assign experiment"/accepting/rejecting a
         pending change stays superuser-only, "View version history" is
         available to EVERY user for their own requests (the table already
         only shows non-superusers their own rows, see refresh()) - user
@@ -1180,7 +1181,7 @@ class MyRequestsScreen(QWidget):
         action_history = None
 
         if self._is_superuser and current_status_id == 3:
-            action_assign = menu.addAction("Experiment zuordnen…")
+            action_assign = menu.addAction("Assign experiment…")
 
         if self._is_superuser and pending_copy_id is not None:
             if action_assign is not None:
@@ -1235,7 +1236,7 @@ class MyRequestsScreen(QWidget):
         if not er_field:
             QMessageBox.warning(
                 self,
-                "Experiment zuordnen",
+                "Assign experiment",
                 "The field 'ExperimentRequestID' was not found in tblExperimente.\n"
                 "Please check the database schema.",
             )
@@ -1248,7 +1249,7 @@ class MyRequestsScreen(QWidget):
             ) or "ExperimentID"
             pk_field = resolve_field(["ID"], cols) or "ID"
         except Exception as e:
-            QMessageBox.critical(self, "Experiment zuordnen", f"Spaltenzugriff fehlgeschlagen:\n{e}")
+            show_error(self, "Assign experiment", "The experiment requests could not be read.", e)
             return
 
         try:
@@ -1262,20 +1263,20 @@ class MyRequestsScreen(QWidget):
                 )
                 exp_rows = cur.fetchall()
         except Exception as e:
-            QMessageBox.critical(self, "Experiment zuordnen", f"The experiments could not be loaded:\n{e}")
+            show_error(self, "Assign experiment", "The experiments could not be loaded.", e)
             return
 
         if not exp_rows:
             QMessageBox.information(
                 self,
-                "Experiment zuordnen",
+                "Assign experiment",
                 "No experiments without an existing request link found.",
             )
             return
 
         # --- Dialog aufbauen ---
         dlg = QDialog(self)
-        dlg.setWindowTitle("Experiment zuordnen")
+        dlg.setWindowTitle("Assign experiment")
         dlg.setMinimumWidth(420)
         dlg.setModal(True)
 
@@ -1362,7 +1363,7 @@ class MyRequestsScreen(QWidget):
                 cn.rollback()
             except Exception:
                 pass
-            QMessageBox.critical(self, "Error", f"Zuordnung fehlgeschlagen:\n{e}")
+            show_error(self, "Error", "The experiment could not be assigned.", e)
             return
 
         self._notify_owner_of_request(req_id, "status changed to Experiment")

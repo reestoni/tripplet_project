@@ -45,6 +45,7 @@ from ui.widgets import sidebar_nav
 from ui.pathutil import resource_path
 from ui.screen_create_experiment import table_exists, get_columns_map, resolve_field
 from ui.screen_show_experiment import _ExperimentRequestReadOnlyDialog
+from ui.widgets.friendly_error import show_error
 
 _ER_ICON_PIXMAP = None  # cached QPixmap
 
@@ -820,14 +821,7 @@ class AllExperimentsScreen(QWidget):
             self.on_open_experiment(exp_pk, series_pk, experiment_id)
         except Exception as e:
             try:
-                QMessageBox.critical(
-                    self,
-                    "Error opening",
-                    f"Experiment could not be opened.\n\n"
-                    f"ExperimentID: {experiment_id}\n"
-                    f"ExpPK: {exp_pk} / SeriesPK: {series_pk}\n\n"
-                    f"{e}",
-                )
+                show_error(self, "Error opening", "The experiment could not be opened.", e, details=f"ExperimentID: {experiment_id} · ExpPK: {exp_pk} / SeriesPK: {series_pk}")
             except Exception:
                 pass
 
@@ -1141,11 +1135,7 @@ class AllExperimentsScreen(QWidget):
                         combo.blockSignals(True)
                         combo.setCurrentIndex(idx)
                         combo.blockSignals(False)
-                QMessageBox.critical(
-                    self,
-                    "Change status",
-                    f"An error occurred while checking the machine:\n{e}",
-                )
+                show_error(self, "Change status", "The machine could not be checked.", e)
                 return
 
         # Änderung in die Datenbank schreiben
@@ -1641,8 +1631,7 @@ class AllExperimentsScreen(QWidget):
             self.on_copy_trialseries(exp_pk, series_pk, experiment_id)
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Copy TrialSeries",
-                                 f"Aktion fehlgeschlagen:\n{e}")
+            show_error(self, "Copy TrialSeries", "The trial series could not be copied.", e)
 
     # ------------------------------------------------------------------
     # Context menu: rename Trial Series (AccessLevel >= 2)
@@ -1769,8 +1758,7 @@ class AllExperimentsScreen(QWidget):
             cur_machine_id = int(row_data[0]["MachineID"]) if row_data and row_data[0]["MachineID"] else None
             cur_machine_name = str(row_data[0]["MachineName"] or "") if row_data else ""
         except Exception as e:
-            QMessageBox.critical(self, "Error",
-                                 f"Could not load machine data:\n{e}")
+            show_error(self, "Error", "The machine data could not be loaded.", e)
             return
 
         # Alle Maschinen laden
@@ -1831,8 +1819,7 @@ class AllExperimentsScreen(QWidget):
                 [new_machine_id, series_id],
             )
         except Exception as e:
-            QMessageBox.critical(self, "Save Error",
-                                 f"Could not save machine:\n{e}")
+            show_error(self, "Save Error", "The machine could not be saved.", e)
             return
 
         # Feature-Tracking
@@ -1890,8 +1877,7 @@ class AllExperimentsScreen(QWidget):
                 [series_id],
             )
         except Exception as e:
-            QMessageBox.critical(self, "Error",
-                                 f"Could not load yarn data:\n{e}")
+            show_error(self, "Error", "The yarn data could not be loaded.", e)
             return
 
         if not yarn_rows:
@@ -2165,8 +2151,7 @@ class AllExperimentsScreen(QWidget):
                             changes_made += 1
 
         except Exception as e:
-            QMessageBox.critical(self, "Save Error",
-                                 f"Could not save yarn data:\n{e}")
+            show_error(self, "Save Error", "The yarn data could not be saved.", e)
             return
 
         # ── Feature-Tracking ──────────────────────────────────────────────
@@ -2380,11 +2365,7 @@ class AllExperimentsScreen(QWidget):
                 pass
 
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Delete Trial Series",
-                f"An error occurred while deleting:\n\n{e}",
-            )
+            show_error(self, "Delete Trial Series", "The trial series could not be deleted.", e)
             return
 
         # ── Feature tracking ──────────────────────────────────────────────
@@ -2446,11 +2427,7 @@ class AllExperimentsScreen(QWidget):
         try:
             update_trialseries_name(series_pk, new_full)
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Rename Trial Series",
-                f"Could not save the new name.\n\n{e}",
-            )
+            show_error(self, "Rename Trial Series", "The new name could not be saved.", e)
             return
 
         # Update UI cell

@@ -1114,8 +1114,8 @@ def sync_models_async(force: bool = False, blocking: bool = False) -> None:
 
             if not central_ok[0]:
                 log.warning(
-                    "Zentraler Pfad %s nicht erreichbar (Timeout oder existiert nicht) "
-                    "- lokaler Mirror bleibt unveraendert.", central)
+                    "Central path %s not reachable (timeout or missing) "
+                    "- local mirror left unchanged.", central)
                 return
 
             log.info("Zentraler Pfad erreichbar: %s", central)

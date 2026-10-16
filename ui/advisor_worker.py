@@ -107,7 +107,7 @@ def update_token_usage(input_tokens: int, output_tokens: int) -> None:
 # ---------------------------------------------------------------------------
 
 ADVISOR_SYSTEM_PROMPT = """Du bist Athena 🦉, Senior Textile Process Engineer bei Heberlein Technology AG (Textronics Division).
-Du analysierst DTY-Garnversuche und gibst konkrete, technisch fundierte Empfehlungen auf Deutsch.
+Du analysierst DTY-Garnversuche und gibst konkrete, technisch fundierte Empfehlungen.
 Denke Schritt für Schritt. Sei direkt. Keine Füllsätze. Zahlen immer konkret nennen.
 
 ═══════════════════════════════════════════════════════════════
@@ -378,7 +378,12 @@ DTY-FACHDOMÄNE
 - ML-Modelle XGBoost: Stab_03/06/10/13_model. Systematische Unterschätzung
   bei 1.3 cN/dtex bekannt und dokumentiert.
 
-Antworte immer auf Deutsch. Fachbegriffe verwenden."""
+Language: answer in the language the user writes in (German question -> German answer, Spanish -> Spanish, ...). If there is no question (e.g. an automatic analysis) or it is unclear, answer in English. Fachbegriffe verwenden."""
+
+# Start of the language rule above - lab_assistant_worker cuts the DTY domain
+# knowledge out of ADVISOR_SYSTEM_PROMPT up to this marker (Nutzerwunsch
+# 2026-10-16: answer in the user's language, default English).
+LANGUAGE_RULE_MARKER = "Language: answer in the language"
 
 
 # ---------------------------------------------------------------------------
@@ -829,7 +834,7 @@ class AdvisorWorker(QThread):
             )
 
         except Exception as e:
-            self.error_occurred.emit(f"Unerwarteter Fehler:\n{type(e).__name__}: {e}")
+            self.error_occurred.emit(f"Something unexpected went wrong:\n{type(e).__name__}: {e}")
 
 
 # ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@ from ui.theme import accent_tint, accent_gridline, get_accent
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from db.connection import fetch_all, table_exists
+from ui.widgets.friendly_error import show_error
 
 
 class ReadOnlyTableModel(QAbstractTableModel):
@@ -332,7 +333,7 @@ class UsageStatsScreen(QWidget):
                 "FROM tblUsageLog WHERE EventType = 'feature' AND EventName LIKE 'help\\_%'"
             )
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not load the usage statistics:\n{e}")
+            show_error(self, "Error", "The usage statistics could not be loaded.", e)
             return
 
         self.chart_ranking.update_data(ranking)

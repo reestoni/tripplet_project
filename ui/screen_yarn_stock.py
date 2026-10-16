@@ -43,6 +43,7 @@ from db.connection import fetch_all, execute, execute_insert, new_global_id, get
 from db import yarn_spool_log
 from db.usage_log import log_usage_event
 import app_meta
+from ui.widgets.friendly_error import show_error
 
 try:
     import fitz  # PyMuPDF
@@ -1341,7 +1342,7 @@ class YarnStockScreen(QWidget):
         try:
             wb.save(out_path)
         except Exception as e:
-            QMessageBox.critical(self, "Export to Excel", f"Failed to save: {e}")
+            show_error(self, "Export to Excel", "The Excel file could not be saved.", e)
             return
         log_usage_event("feature", "yarn_stock_export_excel", "rack")
         QMessageBox.information(self, "Export to Excel", f"Saved to:\n{out_path}")
@@ -1410,7 +1411,7 @@ class YarnStockScreen(QWidget):
                      "New": pmap.get(new_pid) if new_pid else None}
                     for sp in affected if sp.get("ProducerID") != new_pid)
         except Exception as e:
-            QMessageBox.critical(self, "Edit", f"Failed to update: {e}")
+            show_error(self, "Edit", "The change could not be saved.", e)
         QTimer.singleShot(0, self._finish_group_edit)
 
     def _on_minstock_edited(self, item: QTableWidgetItem) -> None:
@@ -1450,7 +1451,7 @@ class YarnStockScreen(QWidget):
             )
             log_usage_event("feature", "yarn_stock_edit_min_stock")
         except Exception as e:
-            QMessageBox.critical(self, "Min. stock", f"Failed to update: {e}")
+            show_error(self, "Min. stock", "The minimum stock could not be saved.", e)
         QTimer.singleShot(0, self._finish_group_edit)
 
     def _finish_group_edit(self) -> None:
@@ -1525,7 +1526,7 @@ class YarnStockScreen(QWidget):
         try:
             wb.save(out_path)
         except Exception as e:
-            QMessageBox.critical(self, "Export to Excel", f"Failed to save: {e}")
+            show_error(self, "Export to Excel", "The Excel file could not be saved.", e)
             return
         log_usage_event("feature", "yarn_stock_export_excel", "overview")
         QMessageBox.information(self, "Export to Excel", f"Saved to:\n{out_path}")
@@ -1873,7 +1874,7 @@ class YarnStockScreen(QWidget):
                 if new_id:
                     new_ids.append(int(new_id))
         except Exception as e:
-            QMessageBox.critical(self, "New spool(s)", f"Failed to create: {e}")
+            show_error(self, "New spool(s)", "The new spools could not be created.", e)
             if inserted == 0:
                 self._restore_overview_selection(prev_group)
                 return
@@ -1945,7 +1946,7 @@ class YarnStockScreen(QWidget):
                     [today, sid],
                 )
         except Exception as e:
-            QMessageBox.critical(self, "Discard", f"Failed to discard: {e}")
+            show_error(self, "Discard", "The spools could not be discarded.", e)
             return
         log_usage_event("feature", "yarn_stock_discard", str(n))
         yarn_spool_log.log_spool_changes(
@@ -1997,7 +1998,7 @@ class YarnStockScreen(QWidget):
                     [pid, sid],
                 )
         except Exception as e:
-            QMessageBox.critical(self, "Save Changes", f"Failed to save: {e}")
+            show_error(self, "Save Changes", "The changes could not be saved.", e)
             return None
         self._log_pending_changes(weight_updates, loc_updates, colour_updates, producer_updates)
         self.model_detail.clear_pending_changes()
@@ -2100,7 +2101,7 @@ class YarnStockScreen(QWidget):
                 )
                 added += 1
         except Exception as e:
-            QMessageBox.critical(self, title, f"Failed to add to the label queue: {e}")
+            show_error(self, title, "The spools could not be added to the label queue.", e)
             self._reload_label_queue()
             return None
         self._reload_label_queue()
@@ -2118,7 +2119,7 @@ class YarnStockScreen(QWidget):
             for qid in queue_ids:
                 execute(f"DELETE FROM {LABEL_QUEUE_TABLE} WHERE [ID] = ?", [qid])
         except Exception as e:
-            QMessageBox.critical(self, "Remove selected", f"Failed to remove: {e}")
+            show_error(self, "Remove selected", "The spools could not be removed from the label queue.", e)
             return
         self._reload_label_queue()
 
@@ -2151,7 +2152,7 @@ class YarnStockScreen(QWidget):
             placed = generate_label_sheet_pdf(
                 self._queue_items, tpl, start_index, out_path, draw_cell=_draw_yarn_label_cell)
         except Exception as e:
-            QMessageBox.critical(self, "Print Labels", f"Failed to generate PDF: {e}")
+            show_error(self, "Print Labels", "The PDF could not be created.", e)
             return
 
         printed_ids = [it["QueueID"] for it in self._queue_items[:placed]]
@@ -2160,9 +2161,7 @@ class YarnStockScreen(QWidget):
             for qid in printed_ids:
                 execute(f"UPDATE {LABEL_QUEUE_TABLE} SET [PrintedDate] = ? WHERE [ID] = ?", [now, qid])
         except Exception as e:
-            QMessageBox.warning(
-                self, "Print Labels",
-                f"PDF was created, but marking items as printed failed: {e}")
+            show_error(self, "Print Labels", "The PDF was created, but the labels could not be marked as printed.", e, warning=True)
 
         remaining = len(self._queue_items) - placed
         msg = f"{placed} label(s) written to:\n{out_path}"

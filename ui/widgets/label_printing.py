@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from db.connection import fetch_all, execute, table_exists
+from ui.widgets.friendly_error import show_error
 
 try:
     import fitz  # PyMuPDF
@@ -357,7 +358,7 @@ class PrintLabelsDialog(QDialog):
         try:
             save_label_template(self.template_name, self.template_values())
         except Exception as e:
-            QMessageBox.critical(self, "Save template", f"Failed to save: {e}")
+            show_error(self, "Save template", "The template could not be saved.", e)
             return
         QMessageBox.information(self, "Save template", "Template saved.")
 

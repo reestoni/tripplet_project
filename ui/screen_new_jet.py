@@ -15,6 +15,7 @@ from PySide6.QtGui import QPixmap
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.text_normalize import canon_simple as _canon
+from ui.widgets.friendly_error import show_error
 
 
 # ── File storage ─────────────────────────────────────────────────────────────
@@ -723,8 +724,7 @@ class NewJetScreen(QWidget):
         try:
             new_id = self._on_save(data)
         except Exception as e:
-            QMessageBox.critical(
-                self, "New Jet", f"Save failed:\n{e}")
+            show_error(self, "New Jet", "The jet could not be saved.", e)
             return
 
         if new_id is None:

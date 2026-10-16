@@ -40,6 +40,7 @@ except Exception:
 
 # --- Globaler Benutzerkontext ---
 import app_meta
+from ui.widgets.friendly_error import show_error
 
 
 class LoginScreen(QWidget):
@@ -185,8 +186,7 @@ class LoginScreen(QWidget):
         try:
             ok = check_credentials(user, pw)
         except Exception as e:
-            QMessageBox.critical(self, "Connection error",
-                                 f"Database connection failed.\n\n{e}")
+            show_error(self, "Connection error", "TrippleT could not connect to the database.", e)
             return
 
         if ok:

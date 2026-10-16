@@ -167,3 +167,34 @@ def test_whats_new_pdf_sections_stay_on_one_page(tmp_path):
         elif block[0] == "feature" and section:
             title = " ".join(block[1].split())[:25]
             assert any(title in pages[i] for i in section), (block[1], section)  # card on its heading's page
+
+
+def test_whats_new_tabs_per_section(monkeypatch):
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    import ui.widgets.multilang_help as mh
+    monkeypatch.setattr(mh, "save_language", lambda lang: None)
+    from ui import display_prefs
+    import ui.whats_new as wn
+    rel = {"version": "current", "date": "", "texts": {l: [
+        ("p", "intro"), ("h", "A & B"), ("feature", "x", "y", "z", None), ("feature", "x2", "y", "z", None),
+        ("h", "C"), ("feature", "x3", "y", "z", None)] for l in ("en", "de", "es")}}
+    secs = wn.release_sections(rel, "en")
+    assert [(t, [b[0] for b in bl]) for t, bl in secs] == [("A & B", ["p", "feature", "feature"]), ("C", ["feature"])]
+    assert wn.release_sections({"texts": {"en": [("feature", "x", "y", "z", None)]}}, "en") == \
+        [("", [("feature", "x", "y", "z", None)])]
+    display_prefs._prefs = dict(display_prefs.DEFAULTS)
+    dlg = wn.WhatsNewDialog(language="en")
+    sections = wn.release_sections(wn.RELEASES[0], "en")
+    assert dlg.tabs.count() == len(sections)
+    assert dlg.tabs.tabText(0).startswith(sections[0][0].replace("&", "&&"))
+    dlg.tabs.setCurrentIndex(1)
+    dlg.set_language("de")  # same tab position after switching the language
+    assert dlg.tabs.currentIndex() == 1
+    dlg.search.setText("Ref")
+    dlg._apply_search()
+    assert dlg.right.currentWidget() is dlg.scroll  # search = one list
+    dlg.search.setText("")
+    dlg._apply_search()
+    assert dlg.right.currentWidget() is dlg._release_view
+    display_prefs._prefs = dict(display_prefs.DEFAULTS)

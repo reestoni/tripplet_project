@@ -24,6 +24,7 @@ from ui.screen_manage_jets import (
     MultiColumnFilterProxy, FilterableHeaderView, ColumnOrderDialog, ExpandableFilterProxy,
     SearchHighlightDelegate,
 )
+from ui.widgets.friendly_error import show_error
 
 
 def _canon_noparen(s: str) -> str:
@@ -1585,7 +1586,7 @@ class ManageYarnScreen(QWidget):
         try:
             series_list = self._fetch_yarn_usage(yarn_id)
         except Exception as e:
-            QMessageBox.critical(self, 'Used in Trial Series', f'Could not load usage: {e}')
+            show_error(self, 'Used in Trial Series', "The list of uses could not be loaded.", e)
             return
         if not series_list:
             QMessageBox.information(

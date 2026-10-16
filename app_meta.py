@@ -102,3 +102,7 @@ open_help_search = None    # callable or None
 # Papierkorb-Vorschau (ui/recycle_preview.py) - von MainWindow gesetzt:
 # (exp_pk, series_pk, experiment_id, setup(screen)) -> None
 open_show_experiment_preview = None
+
+# Sidebar -> "Recent" (ui/recent_series.py) - von MainWindow gesetzt:
+# (exp_pk, series_pk, experiment_id, new_tab: bool) -> None
+open_recent_series = None

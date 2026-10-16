@@ -137,10 +137,10 @@ class TestLoginScreenSicherheit:
         login.txt_user.setText("jens")
         login.txt_pw.setText("anderes_pw")
         with patch("ui.screen_login.check_credentials", side_effect=Exception("DB offline")):
-            with patch("ui.screen_login.QMessageBox") as mock_mb:
-                mock_mb.critical = MagicMock()
+            with patch("ui.screen_login.show_error") as mock_err:  # friendly error box (2026-10-16)
                 login._attempt_login()
-                mock_mb.critical.assert_called_once()
+                mock_err.assert_called_once()
+                assert "could not connect" in mock_err.call_args[0][2]
 
     def test_erfolgreicher_login_ruft_callback(self, qtbot):
         from ui.screen_login import LoginScreen

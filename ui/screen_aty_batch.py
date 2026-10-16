@@ -67,7 +67,7 @@ _COL_BIN1_PCT   = 9
 _COL_CORE_CV    = 10
 
 _HEADERS = [
-    "Serie", "Vers.", "TrialID", "File", "Status",
+    "Series", "Trial", "TrialID", "File", "Status",
     "Length [m]", "Core [µm]", "Bulk Index [%]",
     "Freq [1/m]", "Bin1 % (Kurzhocker)", "Core CV [%]",
 ]
@@ -252,7 +252,7 @@ class ATYFolderScanner:
             if sid not in series_ids_set:
                 continue
             if (sid, vno) not in known_keys:
-                sname = series_map.get(sid, f"Serie {sid}")
+                sname = series_map.get(sid, f"Series {sid}")
                 rows.append(ATYTrialRow(
                     series_id=sid, series_name=sname,
                     trial_no=vno, trial_id=None,
@@ -743,7 +743,7 @@ class ATYBatchScreen(QWidget):
             series_to_show = self._all_series
         else:
             sid   = self._locked_series_id
-            label = self._locked_series_name or f"Serie {sid}"
+            label = self._locked_series_name or f"Series {sid}"
             series_to_show = [(sid, label)] if sid is not None else []
 
         for sid, label in series_to_show:

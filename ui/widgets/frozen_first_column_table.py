@@ -5,7 +5,8 @@ from PySide6.QtCore import Qt, Slot, QEvent
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtCore import QSize
 from PySide6.QtWidgets import (
-    QWidget, QGridLayout, QTableView, QAbstractItemView, QHeaderView, QSizePolicy, QLabel
+    QWidget, QGridLayout, QTableView, QAbstractItemView, QHeaderView, QSizePolicy, QLabel, QApplication,
+    QAbstractItemDelegate,
 )
 from PySide6.QtCore import QItemSelectionModel
 
@@ -17,6 +18,44 @@ _CONTRAST_QSS = """
 QTableView { gridline-color: #404040; color: #000000; }
 QTableView::item:selected { background: #1F4E8C; color: #FFFFFF; }
 """
+
+
+class _GridView(QTableView):
+    """QTableView with Excel-like Enter (Nutzerwunsch 2026-10-16): Enter
+    goes to the cell below - after typing a value (the editor closes with
+    "submit") and also without editing. Shift+Enter goes up. Hidden rows
+    are skipped; the views share one selection model, so moving here moves
+    the current cell of the whole table."""
+
+    def _step(self, delta: int) -> bool:
+        cur = self.currentIndex()
+        model = self.model()
+        if model is None or not cur.isValid():
+            return False
+        r = cur.row() + delta
+        while 0 <= r < model.rowCount() and self.isRowHidden(r):
+            r += delta
+        if not (0 <= r < model.rowCount()):
+            return False
+        nxt = model.index(r, cur.column())
+        sel = self.selectionModel()
+        if sel is not None:
+            sel.setCurrentIndex(nxt, QItemSelectionModel.ClearAndSelect)
+        self.scrollTo(nxt)
+        return True
+
+    def keyPressEvent(self, event):  # noqa: N802
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter) and self.state() != QAbstractItemView.EditingState:
+            if self._step(-1 if event.modifiers() & Qt.ShiftModifier else 1):
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
+    def closeEditor(self, editor, hint):  # noqa: N802
+        up = bool(QApplication.keyboardModifiers() & Qt.ShiftModifier)
+        super().closeEditor(editor, hint)
+        if hint == QAbstractItemDelegate.SubmitModelCache:  # editor closed with Enter
+            self._step(-1 if up else 1)
 
 
 class FrozenFirstColumnTable(QWidget):
@@ -55,10 +94,10 @@ class FrozenFirstColumnTable(QWidget):
         self._n_hdr = 0
         self._syncing = False  # Reentrancy-Guard fuer Resize-Sync
 
-        self.top_left = QTableView(self)
-        self.top_right = QTableView(self)
-        self.bottom_left = QTableView(self)
-        self.bottom_right = QTableView(self)
+        self.top_left = _GridView(self)
+        self.top_right = _GridView(self)
+        self.bottom_left = _GridView(self)
+        self.bottom_right = _GridView(self)
 
         # Rückwärtskompatible Aliase (ältere Aufrufer/Attribute erwarten .left/.right)
         self.left = self.bottom_left

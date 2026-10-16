@@ -1169,7 +1169,7 @@ class _ReportBridge(QObject):
         try:
             from db.connection import fetch_all, table_exists
             if not table_exists('tblSmartChartFreeTable'):
-                logger.warning('getFreeQueryMeta: tblSmartChartFreeTable nicht gefunden')
+                logger.warning('getFreeQueryMeta: tblSmartChartFreeTable not found')
                 if self._screen._web: self._screen._web.page().runJavaScript('receiveFreeQueryMeta([],{},[]);')
                 return
             tbl_rows = fetch_all(
@@ -1611,7 +1611,7 @@ class _ReportBridge(QObject):
         try:
             from db.connection import fetch_all, table_exists
             if not table_exists("tblSmartChartPdfTemplate"):
-                logger.warning("getPdfTemplates: Tabelle nicht gefunden — sende Default")
+                logger.warning("getPdfTemplates: table not found - sending default")
                 js = 'receivePdfTemplates([{"id":null,"name":"Heberlein Standard (Default)","description":"","isDefault":true}]);'
                 if self._screen._web: self._screen._web.page().runJavaScript(js)
                 return
@@ -1622,7 +1622,7 @@ class _ReportBridge(QObject):
                 []
             )
             if not rows:
-                logger.warning("getPdfTemplates: keine aktiven Templates gefunden")
+                logger.warning("getPdfTemplates: no active templates found")
                 js = 'receivePdfTemplates([{"id":null,"name":"Heberlein Standard (Default)","description":"","isDefault":true}]);'
                 if self._screen._web: self._screen._web.page().runJavaScript(js)
                 return

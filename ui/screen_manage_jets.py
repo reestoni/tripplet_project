@@ -36,6 +36,7 @@ from ui.pathutil import resource_path
 from ui.text_normalize import canon_with_id_strip as _canon
 from db.trial_reference import exclude_references_sql
 import app_meta
+from ui.widgets.friendly_error import show_error
 
 _AUDIT_COLS = ("createdby", "creationdate")
 # Rein berechnet (kein echtes tblDTYJets-Feld, siehe main.py._load_jets_data) -
@@ -2186,7 +2187,7 @@ class ManageJetsScreen(QWidget):
         try:
             series_list = self._fetch_jet_usage(jet_id)
         except Exception as e:
-            QMessageBox.critical(self, 'Used in Trial Series', f'Could not load usage: {e}')
+            show_error(self, 'Used in Trial Series', "The list of uses could not be loaded.", e)
             return
         if not series_list:
             QMessageBox.information(

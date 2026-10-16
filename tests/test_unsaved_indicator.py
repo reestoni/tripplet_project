@@ -62,3 +62,26 @@ def test_tab_close_asks_and_cancel_keeps_tab(app):
     nav.addTab(stack2, "x")
     nav.close_all_but_first()
     assert scr2.asked == 0 and nav.count() == 1
+
+
+def test_delete_clears_selected_editable_cells(app, monkeypatch):
+    import app_meta
+    from PySide6.QtCore import QItemSelectionModel
+    from ui.screen_show_experiment import ShowExperimentScreen
+    from ui.widgets.frozen_first_column_table import FrozenFirstColumnTable
+    monkeypatch.setattr(app_meta, "access_level", lambda: 4)
+    m = _model()
+    m.setData(m.index(0, 1), "4.0")
+    m.setData(m.index(0, 2), "4.5")
+    m._readonly = {1}
+    m._matrix[1][0] = "8"
+    m._dirty.clear()
+    t = FrozenFirstColumnTable()
+    t.setModel(m)
+    sel = t.selectionModel()
+    for r, c in ((0, 1), (0, 2), (1, 1), (0, 0)):  # incl. a read-only cell and the title column
+        sel.select(m.index(r, c), QItemSelectionModel.Select)
+    n = ShowExperimentScreen._clear_selected_cells(object(), t)
+    assert n == 2
+    assert [m.data(m.index(0, c)) for c in (1, 2)] == ["", ""] and m.data(m.index(1, 1)) == "8"
+    assert m.dirty_cells() == {(0, 0), (0, 1)}

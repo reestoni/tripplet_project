@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 import app_meta
 from ui import display_prefs
+from ui.widgets.friendly_error import show_error
 
 WELCOME_MAX_LEN = 45
 # chosen size clearly visible (the app stylesheet barely marks :checked)
@@ -259,7 +260,7 @@ class UserSettingsDialog(QDialog):
             if self._accent != self._orig_accent:
                 save_accent(self._accent)
         except Exception as e:
-            QMessageBox.warning(self, "Settings", f"Could not save all settings:\n{e}")
+            show_error(self, "Settings", "Not all settings could be saved.", e, warning=True)
         display_prefs.save_now()
         try:
             from db.usage_log import log_usage_event

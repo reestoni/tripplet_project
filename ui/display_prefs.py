@@ -40,7 +40,19 @@ ADD_COLUMN_SQL = "ALTER TABLE tbluser ADD COLUMN DisplaySettings VARCHAR(255) NU
 
 DEFAULTS: Dict[str, Any] = {"scale": 100, "contrast": False, "crosshair": False, "readbar": False,
                             "alert_marks": False, "cb_colours": False, "app_scale": 100,
-                            "whats_new_seen": ""}
+                            "whats_new_seen": "", "recent_series": []}
+RECENT_MAX = 8  # Sidebar -> "Recent" (ui/recent_series.py)
+
+
+def _clean_recent(v: Any) -> list:
+    out = []
+    for e in (v if isinstance(v, list) else [])[:RECENT_MAX]:
+        try:
+            out.append({"exp": int(e["exp"]), "series": int(e["series"]),
+                        "eid": str(e.get("eid") or "")[:40], "name": str(e.get("name") or "")[:80]})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
 _BOOL_KEYS = ("contrast", "crosshair", "readbar", "alert_marks", "cb_colours")
 SCALE_MIN, SCALE_MAX, SCALE_STEP = 80, 300, 10
 APP_SCALE_CHOICES = [100, 125, 150, 200]
@@ -74,6 +86,7 @@ def _clean(d: Dict[str, Any]) -> Dict[str, Any]:
     except (TypeError, ValueError):
         pass
     out["whats_new_seen"] = str(d.get("whats_new_seen") or "")[:40]
+    out["recent_series"] = _clean_recent(d.get("recent_series"))
     return out
 
 
@@ -136,19 +149,21 @@ def _save_later() -> None:
     _save_timer.start()
 
 
-def update(persist: bool = True, **changes) -> None:
+def update(persist: bool = True, quiet: bool = False, **changes) -> None:
+    """quiet=True: store without telling the display listeners (e.g. the
+    recent-series list - no reason to restyle every table)."""
     new = dict(_prefs)
     new.update(changes)
-    _set(_clean(new), persist=persist)
+    _set(_clean(new), persist=persist, notify=not quiet)
 
 
-def _set(new: Dict[str, Any], persist: bool) -> None:
+def _set(new: Dict[str, Any], persist: bool, notify: bool = True) -> None:
     global _prefs
     changed = new != _prefs
     _prefs = new
     if persist:
         _save_later()
-    if changed:
+    if changed and notify:
         _notify()
 
 

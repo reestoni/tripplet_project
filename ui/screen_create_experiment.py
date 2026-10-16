@@ -401,6 +401,7 @@ class ReadOnlyTable(QTableWidget):
 
 
 from PySide6.QtWidgets import QStyledItemDelegate
+from ui.widgets.friendly_error import show_error
 
 class _JetColProtectDelegate(QStyledItemDelegate):
     """Delegate das die Jet-Spalte in der Trial-Tabelle schreibschützt (nur Anzeige)."""
@@ -1479,7 +1480,7 @@ class CreateExperimentScreen(QWidget):
             dlg.show()
         except Exception as e:
             try:
-                QMessageBox.critical(self, "Open Experiment Request", f"{e}")
+                show_error(self, "Open Experiment Request", "The experiment request could not be opened.", e)
             except Exception:
                 pass
 
@@ -1587,8 +1588,7 @@ class CreateExperimentScreen(QWidget):
             else:
                 self.cmbExistingExperiment.setCurrentIndex(-1)
         except Exception as e:
-            QMessageBox.critical(self, "Existing Experiment",
-                                 f"Error while loading:\n{e}")
+            show_error(self, "Existing Experiment", "The experiment could not be loaded.", e)
 
     def _load_trials_for_selection(self, exp_id: int, series_id: int):
         # UI leeren
@@ -2761,7 +2761,7 @@ class CreateExperimentScreen(QWidget):
 
             msg_lines = [
                 "Lab Machines zugewiesen.",
-                f"Experiment ID: {exp_id} • Serie: {ts_id}",
+                f"Experiment ID: {exp_id} • Series: {ts_id}",
                 f"Created: {inserted} • Skipped (already exists): {skipped}",
             ]
             if any(jet_air_stats.values()):
@@ -2781,7 +2781,7 @@ class CreateExperimentScreen(QWidget):
                 cn.rollback()
             except Exception:
                 pass
-            QMessageBox.critical(self, "Save failed", f"{e}")
+            show_error(self, "Save failed", "The experiment could not be saved.", e)
 
     def _save_addtrials(self):
         """Erstellt neue Trials in der gewählten TrialSeries.
@@ -3014,7 +3014,7 @@ class CreateExperimentScreen(QWidget):
                 cn.rollback()
             except Exception:
                 pass
-            QMessageBox.critical(self, "Error", f"The trials could not be created:\n{e}")
+            show_error(self, "Error", "The trials could not be created.", e)
 
 
     def _check_safe(self):
@@ -3276,8 +3276,7 @@ class CreateExperimentScreen(QWidget):
         except Exception as e:
             self.txtExperimentNumber.clear()
             self.strExperimentData[3] = ""
-            QMessageBox.warning(self, "Experiment Number",
-                                f"Error reading from {table}:\n{e}")
+            show_error(self, "Experiment Number", "The next experiment number could not be read.", e, warning=True)
 
     def _resolve_next_free_experiment_number(self, cur, exp_table: str, cols: dict,
                                               year: str, pg, ot, preferred_no_txt: str) -> str:
@@ -3534,7 +3533,7 @@ class CreateExperimentScreen(QWidget):
         try:
             yarn_id = get_or_create_shadow_yarn(trial_id)
         except Exception as e:
-            QMessageBox.critical(self, "Trial Ply", f"Could not create yarn entry for this trial:\n{e}")
+            show_error(self, "Trial Ply", "The yarn entry for this trial could not be created.", e)
             return
         if yarn_id is None:
             QMessageBox.warning(self, "Trial Ply", "Could not find this trial.")
@@ -5041,14 +5040,14 @@ class CreateExperimentScreen(QWidget):
                 QMessageBox.information(
                     self, "Saved",
                     f"{'Trials added' if self.mode == 'addtrials' else ('Trial series added' if self.mode == 'addseries' else 'Experiment saved')}.\n"
-                    f"Experiment ID: {exp_id} • Serie: {ts_id}"
+                    f"Experiment ID: {exp_id} • Series: {ts_id}"
                 )
         except Exception as e:
             try:
                 cn.rollback()
             except Exception:
                 pass
-            QMessageBox.critical(self, "Save failed", f"{e}")
+            show_error(self, "Save failed", "The experiment could not be saved.", e)
 
     # -->-->-->- addSeries/addTrials Helper -->-->-->-
     def _prefill_lab_from_series(self, series_id: int) -> None:
@@ -5680,8 +5679,7 @@ class CreateExperimentScreen(QWidget):
             self._prefill_jets_from_trialseries(int(trialseries_id))
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Prefill Jets",
-                                f"The jets could not be loaded:\n{e}")
+            show_error(self, "Prefill Jets", "The jets could not be loaded.", e, warning=True)
         # Focus tabs & recompute icons
         try:
             self.tabs.setCurrentIndex(2)  # Jet tab

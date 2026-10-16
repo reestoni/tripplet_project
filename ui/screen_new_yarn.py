@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.text_normalize import canon_simple as _canon
+from ui.widgets.friendly_error import show_error
 
 _HIDDEN_COLS = {"globalid", "sourcetrialid"}  # SourceTrialID: Nutzerwunsch "verwirrt nur"
 _AUDIT_COLS = {"createdby", "creationdate"}
@@ -397,7 +398,7 @@ class NewYarnScreen(QWidget):
         try:
             new_id = self._on_save(data)
         except Exception as e:
-            QMessageBox.critical(self, "Yarn", f"Save failed:\n{e}")
+            show_error(self, "Yarn", "The yarn could not be saved.", e)
             return
 
         if new_id is None:

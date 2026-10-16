@@ -33,9 +33,13 @@ TEXTS = {
             {"key": "tasks", "title": "How do I…?", "blocks": [
                 ("p", "Show Experiment shows one trial series: all trials side by side, with machine settings and "
                       "lab results. Numbers (1)–(7) refer to the <i>Screen guide</i> tab."),
+                ("task", "Open a series I used recently",
+                 ["In the sidebar, click <b>Recent</b> (under Help).",
+                  "Click the series. Ctrl+click opens it in a new tab."],
+                 "The last 8 series you opened, newest first - on every PC you log in."),
                 ("h", "Entering data"),
                 ("task", "Enter or change a value",
-                 ["Click the cell (7) and type the value, or double-click to edit it. Press Enter.",
+                 ["Click the cell (7) and type the value, or double-click to edit it. Press Enter - you land in the cell below for the next value (Shift+Enter goes up).",
                   f"Click {B('Save')} or press Ctrl+S."],
                  "Changed cells stay <b>yellow</b> until you save; the button shows how many, e.g. "
                  f"{B('Save (3)')}, and the tab gets a dot (●). If you leave the screen, close the tab or the "
@@ -147,7 +151,7 @@ TEXTS = {
             ]},
             {"key": "screen", "title": "Screen guide", "blocks": [
                 ("svg", SVG, {"lab_hint": "(lab tabs appear only if used)",
-                              "keys_hint": "Ctrl+C / Ctrl+V copy and paste cells · Ctrl+S save · F5 reload"},
+                              "keys_hint": "Enter next cell down · Ctrl+C / Ctrl+V copy and paste · Delete clears the selected cells · Ctrl+Z undo, Ctrl+Y redo · Ctrl+S save · F5 reload"},
                  SVG_W, SVG_H),
                 ("areas", [
                     ("(1) Toolbar", "Experiment ID and series, attachments (upload and show images/PDFs), Statimat and "
@@ -193,9 +197,13 @@ TEXTS = {
             {"key": "tasks", "title": "Wie mache ich…?", "blocks": [
                 ("p", "Show Experiment zeigt eine Versuchsserie: alle Versuche nebeneinander, mit Maschineneinstellungen "
                       "und Laborresultaten. Die Nummern (1)–(7) verweisen auf den Tab <i>Bildschirm</i>."),
+                ("task", "Eine kürzlich geöffnete Serie wieder öffnen",
+                 ["In der Sidebar auf <b>Recent</b> klicken (unter Help).",
+                  "Die Serie anklicken. Strg+Klick öffnet sie in einem neuen Tab."],
+                 "Die letzten 8 geöffneten Serien, neueste zuerst - auf jedem PC, an dem du dich anmeldest."),
                 ("h", "Daten erfassen"),
                 ("task", "Einen Wert eingeben oder ändern",
-                 ["Die Zelle (7) anklicken und den Wert eintippen, oder doppelklicken zum Bearbeiten. Enter drücken.",
+                 ["Die Zelle (7) anklicken und den Wert eintippen, oder doppelklicken zum Bearbeiten. Enter drücken - du landest in der Zelle darunter für den nächsten Wert (Umschalt+Enter geht nach oben).",
                   f"Auf {B('Save')} klicken oder Strg+S drücken."],
                  "Geänderte Zellen bleiben <b>gelb</b>, bis gespeichert ist; der Knopf zeigt die Anzahl, z.&nbsp;B. "
                  f"{B('Save (3)')}, und der Tab bekommt einen Punkt (●). Verlässt du den Bildschirm oder schliesst "
@@ -311,7 +319,7 @@ TEXTS = {
             ]},
             {"key": "screen", "title": "Bildschirm", "blocks": [
                 ("svg", SVG, {"lab_hint": "(Labor-Tabs erscheinen nur bei Bedarf)",
-                              "keys_hint": "Strg+C / Strg+V Zellen kopieren und einfügen · Strg+S speichern · F5 neu laden"},
+                              "keys_hint": "Enter nächste Zelle unten · Strg+C / Strg+V kopieren und einfügen · Entf leert die markierten Zellen · Strg+Z rückgängig, Strg+Y wiederherstellen · Strg+S speichern · F5 neu laden"},
                  SVG_W, SVG_H),
                 ("areas", [
                     ("(1) Werkzeugleiste", "Experiment-ID und Serie, Anhänge (Bilder/PDFs hochladen und ansehen), Statimat- "
@@ -359,9 +367,13 @@ TEXTS = {
                 ("p", "Show Experiment muestra una serie de ensayos: todos los ensayos uno al lado del otro, con los "
                       "ajustes de máquina y los resultados de laboratorio. Los números (1)–(7) se refieren a la "
                       "pestaña <i>Pantalla</i>."),
+                ("task", "Abrir una serie usada hace poco",
+                 ["En la barra lateral, haz clic en <b>Recent</b> (debajo de Help).",
+                  "Haz clic en la serie. Ctrl+clic la abre en una pestaña nueva."],
+                 "Las últimas 8 series que abriste, la más reciente primero, en cualquier PC donde inicies sesión."),
                 ("h", "Introducir datos"),
                 ("task", "Introducir o cambiar un valor",
-                 ["Haz clic en la celda (7) y escribe el valor, o haz doble clic para editarlo. Pulsa Enter.",
+                 ["Haz clic en la celda (7) y escribe el valor, o haz doble clic para editarlo. Pulsa Enter: pasas a la celda de abajo para el siguiente valor (Mayús+Enter sube).",
                   f"Haz clic en {B('Save')} o pulsa Ctrl+S."],
                  "Las celdas cambiadas quedan en <b>amarillo</b> hasta que guardas; el botón muestra cuántas, p.&nbsp;ej. "
                  f"{B('Save (3)')}, y la pestaña recibe un punto (●). Si sales de la pantalla o cierras la pestaña o el "
@@ -477,7 +489,7 @@ TEXTS = {
             ]},
             {"key": "screen", "title": "Pantalla", "blocks": [
                 ("svg", SVG, {"lab_hint": "(las pestañas de laboratorio solo aparecen si se usan)",
-                              "keys_hint": "Ctrl+C / Ctrl+V copiar y pegar celdas · Ctrl+S guardar · F5 recargar"},
+                              "keys_hint": "Enter celda de abajo · Ctrl+C / Ctrl+V copiar y pegar · Supr vacía las celdas seleccionadas · Ctrl+Z deshacer, Ctrl+Y rehacer · Ctrl+S guardar · F5 recargar"},
                  SVG_W, SVG_H),
                 ("areas", [
                     ("(1) Barra de herramientas", "ID del experimento y serie, adjuntos (subir y ver imágenes/PDF), "

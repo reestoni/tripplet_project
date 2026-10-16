@@ -37,6 +37,7 @@ from db.connection import execute
 from db import stock_take as st
 from db import yarn_spool_log
 from db.usage_log import log_usage_event
+from ui.widgets.friendly_error import show_error
 
 _FOUND_BG = QColor("#EAF3DE")
 _MANUAL_BG = QColor("#E3EEF9")  # found by double-click, not scanned
@@ -378,7 +379,7 @@ class StockTakeDialog(QDialog):
         try:
             execute(f"UPDATE {self.SPOOL_TABLE} SET [Location] = ? WHERE [ID] = ?", [new, sid])
         except Exception as e:
-            QMessageBox.critical(self, "Stock take", f"Failed to move spool #{sid}: {e}")
+            show_error(self, "Stock take", f"Spool #{sid} could not be moved.", e)
             return
         yarn_spool_log.log_spool_changes([{"SpoolID": sid, "Action": yarn_spool_log.UPDATED,
                                            "Field": "Location", "Old": s.get("Location"),
@@ -402,7 +403,7 @@ class StockTakeDialog(QDialog):
             execute(f"UPDATE {self.SPOOL_TABLE} SET [Status] = 'in stock', [DiscardedDate] = NULL, "
                     f"[Location] = ? WHERE [ID] = ?", [new, sid])
         except Exception as e:
-            QMessageBox.critical(self, "Stock take", f"Failed to put spool #{sid} back in stock: {e}")
+            show_error(self, "Stock take", f"Spool #{sid} could not be put back in stock.", e)
             return
         yarn_spool_log.log_spool_changes([
             {"SpoolID": sid, "Action": yarn_spool_log.UPDATED, "Field": "Status",
@@ -480,7 +481,7 @@ class StockTakeDialog(QDialog):
                 n += execute(f"UPDATE {self.SPOOL_TABLE} SET [Status] = 'discarded', [DiscardedDate] = ? "
                              f"WHERE [ID] = ?", [today, sid]) or 0
         except Exception as e:
-            QMessageBox.critical(self, "Stock take", f"Failed to discard: {e}")
+            show_error(self, "Stock take", "The missing spools could not be discarded.", e)
             return None
         yarn_spool_log.log_spool_changes(
             {"SpoolID": sid, "Action": yarn_spool_log.DISCARDED, "Field": "Status",

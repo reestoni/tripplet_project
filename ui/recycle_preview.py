@@ -26,6 +26,7 @@ from typing import Any, Dict, Optional, Set
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton, QWidget
 
 from db import recycle_bin
+from ui.widgets.friendly_error import show_error
 
 AMBER_BG, AMBER_BORDER, AMBER_TEXT = "#FFF4D6", "#E8C15A", "#5a4500"
 
@@ -77,7 +78,7 @@ class RecyclePreview:
                 raise recycle_bin.RecycleBinError("Entry not found.")
             recycle_bin.restore(self.bin_id)
         except Exception as e:
-            QMessageBox.warning(parent, "Open in Show Experiment", f"Could not open the series:\n\n{e}")
+            show_error(parent, "Open in Show Experiment", "The series could not be opened.", e, warning=True)
             return False
         self.active = True
         _ACTIVE.add(self)
@@ -96,8 +97,7 @@ class RecyclePreview:
             opener(int(exp_pk or 0), series_pk, experiment_id, self._attach)
         except Exception as e:
             self.back_to_bin(silent=True)
-            QMessageBox.warning(parent, "Open in Show Experiment",
-                                f"Could not open the series - it is back in the recycle bin.\n\n{e}")
+            show_error(parent, "Open in Show Experiment", "The series could not be opened - it is back in the recycle bin.", e, warning=True)
             return False
         self._refresh_lists()
         return True
@@ -163,8 +163,7 @@ class RecyclePreview:
         except Exception as e:
             if not silent or self.screen is not None:
                 try:
-                    QMessageBox.warning(self.screen, "Back to Recycle Bin",
-                                        f"Could not put the series back - it stays restored.\n\n{e}")
+                    show_error(self.screen, "Back to Recycle Bin", "The series could not be put back into the recycle bin - it stays restored.", e, warning=True)
                 except Exception:
                     pass
             self._end()
@@ -188,8 +187,7 @@ class RecyclePreview:
             try:
                 recycle_bin.delete_permanently(new_id)
             except Exception as e:
-                QMessageBox.warning(self.screen, "Delete permanently",
-                                    f"The series is back in the recycle bin, but could not be removed there:\n\n{e}")
+                show_error(self.screen, "Delete permanently", "The series is back in the recycle bin, but could not be removed from there.", e, warning=True)
         self._close_tab()
 
     def tab_closed(self) -> None:

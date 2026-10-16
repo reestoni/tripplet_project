@@ -21,6 +21,7 @@ from db.connection import fetch_all, execute, execute_insert, get_columns_map
 # MaterialTableModel.row_kind() fuer die daraus folgende Konvention.
 from ui.screen_manage_jets import FilterableHeaderView, ColumnOrderDialog, ExpandableFilterProxy
 from ui.screen_manage_yarn import _resolve_field, load_garntyp_map, load_colour_map
+from ui.widgets.friendly_error import show_error
 
 
 # Optional rating columns that may exist on tblMaterial.
@@ -705,7 +706,7 @@ class ManageMaterialScreen(QWidget):
         try:
             usage = self._fetch_material_usage(material_id)
         except Exception as e:
-            QMessageBox.critical(self, 'Used in Yarn', f'Could not load usage: {e}')
+            show_error(self, 'Used in Yarn', "The list of uses could not be loaded.", e)
             return
         if not usage:
             QMessageBox.information(

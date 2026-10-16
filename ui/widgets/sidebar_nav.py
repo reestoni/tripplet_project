@@ -716,6 +716,67 @@ def build_pinned_search(sidebar: SidebarPanel) -> QPushButton:
     return btn_search
 
 
+def show_recent_menu(btn: QPushButton) -> None:
+    """Sidebar -> "Recent": menu with the last opened series (ui/recent_series.py).
+    Click = open here, Ctrl+click = new tab."""
+    menu = build_recent_menu(btn)
+    menu.exec(btn.mapToGlobal(btn.rect().topRight()))
+
+
+def build_recent_menu(btn: QPushButton):
+    """Own look on purpose: as a child of the dark sidebar the menu inherited
+    its transparent style (2026-10-16 screenshot) - so parent = window and an
+    explicit light style."""
+    from PySide6.QtWidgets import QMenu
+    from ui import recent_series
+    from ui.theme import accent_tint, get_accent
+    menu = QMenu(btn.window())
+    menu.setStyleSheet(
+        "QMenu{background:#ffffff; border:1px solid #cfcfcf; border-radius:6px; padding:4px 0;}"
+        "QMenu::item{padding:7px 22px 7px 14px; color:#1a1a1a; background:transparent;}"
+        f"QMenu::item:selected{{background:{accent_tint()}; color:#1a1a1a; border-left:3px solid {get_accent()};"
+        "padding-left:11px;}"
+        "QMenu::item:disabled{color:#7a7a7a;}"
+        "QMenu::separator{height:1px; background:#e6e6e6; margin:4px 8px;}")
+    head = menu.addAction("Recently opened  ·  Ctrl+click = new tab")
+    head.setEnabled(False)
+    menu.addSeparator()
+    items = recent_series.entries()
+    if not items:
+        menu.addAction("No series opened yet").setEnabled(False)
+    for e in items:
+        act = menu.addAction(recent_series.label(e, max_name=46))
+        act.triggered.connect(lambda _c=False, e=e: open_recent_series(e, btn))
+    return menu
+
+
+def open_recent_series(e: dict, parent: Optional[QWidget] = None) -> None:
+    from PySide6.QtWidgets import QApplication, QMessageBox
+    import app_meta
+    from ui import recent_series
+    new_tab = bool(QApplication.keyboardModifiers() & Qt.ControlModifier)
+    if not recent_series.series_exists(e["series"]):
+        recent_series.forget(e["series"])
+        QMessageBox.information(parent, "Recent", f"{recent_series.label(e)} does not exist any more "
+                                                  "(it may have been deleted). It was removed from the list.")
+        return
+    opener = getattr(app_meta, "open_recent_series", None)
+    if callable(opener):
+        opener(e["exp"], e["series"], e["eid"], new_tab)
+
+
+def build_pinned_recent(sidebar: SidebarPanel) -> QPushButton:
+    """One line "Recent" under Help (2026-10-16) - deliberately not a whole
+    section, the sidebar should stay calm."""
+    holder: dict = {}
+    btn = icon_btn("Recent", "recent.png", "SidebarItem", lambda: show_recent_menu(holder["btn"]))
+    holder["btn"] = btn  # icon_btn disables buttons without a click handler - so pass one
+    btn.setToolTip("Recently opened trial series (Ctrl+click an entry: new tab)")
+    btn.setFocusPolicy(Qt.NoFocus)  # no dotted focus frame after the menu closes
+    sidebar.add_item(btn)
+    return btn
+
+
 def build_pinned_help(sidebar: SidebarPanel) -> QPushButton:
     """Fester Eintrag "Help" direkt unter Search (2026-10-13): Hilfe-Suche
     ueber alle Kontext-Hilfen ("wo finde ich…?"), auch per F1."""
@@ -864,6 +925,7 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
     bell_refs = build_pinned_bell(sidebar)
     build_pinned_search(sidebar)
     build_pinned_help(sidebar)
+    build_pinned_recent(sidebar)
     sidebar.add_separator()
 
     sidebar.add_section_header("experiment_white.png", "Navigation", expanded=True)

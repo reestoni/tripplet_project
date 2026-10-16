@@ -65,6 +65,7 @@ from ui.yarnscope.aty_core_analysis import (
     RADAR_LABELS as _ATY_RADAR_LABELS,
 )
 from ui.theme import get_accent, CARD_BG, LIGHT_BG, TEXT
+from ui.widgets.friendly_error import show_error
 
 # ---------------------------------------------------------------------------
 # TDMS-Ordner-Helpers
@@ -2095,7 +2096,7 @@ def _aty_open_batch(self):
         QTimer.singleShot(50, mw.aty_batch._init_series_state)
     except Exception as e:
         from PySide6.QtWidgets import QMessageBox
-        QMessageBox.critical(self, "ATY Batch", f"Error: {e}")
+        show_error(self, "ATY Batch", "The batch analysis stopped.", e)
 
 
 # ---------------------------------------------------------------------------

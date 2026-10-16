@@ -36,6 +36,7 @@ import app_meta
 from db.connection import get_connection, new_global_id, execute as _db_execute
 from ui.widgets.statimat_pdf_parser import parse_statimat_pdf
 from ui.widgets.itemat_pdf_parser import DB_TENSIONS as ITEMAT_DB_TENSIONS
+from ui.widgets.friendly_error import show_error
 
 
 def statimat_import_impl(self) -> None:
@@ -70,7 +71,7 @@ def statimat_import_impl(self) -> None:
     try:
         attached = self._fetch_series_pdfs(sid)
     except Exception as e:
-        QMessageBox.warning(self, "Statimat import", f"Could not load the PDF list:\n{e}")
+        show_error(self, "Statimat import", "The list of PDFs could not be loaded.", e, warning=True)
         return
 
     allowed = set()
@@ -440,8 +441,7 @@ def itemat_import_impl(self) -> None:
     try:
         attached = self._fetch_series_pdfs(sid)
     except Exception as e:
-        QMessageBox.warning(self, "Itemat import",
-                            f"Could not load the PDF list:\n{e}")
+        show_error(self, "Itemat import", "The list of PDFs could not be loaded.", e, warning=True)
         return
 
     if not attached:

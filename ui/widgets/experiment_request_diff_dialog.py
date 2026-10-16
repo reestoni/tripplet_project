@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from db.connection import get_connection, fetch_all, table_exists, get_columns_map
 from db import experiment_request_changes as request_changes
 from ui.text_normalize import resolve_field
+from ui.widgets.friendly_error import show_error
 
 # Pure row metadata - never a real content difference worth showing (mirrors
 # ui/screen_create_experiment_request.py::EXCLUDE_FIELDS).
@@ -237,7 +238,7 @@ class ExperimentRequestDiffDialog(QDialog):
         try:
             original_id, archived_version_id = request_changes.accept_pending_change(self._copy_id)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not accept the change:\n\n{e}")
+            show_error(self, "Error", "The change could not be accepted.", e)
             return
         # Best-effort heads-up (2026-09-02, user request) to whoever already
         # created an Experiment from this request before it changed - they're
@@ -266,7 +267,7 @@ class ExperimentRequestDiffDialog(QDialog):
         try:
             request_changes.reject_pending_change(self._copy_id)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not reject the change:\n\n{e}")
+            show_error(self, "Error", "The change could not be rejected.", e)
             return
         self.outcome = "rejected"
         self.accept()

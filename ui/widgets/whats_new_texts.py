@@ -48,6 +48,20 @@ RELEASES = [
                 ("feature", "D/Y Ratio (T2/T1)",
                  "Calculated automatically from T1 and T2 and shown right below T2 Tension on DTY machines.",
                  "Show Experiment → Machine Data", "wn_dy_ratio.svg"),
+                ("feature", "Faster data entry - like in Excel",
+                 "Type a value and press <b>Enter</b>: you land in the cell below, ready for the next value "
+                 "(<b>Shift+Enter</b> goes up). Click a cell (or select several) and press <b>Delete</b> to empty "
+                 "them - no double-click needed. Save with <b>Save</b> or <b>Ctrl+S</b>; there is no \"Saved\" "
+                 "message any more - the yellow simply disappears.",
+                 "Show Experiment → any table", None),
+                ("feature", "Undo with Ctrl+Z",
+                 "Typed the wrong value, pasted into the wrong place or deleted too much? <b>Ctrl+Z</b> takes it "
+                 "back step by step, <b>Ctrl+Y</b> does it again - as long as you have not saved yet.",
+                 "Show Experiment → any table", None),
+                ("feature", "Back on your tab",
+                 "A series opens on the tab you used last for it, e.g. <i>Statimat M</i> instead of always "
+                 "<i>Machine Data</i>.",
+                 "Show Experiment", None),
                 ("feature", "Hide rows you don't need",
                  "Right-click a parameter name → <b>Hide row</b>. A blue line shows where rows are hidden; click "
                  "it, or use <b>n rows hidden</b>, to show them again. Remembered per machine.",
@@ -87,7 +101,8 @@ RELEASES = [
                 ("feature", "Search in What's new",
                  "Know a feature exists but not when it came? Type a word in the search field above the version "
                  "list - all versions are searched at once, in English, German and Spanish. Versions with hits show "
-                 "how many; click one to jump to it.",
+                 "how many; click one to jump to it. Each version is now split into tabs by area, e.g. "
+                 "<i>Show Experiment (8)</i>.",
                  "Sidebar → Account → <b>What's new</b> → search field", "wn_whats_new_search.svg"),
                 ("feature", "What's new as PDF",
                  "Save a version's news as a PDF - to print it or send it to colleagues. Each topic stays together "
@@ -136,6 +151,19 @@ RELEASES = [
                  "now asks before unsaved spool changes are lost. Help in three languages: round button top right.",
                  "Yarn Stock → <b>Go to spool #</b>", None),
                 ("h", "General"),
+                ("feature", "Recent series",
+                 "The series you opened last are one click away: <b>Recent</b> in the sidebar (under Help). "
+                 "Click one to open it, <b>Ctrl+click</b> opens it in a new tab. The list follows you to every PC.",
+                 "Sidebar → <b>Recent</b>", None),
+                ("feature", "Athena answers in your language",
+                 "Athena and the Lab Assistant now answer in the language you ask in - English, German, Spanish, "
+                 "… Without a question (e.g. the automatic analysis) the answer is in English.",
+                 "Show Experiment → Athena, Lab Assistant", None),
+                ("feature", "Error messages that help",
+                 "When something goes wrong, TrippleT now says in plain words what did not work, why, and what you "
+                 "can do - e.g. \"The file is open in another program - close it (e.g. in Excel) and try again.\" "
+                 "The technical text is under <b>Show Details</b>, to send to the admin.",
+                 "Whole program", None),
                 ("feature", "All texts in English",
                  "Messages, buttons, menus and status texts that were still in German are now in English everywhere - "
                  "e.g. the right-click menu in the Backlog says <b>Reassign yarn…</b>. Lab terms such as Kurzhocker or "
@@ -157,6 +185,21 @@ RELEASES = [
                 ("feature", "D/Y Ratio (T2/T1)",
                  "Wird bei DTY-Maschinen automatisch aus T1 und T2 berechnet und direkt unter T2 Tension angezeigt.",
                  "Show Experiment → Machine Data", "wn_dy_ratio.svg"),
+                ("feature", "Schneller erfassen - wie in Excel",
+                 "Wert tippen und <b>Enter</b> drücken: Du landest in der Zelle darunter, bereit für den nächsten "
+                 "Wert (<b>Umschalt+Enter</b> geht nach oben). Zelle anklicken (oder mehrere markieren) und "
+                 "<b>Entf</b> drücken leert sie - ohne Doppelklick. Speichern mit <b>Save</b> oder <b>Strg+S</b>; "
+                 "eine \"Saved\"-Meldung gibt es nicht mehr - das Gelb verschwindet einfach.",
+                 "Show Experiment → jede Tabelle", None),
+                ("feature", "Rückgängig mit Strg+Z",
+                 "Falschen Wert getippt, an der falschen Stelle eingefügt oder zu viel gelöscht? <b>Strg+Z</b> nimmt "
+                 "es Schritt für Schritt zurück, <b>Strg+Y</b> stellt es wieder her - solange noch nicht gespeichert "
+                 "ist.",
+                 "Show Experiment → jede Tabelle", None),
+                ("feature", "Zurück auf deinem Reiter",
+                 "Eine Serie öffnet sich auf dem Reiter, den du zuletzt bei ihr benutzt hast, z.&nbsp;B. "
+                 "<i>Statimat M</i> statt immer <i>Machine Data</i>.",
+                 "Show Experiment", None),
                 ("feature", "Nicht benötigte Zeilen ausblenden",
                  "Rechtsklick auf einen Parameternamen → <b>Hide row</b>. Eine blaue Linie zeigt, wo Zeilen fehlen; "
                  "ein Klick darauf oder <b>n rows hidden</b> holt sie zurück. Gemerkt pro Maschine.",
@@ -197,7 +240,8 @@ RELEASES = [
                 ("feature", "Suche in \"Was ist neu\"",
                  "Du weisst, dass es eine Funktion gibt, aber nicht seit wann? Ein Wort ins Suchfeld über der "
                  "Versionsliste tippen - gesucht wird in allen Versionen gleichzeitig, auf Englisch, Deutsch und "
-                 "Spanisch. Versionen mit Treffern zeigen die Anzahl; ein Klick springt dorthin.",
+                 "Spanisch. Versionen mit Treffern zeigen die Anzahl; ein Klick springt dorthin. Jede Version ist "
+                 "jetzt in Reiter nach Bereich aufgeteilt, z.&nbsp;B. <i>Show Experiment (8)</i>.",
                  "Sidebar → Account → <b>What's new</b> → Suchfeld", "wn_whats_new_search.svg"),
                 ("feature", "\"Was ist neu\" als PDF",
                  "Die Neuheiten einer Version als PDF speichern - zum Ausdrucken oder um sie Kollegen zu schicken. "
@@ -246,6 +290,20 @@ RELEASES = [
                  "Sprachen: runder Knopf oben rechts.",
                  "Yarn Stock → <b>Go to spool #</b>", None),
                 ("h", "Allgemein"),
+                ("feature", "Zuletzt geöffnete Serien",
+                 "Die zuletzt geöffneten Serien sind einen Klick entfernt: <b>Recent</b> in der Sidebar (unter Help). "
+                 "Klick öffnet sie, <b>Strg+Klick</b> in einem neuen Tab. Die Liste folgt dir auf jeden PC.",
+                 "Sidebar → <b>Recent</b>", None),
+                ("feature", "Athena antwortet in deiner Sprache",
+                 "Athena und der Lab Assistant antworten jetzt in der Sprache, in der du fragst - Englisch, Deutsch, "
+                 "Spanisch, … Ohne Frage (z.&nbsp;B. die automatische Analyse) kommt die Antwort auf Englisch.",
+                 "Show Experiment → Athena, Lab Assistant", None),
+                ("feature", "Fehlermeldungen, die weiterhelfen",
+                 "Geht etwas schief, sagt TrippleT jetzt in Alltagssprache, was nicht geklappt hat, warum und was du "
+                 "tun kannst - z.&nbsp;B. \"Die Datei ist in einem anderen Programm offen - schliessen (z.&nbsp;B. in "
+                 "Excel) und nochmals versuchen.\" Der technische Text steht unter <b>Show Details</b>, zum "
+                 "Weiterleiten an den Admin.",
+                 "Ganzes Programm", None),
                 ("feature", "Alle Texte auf Englisch",
                  "Meldungen, Knöpfe, Menüs und Statustexte, die noch deutsch waren, sind jetzt überall englisch - "
                  "z.&nbsp;B. heisst das Rechtsklick-Menü im Backlog <b>Reassign yarn…</b>. Laborbegriffe wie Kurzhocker "
@@ -268,6 +326,20 @@ RELEASES = [
                  "Se calcula automáticamente a partir de T1 y T2 y se muestra justo debajo de T2 Tension en "
                  "máquinas DTY.",
                  "Show Experiment → Machine Data", "wn_dy_ratio.svg"),
+                ("feature", "Introducir datos más rápido, como en Excel",
+                 "Escribe un valor y pulsa <b>Enter</b>: pasas a la celda de abajo, listo para el siguiente valor "
+                 "(<b>Mayús+Enter</b> sube). Haz clic en una celda (o selecciona varias) y pulsa <b>Supr</b> para "
+                 "vaciarlas, sin doble clic. Guarda con <b>Save</b> o <b>Ctrl+S</b>; ya no aparece el mensaje "
+                 "\"Saved\": el amarillo simplemente desaparece.",
+                 "Show Experiment → cualquier tabla", None),
+                ("feature", "Deshacer con Ctrl+Z",
+                 "¿Valor equivocado, pegado en el sitio incorrecto o borrado de más? <b>Ctrl+Z</b> lo deshace paso a "
+                 "paso y <b>Ctrl+Y</b> lo rehace, mientras no hayas guardado.",
+                 "Show Experiment → cualquier tabla", None),
+                ("feature", "De vuelta en tu pestaña",
+                 "Una serie se abre en la pestaña que usaste la última vez con ella, p.&nbsp;ej. <i>Statimat M</i> "
+                 "en lugar de siempre <i>Machine Data</i>.",
+                 "Show Experiment", None),
                 ("feature", "Ocultar filas que no necesitas",
                  "Clic derecho en el nombre de un parámetro → <b>Hide row</b>. Una línea azul indica dónde faltan "
                  "filas; un clic en ella o <b>n rows hidden</b> las vuelve a mostrar. Se recuerda por máquina.",
@@ -307,7 +379,8 @@ RELEASES = [
                 ("feature", "Buscar en Novedades",
                  "¿Sabes que existe una función pero no desde cuándo? Escribe una palabra en el campo de búsqueda "
                  "encima de la lista de versiones: se busca en todas las versiones a la vez, en inglés, alemán y "
-                 "español. Las versiones con resultados muestran cuántos; un clic salta a ellos.",
+                 "español. Las versiones con resultados muestran cuántos; un clic salta a ellos. Cada versión se "
+                 "divide ahora en pestañas por área, p.&nbsp;ej. <i>Show Experiment (8)</i>.",
                  "Barra lateral → Account → <b>What's new</b> → campo de búsqueda", "wn_whats_new_search.svg"),
                 ("feature", "Novedades en PDF",
                  "Guarda las novedades de una versión como PDF, para imprimirlas o enviarlas a compañeros. Cada "
@@ -357,6 +430,19 @@ RELEASES = [
                  "a la derecha.",
                  "Yarn Stock → <b>Go to spool #</b>", None),
                 ("h", "General"),
+                ("feature", "Series recientes",
+                 "Las últimas series que abriste están a un clic: <b>Recent</b> en la barra lateral (debajo de Help). "
+                 "Un clic la abre, <b>Ctrl+clic</b> en una pestaña nueva. La lista te acompaña en cualquier PC.",
+                 "Barra lateral → <b>Recent</b>", None),
+                ("feature", "Athena responde en tu idioma",
+                 "Athena y el Lab Assistant responden ahora en el idioma en que preguntas: inglés, alemán, español… "
+                 "Sin pregunta (p.&nbsp;ej. el análisis automático) la respuesta es en inglés.",
+                 "Show Experiment → Athena, Lab Assistant", None),
+                ("feature", "Mensajes de error que ayudan",
+                 "Cuando algo falla, TrippleT dice ahora con palabras sencillas qué no funcionó, por qué y qué puedes "
+                 "hacer - p.&nbsp;ej. \"El archivo está abierto en otro programa: ciérralo (p.&nbsp;ej. en Excel) y "
+                 "vuelve a intentarlo.\" El texto técnico está en <b>Show Details</b>, para enviarlo al administrador.",
+                 "Todo el programa", None),
                 ("feature", "Todos los textos en inglés",
                  "Los mensajes, botones, menús y textos de estado que aún estaban en alemán ahora están en inglés en "
                  "todas partes - p.&nbsp;ej. el menú contextual del Backlog dice <b>Reassign yarn…</b>. Los términos de "

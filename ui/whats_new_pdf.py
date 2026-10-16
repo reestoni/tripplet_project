@@ -20,6 +20,7 @@ import re
 from typing import Dict, Optional, Tuple
 
 from ui.widgets.whats_new_texts import RELEASES, VERSION_LABEL, WHERE_LABEL, WINDOW_TITLE
+from ui.widgets.friendly_error import show_error
 
 ACCENT = "#39A650"
 NAVY = "#1D3557"
@@ -249,7 +250,7 @@ def save_release_pdf_dialog(parent, release_idx: int, lang: str) -> Optional[str
     try:
         export_release_pdf(release_idx, lang, path)
     except Exception as e:
-        QMessageBox.critical(parent, "PDF", f"Could not write the PDF:\n{e}")
+        show_error(parent, "PDF", "The PDF could not be saved.", e)
         return None
     try:
         from db.usage_log import log_usage_event

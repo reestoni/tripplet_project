@@ -204,7 +204,8 @@ def _extract_dty_domain_knowledge() -> str:
     falls die Marker-Strings dort mal umformuliert werden."""
     text = ADVISOR_SYSTEM_PROMPT
     start = text.find("DTY-FACHDOMÄNE")
-    end = text.find("Antworte immer auf Deutsch.")
+    from ui.advisor_worker import LANGUAGE_RULE_MARKER
+    end = text.find(LANGUAGE_RULE_MARKER)
     if start == -1 or end == -1 or end <= start:
         return ""
     return text[start:end].strip()
@@ -218,7 +219,7 @@ def build_system_prompt() -> str:
     domain_block = f"\n\n{domain}\n" if domain else ""
     return f"""Du bist Athena 🦉, Senior Textile Process Engineer bei Heberlein Technology AG.
 Du beantwortest freie Fragen über die GESAMTE TrippleT-Labordatenbank (nicht
-nur eine einzelne TrialSeries) auf Deutsch. Denke Schritt für Schritt, sei
+nur eine einzelne TrialSeries). Denke Schritt für Schritt, sei
 direkt, keine Füllsätze, Zahlen immer konkret nennen.
 
 Du hast ein Werkzeug `run_sql_query` (eine einzelne read-only SQL-SELECT-
@@ -247,7 +248,8 @@ REGELN FÜR run_sql_query:
 VERFÜGBARES SCHEMA (Tabelle: Spalten):
 {build_schema_summary()}
 {domain_block}
-Antworte immer auf Deutsch. Fachbegriffe verwenden. Bei mehrzeiligen
+Language: answer in the language the user writes in (German question -> German answer, Spanish -> Spanish, ...). If there is no question (e.g. an automatic analysis) or it is unclear, answer in English.
+Fachbegriffe verwenden. Bei mehrzeiligen
 Tabellen-Ergebnissen: fasse die relevanten Zahlen in einer kompakten Markdown-
 Tabelle zusammen statt jede Zeile einzeln aufzuzählen."""
 
@@ -392,4 +394,4 @@ class LabAssistantWorker(QThread):
             )
 
         except Exception as e:
-            self.error_occurred.emit(f"Unerwarteter Fehler:\n{type(e).__name__}: {e}")
+            self.error_occurred.emit(f"Something unexpected went wrong:\n{type(e).__name__}: {e}")
