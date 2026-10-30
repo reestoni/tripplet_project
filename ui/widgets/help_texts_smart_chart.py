@@ -173,6 +173,17 @@ TEXTS = {
                   "Months and years run in order, months without anything show as 0."],
                  "Series without trials and experiments without series are counted too. A trial measured on two "
                  "lab machines counts once for each."),
+                ("task", "Show how parts add up, e.g. A, B and C knots per trial",
+                 ["Add the visual <i>Stacked fields</i> (columns with three colours in Visualizations).",
+                  "Drag the number fields into <i>Values</i> - e.g. DTYoMat <i>AKnots</i>, <i>BKnots</i>, "
+                  "<i>CKnots</i>. Each becomes one colour of the column.",
+                  "Drag <i>Trial</i> (General) into <i>X axis</i> for one column per trial - or a series, machine, "
+                  "jet … to compare groups. Without X you get one column for all trials.",
+                  "Under <i>Bars</i>: <i>100 % stacked</i> (default, the share of each part), <i>Stacked</i> (the "
+                  "values) or <i>Side by side</i>.",
+                  "Combo chart: drag one or more number fields into <i>Line (right axis)</i> - e.g. <i>FP/m "
+                  "DTYoMat</i>. They are drawn as lines with their own axis on the right."],
+                 "Filter to one series first (Filters or a slicer), then the columns are labelled V1, V2 …"),
                 ("task", "Show only this year, last year or the last 12 months",
                  [f"Add a filter ({B('Add filter')}, or <i>+ Add filter</i> in the Filters pane) on a time field: "
                   "<i>Month</i>, <i>Year</i>, <i>Trial month</i>, <i>Experiment month</i> …",
@@ -389,6 +400,17 @@ TEXTS = {
                   "Monate und Jahre laufen in der richtigen Reihenfolge, Monate ohne Einträge erscheinen als 0."],
                  "Serien ohne Versuche und Experimente ohne Serien zählen mit. Ein Versuch, der auf zwei "
                  "Labormaschinen gemessen wurde, zählt bei beiden."),
+                ("task", "Zeigen, wie sich Teile zusammensetzen, z.&nbsp;B. A-, B- und C-Knoten pro Versuch",
+                 ["Das Visual <i>Stacked fields</i> hinzufügen (Säulen mit drei Farben in Visualizations).",
+                  "Die Zahlenfelder in <i>Values</i> ziehen - z.&nbsp;B. DTYoMat <i>AKnots</i>, <i>BKnots</i>, "
+                  "<i>CKnots</i>. Jedes wird eine Farbe der Säule.",
+                  "<i>Trial</i> (General) in <i>X axis</i> ziehen für eine Säule pro Versuch - oder Serie, "
+                  "Maschine, Jet … um Gruppen zu vergleichen. Ohne X gibt es eine Säule für alle Versuche.",
+                  "Unter <i>Bars</i>: <i>100 % stacked</i> (Standard, Anteil jedes Teils), <i>Stacked</i> (die "
+                  "Werte) oder <i>Side by side</i>.",
+                  "Kombi-Diagramm: ein oder mehrere Zahlenfelder in <i>Line (right axis)</i> ziehen - z.&nbsp;B. "
+                  "<i>FP/m DTYoMat</i>. Sie erscheinen als Linien mit eigener Achse rechts."],
+                 "Zuerst auf eine Serie filtern (Filters oder ein Slicer), dann heissen die Säulen V1, V2 …"),
                 ("task", "Nur dieses Jahr, letztes Jahr oder die letzten 12 Monate zeigen",
                  [f"Einen Filter ({B('Add filter')} oder <i>+ Add filter</i> im Bereich Filters) auf ein Zeitfeld "
                   "setzen: <i>Month</i>, <i>Year</i>, <i>Trial month</i>, <i>Experiment month</i> …",
@@ -605,6 +627,17 @@ TEXTS = {
                   "Meses y años van en orden; los meses sin nada aparecen como 0."],
                  "También cuentan las series sin ensayos y los experimentos sin series. Un ensayo medido en dos "
                  "máquinas cuenta en ambas."),
+                ("task", "Mostrar cómo se reparten las partes, p.&nbsp;ej. nudos A, B y C por ensayo",
+                 ["Añade el visual <i>Stacked fields</i> (columnas de tres colores en Visualizations).",
+                  "Arrastra los campos numéricos a <i>Values</i>, p.&nbsp;ej. DTYoMat <i>AKnots</i>, <i>BKnots</i>, "
+                  "<i>CKnots</i>. Cada uno es un color de la columna.",
+                  "Arrastra <i>Trial</i> (General) a <i>X axis</i> para una columna por ensayo, o una serie, "
+                  "máquina, jet … para comparar grupos. Sin X hay una columna para todos los ensayos.",
+                  "En <i>Bars</i>: <i>100 % stacked</i> (por defecto, la parte de cada uno), <i>Stacked</i> (los "
+                  "valores) o <i>Side by side</i>.",
+                  "Gráfico combinado: arrastra uno o más campos numéricos a <i>Line (right axis)</i>, p.&nbsp;ej. "
+                  "<i>FP/m DTYoMat</i>. Se dibujan como líneas con su propio eje a la derecha."],
+                 "Filtra primero a una serie (Filters o un slicer); así las columnas se llaman V1, V2 …"),
                 ("task", "Mostrar solo este año, el año pasado o los últimos 12 meses",
                  [f"Añade un filtro ({B('Add filter')} o <i>+ Add filter</i> en el panel Filters) sobre un campo de "
                   "tiempo: <i>Month</i>, <i>Year</i>, <i>Trial month</i>, <i>Experiment month</i> …",

@@ -264,6 +264,21 @@ for i, t in enumerate(("Backlog", "All Experiments", "Dashboards", "Yarn Stock")
 s.text(22, 88, "Default: Backlog", 8, MUTED)
 save(s, "wn_start_screen.svg")
 
+s = new("Stacked fields")
+s.rect(12, 10, 276, 110, "#ffffff", LINE, 4)
+parts = ((6, 52, 42), (4, 58, 38), (5, 60, 35), (7, 76, 17), (6, 78, 16), (8, 80, 12), (7, 79, 14))
+for i, (a, b, c) in enumerate(parts):
+    x, y0 = 24 + i * 28, 104
+    for share, col in ((a, "#2F6DB5"), (b, "#D9822B"), (c, "#4B5058")):
+        h = share * 0.84
+        s.rect(x, y0 - h, 18, h, col, None, 0)
+        y0 -= h
+    s.text(x + 9, 116, f"V{i + 1}", 7, MUTED, anchor="middle")
+for i, (t, col) in enumerate((("A knots", "#2F6DB5"), ("B knots", "#D9822B"), ("C knots", "#4B5058"))):
+    s.rect(226, 24 + i * 16, 9, 9, col, None, 1)
+    s.text(240, 32 + i * 16, t, 8, INK)
+save(s, "wn_stacked_fields.svg")
+
 s = new("Yarn colour")
 s.rect(12, 10, 200, 20, "#ffffff", BLUE, 3)
 s.text(20, 24, "Search yarn  e.g. 167 dty", 9, MUTED)

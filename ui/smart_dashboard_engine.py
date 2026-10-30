@@ -44,8 +44,11 @@ WELLS: Dict[str, Tuple[str, str]] = {      # key -> (label, accepted kinds)
     "split": ("Small multiples", "any"), "rows": ("Rows", "any"), "cols": ("Columns", "any"),
     "value": ("Value", "num"), "columns": ("Columns", "any"), "field": ("Field", "any"),
     "drill": ("Drill down to (double-click a bar)", "any"),
+    "values": ("Values (several number fields)", "num"),
+    "lines": ("Line (right axis)", "num"),
 }
-MULTI_WELLS = ("columns", "drill")
+MULTI_WELLS = ("columns", "drill", "values", "lines")
+LINE_COLOURS = ("#C62828", "#6A1B9A", "#00838F", "#2E7D32")
 DRILL_TYPES = ("bar", "box", "violin", "line")
 # Slicer ("Datenschnitt", Nutzerwunsch 2026-10-30): how it looks
 SLICER_STYLES = {"list": "List", "dropdown": "Dropdown", "tiles": "Tiles", "between": "Between (range)",
@@ -66,6 +69,9 @@ VISUAL_TYPES: Dict[str, Dict[str, Any]] = {
     "column": {"label": "Columns", "tip": "Count or total per category - stacked, side by side or 100 %. "
                                           "Months and years run in order",
                "wells": ["x", "legend", "value"], "agg": True, "target": True, "defagg": "count"},
+    "stack": {"label": "Stacked fields", "tip": "Several number fields in one column, each a colour - e.g. A, B "
+                                                "and C knots per trial, as share (100 %) or as values",
+              "wells": ["x", "values", "lines"], "agg": True, "defagg": "avg", "nocount": True},
     "matrix": {"label": "Matrix", "tip": "Table of a value per row and column, coloured - gaps show missing trials",
                "wells": ["rows", "cols", "value"], "agg": True, "target": True},
     "kpi": {"label": "Card", "tip": "One number: count, average, best …", "wells": ["value"], "agg": True,
@@ -83,6 +89,7 @@ ENTITY = {"count": ("Trials", "trials"), "count_series": ("Trial series", "trial
           "count_experiments": ("Experiments", "experiments")}
 STACK_MODES = {"stacked": "Stacked", "grouped": "Side by side", "percent": "100 % stacked"}
 MAX_LEGEND = 8
+MAX_TRIAL_COLUMNS = 150     # "Stacked fields" with X = Trial (a whole series)
 MAX_TIME_POINTS = 240
 MAX_ROWS, MAX_COLS = 20, 15
 MAX_CATEGORIES = 25          # bars / boxes per chart; rarer values are left out (with a note)
@@ -311,6 +318,13 @@ def auto_title(ds: TrialDataset, v: Dict[str, Any]) -> str:
         if agg in COUNT_AGGS or not title("value"):
             return ENTITY.get(agg, ENTITY["count"])[0]
         return f"{AGGS[agg]} {title('value')}"
+    if t == "stack":
+        keys = [f[k].title for k in (v.get("wells") or {}).get("values") or [] if k in f]
+        what = ", ".join(keys[:4]) + (" …" if len(keys) > 4 else "") or "Stacked fields"
+        share = "Share of " if (v.get("stack") or "percent") == "percent" else ""
+        lines = [f[k].title for k in (v.get("wells") or {}).get("lines") or [] if k in f]
+        return (f"{share}{what}" + (f" per {title('x')}" if title("x") else "")
+                + (f" with {', '.join(lines[:2])}" if lines else ""))
     if t == "column":
         agg = v.get("agg") or "count"
         what = ENTITY[agg][0] if agg in COUNT_AGGS else f"{AGGS.get(agg, '')} {title('value')}".strip()
@@ -376,6 +390,13 @@ def compute_visual(ds: TrialDataset, v: Dict[str, Any], filters: List[Dict[str, 
                 "xanchor": "right", "yanchor": "bottom", "showarrow": False,
                 "font": {"size": 10, "color": "#C62828"}})
         return {**out, **r}
+    if t == "stack":
+        keys = [k for k in (v.get("wells") or {}).get("values") or [] if k in ds.fields]
+        if not keys:
+            return {**out, "kind": "empty", "message": "Drag two or more number fields into Values"}
+        agg = v.get("agg") if v.get("agg") in AGGS and v.get("agg") not in COUNT_AGGS else "avg"
+        lines = [k for k in (v.get("wells") or {}).get("lines") or [] if k in ds.fields]
+        return {**out, **_stack(ds, res, w.get("x"), keys, agg, v.get("stack") or "percent", palette, lines)}
     if t == "matrix":
         if not (w.get("rows") and w.get("cols")) or (not w.get("value") and v.get("agg") not in COUNT_AGGS):
             return {**out, "kind": "empty", "message": "Drag fields into Rows, Columns and Value"}
@@ -532,6 +553,16 @@ def visual_table(ds: TrialDataset, v: Dict[str, Any], filters: List[Dict[str, An
     res = _apply(ds, v, filters, ply_scope)
     title = v.get("title") or auto_title(ds, v)
     f = ds.fields
+    if t == "stack":
+        keys = [k for k in (v.get("wells") or {}).get("values") or [] if k in f]
+        r = _stack(ds, res, w.get("x"), keys, v.get("agg") if v.get("agg") not in COUNT_AGGS else "avg",
+                   v.get("stack") or "percent",
+                   lines=[k for k in (v.get("wells") or {}).get("lines") or [] if k in f]) if keys else {}
+        if r.get("kind") != "plotly":
+            return title, [], []
+        data = r["figure"]["data"]
+        return title, [f[w["x"]].title if w.get("x") else ""] + [tr["name"] for tr in data], \
+            [[x] + [tr["y"][i] for tr in data] for i, x in enumerate(data[0]["x"])]
     if t == "column" and w.get("x"):
         r = _column(ds, res, w["x"], w.get("legend"), w.get("value"), v.get("agg") or "count",
                     v.get("stack") or "stacked")
@@ -818,6 +849,105 @@ def _column(ds, res, xk, lk, vk, agg, stack="stacked", palette="trippleT") -> Di
     return {"kind": "plotly", "figure": fig, "clickable": True, "note": note}
 
 
+# ── stacked fields (several number fields in one column) ──────────────────
+def _stack(ds, res, xk, keys, agg="avg", stack="percent", palette="trippleT",
+           lines: Sequence[str] = ()) -> Dict[str, Any]:
+    """One column per X value (or one for all trials), one part per field. "percent": the share of
+    each field in the sum of the fields (A, B, C knots = 100 %). `lines`: number fields drawn as
+    lines on a second axis on the right (combo chart, e.g. FP/m over the knot shares)."""
+    lines = [k for k in lines if k not in keys]
+    groups: Dict[str, List[int]] = {}
+    order: Dict[str, Any] = {}
+    for tid in res.ids:
+        m = res.matched.get(tid)
+        if all(_num(ds.value(k, tid, m)) is None for k in list(keys) + list(lines)):
+            continue
+        labs = _labels(ds, xk, tid, m) if xk else ["All trials"]
+        for lab in labs:
+            groups.setdefault(lab, []).append(tid)
+            if xk == "trial":
+                t = ds.by_id[tid]
+                order[lab] = (t.series, t.nr, (t.series.split(" ")[0] if t.series else ""))
+    if not groups:
+        return {"kind": "empty", "message": "No trial has values for these fields"}
+    note = ""
+    if xk == "trial":
+        xs = sorted(groups, key=lambda k: order.get(k, ("", 0, ""))[:2])
+        limit = MAX_TRIAL_COLUMNS
+    elif xk and xk in TIME_KEYS:
+        xs = [x for x in _time_axis(list(groups), xk) if x in groups]
+        limit = 10 ** 6
+    elif xk and ds.fields[xk].kind == "num":
+        xs = sorted(groups, key=_sort_key)
+        limit = MAX_CATEGORIES
+    else:
+        xs = sorted(groups, key=lambda k: (k == NONE_LABEL, -len(groups[k]), k.lower()))
+        limit = MAX_CATEGORIES
+    if len(xs) > limit:
+        note = f"{len(xs) - limit} more columns not shown - filter or use a slicer to pick the ones you want"
+        xs = xs[:limit]
+    vals = {(x, k): aggregate([_num(ds.value(k, t, res.matched.get(t))) for t in groups[x]], agg)
+            for x in xs for k in keys}
+    totals = {x: sum(vals[(x, k)] or 0 for k in keys) for x in xs}
+    colours = PALETTES.get(palette, PALETTES["trippleT"])["colours"]
+    traces = []
+    for i, k in enumerate(keys):
+        f = ds.fields[k]
+        ys, text, hover = [], [], []
+        for x in xs:
+            a = vals[(x, k)]
+            share = (100.0 * a / totals[x]) if a is not None and totals[x] else None
+            y = share if stack == "percent" else a
+            ys.append(y)
+            text.append("" if y is None else (f"{_kfmt(share)} %" if stack == "percent" else _kfmt(a)))
+            hover.append(f"{x}<br>{f.label}: {_kfmt(a) if a is not None else '–'}"
+                         + (f" ({_kfmt(share)} %)" if share is not None else "")
+                         + (f"<br>{AGGS.get(agg, '')} of {len(groups[x])} trials" if len(groups[x]) > 1 else ""))
+        tr = {"type": "bar", "x": xs, "y": ys, "name": f.label, "hovertext": hover, "hoverinfo": "text",
+              "marker": {"color": colours[i % len(colours)]}}
+        if len(xs) <= 30:
+            tr.update({"text": text, "textposition": "inside" if stack != "grouped" else "outside",
+                       "insidetextanchor": "middle", "cliponaxis": False})
+        traces.append(tr)
+    ytitle = "Share (%)" if stack == "percent" else (AGGS.get(agg, "") if len(groups) and max(map(len, groups.values())) > 1
+                                                    else "Value")
+    for j, k in enumerate(lines):
+        f = ds.fields[k]
+        ys = [aggregate([_num(ds.value(k, t, res.matched.get(t))) for t in groups[x]], agg) for x in xs]
+        traces.append({"type": "scatter", "mode": "lines+markers", "x": xs, "y": ys, "name": f.label, "yaxis": "y2",
+                       "line": {"color": LINE_COLOURS[j % len(LINE_COLOURS)], "width": 2}, "marker": {"size": 5},
+                       "hovertext": [f"{x}<br>{f.label}: {_kfmt(y) if y is not None else '–'}" for x, y in zip(xs, ys)],
+                       "hoverinfo": "text", "connectgaps": False})
+    ticks = {}
+    if xk == "trial":           # short labels: "V12", or "2026-71-005.02 · V12" when several series are shown
+        one = len({order[x][0] for x in xs}) == 1
+        every = max(1, math.ceil(len(xs) / 40))        # many trials: label only every n-th column
+        shown = xs[::every]
+        ticks = {"tickmode": "array", "tickvals": shown,
+                 "ticktext": [f"V{order[x][1]}" if one else f"{order[x][2]} · V{order[x][1]}" for x in shown]}
+    fig = {"data": traces,
+           "layout": {"autosize": True, "barmode": "group" if stack == "grouped" else "stack", "bargap": 0.2,
+                      "margin": {"l": 52, "r": 16, "t": 14, "b": 60 if xk == "trial" else 44},
+                      "font": {"family": "Segoe UI, Inter, sans-serif", "size": 11, "color": "#1C2321"},
+                      "plot_bgcolor": "#FFFFFF", "paper_bgcolor": "#FFFFFF",
+                      "xaxis": {"type": "category", "title": {"text": ds.fields[xk].label if xk else ""},
+                                "categoryorder": "array", "categoryarray": xs, "automargin": True, **ticks},
+                      "yaxis": {"title": {"text": ytitle}, "gridcolor": "#E3E7E2", "rangemode": "tozero",
+                                **({"range": [0, 100]} if stack == "percent" else {})},
+                      "legend": {"orientation": "v", "x": 1.01, "y": 1, "xanchor": "left", "font": {"size": 10},
+                                 "traceorder": "normal"}}}
+    if lines:
+        lay = fig["layout"]
+        lay["yaxis2"] = {"overlaying": "y", "side": "right", "showgrid": False, "zeroline": False,
+                         "title": {"text": ds.fields[lines[0]].label if len(lines) == 1 else "Line"},
+                         "tickfont": {"color": LINE_COLOURS[0]} if len(lines) == 1 else {}}
+        lay["margin"].update({"r": 60, "t": 54})
+        lay["legend"] = {"orientation": "h", "x": 0, "y": 1.05, "yanchor": "bottom", "font": {"size": 10},
+                         "bgcolor": "rgba(0,0,0,0)",
+                         "traceorder": "normal"}
+    return {"kind": "plotly", "figure": fig, "clickable": bool(xk), "note": note}
+
+
 # ── slicer ───────────────────────────────────────────────────────────────
 def slicer_style(ds: TrialDataset, v: Dict[str, Any]) -> str:
     key = (v.get("wells") or {}).get("field")
@@ -928,6 +1058,10 @@ def click_filters(ds: TrialDataset, v: Dict[str, Any], click: Dict[str, Any]) ->
             f = _filter_for(ds, key, val) if key else None
             if f:
                 out.append(f)
+    elif v.get("type") == "stack" and w.get("x"):
+        f = _filter_for(ds, w["x"], click.get("x"))
+        if f:
+            out.append(f)
     elif v.get("type") == "column" and w.get("x"):
         f = _filter_for(ds, w["x"], click.get("x"))
         if f:

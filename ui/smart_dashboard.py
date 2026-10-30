@@ -164,10 +164,11 @@ class SmartDashboard(QWidget):
         cat = [{"key": f.key, "label": f.label, "group": f.group, "kind": f.kind} for f in full]
         data = {"catalog": cat, "groups": te.group_order(full), "tree": te.group_tree(full),
                 "types": {k: {"label": t["label"], "tip": t["tip"], "wells": t["wells"], "agg": bool(t.get("agg")),
-                              "target": bool(t.get("target")), "defagg": t.get("defagg") or ""}
+                              "target": bool(t.get("target")), "defagg": t.get("defagg") or "",
+                              "nocount": bool(t.get("nocount"))}
                           for k, t in en.VISUAL_TYPES.items()},
                 "wells": {k: list(v) for k, v in en.WELLS.items()}, "aggs": en.AGGS,
-                "slicer_styles": en.SLICER_STYLES, "stacks": en.STACK_MODES, "month_of": en.MONTH_OF, "grid": {"cols": en.GRID_COLS, "row": en.GRID_ROW},
+                "slicer_styles": en.SLICER_STYLES, "stacks": en.STACK_MODES, "month_of": en.MONTH_OF, "multi_wells": list(en.MULTI_WELLS), "grid": {"cols": en.GRID_COLS, "row": en.GRID_ROW},
                 "spec": self.spec, "panes": {} if self.read_only else self._panes(),
                 "readonly": self.read_only}
         self._sent_catalog = (id(self.screen.catalog), json.dumps(self.spec.get("calc") or [], sort_keys=True))

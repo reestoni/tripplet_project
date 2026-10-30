@@ -99,6 +99,7 @@ GENERAL_FIELDS = [
     Field("machine", "Machine", "", "General", "cat"),
     Field("jet", "Jet", "", "Jet", "cat"),
     Field("series", "Trial series", "", "General", "cat"),
+    Field("trial", "Trial", "", "General", "cat"),
     Field("experiment", "Experiment", "", "General", "cat"),
     Field("owner", "Owner", "", "General", "cat"),
     Field("tested_on", "Tested on (lab machine)", "", "General", "cat", source={"computed": "tested_on"}),
@@ -432,7 +433,9 @@ class TrialDataset:
         """{trial id: value} of a trial-level field (cached)."""
         if key not in self._cache:
             f = self.fields[key]
-            if f.key in ATTR_KEYS:
+            if f.key == "trial":         # "2026-41-007.03 · V12" - one value per trial
+                self._cache[key] = {t.id: trial_label(t) for t in self.trials}
+            elif f.key in ATTR_KEYS:
                 self._cache[key] = {t.id: getattr(t, f.key) or None for t in self.trials + self.empties}
             elif f.key in EXTRA_KEYS:
                 self._cache[key] = {t.id: t.extra.get(f.key) or None for t in self.trials + self.empties}
@@ -594,6 +597,10 @@ class TrialDataset:
             return [p.values.get(key) for i in res.ids for p in scoped_plies(self.by_id[i].plies, ply_scope)]
         m = self.values(key)
         return [m.get(i) for i in res.ids]
+
+
+def trial_label(t: "Trial") -> str:
+    return f"{t.series} · V{t.nr}" if t.series else f"V{t.nr}"
 
 
 def scoped_plies(plies: Sequence[Ply], scope: str) -> List[Ply]:

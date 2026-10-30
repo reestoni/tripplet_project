@@ -153,7 +153,7 @@ summary .cnt{color:#9AA59C;font-weight:400}
 .sl .q{height:26px;border:1px solid #C9D1C8;border-radius:5px;padding:0 7px;font:inherit}
 .sl .acts{display:flex;gap:10px;font-size:11px}
 .sl .acts a{color:#1F7A3A;cursor:pointer;text-decoration:underline}
-.sl .opts{flex:1;min-height:0;max-height:260px;overflow:auto;display:flex;flex-direction:column}
+.sl .opts{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
 .sl .ddp .opts{max-height:220px}
 .sl .opt{display:flex;align-items:center;gap:7px;padding:3px 4px;border-radius:4px;cursor:pointer}
 .sl .opt:hover{background:#F0F7F2}
@@ -212,7 +212,7 @@ summary .cnt{color:#9AA59C;font-weight:400}
 </div>
 <div id="toast"></div>
 <script>
-var MONTHOF={}, YOPEN={}, RO=false, STACKS={}, bridge=null, CATALOG=[], FIELDS={}, GROUPS=[], TREE=[], TYPES={}, WELLS={}, AGGS={}, SLSTYLES={}, DDOPEN={}, SLQ={};
+var MULTIW=['columns','drill','values'], MONTHOF={}, YOPEN={}, RO=false, STACKS={}, bridge=null, CATALOG=[], FIELDS={}, GROUPS=[], TREE=[], TYPES={}, WELLS={}, AGGS={}, SLSTYLES={}, DDOPEN={}, SLQ={};
 var SPEC={pages:[{id:'p1',title:'Page 1',visuals:[],filters:[]}],active:'p1'}, SEL=null, RESULTS={}, PFILTERS=[];
 var MSEL=[], GRID={cols:12,row:20}, GAP=10, FDATA={all:[],page:[],cross:[],slicers:[],ply:'any'};
 function PG(){for(var i=0;i<SPEC.pages.length;i++)if(SPEC.pages[i].id===SPEC.active)return SPEC.pages[i];return SPEC.pages[0];}
@@ -225,6 +225,7 @@ var ICON={
  violin:'<path d="M10 4 C15 10 13 16 10 24 C7 16 5 10 10 4Z"/><path d="M21 6 C26 12 24 17 21 23 C18 17 16 12 21 6Z"/>',
  hist:'<rect x="4" y="18" width="4" height="6"/><rect x="9" y="11" width="4" height="13"/><rect x="14" y="6" width="4" height="18"/><rect x="19" y="12" width="4" height="12"/><rect x="24" y="19" width="3" height="5"/>',
  density:'<ellipse cx="15" cy="14" rx="11" ry="8" fill-opacity=".25"/><ellipse cx="15" cy="14" rx="6" ry="4" fill-opacity=".6"/>',
+ stack:'<rect x="6" y="16" width="7" height="8"/><rect x="6" y="9" width="7" height="7" fill-opacity=".55"/><rect x="6" y="4" width="7" height="5" fill-opacity=".25"/><rect x="17" y="13" width="7" height="11"/><rect x="17" y="8" width="7" height="5" fill-opacity=".55"/><rect x="17" y="4" width="7" height="4" fill-opacity=".25"/>',
  column:'<rect x="5" y="15" width="5" height="9"/><rect x="5" y="9" width="5" height="6" fill-opacity=".45"/><rect x="12" y="11" width="5" height="13"/><rect x="12" y="4" width="5" height="7" fill-opacity=".45"/><rect x="19" y="17" width="5" height="7"/><rect x="19" y="12" width="5" height="5" fill-opacity=".45"/>',
  matrix:'<rect x="4" y="5" width="7" height="6"/><rect x="12" y="5" width="7" height="6" fill-opacity=".4"/><rect x="20" y="5" width="7" height="6" fill-opacity=".7"/><rect x="4" y="12" width="7" height="6" fill-opacity=".5"/><rect x="12" y="12" width="7" height="6"/><rect x="20" y="12" width="7" height="6" fill-opacity=".3"/><rect x="4" y="19" width="7" height="6" fill-opacity=".8"/><rect x="12" y="19" width="7" height="6" fill-opacity=".2"/><rect x="20" y="19" width="7" height="6"/>',
  kpi:'<text x="15" y="20" font-size="13" font-weight="700" text-anchor="middle" stroke="none">123</text>',
@@ -251,7 +252,7 @@ document.querySelectorAll('.strip').forEach(function(s){s.addEventListener('clic
 window.addEventListener('resize',function(){clearTimeout(window._rz);window._rz=setTimeout(resizePlots,120);});
 
 function init(data){
-  CATALOG=data.catalog;GROUPS=data.groups;TREE=data.tree||GROUPS.map(function(g){return [g,[]];});TYPES=data.types;WELLS=data.wells;AGGS=data.aggs;SLSTYLES=data.slicer_styles||{};STACKS=data.stacks||{};MONTHOF=data.month_of||{};
+  CATALOG=data.catalog;GROUPS=data.groups;TREE=data.tree||GROUPS.map(function(g){return [g,[]];});TYPES=data.types;WELLS=data.wells;AGGS=data.aggs;SLSTYLES=data.slicer_styles||{};STACKS=data.stacks||{};MONTHOF=data.month_of||{};MULTIW=data.multi_wells||MULTIW;
   FIELDS={};CATALOG.forEach(function(f){FIELDS[f.key]=f;});
   SPEC=data.spec;SEL=null;MSEL=[];GRID=data.grid||GRID;LAST=JSON.stringify(SPEC);HIST=[];FUT=[];
   RO=!!data.readonly;document.body.classList.toggle('ro',RO);
@@ -346,7 +347,7 @@ function accepts(well,key,v){
 function setWell(v,well,key){
   if(!accepts(well,key,v)){toast(WELLS[well][0]+' needs a number field'+(well==='y'||well==='value'?' - to count experiments, series or trials use the visual Columns':''));return false;}
   v.wells=v.wells||{};
-  if(well==='columns'||well==='drill'){v.wells[well]=(v.wells[well]||[]);if(v.wells[well].indexOf(key)<0)v.wells[well].push(key);}
+  if(MULTIW.indexOf(well)>=0){v.wells[well]=(v.wells[well]||[]);if(v.wells[well].indexOf(key)<0)v.wells[well].push(key);}
   else v.wells[well]=key;
   if(well==='drill'||well==='x')v.drillpath=[];
   if(!v.title_set)v.title='';
@@ -359,7 +360,7 @@ function addFieldToSelected(key){
   for(var i=0;i<wells.length;i++){
     var wl=wells[i];
     if(wl==='drill')continue;
-    if(wl==='columns'||!w[wl]){if(accepts(wl,key,v)){setWell(v,wl,key);changed();return;}}
+    if(MULTIW.indexOf(wl)>=0||!w[wl]){if(accepts(wl,key,v)){setWell(v,wl,key);changed();return;}}
   }
   toast('No free well for this field - drag it onto a well to replace');
 }
@@ -381,7 +382,7 @@ function renderWells(){
   if(!v){el.innerHTML='<div class="hint">Click a visual on the page to change it - or click a type above to add a new one.<br><br>Then drag fields from <b>Fields</b> into its wells.</div>';return;}
   var t=TYPES[v.type], h='<div class="hint" style="margin-bottom:8px"><b>'+esc(t.label)+'</b> - '+esc(t.tip)+'</div>';
   t.wells.forEach(function(wl){
-    var multi=(wl==='columns'||wl==='drill');
+    var multi=MULTIW.indexOf(wl)>=0;
     var keys=multi?((v.wells||{})[wl]||[]):((v.wells||{})[wl]?[(v.wells||{})[wl]]:[]);
     h+='<div class="well"><div class="lab">'+esc(WELLS[wl][0])+(WELLS[wl][1]==='num'?' · number':'')+'</div><div class="drop" data-w="'+wl+'">';
     if(!keys.length)h+='drop a field here';
@@ -390,12 +391,13 @@ function renderWells(){
   });
   if(t.agg){
     h+='<div class="well"><div class="lab">Aggregation</div><select id="agg">';
-    Object.keys(AGGS).forEach(function(a){h+='<option value="'+a+'"'+((v.agg||t.defagg||'avg')===a?' selected':'')+'>'+esc(AGGS[a])+'</option>';});
+    Object.keys(AGGS).forEach(function(a){if(t.nocount&&a.indexOf('count')===0)return;h+='<option value="'+a+'"'+((v.agg||t.defagg||'avg')===a?' selected':'')+'>'+esc(AGGS[a])+'</option>';});
     h+='</select></div>';
   }
-  if(v.type==='column'){
+  if(v.type==='column'||v.type==='stack'){
+    var defst=v.type==='stack'?'percent':'stacked';
     h+='<div class="well"><div class="lab">Bars</div><select id="vstack">';
-    Object.keys(STACKS).forEach(function(k){h+='<option value="'+k+'"'+((v.stack||'stacked')===k?' selected':'')+'>'+esc(STACKS[k])+'</option>';});
+    Object.keys(STACKS).forEach(function(k){h+='<option value="'+k+'"'+((v.stack||defst)===k?' selected':'')+'>'+esc(STACKS[k])+'</option>';});
     h+='</select></div>';
   }
   if(v.type==='points'||v.type==='trend'){
@@ -430,7 +432,7 @@ function renderWells(){
       var k=e.dataTransfer.getData('text/plain');if(setWell(v,d.dataset.w,k))changed();});
   });
   el.querySelectorAll('.chip b').forEach(function(b){b.addEventListener('click',function(){
-    if(b.dataset.w==='columns'||b.dataset.w==='drill')v.wells[b.dataset.w]=v.wells[b.dataset.w].filter(function(k){return k!==b.dataset.k;});
+    if(MULTIW.indexOf(b.dataset.w)>=0)v.wells[b.dataset.w]=v.wells[b.dataset.w].filter(function(k){return k!==b.dataset.k;});
     else delete v.wells[b.dataset.w];
     if(b.dataset.w==='drill'||b.dataset.w==='x')v.drillpath=[];
     changed();});});

@@ -341,3 +341,41 @@ def test_year_month_slicer(sds):
     assert en.slicer_filter(sds, v) == {"key": "month", "values": ["2026-01"]}
     assert sds.apply([en.slicer_filter(sds, v)]).ids == [1, 2]
     assert en.slicer_style(sds, {"type": "slicer", "wells": {"field": "owner"}, "style": "hierarchy"}) == "list"
+
+
+def test_stacked_fields_share_per_trial():
+    trials = [te.Trial(id=i, nr=i, series_id=1, exp_pk=1, experiment="E", series="2026-71-005.02 MA", machine="AFK",
+                       jet="", year="2026") for i in (1, 2)]
+    lab = {"a": {1: 10.0, 2: 0.0}, "b": {1: 30.0, 2: 50.0}, "c": {1: 60.0, 2: 50.0}}
+    cat = te.GENERAL_FIELDS + [te.Field(k, k.upper() + " knots", "", "DTYoMat", "num") for k in lab]
+    ds = te.TrialDataset(cat, trials=trials, loader=lambda f: lab.get(f.key, {}))
+    v = {"id": "v1", "type": "stack", "wells": {"x": "trial", "values": ["a", "b", "c"]}}
+    r = en.compute_visual(ds, v, [])
+    shares = {t["name"]: t["y"] for t in r["figure"]["data"]}
+    assert shares == {"A knots": [10.0, 0.0], "B knots": [30.0, 50.0], "C knots": [60.0, 50.0]}
+    assert r["figure"]["layout"]["xaxis"]["ticktext"] == ["V1", "V2"]          # one series: short labels
+    assert r["title"] == "Share of A knots, B knots, C knots per Trial"
+    vals = en.compute_visual(ds, {**v, "stack": "stacked"}, [])
+    assert {t["name"]: t["y"][0] for t in vals["figure"]["data"]} == {"A knots": 10.0, "B knots": 30.0, "C knots": 60.0}
+    assert en.click_filters(ds, v, {"x": "2026-71-005.02 MA · V2"}) == [{"key": "trial", "values": ["2026-71-005.02 MA · V2"]}]
+    assert ds.apply(en.click_filters(ds, v, {"x": "2026-71-005.02 MA · V2"})).ids == [2]
+    one = en.compute_visual(ds, {**v, "wells": {"values": ["a", "b", "c"]}}, [])          # no X: one column
+    assert one["figure"]["data"][0]["x"] == ["All trials"] and one["figure"]["data"][0]["y"] == [5.0]
+    assert en.compute_visual(ds, {**v, "wells": {"x": "trial"}}, [])["kind"] == "empty"
+
+
+def test_stacked_fields_with_line_on_right_axis():
+    trials = [te.Trial(id=i, nr=i, series_id=1, exp_pk=1, experiment="E", series="S", machine="AFK", jet="",
+                       year="2026") for i in (1, 2)]
+    lab = {"a": {1: 40.0, 2: 20.0}, "b": {1: 60.0, 2: 80.0}, "fpm": {1: 110.0, 2: 150.0}}
+    cat = te.GENERAL_FIELDS + [te.Field(k, k, "", "DTYoMat", "num") for k in lab]
+    ds = te.TrialDataset(cat, trials=trials, loader=lambda f: lab.get(f.key, {}))
+    v = {"id": "v1", "type": "stack", "wells": {"x": "trial", "values": ["a", "b"], "lines": ["fpm"]}}
+    r = en.compute_visual(ds, v, [])
+    data = r["figure"]["data"]
+    assert [d["type"] for d in data] == ["bar", "bar", "scatter"]
+    assert data[2]["yaxis"] == "y2" and data[2]["y"] == [110.0, 150.0]
+    assert r["figure"]["layout"]["yaxis2"]["side"] == "right"
+    assert r["title"].endswith("with fpm")
+    _t, head, rows = en.visual_table(ds, v, [])
+    assert head == ["Trial", "a", "b", "fpm"] and rows[1][1:] == [20.0, 80.0, 150.0]
