@@ -1898,6 +1898,8 @@ class AllExperimentsScreen(QWidget):
         yarn_id_to_name = {int(r["ID"]): str(r["Name"]) for r in all_yarns}
         yarn_name_list = [str(r["Name"]) for r in all_yarns]
         yarn_id_list = [int(r["ID"]) for r in all_yarns]
+        from ui.widgets.yarn_colour import colour_icon, colour_tooltip, load_yarn_colours
+        yarn_colours, _ = load_yarn_colours()
 
         # ── Dialog aufbauen ───────────────────────────────────────────────
         dlg = QDialog(self)
@@ -1951,10 +1953,15 @@ class AllExperimentsScreen(QWidget):
             cur_name = yarn_id_to_name.get(orig_yid, f"ID {orig_yid}") if orig_yid else "—"
             cur_item = _TWI(cur_name)
             cur_item.setFlags(Qt.ItemIsEnabled)
+            if orig_yid:
+                cur_item.setIcon(colour_icon(yarn_colours.get(orig_yid)))
+                cur_item.setToolTip(colour_tooltip(yarn_colours.get(orig_yid)))
             tbl.setItem(row_idx, 1, cur_item)
 
             cmb = QComboBox()
             cmb.addItems(yarn_name_list)
+            for _i, _yid in enumerate(yarn_id_list):
+                cmb.setItemIcon(_i, colour_icon(yarn_colours.get(_yid)))
             if orig_yid and orig_yid in yarn_id_list:
                 cmb.setCurrentIndex(yarn_id_list.index(orig_yid))
             elif yarn_id_list:

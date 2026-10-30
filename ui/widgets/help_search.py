@@ -37,9 +37,11 @@ from ui.widgets.multilang_help import (
 SOURCES: List[Tuple[str, str, str, str]] = [
     ("all_experiments", "All Experiments", "ui.widgets.help_texts_all_experiments", "multilang"),
     ("backlog", "Backlog", "ui.widgets.help_texts_backlog", "multilang"),
+    ("dashboards", "Dashboards", "ui.widgets.help_texts_dashboards", "multilang"),
     ("show_experiment", "Show Experiment", "ui.widgets.help_texts_show_experiment", "multilang"),
     ("create_experiment", "Create Experiment", "ui.widgets.help_texts_create_experiment", "multilang"),
-    ("report", "Report / Smart Chart", "ui.widgets.help_texts_report", "multilang"),
+    ("report", "Report", "ui.widgets.help_texts_report", "multilang"),
+    ("smart_chart", "Smart Chart", "ui.widgets.help_texts_smart_chart", "multilang"),
     ("manage_yarn", "Manage Yarn", "ui.widgets.help_texts_manage_yarn", "multilang"),
     ("manage_jets", "Manage Jets", "ui.widgets.help_texts_manage_jets", "multilang"),
     ("yarn_stock", "Yarn Stock", "ui.widgets.yarn_stock_help_texts", "yarn_stock"),
@@ -53,11 +55,15 @@ SYNONYMS: List[List[str]] = [
     ["trial series", "series", "serie", "versuchsserie", "auftrag", "auftrage", "order", "orders", "job",
      "pedido", "encargo", "experiment", "experimento", "projekt", "project"],
     ["trial", "trials", "versuch", "versuche", "ensayo", "ensayos", "probe", "test"],
+    ["count", "zahlen", "zaehlen", "anzahl", "how many", "wie viele", "contar", "cuantos", "statistics",
+     "statistik", "estadistica", "estadisticas", "per month", "pro monat", "por mes"],
     ["machine", "maschine", "maquina", "anlage", "texturiermaschine",
      # Maschinennamen (tblMaschine), damit z. B. "alles von der AFK" die Maschinen-Anleitung findet
      "afk", "eafk", "aalidhra", "erdmann", "ssm", "dp2t", "xeno", "zinser"],
     ["yarn", "garn", "garne", "hilo", "hilos", "faden", "material"],
     ["spool", "spule", "spulen", "bobina", "bobinas", "rolle", "cone", "konus"],
+    ["note", "notes", "notiz", "notizen", "nota", "notas", "kommentar", "comment", "bemerkung",
+     "anmerkung", "comentario", "vermerk"],
     ["jet", "jets", "duse", "dusen", "duese", "duesen", "tobera", "toberas", "nozzle"],
     ["stock", "lager", "lagerbestand", "bestand", "inventario", "almacen", "inventory", "vorrat"],
     ["stock take", "inventur", "inventario fisico", "zahlen", "count"],
@@ -330,7 +336,7 @@ UI = {
 }
 
 # Screens, die eine geoeffnete Serie brauchen - "Take me there" fuehrt dann zu All Experiments.
-NEEDS_SERIES = {"show_experiment"}
+NEEDS_SERIES = {"show_experiment", "report"}
 
 
 def open_screen_help(screen: str, tab: str, parent: QWidget) -> None:
@@ -515,7 +521,7 @@ class HelpSearchDialog(QDialog):
         steps = "".join(f"<li>{s}</li>" for s in e.steps)
         extra = f"<p style='color:#565656'>{e.note}</p>" if e.note else ""
         warn = (f"<p style='background:#fff3cd;padding:6px'>{u['needs_series']}</p>"
-                if h.screen in NEEDS_SERIES or (h.screen == "report" and h.tab != "smart") else "")
+                if h.screen in NEEDS_SERIES else "")
         areas = (f"<p style='color:#8a8a8a;font-size:12px'>{u['areas']}</p>"
                  if re.search(r"\(\d\)|\([A-F]\)", " ".join(e.steps) + e.note) else "")
         ai = ""

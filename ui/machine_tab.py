@@ -89,6 +89,39 @@ def _trial_hdr_label(self, cs: Dict) -> str:
     return f"V{cs['vno']}"
 
 
+def ply_header_colour(cs: Dict, trial_cs: Dict[int, List[Dict]], compact_mode: bool) -> str:
+    """Yarn colour for the colour square in the ply header row ("" = none).
+    Compact view with several plies ("div."): only if all plies share it."""
+    if not compact_mode:
+        return cs.get("yarn_colour") or ""
+    colours = {c.get("yarn_colour") or "" for c in trial_cs.get(cs["trial_id"], [cs])}
+    return colours.pop() if len(colours) == 1 else ""
+
+
+def _set_trial_spans(table, trial_groups, rows) -> None:
+    """One merged cell per trial (over all its ply columns) in the given rows.
+    Set in the data part (right) AND the frozen header part (top_right) of the
+    FrozenFirstColumnTable - the trial number row 0 is drawn up there, so
+    without it "V3 | V3" showed twice for a trial with two plies."""
+    views = [table.right]
+    top = getattr(table, "top_right", None)
+    if top is not None:
+        views.append(top)
+    for view in views:
+        model = view.model()
+        if model is None:
+            continue
+        for row in range(model.rowCount()):
+            for col in range(1, model.columnCount()):
+                if view.columnSpan(row, col) > 1 or view.rowSpan(row, col) > 1:
+                    view.setSpan(row, col, 1, 1)
+        for first_col, span in trial_groups:
+            if span <= 1:
+                continue
+            for row_idx in rows:
+                view.setSpan(row_idx, first_col, 1, span)
+
+
 def build_machine_tab_impl(self) -> None:
     from ui.screen_show_experiment import (
         table_exists, fetch_all, get_columns_map, get_columns_info,
@@ -464,6 +497,10 @@ def build_machine_tab_impl(self) -> None:
                     _ymap[int(_yr["ID"])] = str(_yr["Name"] or "")
                 except Exception:
                     pass
+        _ycolours: Dict[int, str] = cache.get("yarn_colour_map")
+        if _ycolours is None:
+            from ui.widgets.yarn_colour import load_yarn_colours
+            _ycolours = load_yarn_colours()[0]
 
         trial_row_by_id = {int(t["ID"]): t for t in trial_rows}
         for trial in self._trials:
@@ -490,6 +527,7 @@ def build_machine_tab_impl(self) -> None:
                         "sr": sr,
                         "ply": ply,
                         "yarn_name": _ymap.get(_yid, ""),
+                        "yarn_colour": _ycolours.get(_yid, ""),
                         "trial_id": tid,
                         "vno": int(trial["Versuchsnummer"]),
                     })
@@ -577,6 +615,7 @@ def build_machine_tab_impl(self) -> None:
                     "ply": use_name,  # Spalten-Header = YarnUse-Name
                     "ply_label_short": ply_label_short,  # "1, 2" für Plies-Zeile
                     "yarn_name": members[0].get("yarn_name", ""),
+                    "yarn_colour": members[0].get("yarn_colour", ""),
                     "trial_id": tid,
                     "vno": members[0]["vno"],
                     "yarn_use_id": uid,
@@ -600,8 +639,10 @@ def build_machine_tab_impl(self) -> None:
     trial_hdr_vals = [""]
     ply_hdr_vals = [""]
     ply_tooltip_vals = [""]
+    ply_colour_vals = [""]
     for cs in col_specs:
         trial_hdr_vals.append(_trial_hdr_label(self, cs))
+        ply_colour_vals.append(ply_header_colour(cs, trial_cs_for_hdr, compact_mode))
         if compact_mode:
             # Kompakt: alle Plies des Trials zusammenfassen
             all_cs = trial_cs_for_hdr.get(cs["trial_id"], [cs])
@@ -625,7 +666,8 @@ def build_machine_tab_impl(self) -> None:
 
     hdr_rows = [
         {"values": trial_hdr_vals, "bg": None, "fg": None},
-        {"values": ply_hdr_vals, "bg": None, "fg": None, "tooltips": ply_tooltip_vals},
+        {"values": ply_hdr_vals, "bg": None, "fg": None, "tooltips": ply_tooltip_vals,
+         "colours": ply_colour_vals},
     ]
     # Zeile 0 = V-Nummern (gespannt), Zeile 1 = Ply-Labels (einzeln) – nur fett, kein Sonderfarbe
 
@@ -956,19 +998,10 @@ def build_machine_tab_impl(self) -> None:
 
     try:
         right_view = self.tbl_machine.right
-        # Alle alten Spans zurücksetzen
-        for row in range(right_view.model().rowCount()):
-            for col in range(1, right_view.model().columnCount()):
-                if right_view.columnSpan(row, col) > 1 or right_view.rowSpan(row, col) > 1:
-                    right_view.setSpan(row, col, 1, 1)
-        # Neue Spans setzen
-        for first_col, span in trial_groups:
-            if span <= 1:
-                continue
-            for row_idx in trial_wide_model_rows:
-                right_view.setSpan(row_idx, first_col, 1, span)
+        _set_trial_spans(self.tbl_machine, trial_groups, trial_wide_model_rows)
         try:
             right_view.viewport().update()
+            self.tbl_machine.top_right.viewport().update()
             self.tbl_machine.left.viewport().update()
         except Exception:
             pass
@@ -1249,7 +1282,8 @@ def build_rd_machine_tab_impl(
 
     hdr_rows = [
         {"values": trial_hdr_vals, "bg": None, "fg": None},
-        {"values": ply_hdr_vals, "bg": None, "fg": None, "tooltips": ply_tooltip_vals},
+        {"values": ply_hdr_vals, "bg": None, "fg": None, "tooltips": ply_tooltip_vals,
+         "colours": [""] + [cs.get("yarn_colour") or "" for cs in col_specs]},
     ]
     expanded_col_titles = ["" for _ in col_specs]
 
@@ -1411,16 +1445,7 @@ def build_rd_machine_tab_impl(
             trial_wide_model_rows.append(n_hdr + len(titles_fixed) + offset)
 
     try:
-        right_view = self.tbl_rd_machine.right
-        for row in range(right_view.model().rowCount()):
-            for col in range(1, right_view.model().columnCount()):
-                if right_view.columnSpan(row, col) > 1 or right_view.rowSpan(row, col) > 1:
-                    right_view.setSpan(row, col, 1, 1)
-        for first_col, span in trial_groups:
-            if span <= 1:
-                continue
-            for row_idx in trial_wide_model_rows:
-                right_view.setSpan(row_idx, first_col, 1, span)
+        _set_trial_spans(self.tbl_rd_machine, trial_groups, trial_wide_model_rows)
     except Exception:
         pass
 

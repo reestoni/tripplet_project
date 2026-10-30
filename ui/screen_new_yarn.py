@@ -33,6 +33,7 @@ from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.text_normalize import canon_simple as _canon
 from ui.widgets.friendly_error import show_error
+from ui.widgets.yarn_colour import colour_icon
 
 _HIDDEN_COLS = {"globalid", "sourcetrialid"}  # SourceTrialID: Nutzerwunsch "verwirrt nur"
 _AUDIT_COLS = {"createdby", "creationdate"}
@@ -233,6 +234,9 @@ class NewYarnScreen(QWidget):
             combo.addItem("")
             combo.addItems(list(fk.get("name_to_id", {}).keys()))
             combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            if key == "colourid":
+                for i in range(1, combo.count()):
+                    combo.setItemIcon(i, colour_icon(combo.itemText(i)))
             if key == "colourid" and self._on_quick_add_colour:
                 self._wire_quick_add_colour(combo, fk)
             return combo
@@ -273,6 +277,7 @@ class NewYarnScreen(QWidget):
             else:
                 insert_pos = combo.count() - 1  # vor dem Sentinel-Eintrag
                 combo.insertItem(insert_pos, str(new_name))
+                combo.setItemIcon(insert_pos, colour_icon(new_name))
                 combo.setCurrentIndex(insert_pos)
                 state["last_good"] = insert_pos
 

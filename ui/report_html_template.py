@@ -554,6 +554,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="tb-sep"></div>
   <button id="btn-sd" class="btn-toolbar active" title="Toggle Standard Deviation bars">± SD</button>
   <button id="btn-minmax" class="btn-toolbar" title="Toggle Min/Max markers">↕ Min/Max</button>
+  <button id="btn-value-notes" class="btn-toolbar" title="Show notes on values (from Show Experiment): values with a note get a purple outline, the note is in the tooltip. Not printed in the PDF unless you tick it there.">Notes</button>
   <button id="btn-legend-order" class="btn-toolbar" title="Legend order &amp; colours">🎨 Legend</button>
   <div class="tb-sep"></div>
   <button id="btn-toggle-builder" class="btn-toolbar" title="Toggle SQL Builder" style="display:none">⚙ Filter</button>
@@ -923,6 +924,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       </select>
     </div>
     <div id="pdf-template-desc" style="font-size:10px;color:#888;margin-top:4px;min-height:16px;"></div>
+    <div class="modal-form-row" id="pdf-notes-row">
+      <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;">
+        <input type="checkbox" id="pdf-include-notes"> Include notes on values
+      </label>
+      <div style="font-size:10px;color:#888;margin-top:2px;">Notes are internal. Only tick this for a report that stays in-house.</div>
+    </div>
     <div class="modal-footer">
       <button class="btn-cancel" id="pdf-export-cancel">Cancel</button>
       <button class="btn-ok" id="pdf-export-ok">Export</button>
@@ -1548,7 +1555,8 @@ function buildTraces2dDrill(yKey){
       var yVal = d[yKey];
       if(yVal === null || yVal === undefined || yVal === 0) return;
       var jet = SERIES_REGISTRY.length > 1 ? s.pk + '::' + (d.jet_name||'Unknown') : (d.jet_name||'Unknown');
-      rows.push({jet: jet, trial_nr: d.trial_nr, yVal: yVal, row: d});
+      rows.push({jet: jet, trial_nr: d.trial_nr, yVal: yVal, row: d,
+                 cn: _rowCellNotes(d, [yKey]), tn: d._tnotes || []});
     });
   });
   if(rows.length === 0) return [];
@@ -1564,7 +1572,7 @@ function buildTraces2dDrill(yKey){
   return Object.keys(jetGroups).map(function(jet){
     var pts = jetGroups[jet].sort(function(a,b){ return a.trial_nr - b.trial_nr; });
     var col = getJetColor(jet);
-    return {
+    return _withNotes({
       type: 'bar',
       name: getLegendLabel(jet),
       x: pts.map(function(p){ return 'V' + p.trial_nr; }),
@@ -1587,7 +1595,7 @@ function buildTraces2dDrill(yKey){
       hoverinfo: 'text',
       marker: { color: col, line: { color: 'rgba(0,0,0,0.12)', width: 1 } },
       showlegend: true,
-    };
+    }, pts);
   });
 }
 
@@ -1602,15 +1610,17 @@ function aggregate2d(xField,yKey){
       if(xVal===null||xVal===undefined||xVal==='')return;
       if(yVal===null||yVal===undefined||yVal===0)return;
       var key=jet+'||'+xVal;
-      if(!aggMap[key])aggMap[key]={jet:jet,x:xVal,vals:[],n:0};
+      if(!aggMap[key])aggMap[key]={jet:jet,x:xVal,vals:[],n:0,cn:[],tn:[]};
       aggMap[key].vals.push(yVal);aggMap[key].n++;
+      _addNotes(aggMap[key].cn,_rowCellNotes(d,[xField,yKey]));
+      _addNotes(aggMap[key].tn,d._tnotes);
     });
   });
   var result=Object.values(aggMap).filter(function(a){return a.n>0;}).map(function(a){
     var n=a.n,sum=a.vals.reduce(function(s,v){return s+v;},0),avg=sum/n,sd=0;
     if(n>1){var sq=a.vals.reduce(function(s,v){return s+(v-avg)*(v-avg);},0);sd=Math.sqrt(sq/(n-1));}
     var mn=Math.min.apply(null,a.vals),mx=Math.max.apply(null,a.vals);
-    return{jet:a.jet,x:a.x,z:avg,sd:sd,n:n,min:mn,max:mx};
+    return{jet:a.jet,x:a.x,z:avg,sd:sd,n:n,min:mn,max:mx,cn:a.cn,tn:a.tn};
   });
   _lastMaxN=result.reduce(function(m,d){return Math.max(m,d.n);},1);
   return result;
@@ -1894,6 +1904,67 @@ function getYTitleShort(yKey){
 
 // ── 2D Traces ─────────────────────────────────────────────────────────────────
 var showSD=true, showMinMax=false, selectedJet=null, _lastNJets=1, _lastMaxN=1;
+// Notes on values (db/cell_notes.py via report_queries.attach_notes): rows carry
+// _notes {axis key:[note]} and _tnotes [note]. Shown only when switched on;
+// the PDF gets them only with "Include notes on values" (Nutzerentscheid 2026-10-30).
+var SHOW_NOTES=false, NOTE_COLOR='#5E35B1';
+function _esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _rowCellNotes(d,keys){
+  var out=[],n=(d&&d._notes)||{};
+  keys.forEach(function(k){(n[k]||[]).forEach(function(x){if(!out.some(function(o){return o.id===x.id;}))out.push(x);});});
+  return out;
+}
+function _addNotes(dst,src){(src||[]).forEach(function(x){if(!dst.some(function(o){return o.id===x.id;}))dst.push(x);});}
+function _notesHover(cn,tn){
+  var lines=[];
+  (cn||[]).forEach(function(n){lines.push('<span style="color:'+NOTE_COLOR+'"><b>Note:</b></span> '+_esc(n.t).replace(/\\n/g,'<br>')+' <i>('+_esc(n.by)+', '+_esc(n.at)+')</i>');});
+  (tn||[]).forEach(function(n){lines.push('<span style="color:'+NOTE_COLOR+'"><b>Trial note:</b></span> '+_esc(n.t).replace(/\\n/g,'<br>')+' <i>('+_esc(n.by)+', '+_esc(n.at)+')</i>');});
+  return lines.length?'<br>'+lines.join('<br>'):'';
+}
+// pts[i].cn = notes on the plotted values, pts[i].tn = notes on the whole trial
+function _withNotes(tr,pts){
+  if(!SHOW_NOTES||!tr)return tr;
+  var any=false,ht=(tr.hovertext||[]).slice(),lc=[],lw=[];
+  var m=tr.marker||{},ml=m.line||{};
+  pts.forEach(function(p,i){
+    var cn=p.cn||[],tn=p.tn||[];
+    if(cn.length||tn.length){ht[i]=(ht[i]||'')+_notesHover(cn,tn);any=true;}
+    lc.push(cn.length?NOTE_COLOR:(Array.isArray(ml.color)?ml.color[i]:(ml.color||'rgba(0,0,0,0.12)')));
+    lw.push(cn.length?3:(Array.isArray(ml.width)?ml.width[i]:(ml.width==null?1:ml.width)));
+  });
+  if(!any)return tr;
+  tr.hovertext=ht;tr.hoverinfo='text';
+  tr.marker=Object.assign({},m,{line:{color:lc,width:lw}});
+  return tr;
+}
+// notes shown in one chart (for the PDF list): [{trial, what, t, by, at}]
+function _chartValueNotes(s){
+  var yKeys=s.yKeys&&s.yKeys.length?s.yKeys:[s.yKey];
+  var keys=yKeys.concat(s.xField?[s.xField]:[]);
+  var out=[],seen={};
+  SERIES_REGISTRY.forEach(function(ser){
+    (ser.data||[]).forEach(function(d){
+      if(!slicerMatch(d))return;
+      if(!yKeys.some(function(k){var v=d[k];return v!==null&&v!==undefined&&v!==0;}))return;
+      var tr=(SERIES_REGISTRY.length>1?ser.name+' · ':'')+'V'+d.trial_nr;
+      keys.forEach(function(k){
+        ((d._notes||{})[k]||[]).forEach(function(n){
+          if(seen[n.id])return;seen[n.id]=1;
+          out.push({trial:tr,what:_axisTitle(k),t:n.t,by:n.by,at:n.at});
+        });
+      });
+      (d._tnotes||[]).forEach(function(n){
+        if(seen[n.id])return;seen[n.id]=1;
+        out.push({trial:tr,what:'whole trial',t:n.t,by:n.by,at:n.at});
+      });
+    });
+  });
+  return out;
+}
+function _axisTitle(k){
+  var a=Y_AXES.filter(function(x){return x.key===k;})[0]||X_AXES.filter(function(x){return x.key===k;})[0];
+  return a?a.title:k;
+}
 
 function buildTraces2d(xField,yKey){
   var xAxisDef=X_AXES.filter(function(a){return a.key===xField;})[0]||X_AXES[0];
@@ -1916,7 +1987,7 @@ function buildTraces2d(xField,yKey){
     // Textstufen: >=52 horizontal+n | >=32 vertikal+n | >=18 vertikal ohne n | <18 nichts
     var _textMode=_barW>=52?'h_n':_barW>=32?'v_n':_barW>=18?'v':'none';
     var _textAngle=(_textMode==='v_n'||_textMode==='v')?-90:0;
-    return{
+    return _withNotes({
       type:'bar',name:getLegendLabel(jet),
       x:pts.map(function(d){return String(d.x);}),
       y:pts.map(function(d){return d.z;}),
@@ -1942,7 +2013,7 @@ function buildTraces2d(xField,yKey){
         visible:isHL&&(showMinMax||(showSD&&_lastMaxN>1)),
         color:'rgba(0,0,0,0.75)',thickness:3,width:12,symmetric:!showMinMax,
       },
-    };
+    },pts);
   });
 }
 
@@ -1983,7 +2054,8 @@ function getRawData(xField,yKey){
       if(xVal===null||xVal===undefined||xVal==='')return;
       if(yVal===null||yVal===undefined)return;
       var jet=SERIES_REGISTRY.length>1?s.pk+'::'+(d.jet_name||'Unknown'):(d.jet_name||'Unknown');
-      out.push({jet:jet,x:xVal,y:yVal,trial_nr:d.trial_nr,'__fqb_label':d['__fqb_label']||'','__fqb_color':d['__fqb_color']||''});
+      out.push({jet:jet,x:xVal,y:yVal,trial_nr:d.trial_nr,'__fqb_label':d['__fqb_label']||'','__fqb_color':d['__fqb_color']||'',
+                cn:_rowCellNotes(d,[xField,yKey]),tn:d._tnotes||[]});
     });
   });
   return out;
@@ -2025,7 +2097,7 @@ function buildTracesLine(xField,yKey){
     var pts=aggData.filter(function(d){return d.jet===jet;}).sort(function(a,b){return parseFloat(a.x)-parseFloat(b.x)||String(a.x).localeCompare(String(b.x));});
     var isHL=!hasHL||jet===selectedJet;
     var col=getJetColor(jet);
-    return{
+    return _withNotes({
       type:'scatter',mode:'lines+markers',name:getLegendLabel(jet),
       x:pts.map(function(d){return d.x;}),
       y:pts.map(function(d){return d.z;}),
@@ -2040,7 +2112,7 @@ function buildTracesLine(xField,yKey){
         visible:isHL&&(showMinMax||(showSD&&_lastMaxN>1)),
         color:col,thickness:2,width:8,symmetric:!showMinMax,
       },
-    };
+    },pts);
   });
 }
 
@@ -2057,7 +2129,7 @@ function buildTracesScatter(xField,yKey){
     var pts=raw.filter(function(d){return d.jet===jet;});
     var isHL=!hasHL||jet===selectedJet;
     var col=getJetColor(jet);
-    return{
+    return _withNotes({
       type:'scatter',mode:'markers',name:getLegendLabel(jet),
       x:pts.map(function(d){return d.x;}),
       y:pts.map(function(d){return d.y;}),
@@ -2079,7 +2151,7 @@ function buildTracesScatter(xField,yKey){
         return ht;
       }),
       hoverinfo:'text',
-    };
+    },pts);
   });
 }
 
@@ -4610,6 +4682,12 @@ function exportPdf(){
     chartStates[_i]=_s;
   }
   var chartImages=[];
+  // Notes on values: in the PDF only when explicitly ticked - charts are
+  // re-drawn for the capture and restored afterwards.
+  var _inclNotes=!!(document.getElementById('pdf-include-notes')||{}).checked;
+  var _notesBefore=SHOW_NOTES;
+  if(SHOW_NOTES!==_inclNotes){SHOW_NOTES=_inclNotes;refreshAllCharts();}
+  function _restoreNotes(){if(SHOW_NOTES!==_notesBefore){SHOW_NOTES=_notesBefore;refreshAllCharts();}}
 
   function captureNext(idx){
     if(idx>=total){ sendToPython(chartImages); return; }
@@ -4645,12 +4723,14 @@ function exportPdf(){
         noteTitle:  s.noteTitle||'',
         noteText:   s.noteText||'',
         noteVisible:!!s.noteVisible,
+        valueNotes: _inclNotes ? _chartValueNotes(s) : [],
       });
       captureNext(idx+1);
     }).catch(function(){ chartImages.push(null); captureNext(idx+1); });
   }
 
   function sendToPython(images){
+    _restoreNotes();
     var infoboxSetting = document.getElementById('save-infobox') ? document.getElementById('save-infobox').value : 'left';
     var payload = {
       reportTitle:     ((document.getElementById('pdf-export-title')&&document.getElementById('pdf-export-title').value.trim())||_currentReportTitle||document.getElementById('save-title').value||'SmartChart Report').trim(),
@@ -4922,6 +5002,11 @@ function init(){
     var mm=document.getElementById('btn-minmax');if(mm)mm.classList.toggle('active',showMinMax);
     refreshAllCharts();
   });
+  document.getElementById('btn-value-notes').addEventListener('click',function(){
+    SHOW_NOTES=!SHOW_NOTES;
+    this.classList.toggle('active',SHOW_NOTES);
+    refreshAllCharts();
+  });
   document.getElementById('btn-minmax').addEventListener('click',function(){
     showMinMax=!showMinMax;
     if(showMinMax) showSD=false;
@@ -4969,6 +5054,8 @@ function init(){
   // ── PDF Export Modal ──────────────────────────────────────────────────────
   function openPdfExportModal(){
     document.getElementById('modal-pdf-export').classList.add('open');
+    var _pin=document.getElementById('pdf-include-notes');
+    if(_pin) _pin.checked=false;  // never remembered - notes are internal
     var titleInp = document.getElementById('pdf-export-title');
     if(titleInp){
       titleInp.value = _currentReportTitle || (document.getElementById('save-title')?document.getElementById('save-title').value.trim():'');

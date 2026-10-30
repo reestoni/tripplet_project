@@ -8,6 +8,10 @@ from ui.widgets.help_search import search, get_index, normalize, SOURCES
 
 
 @pytest.mark.parametrize("query, screen, lang", [
+    ("wo sehe ich die dashboards die mir freigegeben wurden", "dashboards", "de"),
+    ("how do I share my dashboard with a colleague", "dashboards", "en"),
+    ("wie viele experimente pro monat", "smart_chart", "de"),
+    ("count experiments per month", "smart_chart", "en"),
     ("wo kann ich alle aufträge einer maschine einsehen?", "all_experiments", "de"),
     ("where are all orders of a machine", "all_experiments", "en"),
     ("dónde veo todos los pedidos de una máquina", "all_experiments", "es"),
@@ -23,6 +27,8 @@ from ui.widgets.help_search import search, get_index, normalize, SOURCES
     ("report als pdf", "report", "de"),
     ("originalspule vom kunden als benchmark erfassen", "show_experiment", "de"),
     ("how do I add a customer reference sample", "show_experiment", "en"),
+    ("notiz an einen messwert hängen", "show_experiment", "de"),
+    ("how do I add a note", "show_experiment", "en"),
 ])
 def test_top_hit(query, screen, lang):
     hits = search(query, 3)

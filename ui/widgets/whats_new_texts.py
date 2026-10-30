@@ -36,6 +36,27 @@ RELEASES = [
             # ═══════════════════════════════ EN ═══════════════════════════════
             "en": [
                 ("h", "Show Experiment"),
+                ("feature", "Yarns of the series in one table",
+                 "<b>Yarns…</b> shows every ply of the series with its yarn and every trial. Click a yarn to change "
+                 "it for the whole ply - type a part of the name to find it, e.g. <i>167 dty</i>. Click a cell to "
+                 "switch a ply on or off for one trial, type 1-9 for the number of ends. <b>+ Add ply</b> adds a "
+                 "ply for all trials. Changed cells are yellow, nothing is saved before <b>Apply</b>.",
+                 "Show Experiment → Machine Data → <b>Yarns…</b> (or right-click the Ply row)", "wn_series_yarns.svg"),
+                ("feature", "Where are my spools?",
+                 "A small spool behind every ply in the Material line tells you at a glance: green spool = this yarn "
+                 "is in stock, crossed-out tube = nothing in stock. Click the yarn or the green spool to see every spool in "
+                 "stock by storage location, with batch, weight and tube colour. Spools assigned to this series "
+                 "are bold. <b>Open in Yarn Stock</b> takes you straight to the yarn.",
+                 "Show Experiment → Material line → yarn or spool symbol", "wn_spool_locations.svg"),
+                ("feature", "Notes on values",
+                 "Write down why a value looks the way it does - right where it is: right-click a value → "
+                 "<b>Add note…</b>, e.g. <i>Spool had knots, measured again</i>. A small purple triangle marks the "
+                 "cell, pointing at it shows the note with name and date. Right-click a trial number for a note on "
+                 "the whole trial. The <b>Notes</b> tab lists all notes of the series, double-click jumps to the "
+                 "value. Everybody can write notes. In the <b>Smart Chart</b>, the <b>Notes</b> button shows them as a "
+                 "purple outline with the note in the tooltip. They are not printed in the PDF unless you tick "
+                 "<i>Include notes on values</i> when exporting.",
+                 "Show Experiment → right-click a value → <b>Add note…</b>", "wn_cell_notes.svg"),
                 ("feature", "Reference samples",
                  "Add a customer's original spool as a benchmark. It appears as a highlighted <i>Ref</i> column "
                  "and as a horizontal line in the report - and is never counted as a trial.",
@@ -51,8 +72,9 @@ RELEASES = [
                 ("feature", "Faster data entry - like in Excel",
                  "Type a value and press <b>Enter</b>: you land in the cell below, ready for the next value "
                  "(<b>Shift+Enter</b> goes up). Click a cell (or select several) and press <b>Delete</b> to empty "
-                 "them - no double-click needed. Save with <b>Save</b> or <b>Ctrl+S</b>; there is no \"Saved\" "
-                 "message any more - the yellow simply disappears.",
+                 "them - no double-click needed. Save with <b>Save</b> or <b>Ctrl+S</b>; instead of a \"Saved\" "
+                 "message to click away, the yellow disappears and a green tick lights up briefly in the middle - "
+                 "you can keep typing right away.",
                  "Show Experiment → any table", None),
                 ("feature", "Undo with Ctrl+Z",
                  "Typed the wrong value, pasted into the wrong place or deleted too much? <b>Ctrl+Z</b> takes it "
@@ -79,7 +101,37 @@ RELEASES = [
                 ("feature", "Change history (superusers)",
                  "See who changed a value, when, and what it was before - for one value or the whole series.",
                  "Show Experiment → right-click a value → <b>Change history…</b>", "wn_history.svg"),
+                ("h", "Smart Chart"),
+                ("feature", "New Smart Chart: find trials by their properties",
+                 "Pick trials across <b>all</b> series by yarn, jet geometry, machine settings and lab results - e.g. all polyester "
+                 "trials with 70–80 dtex end titer and 30–40 filaments. <b>+ Add filter</b> shows how the values are "
+                 "spread and how many trials each filter leaves; number filters can keep only whole numbers, every 0.5 or "
+                 "values you tick. Then chart any field against any other - as points, "
+                 "trend lines with R², mean lines, bars, box plots, violins, histograms or a density map - colour by "
+                 "jet, machine or a number (colour scale), pick a palette or your own colours, split into one small "
+                 "chart per machine. Click a point "
+                 "to find the trial in the list, double-click to open it. Save your chart as a view (also shared), "
+                 "export to PDF or Excel.",
+                 "Sidebar → <b>Smart Chart</b>", "wn_smart_chart.svg"),
+                ("feature", 'Is this comparison fair?',
+                 'A coloured bar above the chart warns when the groups you compare also differ in other things that change the result - e.g. jet A was mostly tested on PES at 3.5 bar, jet B on PA at 2 bar. Green, yellow or red, with the reason in one sentence. <b>Details</b> shows every condition, <b>Make it fairer</b> keeps only what all groups have in common. It also warns about very small groups, groups from one single series and groups in different X ranges.',
+                 'Smart Chart → bar above the chart', "wn_fairness.svg"),
+                ("feature", 'Dashboard: build your own page, like Power BI',
+                 'Switch Smart Chart to <b>Dashboard</b>: a page with several visuals side by side. Drag fields from <b>Fields</b> - every table, from Statimat and Itemat to DTYoMat, jet and yarn - into the wells of a visual. New visuals: <b>Matrix</b> (e.g. FP/m per jet and air pressure, coloured - empty cells show where trials are missing), <b>Card</b> (one number) and <b>Table</b>. Click a bar, box or matrix cell and all other visuals filter to it. <b>Slicers</b> pick values for the whole page - as a list, dropdown, tiles or a range slider. Place visuals freely and resize them, work with several pages (tabs at the bottom) and add filters to one page or one visual. New: <b>calculated fields</b> from your own formula, <b>targets</b> (green/red, target lines), <b>drill-down</b> machine → jet and <b>selecting points</b> to filter the page. Plus: <b>templates</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> of one or all pages, <b>Excel</b> per visual or page, notes on values, undo with <b>Ctrl+Z</b>, and <b>lining up</b> several visuals at once (Ctrl+click, then align, same size or distribute).',
+                 'Smart Chart → <b>Dashboard</b>', "wn_dashboard.svg"),
+                ("feature", 'Lab statistics in the dashboard',
+                 'Count <b>experiments, trial series or trials</b> - per month, product group, order type, project, owner or lab machine (<i>Tested on</i>). The new visual <b>Columns</b> shows them stacked, side by side or as 100 %; months and years run in order, empty months show as 0. Start with <b>New</b> → <b>Lab statistics</b>. The numbers are the same as on the Statistics page - now for everybody and with slicers.',
+                 'Smart Chart → <b>Dashboard</b> → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
+                ("feature", 'Dashboards: look at them, share them',
+                 'The new page <b>Dashboards</b> shows your own dashboards and the ones colleagues shared with you. Here you only look: slicers, clicking bars to filter, drill-down, page tabs and <b>PDF</b> work - nothing gets changed by accident. To share your dashboard, open it in Smart Chart and click <b>Share…</b>: with everybody, with single people or with groups (read, write, admin, superuser), each to <b>view</b> or to <b>edit</b>. Only you can share or delete it.',
+                 'Sidebar → Tools → <b>Dashboards</b> · Smart Chart → <b>Share…</b>', "wn_dashboards.svg"),
+                ("feature", 'Superusers decide who may use which tool',
+                 'In <b>Manage User → Access…</b> a superuser switches every tool and screen on or off - for a group (read, write, admin) or for a single person, e.g. Smart Chart for one colleague, or no Backlog for a group. A setting for a person wins over the group; without settings everything stays as before. Blocked tools disappear from the sidebar from the next login.',
+                 'Sidebar → Superuser → Manage User → <b>Access…</b>', "wn_feature_access.svg"),
                 ("h", "Settings"),
+                ("feature", 'Choose your start screen',
+                 'Decide which screen opens after the login - Backlog (as before), All Experiments, Dashboards, Yarn Stock or another tool you use. If a superuser switches that tool off for you, Backlog opens instead.',
+                 'Sidebar → Account → <b>Settings</b> → <b>Start screen</b>', "wn_start_screen.svg"),
                 ("feature", "Text size for the whole program",
                  "Normal, Large, Extra large or Huge - buttons, menus, tables and dialogs all grow. Applies after a "
                  "restart. Welcome message and accent colour are set here, too.",
@@ -130,6 +182,13 @@ RELEASES = [
                  "The list fills the full width and height of the window - the last columns are visible without "
                  "scrolling sideways - and is shown larger on big screens.",
                  "All Experiments", "wn_all_experiments.svg"),
+                ("h", "Yarns"),
+                ("feature", "See the colour of a yarn",
+                 "A small square in front of the yarn name shows its colour - black, white, beige, grey, natural. "
+                 "Hold the mouse over it to read the colour. You can also search by colour, e.g. <i>black</i>. The "
+                 "colour comes from the <i>Colour</i> field of the yarn (<b>Manage Yarn</b>).",
+                 "Yarns… dialog, Create Experiment, Yarn Stock, Manage Yarn, Reassign Yarn, Show Experiment "
+                 "(Ply row)", "wn_yarn_colour.svg"),
                 ("h", "Yarn Stock"),
                 ("feature", "Stock status per yarn",
                  "The traffic light now shows each yarn as a whole: all its batches in stock against its minimum "
@@ -182,6 +241,29 @@ RELEASES = [
             # ═══════════════════════════════ DE ═══════════════════════════════
             "de": [
                 ("h", "Show Experiment"),
+                ("feature", "Garne der Serie in einer Tabelle",
+                 "<b>Yarns…</b> zeigt alle Plies der Serie mit ihrem Garn und alle Versuche. Ein Klick aufs Garn "
+                 "tauscht es für die ganze Ply - zum Finden einen Teil des Namens tippen, z.&nbsp;B. <i>167 dty</i>. "
+                 "Ein Klick in eine Zelle schaltet die Ply für diesen Versuch ein oder aus, 1-9 tippen setzt die "
+                 "Anzahl Enden. <b>+ Add ply</b> fügt eine Ply für alle Versuche hinzu. Geänderte Zellen sind gelb, "
+                 "gespeichert wird erst mit <b>Apply</b>.",
+                 "Show Experiment → Machine Data → <b>Yarns…</b> (oder Rechtsklick auf die Ply-Zeile)",
+                 "wn_series_yarns.svg"),
+                ("feature", "Wo liegen meine Spulen?",
+                 "Eine kleine Spule hinter jeder Ply in der Materialzeile zeigt auf einen Blick: grüne Spule = dieses "
+                 "Garn ist am Lager, durchgestrichene Hülse = nichts am Lager. Ein Klick aufs Garn oder die grüne Spule zeigt "
+                 "alle Spulen am Lager nach Lagerplatz, mit Batch, Gewicht und Hülsenfarbe. Spulen, die dieser Serie "
+                 "zugewiesen sind, stehen fett. <b>Open in Yarn Stock</b> springt direkt zum Garn.",
+                 "Show Experiment → Materialzeile → Garn oder Spulen-Symbol", "wn_spool_locations.svg"),
+                ("feature", "Notizen an Werten",
+                 "Festhalten, warum ein Wert so ist - direkt dort, wo er steht: Rechtsklick auf einen Wert → "
+                 "<b>Add note…</b>, z.&nbsp;B. <i>Spule hatte Knoten, nachgemessen</i>. Ein kleines violettes "
+                 "Dreieck markiert die Zelle, mit der Maus darauf zeigen zeigt die Notiz mit Name und Datum. "
+                 "Rechtsklick auf eine Versuchsnummer für eine Notiz zum ganzen Versuch. Der Tab <b>Notes</b> "
+                 "listet alle Notizen der Serie, Doppelklick springt zum Wert. Notizen schreiben darf jeder. Im "
+                 "<b>Smart Chart</b> zeigt der Knopf <b>Notes</b> sie als violetten Rand mit der Notiz im Tooltip. "
+                 "Ins PDF kommen sie nur, wenn man beim Export <i>Include notes on values</i> ankreuzt.",
+                 "Show Experiment → Rechtsklick auf einen Wert → <b>Add note…</b>", "wn_cell_notes.svg"),
                 ("feature", "Referenzmuster",
                  "Die Originalspule eines Kunden als Vergleich hinzufügen. Sie erscheint als hervorgehobene "
                  "<i>Ref</i>-Spalte und im Report als waagrechte Linie - und zählt nie als Versuch.",
@@ -198,7 +280,8 @@ RELEASES = [
                  "Wert tippen und <b>Enter</b> drücken: Du landest in der Zelle darunter, bereit für den nächsten "
                  "Wert (<b>Umschalt+Enter</b> geht nach oben). Zelle anklicken (oder mehrere markieren) und "
                  "<b>Entf</b> drücken leert sie - ohne Doppelklick. Speichern mit <b>Save</b> oder <b>Strg+S</b>; "
-                 "eine \"Saved\"-Meldung gibt es nicht mehr - das Gelb verschwindet einfach.",
+                 "statt einer \"Saved\"-Meldung zum Wegklicken verschwindet das Gelb und in der Mitte leuchtet "
+                 "kurz ein grünes Häkchen auf - du kannst sofort weitertippen.",
                  "Show Experiment → jede Tabelle", None),
                 ("feature", "Rückgängig mit Strg+Z",
                  "Falschen Wert getippt, an der falschen Stelle eingefügt oder zu viel gelöscht? <b>Strg+Z</b> nimmt "
@@ -227,7 +310,37 @@ RELEASES = [
                  "Sehen, wer einen Wert wann geändert hat und was vorher drinstand - für einen Wert oder die ganze "
                  "Serie.",
                  "Show Experiment → Rechtsklick auf einen Wert → <b>Change history…</b>", "wn_history.svg"),
+                ("h", "Smart Chart"),
+                ("feature", "Neuer Smart Chart: Versuche über ihre Eigenschaften finden",
+                 "Versuche über <b>alle</b> Serien nach Garn, Jet-Geometrie, Maschineneinstellungen und Laborwerten auswählen - "
+                 "z.&nbsp;B. alle Polyester-Versuche mit 70–80 dtex Endtiter und 30–40 Filamenten. <b>+ Add filter</b> "
+                 "zeigt, wie sich die Werte verteilen und wie viele Versuche jeder Filter übrig lässt; Zahlenfilter können "
+                 "nur ganze Zahlen, alle 0.5 oder angekreuzte Werte behalten. Danach jedes "
+                 "Feld gegen jedes andere darstellen - als Punkte, Trendlinien mit R², Mittelwert-Linien, Balken, "
+                 "Boxplots, Violins, Histogramme oder Dichte-Karte -, nach Jet, Maschine oder einer Zahl (Farbskala) "
+                 "einfärben, Palette oder eigene Farben wählen, pro Maschine ein kleines Diagramm. Klick auf einen "
+                 "Punkt findet den Versuch in der "
+                 "Liste, Doppelklick öffnet ihn. Diagramm als View speichern (auch geteilt), als PDF oder Excel exportieren.",
+                 "Sidebar → <b>Smart Chart</b>", "wn_smart_chart.svg"),
+                ("feature", 'Ist dieser Vergleich fair?',
+                 'Eine farbige Leiste über dem Diagramm warnt, wenn sich die verglichenen Gruppen auch in anderen Dingen unterscheiden, die das Ergebnis verändern - z.&nbsp;B. Jet A wurde vor allem auf PES bei 3.5 bar getestet, Jet B auf PA bei 2 bar. Grün, gelb oder rot, mit dem Grund in einem Satz. <b>Details</b> zeigt jede Bedingung, <b>Make it fairer</b> behält nur, was alle Gruppen gemeinsam haben. Gewarnt wird auch bei sehr kleinen Gruppen, Gruppen aus einer einzigen Serie und Gruppen in verschiedenen X-Bereichen.',
+                 'Smart Chart → Leiste über dem Diagramm', "wn_fairness.svg"),
+                ("feature", 'Dashboard: eigene Seite bauen, wie in Power BI',
+                 'Smart Chart auf <b>Dashboard</b> umschalten: eine Seite mit mehreren Visuals nebeneinander. Felder aus <b>Fields</b> - jede Tabelle, von Statimat und Itemat bis DTYoMat, Jet und Garn - in die Ablagen eines Visuals ziehen. Neue Visuals: <b>Matrix</b> (z.&nbsp;B. FP/m pro Jet und Luftdruck, eingefärbt - leere Zellen zeigen, wo Versuche fehlen), <b>Card</b> (eine Zahl) und <b>Table</b>. Klick auf einen Balken, eine Box oder eine Matrix-Zelle, und alle anderen Visuals filtern sich darauf. <b>Slicer</b> wählen Werte für die ganze Seite - als Liste, Dropdown, Knöpfe oder Bereichsregler. Visuals frei platzieren und in der Grösse ziehen, mehrere Seiten (Reiter unten) und Filter nur für eine Seite oder ein Visual. Neu: <b>berechnete Felder</b> per eigener Formel, <b>Zielwerte</b> (grün/rot, Ziellinien), <b>Drill-down</b> Maschine → Jet und <b>Punkte auswählen</b>, um die Seite zu filtern. Dazu: <b>Vorlagen</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> einer oder aller Seiten, <b>Excel</b> pro Visual oder Seite, Notizen an Werten, Rückgängig mit <b>Strg+Z</b> und mehrere Visuals auf einmal <b>ausrichten</b> (Strg+Klick, dann ausrichten, gleich gross machen oder verteilen).',
+                 'Smart Chart → <b>Dashboard</b>', "wn_dashboard.svg"),
+                ("feature", 'Laborstatistik im Dashboard',
+                 '<b>Experimente, Versuchsserien oder Versuche</b> zählen - pro Monat, Produktgruppe, Auftragsart, Projekt, Owner oder Labormaschine (<i>Tested on</i>). Das neue Visual <b>Columns</b> zeigt sie gestapelt, nebeneinander oder als 100 %; Monate und Jahre laufen in der richtigen Reihenfolge, leere Monate erscheinen als 0. Am einfachsten mit <b>New</b> → <b>Lab statistics</b> beginnen. Die Zahlen sind dieselben wie auf der Statistics-Seite - jetzt für alle und mit Slicern.',
+                 'Smart Chart → <b>Dashboard</b> → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
+                ("feature", 'Dashboards: anschauen und teilen',
+                 'Die neue Seite <b>Dashboards</b> zeigt deine eigenen Dashboards und die, die Kollegen für dich freigegeben haben. Hier wird nur geschaut: Slicer, Klick auf Balken zum Filtern, Drill-down, Seiten-Reiter und <b>PDF</b> gehen - versehentlich verändern kann man nichts. Zum Teilen das Dashboard in Smart Chart öffnen und auf <b>Share…</b> klicken: für alle, für einzelne Personen oder für Gruppen (read, write, admin, superuser), je zum <b>Anschauen</b> oder zum <b>Bearbeiten</b>. Teilen oder löschen kannst nur du.',
+                 'Sidebar → Tools → <b>Dashboards</b> · Smart Chart → <b>Share…</b>', "wn_dashboards.svg"),
+                ("feature", 'Superuser bestimmen, wer welches Tool nutzen darf',
+                 'In <b>Manage User → Access…</b> schaltet ein Superuser jedes Tool und jeden Screen ein oder aus - für eine Gruppe (read, write, admin) oder für eine einzelne Person, z.&nbsp;B. Smart Chart für einen Kollegen oder kein Backlog für eine Gruppe. Die Einstellung für eine Person gewinnt über die Gruppe; ohne Einstellung bleibt alles wie bisher. Gesperrte Tools verschwinden ab dem nächsten Login aus der Sidebar.',
+                 'Sidebar → Superuser → Manage User → <b>Access…</b>', "wn_feature_access.svg"),
                 ("h", "Settings"),
+                ("feature", 'Eigene Startseite wählen',
+                 'Bestimme, welcher Screen nach dem Login aufgeht - Backlog (wie bisher), All Experiments, Dashboards, Yarn Stock oder ein anderes Tool, das du nutzt. Schaltet ein Superuser dieses Tool für dich aus, öffnet sich stattdessen Backlog.',
+                 'Sidebar → Account → <b>Settings</b> → <b>Start screen</b>', "wn_start_screen.svg"),
                 ("feature", "Textgrösse fürs ganze Programm",
                  "Normal, Large, Extra large oder Huge - Knöpfe, Menüs, Tabellen und Dialoge wachsen alle mit. Gilt "
                  "nach einem Neustart. Auch Willkommensnachricht und Akzentfarbe werden hier eingestellt.",
@@ -279,6 +392,13 @@ RELEASES = [
                  "Die Liste füllt die volle Breite und Höhe des Fensters - die letzten Spalten sind ohne seitliches "
                  "Scrollen sichtbar - und wird auf grossen Bildschirmen grösser dargestellt.",
                  "All Experiments", "wn_all_experiments.svg"),
+                ("h", "Garne"),
+                ("feature", "Die Farbe eines Garns sehen",
+                 "Ein kleines Kästchen vor dem Garnnamen zeigt seine Farbe - schwarz, weiss, beige, grau, natur. "
+                 "Mit der Maus darüber steht die Farbe auch als Text. Man kann auch nach Farbe suchen, z. B. "
+                 "<i>black</i>. Die Farbe kommt aus dem Feld <i>Colour</i> des Garns (<b>Manage Yarn</b>).",
+                 "Dialog Yarns…, Create Experiment, Yarn Stock, Manage Yarn, Reassign Yarn, Show Experiment "
+                 "(Zeile Ply)", "wn_yarn_colour.svg"),
                 ("h", "Yarn Stock"),
                 ("feature", "Lagerstatus pro Garn",
                  "Die Ampel zeigt jetzt jedes Garn als Ganzes: alle Batches am Lager zusammen gegen den "
@@ -332,6 +452,29 @@ RELEASES = [
             # ═══════════════════════════════ ES ═══════════════════════════════
             "es": [
                 ("h", "Show Experiment"),
+                ("feature", "Los hilos de la serie en una tabla",
+                 "<b>Yarns…</b> muestra todos los plies de la serie con su hilo y todos los ensayos. Un clic en el "
+                 "hilo lo cambia para todo el ply; para encontrarlo escribe parte del nombre, p.&nbsp;ej. "
+                 "<i>167 dty</i>. Un clic en una celda activa o quita el ply en ese ensayo; escribe 1-9 para el "
+                 "número de cabos. <b>+ Add ply</b> añade un ply a todos los ensayos. Las celdas cambiadas están en "
+                 "amarillo y nada se guarda antes de <b>Apply</b>.",
+                 "Show Experiment → Machine Data → <b>Yarns…</b> (o clic derecho en la fila Ply)",
+                 "wn_series_yarns.svg"),
+                ("feature", "¿Dónde están mis bobinas?",
+                 "Una pequeña bobina detrás de cada ply en la línea de material lo indica de un vistazo: bobina verde "
+                 "= hay hilo en almacén, tubo tachado = no hay nada en almacén. Un clic en el hilo o en la bobina verde muestra "
+                 "todas las bobinas en almacén por ubicación, con lote, peso y color del tubo. Las bobinas asignadas "
+                 "a esta serie aparecen en negrita. <b>Open in Yarn Stock</b> lleva directamente al hilo.",
+                 "Show Experiment → línea de material → hilo o símbolo de bobina", "wn_spool_locations.svg"),
+                ("feature", "Notas en los valores",
+                 "Anota por qué un valor es así, justo donde está: clic derecho en un valor → <b>Add note…</b>, "
+                 "p.&nbsp;ej. <i>La bobina tenía nudos, medido de nuevo</i>. Un pequeño triángulo violeta marca "
+                 "la celda; al señalarla se ve la nota con nombre y fecha. Clic derecho en un número de ensayo "
+                 "para una nota sobre todo el ensayo. La pestaña <b>Notes</b> lista todas las notas de la serie; "
+                 "doble clic salta al valor. Todos pueden escribir notas. En el <b>Smart Chart</b>, el botón "
+                 "<b>Notes</b> las muestra como borde violeta con la nota en la descripción emergente. En el PDF "
+                 "solo aparecen si al exportar marcas <i>Include notes on values</i>.",
+                 "Show Experiment → clic derecho en un valor → <b>Add note…</b>", "wn_cell_notes.svg"),
                 ("feature", "Muestras de referencia",
                  "Añade la bobina original de un cliente como comparación. Aparece como columna <i>Ref</i> "
                  "resaltada y como línea horizontal en el informe, y nunca cuenta como ensayo.",
@@ -348,8 +491,9 @@ RELEASES = [
                 ("feature", "Introducir datos más rápido, como en Excel",
                  "Escribe un valor y pulsa <b>Enter</b>: pasas a la celda de abajo, listo para el siguiente valor "
                  "(<b>Mayús+Enter</b> sube). Haz clic en una celda (o selecciona varias) y pulsa <b>Supr</b> para "
-                 "vaciarlas, sin doble clic. Guarda con <b>Save</b> o <b>Ctrl+S</b>; ya no aparece el mensaje "
-                 "\"Saved\": el amarillo simplemente desaparece.",
+                 "vaciarlas, sin doble clic. Guarda con <b>Save</b> o <b>Ctrl+S</b>; en lugar de un mensaje "
+                 "\"Saved\" que cerrar, el amarillo desaparece y en el centro aparece un momento una marca verde; "
+                 "puedes seguir escribiendo enseguida.",
                  "Show Experiment → cualquier tabla", None),
                 ("feature", "Deshacer con Ctrl+Z",
                  "¿Valor equivocado, pegado en el sitio incorrecto o borrado de más? <b>Ctrl+Z</b> lo deshace paso a "
@@ -376,7 +520,37 @@ RELEASES = [
                 ("feature", "Historial de cambios (superusuarios)",
                  "Ver quién cambió un valor, cuándo y qué había antes - para un valor o toda la serie.",
                  "Show Experiment → clic derecho en un valor → <b>Change history…</b>", "wn_history.svg"),
+                ("h", "Smart Chart"),
+                ("feature", "Nuevo Smart Chart: encontrar ensayos por sus propiedades",
+                 "Elige ensayos de <b>todas</b> las series por hilo, geometría del jet, ajustes de máquina y resultados de laboratorio, "
+                 "p.&nbsp;ej. todos los ensayos de poliéster con 70–80 dtex de título final y 30–40 filamentos. "
+                 "<b>+ Add filter</b> muestra cómo se reparten los valores y cuántos ensayos deja cada filtro; los filtros "
+                 "numéricos pueden quedarse solo con enteros, cada 0.5 o los valores marcados. Después "
+                 "representa cualquier campo frente a otro (puntos, rectas de tendencia con R², líneas de media, "
+                 "barras, box plots, violines, histogramas o mapa de densidad), colorea por jet, máquina o un número "
+                 "(escala de color), elige paleta o tus propios colores, un gráfico pequeño por máquina. Clic en un "
+                 "punto encuentra el ensayo en la lista, doble clic lo abre. Guarda "
+                 "el gráfico como vista (también compartida), exporta a PDF o Excel.",
+                 "Barra lateral → <b>Smart Chart</b>", "wn_smart_chart.svg"),
+                ("feature", '¿Es justa esta comparación?',
+                 'Una barra de color sobre el gráfico avisa cuando los grupos que comparas también se diferencian en otras cosas que cambian el resultado, p.&nbsp;ej. el jet A se probó sobre todo con PES a 3.5 bar y el jet B con PA a 2 bar. Verde, amarillo o rojo, con el motivo en una frase. <b>Details</b> muestra cada condición, <b>Make it fairer</b> deja solo lo que todos los grupos tienen en común. También avisa de grupos muy pequeños, grupos de una sola serie y grupos en rangos de X distintos.',
+                 'Smart Chart → barra sobre el gráfico', "wn_fairness.svg"),
+                ("feature", 'Dashboard: crea tu propia página, como en Power BI',
+                 'Cambia Smart Chart a <b>Dashboard</b>: una página con varios visuales. Arrastra campos desde <b>Fields</b> (todas las tablas, de Statimat e Itemat a DTYoMat, jet e hilo) a los huecos de un visual. Visuales nuevos: <b>Matrix</b> (p.&nbsp;ej. FP/m por jet y presión, coloreado; las celdas vacías muestran dónde faltan ensayos), <b>Card</b> (un número) y <b>Table</b>. Haz clic en una barra, caja o celda y todos los demás visuales se filtran. Los <b>slicers</b> eligen valores para toda la página: lista, desplegable, botones o rango. Coloca y redimensiona los visuales libremente, usa varias páginas (pestañas abajo) y filtros solo para una página o un visual. Nuevo: <b>campos calculados</b> con tu propia fórmula, <b>objetivos</b> (verde/rojo, líneas de objetivo), <b>profundizar</b> máquina → jet y <b>seleccionar puntos</b> para filtrar la página. Además: <b>plantillas</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> de una o todas las páginas, <b>Excel</b> por visual o página, notas en los valores, deshacer con <b>Ctrl+Z</b> y <b>alinear</b> varios visuales a la vez (Ctrl+clic, luego alinear, mismo tamaño o distribuir).',
+                 'Smart Chart → <b>Dashboard</b>', "wn_dashboard.svg"),
+                ("feature", 'Estadísticas del laboratorio en el dashboard',
+                 'Cuenta <b>experimentos, series o ensayos</b> por mes, grupo de producto, tipo de pedido, proyecto, responsable o máquina de laboratorio (<i>Tested on</i>). El nuevo visual <b>Columns</b> los muestra apilados, lado a lado o al 100 %; meses y años van en orden y los meses vacíos aparecen como 0. Empieza con <b>New</b> → <b>Lab statistics</b>. Los números son los mismos que en la página Statistics, ahora para todos y con slicers.',
+                 'Smart Chart → <b>Dashboard</b> → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
+                ("feature", 'Dashboards: verlos y compartirlos',
+                 'La nueva página <b>Dashboards</b> muestra tus dashboards y los que tus compañeros compartieron contigo. Aquí solo se mira: funcionan los slicers, el clic en barras para filtrar, el drill-down, las pestañas y el <b>PDF</b>; nada se cambia por error. Para compartir tu dashboard, ábrelo en Smart Chart y haz clic en <b>Share…</b>: con todos, con personas o con grupos (read, write, admin, superuser), cada uno para <b>ver</b> o para <b>editar</b>. Solo tú puedes compartirlo o borrarlo.',
+                 'Sidebar → Tools → <b>Dashboards</b> · Smart Chart → <b>Share…</b>', "wn_dashboards.svg"),
+                ("feature", 'Los superusuarios deciden quién usa qué herramienta',
+                 'En <b>Manage User → Access…</b> un superusuario activa o desactiva cada herramienta y pantalla, para un grupo (read, write, admin) o para una persona, p.&nbsp;ej. Smart Chart para un compañero o sin Backlog para un grupo. El ajuste de una persona tiene prioridad sobre el del grupo; sin ajustes todo queda como antes. Las herramientas bloqueadas desaparecen del menú lateral desde el siguiente inicio de sesión.',
+                 'Sidebar → Superuser → Manage User → <b>Access…</b>', "wn_feature_access.svg"),
                 ("h", "Settings"),
+                ("feature", 'Elige tu pantalla de inicio',
+                 'Decide qué pantalla se abre tras iniciar sesión: Backlog (como antes), All Experiments, Dashboards, Yarn Stock u otra herramienta que uses. Si un superusuario te desactiva esa herramienta, se abre Backlog.',
+                 'Sidebar → Account → <b>Settings</b> → <b>Start screen</b>', "wn_start_screen.svg"),
                 ("feature", "Tamaño del texto para todo el programa",
                  "Normal, Large, Extra large o Huge - botones, menús, tablas y diálogos crecen. Se aplica tras "
                  "reiniciar. Aquí también se ajustan el mensaje de bienvenida y el color de acento.",
@@ -428,6 +602,13 @@ RELEASES = [
                  "La lista ocupa todo el ancho y alto de la ventana - las últimas columnas se ven sin desplazarse "
                  "hacia los lados - y se muestra más grande en pantallas grandes.",
                  "All Experiments", "wn_all_experiments.svg"),
+                ("h", "Hilos"),
+                ("feature", "Ver el color de un hilo",
+                 "Un pequeño cuadrado delante del nombre del hilo muestra su color - negro, blanco, beige, gris, "
+                 "natural. Al pasar el ratón por encima se lee el color. También se puede buscar por color, p. ej. "
+                 "<i>black</i>. El color viene del campo <i>Colour</i> del hilo (<b>Manage Yarn</b>).",
+                 "Diálogo Yarns…, Create Experiment, Yarn Stock, Manage Yarn, Reassign Yarn, Show Experiment "
+                 "(fila Ply)", "wn_yarn_colour.svg"),
                 ("h", "Yarn Stock"),
                 ("feature", "Estado del stock por hilo",
                  "El semáforo muestra ahora cada hilo en conjunto: todos sus lotes en stock frente al stock mínimo. "

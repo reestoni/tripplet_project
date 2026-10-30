@@ -99,6 +99,9 @@ open_quick_search = None   # callable or None
 # ui/widgets/help_search.py. None = noch nicht registriert.
 open_help_search = None    # callable or None
 
+# Dashboards zum Anschauen (Sidebar "Dashboards", ui/screen_dashboards.py) - von MainWindow gesetzt.
+open_dashboards = None     # callable or None
+
 # Papierkorb-Vorschau (ui/recycle_preview.py) - von MainWindow gesetzt:
 # (exp_pk, series_pk, experiment_id, setup(screen)) -> None
 open_show_experiment_preview = None

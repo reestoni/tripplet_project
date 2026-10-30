@@ -67,21 +67,8 @@ TIME_GRANULARITY_LABELS = {
 # titles in ShowExperimentScreen for recognizability. tblLaborJetAirConsumption
 # is deliberately excluded - it has no TrialID column at all, it's scoped to
 # TrialSeriesID/physical jet instead (calibration measurement, not per-trial).
-_LAB_MACHINE_TABLES = [
-    ("tbllabortiter", "Titer"),
-    ("tbllaborstatimatm", "Statimat M"),
-    ("tbllaborstatimatds", "Statimat DS"),
-    ("tbllaborekb", "EKB"),
-    ("tbllaboritematlab", "Itemat Lab"),
-    ("tbllaboritematplus", "Itemat Plus"),
-    ("tbllabordtyomat", "DTYoMat"),
-    ("tbllaborrapid600", "Rapid 600"),
-    ("tbllaborheissluftschrumpf", "Hot Air Shrinkage"),
-    ("tbllaborkochschrumpf", "Hot Water Shrinkage"),
-    ("tbllaboratyshrinkage", "ATY Shrinkage"),
-    ("tbllaboratyomat", "ATYoMat"),
-    ("tbllaborwaterbath", "Waterbath"),
-]
+# shared with the Smart Chart field "Tested on" (db/trial_explorer.py)
+from db.trial_explorer import LAB_MACHINE_TABLES as _LAB_MACHINE_TABLES  # noqa: E402
 
 _LAB_MACHINE_UNION_SQL = " UNION ALL ".join(
     f"SELECT DISTINCT TrialID, '{name}' AS LabMachine FROM {table} WHERE TrialID IS NOT NULL"

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Is this comparison fair - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="10" width="276" height="40" rx="6" fill="#FFF4D6" stroke="#E8C15A" stroke-width="1"/>
+  <circle cx="26" cy="23" r="6" fill="#C98A00"/>
+  <text x="38" y="27" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start" font-weight="bold">Comparison partly fair</text>
+  <text x="38" y="41" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start">Groups differ in material and air pressure</text>
+  <rect x="196" y="16" width="44" height="18" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="218.0" y="29.0" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">Details</text>
+  <rect x="244" y="16" width="40" height="18" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
+  <text x="264.0" y="29.0" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">Fairer</text>
+  <circle cx="170" cy="100" r="3.4" fill="#2F6DB5"/>
+  <circle cx="182" cy="94" r="3.4" fill="#2F6DB5"/>
+  <circle cx="194" cy="88" r="3.4" fill="#2F6DB5"/>
+  <circle cx="206" cy="82" r="3.4" fill="#2F6DB5"/>
+  <circle cx="218" cy="76" r="3.4" fill="#2F6DB5"/>
+  <text x="170" y="126" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2F6DB5" text-anchor="start" font-weight="bold">Jet A: PES 3.5 bar</text>
+  <circle cx="50" cy="86" r="3.4" fill="#D9822B"/>
+  <circle cx="62" cy="80" r="3.4" fill="#D9822B"/>
+  <circle cx="74" cy="74" r="3.4" fill="#D9822B"/>
+  <circle cx="86" cy="68" r="3.4" fill="#D9822B"/>
+  <circle cx="98" cy="62" r="3.4" fill="#D9822B"/>
+  <text x="20" y="126" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#D9822B" text-anchor="start" font-weight="bold">Jet B: PA 2 bar</text>
+  <line x1="14" y1="112" x2="286" y2="112" stroke="#565656" stroke-width="1"/>
+</svg>

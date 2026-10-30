@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 424" width="940" height="424">
-  <!-- Report / Smart Chart help sketch - generated, language-neutral (UI labels are English in the app). -->
+  <!-- Report help sketch - generated, language-neutral (UI labels are English in the app). -->
   <rect x="0" y="0" width="940" height="424" fill="#ffffff"/>
   <rect x="40" y="6" width="890" height="412" rx="8" fill="#f4f4f4" stroke="#cccccc" stroke-width="1"/>
   <circle cx="22" cy="30" r="11" fill="#39a650"/>
@@ -31,83 +31,55 @@
   <text x="685.0" y="35.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Open</text>
   <rect x="705" y="20" width="26" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
   <text x="718.0" y="35.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">PDF</text>
-  <circle cx="22" cy="70" r="11" fill="#39a650"/>
-  <text x="22" y="74" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">2</text>
-  <rect x="56" y="54" width="210" height="360" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
-  <text x="66" y="72" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#2b2b2b" text-anchor="start" font-weight="bold">Visual SQL Builder</text>
-  <rect x="66" y="80" width="92" height="22" rx="3" fill="#39a650"/>
-  <text x="112.0" y="95.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">Trial Data</text>
-  <rect x="162" y="80" width="94" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
-  <text x="209.0" y="95.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Free Query</text>
-  <text x="66" y="122" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start">Group by (Legend)</text>
-  <rect x="66" y="128" width="190" height="20" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
-  <text x="72" y="142" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="start">Jet ▾</text>
-  <rect x="66" y="156" width="60" height="22" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
-  <text x="96.0" y="171.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Simple</text>
-  <rect x="128" y="156" width="70" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
-  <text x="163.0" y="171.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Advanced</text>
-  <rect x="66" y="184" width="90" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
-  <text x="111.0" y="199.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">+ Add Filter</text>
-  <text x="66" y="222" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start">Trial Series</text>
-  <rect x="66" y="228" width="190" height="92" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
-  <text x="72" y="244" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">2026-73-035 X60.112</text>
-  <text x="72" y="262" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">2026-73-034 DTY trials</text>
-  <text x="72" y="280" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">2026-73-033 Jet S+</text>
-  <text x="66" y="334" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start" font-style="italic">Hold Ctrl to select multiple</text>
-  <rect x="66" y="346" width="140" height="22" rx="3" fill="#39a650"/>
-  <text x="136.0" y="361.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">▶ Run Query</text>
-  <rect x="210" y="346" width="46" height="22" rx="3" fill="#e6e6e6" stroke="#bbbbbb" stroke-width="1"/>
-  <text x="233.0" y="361.0" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2b2b2b" text-anchor="middle">Templ.</text>
-  <text x="66" y="400" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#39a650" text-anchor="start" font-weight="bold">{{smart_only}}</text>
-  <circle cx="282" cy="64" r="11" fill="#39a650"/>
-  <text x="282" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">5</text>
-  <rect x="296" y="54" width="626" height="20" rx="3" fill="#eef5ff" stroke="#c7dbf5" stroke-width="1"/>
-  <text x="304" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2a5d9f" text-anchor="start">DRILL   Overfeed: 3.0 %  ›  Jet S+ 1.2</text>
-  <circle cx="282" cy="96" r="11" fill="#39a650"/>
-  <text x="282" y="100" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">3</text>
-  <rect x="296" y="84" width="306" height="220" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
-  <text x="304" y="101" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#565656" text-anchor="start" font-weight="bold">::</text>
-  <rect x="318" y="89" width="130" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
-  <text x="324" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Tension T1 [cN] ▾</text>
-  <text x="454" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#39a650" text-anchor="start" font-weight="bold">+</text>
-  <text x="592" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="end">[ ]  ▲ ▼  x</text>
-  <rect x="318" y="112" width="130" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
-  <text x="324" y="125" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">X: Overfeed [%] ▾</text>
-  <text x="454" y="125" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start">to all</text>
-  <rect x="326" y="220" width="34" height="60" rx="2" fill="#4e79a7"/>
-  <line x1="343" y1="210" x2="343" y2="230" stroke="#2b2b2b" stroke-width="1"/>
-  <rect x="378" y="198" width="34" height="82" rx="2" fill="#4e79a7"/>
-  <line x1="395" y1="188" x2="395" y2="208" stroke="#2b2b2b" stroke-width="1"/>
-  <rect x="430" y="210" width="34" height="70" rx="2" fill="#4e79a7"/>
-  <line x1="447" y1="200" x2="447" y2="220" stroke="#2b2b2b" stroke-width="1"/>
-  <rect x="482" y="185" width="34" height="95" rx="2" fill="#4e79a7"/>
-  <line x1="499" y1="175" x2="499" y2="195" stroke="#2b2b2b" stroke-width="1"/>
-  <rect x="534" y="230" width="34" height="50" rx="2" fill="#4e79a7"/>
-  <line x1="551" y1="220" x2="551" y2="240" stroke="#2b2b2b" stroke-width="1"/>
-  <line x1="318" y1="280" x2="592" y2="280" stroke="#cccccc" stroke-width="1"/>
-  <text x="318" y="296" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start" font-style="italic">note · gridlines e.g. 5, 10, 15</text>
-  <rect x="612" y="84" width="306" height="220" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
-  <text x="620" y="101" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#565656" text-anchor="start" font-weight="bold">::</text>
-  <rect x="634" y="89" width="130" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
-  <text x="640" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Elongation [%] ▾</text>
-  <text x="770" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#39a650" text-anchor="start" font-weight="bold">+</text>
+  <circle cx="42" cy="64" r="11" fill="#39a650"/>
+  <text x="42" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">4</text>
+  <rect x="56" y="54" width="866" height="20" rx="3" fill="#eef5ff" stroke="#c7dbf5" stroke-width="1"/>
+  <text x="64" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#2a5d9f" text-anchor="start">DRILL   Overfeed: 3.0 %  ›  Jet S+ 1.2</text>
+  <circle cx="42" cy="96" r="11" fill="#39a650"/>
+  <text x="42" y="100" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">2</text>
+  <rect x="56" y="84" width="426" height="220" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="64" y="101" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#565656" text-anchor="start" font-weight="bold">::</text>
+  <rect x="78" y="89" width="130" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="84" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Tension T1 [cN] ▾</text>
+  <text x="214" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#39a650" text-anchor="start" font-weight="bold">+</text>
+  <text x="472" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="end">[ ]  ▲ ▼  x</text>
+  <rect x="78" y="112" width="130" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="84" y="125" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">X: Overfeed [%] ▾</text>
+  <text x="214" y="125" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start">to all</text>
+  <rect x="96" y="220" width="44" height="60" rx="2" fill="#4e79a7"/>
+  <line x1="118" y1="210" x2="118" y2="230" stroke="#2b2b2b" stroke-width="1"/>
+  <rect x="172" y="198" width="44" height="82" rx="2" fill="#4e79a7"/>
+  <line x1="194" y1="188" x2="194" y2="208" stroke="#2b2b2b" stroke-width="1"/>
+  <rect x="248" y="210" width="44" height="70" rx="2" fill="#4e79a7"/>
+  <line x1="270" y1="200" x2="270" y2="220" stroke="#2b2b2b" stroke-width="1"/>
+  <rect x="324" y="185" width="44" height="95" rx="2" fill="#4e79a7"/>
+  <line x1="346" y1="175" x2="346" y2="195" stroke="#2b2b2b" stroke-width="1"/>
+  <rect x="400" y="230" width="44" height="50" rx="2" fill="#4e79a7"/>
+  <line x1="422" y1="220" x2="422" y2="240" stroke="#2b2b2b" stroke-width="1"/>
+  <line x1="78" y1="280" x2="472" y2="280" stroke="#cccccc" stroke-width="1"/>
+  <text x="78" y="296" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start" font-style="italic">note · gridlines e.g. 5, 10, 15</text>
+  <rect x="492" y="84" width="426" height="220" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="500" y="101" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#565656" text-anchor="start" font-weight="bold">::</text>
+  <rect x="514" y="89" width="130" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="520" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">Elongation [%] ▾</text>
+  <text x="650" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#39a650" text-anchor="start" font-weight="bold">+</text>
   <text x="908" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="end">[ ]  ▲ ▼  x</text>
-  <rect x="634" y="112" width="130" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
-  <text x="640" y="125" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">X: Overfeed [%] ▾</text>
-  <text x="770" y="125" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start">to all</text>
-  <rect x="642" y="220" width="34" height="60" rx="2" fill="#f28e2b"/>
-  <line x1="659" y1="210" x2="659" y2="230" stroke="#2b2b2b" stroke-width="1"/>
-  <rect x="694" y="198" width="34" height="82" rx="2" fill="#f28e2b"/>
-  <line x1="711" y1="188" x2="711" y2="208" stroke="#2b2b2b" stroke-width="1"/>
-  <rect x="746" y="210" width="34" height="70" rx="2" fill="#f28e2b"/>
-  <line x1="763" y1="200" x2="763" y2="220" stroke="#2b2b2b" stroke-width="1"/>
-  <rect x="798" y="185" width="34" height="95" rx="2" fill="#f28e2b"/>
-  <line x1="815" y1="175" x2="815" y2="195" stroke="#2b2b2b" stroke-width="1"/>
-  <rect x="850" y="230" width="34" height="50" rx="2" fill="#f28e2b"/>
-  <line x1="867" y1="220" x2="867" y2="240" stroke="#2b2b2b" stroke-width="1"/>
-  <line x1="634" y1="280" x2="908" y2="280" stroke="#cccccc" stroke-width="1"/>
-  <text x="634" y="296" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start" font-style="italic">note · gridlines e.g. 5, 10, 15</text>
-  <circle cx="330" cy="180" r="11" fill="#2b2b2b"/>
-  <text x="330" y="184" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">4</text>
-  <text x="296" y="330" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start">{{drill_hint}}</text>
+  <rect x="514" y="112" width="130" height="18" rx="3" fill="#ffffff" stroke="#999999" stroke-width="1"/>
+  <text x="520" y="125" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start">X: Overfeed [%] ▾</text>
+  <text x="650" y="125" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start">to all</text>
+  <rect x="532" y="220" width="44" height="60" rx="2" fill="#f28e2b"/>
+  <line x1="554" y1="210" x2="554" y2="230" stroke="#2b2b2b" stroke-width="1"/>
+  <rect x="608" y="198" width="44" height="82" rx="2" fill="#f28e2b"/>
+  <line x1="630" y1="188" x2="630" y2="208" stroke="#2b2b2b" stroke-width="1"/>
+  <rect x="684" y="210" width="44" height="70" rx="2" fill="#f28e2b"/>
+  <line x1="706" y1="200" x2="706" y2="220" stroke="#2b2b2b" stroke-width="1"/>
+  <rect x="760" y="185" width="44" height="95" rx="2" fill="#f28e2b"/>
+  <line x1="782" y1="175" x2="782" y2="195" stroke="#2b2b2b" stroke-width="1"/>
+  <rect x="836" y="230" width="44" height="50" rx="2" fill="#f28e2b"/>
+  <line x1="858" y1="220" x2="858" y2="240" stroke="#2b2b2b" stroke-width="1"/>
+  <line x1="514" y1="280" x2="908" y2="280" stroke="#cccccc" stroke-width="1"/>
+  <text x="514" y="296" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#565656" text-anchor="start" font-style="italic">note · gridlines e.g. 5, 10, 15</text>
+  <circle cx="110" cy="180" r="11" fill="#2b2b2b"/>
+  <text x="110" y="184" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#ffffff" text-anchor="middle" font-weight="bold">3</text>
+  <text x="56" y="330" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#565656" text-anchor="start">{{drill_hint}}</text>
 </svg>

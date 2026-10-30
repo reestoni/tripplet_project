@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.text_normalize import norm as _norm, canon_simple as _canon
+from ui.widgets.yarn_colour import colour_icon, colour_tooltip
 from db.connection import fetch_all, execute, new_global_id, get_columns_map
 from db.trial_reference import format_trial_number
 import app_meta
@@ -378,9 +379,10 @@ class ComboMapDelegate(QStyledItemDelegate):
 
     def __init__(self, id2name: Dict[object, str], parent=None,
                  add_new_callback: Optional[Callable[[QWidget], Optional[Tuple[object, str]]]] = None,
-                 add_new_label: str = '+ Add new colour…'):
+                 add_new_label: str = '+ Add new colour…', colour_icons: bool = False):
         super().__init__(parent)
         self.id2name = id2name
+        self.colour_icons = colour_icons
         self.add_new_callback = add_new_callback
         self.add_new_label = add_new_label
         # stable order by display name
@@ -399,7 +401,10 @@ class ComboMapDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         combo = QComboBox(parent)
         for i, n in self._options:
-            combo.addItem(str(n), i)
+            if self.colour_icons:
+                combo.addItem(colour_icon(n), str(n), i)
+            else:
+                combo.addItem(str(n), i)
         if self.add_new_callback:
             combo.addItem(self.add_new_label, _ADD_NEW_SENTINEL)
             state = {'last_good': combo.currentIndex()}
@@ -413,6 +418,8 @@ class ComboMapDelegate(QStyledItemDelegate):
                     new_id, new_name = result
                     insert_pos = combo.count() - 1  # vor dem Sentinel
                     combo.insertItem(insert_pos, str(new_name), new_id)
+                    if self.colour_icons:
+                        combo.setItemIcon(insert_pos, colour_icon(new_name))
                     combo.setCurrentIndex(insert_pos)
                     state['last_good'] = insert_pos
                     # self.id2name ist dasselbe Dict-Objekt wie z.B.
@@ -679,6 +686,14 @@ class YarnTableModel(QAbstractTableModel):
         if role == Qt.EditRole:
             return val
 
+        # Colour square in front of the yarn name and the colour (Nutzerwunsch 2026-10-22)
+        if role in (Qt.DecorationRole, Qt.ToolTipRole) and self._colour_col and (
+                header == self._colour_col or _canon(header) == 'name'):
+            colour = self._colour_name(r)
+            if role == Qt.DecorationRole:
+                return colour_icon(colour)
+            return colour_tooltip(colour) if header != self._colour_col else None
+
         # FK display: show names
         if role == Qt.DisplayRole:
             if self._garntyp_col and header == self._garntyp_col:
@@ -715,6 +730,13 @@ class YarnTableModel(QAbstractTableModel):
         if role == Qt.TextAlignmentRole:
             return Qt.AlignCenter
         return None
+
+    def _colour_name(self, r: int) -> str:
+        val = self._rows[r].get(self._colour_col)
+        try:
+            return self._colour_map.get(int(val), '') if val is not None else ''
+        except Exception:
+            return ''
 
     def set_minstock_locked(self, locked: bool):
         """Sperrt/entsperrt nur die MinStock-Spalte (Ansicht muss danach neu
@@ -1191,7 +1213,7 @@ class ManageYarnScreen(QWidget):
             if not self._colour_delegate:
                 self._colour_delegate = ComboMapDelegate(
                     self._colour_id2name, self.table,
-                    add_new_callback=lambda w: quick_add_colour(w))
+                    add_new_callback=lambda w: quick_add_colour(w), colour_icons=True)
             self.table.setItemDelegateForColumn(headers.index(
                 self._colour_col), self._colour_delegate)
 

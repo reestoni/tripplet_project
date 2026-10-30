@@ -44,6 +44,7 @@ from db import yarn_spool_log
 from db.usage_log import log_usage_event
 import app_meta
 from ui.widgets.friendly_error import show_error
+from ui.widgets.yarn_colour import colour_icon, colour_tooltip, load_yarn_colours
 
 try:
     import fitz  # PyMuPDF
@@ -545,7 +546,8 @@ class SpoolHistoryDialog(QDialog):
 
 
 class NewSpoolDialog(QDialog):
-    def __init__(self, yarn_choices: List[Tuple[int, str]], parent=None, preselect_yarn_id=None):
+    def __init__(self, yarn_choices: List[Tuple[int, str]], parent=None, preselect_yarn_id=None,
+                 yarn_colours: Optional[Dict[int, str]] = None):
         super().__init__(parent)
         self.setWindowTitle("New spool(s)")
         self.setMinimumWidth(360)
@@ -553,8 +555,11 @@ class NewSpoolDialog(QDialog):
         form = QFormLayout(self)
 
         self.cmb_yarn = QComboBox()
+        yarn_colours = yarn_colours or {}
         for yid, yname in yarn_choices:
-            self.cmb_yarn.addItem(yname, yid)
+            self.cmb_yarn.addItem(colour_icon(yarn_colours.get(yid)), yname, yid)
+            self.cmb_yarn.setItemData(self.cmb_yarn.count() - 1,
+                                      colour_tooltip(yarn_colours.get(yid)), Qt.ToolTipRole)
         if preselect_yarn_id is not None:
             idx = self.cmb_yarn.findData(preselect_yarn_id)
             if idx >= 0:
@@ -646,6 +651,7 @@ class YarnStockScreen(QWidget):
         self._yarn_name_col = None
         self._yarn_minstock_col = None
         self._yarn_choices: List[Tuple[int, str]] = []
+        self._yarn_colours: Dict[int, str] = {}
 
         self._overview: List[Dict] = []      # aggregierte Zeilen
         self._selected_group: Optional[Tuple[int, str]] = None  # (YarnID, Charge)
@@ -1073,6 +1079,7 @@ class YarnStockScreen(QWidget):
 
         self._all_spools = srows
         self._yarn_name_map = yarn_name_map
+        self._yarn_colours, _ = load_yarn_colours()
         self._yarn_minstock_map = yarn_minstock_map
 
         # Status gilt PRO GARN (Summe ueber alle Batches), nicht pro Batch
@@ -1222,6 +1229,10 @@ class YarnStockScreen(QWidget):
                 if c in self.OV_NUMERIC_COLS:
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 it.setBackground(QColor(g["Color"]))
+                if c == 0:
+                    colour = self._yarn_colours.get(g["YarnID"])
+                    it.setIcon(colour_icon(colour))
+                    it.setToolTip(colour_tooltip(colour))
                 self.tbl_overview.setItem(r, c, it)
         self.tbl_overview.resizeColumnsToContents()
         self._render_guard = False
@@ -1280,6 +1291,10 @@ class YarnStockScreen(QWidget):
                     item.setData(Qt.DisplayRole, txt)  # EditRole-Write ueberschreibt sonst den Anzeigetext
                 if c in (3, 4):
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                if c == 0:
+                    colour = self._yarn_colours.get(it["YarnID"])
+                    item.setIcon(colour_icon(colour))
+                    item.setToolTip(colour_tooltip(colour))
                 self.tbl_rack.setItem(r, c, item)
         self.tbl_rack.resizeColumnsToContents()
         self._render_guard = False
@@ -1830,7 +1845,8 @@ class YarnStockScreen(QWidget):
             return
         prev_group = self._selected_group
         preselect = prev_group[0] if prev_group else None
-        dlg = NewSpoolDialog(self._yarn_choices, self, preselect_yarn_id=preselect)
+        dlg = NewSpoolDialog(self._yarn_choices, self, preselect_yarn_id=preselect,
+                              yarn_colours=self._yarn_colours)
         if prev_group and prev_group[1]:
             dlg.txt_charge.setText(prev_group[1])
 

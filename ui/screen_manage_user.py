@@ -443,6 +443,10 @@ class ManageUserScreen(QWidget):
         self._build_ui()
         self.reload_data()
 
+    def _on_access(self):
+        from ui.widgets.feature_access_dialog import open_feature_access
+        open_feature_access(self)
+
     def _build_ui(self):
         """Erstellt Header, Toolbar (Suche + Buttons), Tabelle, Detailpanel und Footer."""
         root = QVBoxLayout(self)
@@ -482,6 +486,11 @@ class ManageUserScreen(QWidget):
         self.btn_save = QPushButton('Save Changes', objectName='PurpleBtn')
         self.btn_save.clicked.connect(self.save_changes)
 
+        # which tools/screens groups and people may use (db/feature_access.py)
+        self.btn_access = QPushButton('Access…', objectName='GreyBtn')
+        self.btn_access.setToolTip('Switch tools and screens on or off - per group or per person')
+        self.btn_access.clicked.connect(self._on_access)
+
         self.status_label = QLabel('')
 
         tl.addWidget(self.search_edit, 1)
@@ -490,6 +499,7 @@ class ManageUserScreen(QWidget):
         tl.addWidget(self.btn_api_key, 0)
         tl.addWidget(self.btn_reset_pw, 0)
         tl.addWidget(self.btn_delete, 0)
+        tl.addWidget(self.btn_access, 0)
         tl.addWidget(self.btn_save, 0)
         tl.addWidget(self.status_label, 0, Qt.AlignVCenter)
 

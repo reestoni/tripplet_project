@@ -55,6 +55,16 @@ _ADV_DIRECT = {"tbltrial": "T", "tbljets": "J", "tblmaschine": "MC"}  # already 
 _ADV_JOINED = {"tbljetrohling": "LEFT JOIN tbljetrohling AS adv_tbljetrohling ON adv_tbljetrohling.ID = J.Rohling"}
 
 
+def value_notes_text(notes) -> str:
+    """Plain text lines for the PDF: "V7 · Tenacity: text (Name, 30.10.2026)"."""
+    lines = []
+    for n in notes or []:
+        who = ", ".join(x for x in (str(n.get("by") or "").strip(), str(n.get("at") or "").strip()) if x)
+        lines.append(f"{n.get('trial', '')} · {n.get('what', '')}: {str(n.get('t') or '').strip()}"
+                     + (f" ({who})" if who else ""))
+    return "\n".join(lines)
+
+
 def _is_ident(name: str) -> bool:
     import re
     return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name or ""))
@@ -1088,7 +1098,8 @@ class _ReportBridge(QObject):
             for ch in valid_charts:
                 if not ch:
                     continue
-                has_note = bool(ch.get("noteVisible") and ch.get("noteText","").strip())
+                has_note = bool(ch.get("noteVisible") and ch.get("noteText", "").strip()) \
+                    or bool(ch.get("valueNotes"))
                 is_image = ch.get("blockType") == "image"
                 if is_image and ch.get("imageWidth") != "half":
                     if buf: chart_pages.append(buf); buf = []
@@ -1145,6 +1156,14 @@ class _ReportBridge(QObject):
                     if ch.get("noteVisible") and ch.get("noteText","").strip():
                         block.append(_note_block(
                             ch.get("noteTitle",""), ch["noteText"],
+                            s_h2, s_note, HEB_NAVY
+                        ))
+
+                    # Notes on values - only present when "Include notes on
+                    # values" was ticked in the export dialog (db/cell_notes.py)
+                    if ch.get("valueNotes"):
+                        block.append(_note_block(
+                            "Notes on values", value_notes_text(ch["valueNotes"]),
                             s_h2, s_note, HEB_NAVY
                         ))
 
@@ -1780,7 +1799,7 @@ class ReportScreen(QWidget):
         # Kontext-Hilfe EN/DE/ES (Nutzerwunsch 2026-10-13, ui/widgets/multilang_help.py);
         # im Smart-Chart-Modus direkt auf dem Smart-Chart-Tab
         from ui.widgets.multilang_help import make_help_button
-        tl.addWidget(make_help_button("How do Report and Smart Chart work?", self._open_help))
+        tl.addWidget(make_help_button("How does the Report work?", self._open_help))
         content_layout.addWidget(tools)
 
         self.lbl_series = QLabel()  # kept for internal use, not shown
@@ -1998,7 +2017,7 @@ class ReportScreen(QWidget):
     def _open_help(self) -> None:
         from ui.widgets.multilang_help import show_help
         from ui.widgets.help_texts_report import TEXTS
-        show_help(TEXTS, self, tab=None if self.mode == "series" else "smart")
+        show_help(TEXTS, self)
 
     def _go_back(self) -> None:
         if callable(self.on_back):

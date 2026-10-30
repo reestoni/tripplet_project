@@ -337,6 +337,21 @@ def get_pending_request_changes_count() -> int:
 
 
 # --------------------------------------------------------------------------- Groups
+def _allowed(key: str) -> bool:
+    """Tool/screen switched on for the logged-in user (db/feature_access.py,
+    set by a superuser in Manage User -> Access…). Blocked = not shown."""
+    try:
+        from db.feature_access import can_use
+        return can_use(key)
+    except Exception:
+        return True
+
+
+def _add_if(sidebar: SidebarPanel, widget, key: str) -> None:
+    if _allowed(key):
+        sidebar.add_item(widget)
+
+
 def build_navigation_items(
     sidebar: SidebarPanel,
     offline_gated_buttons: list,
@@ -374,14 +389,13 @@ def build_navigation_items(
 
     btn_show = icon_btn("All Experiments", "show.png", "SidebarItem", on_all_experiments,
                          tab_capable=True, open_in_new_tab=open_in_new_tab)
-    sidebar.add_item(btn_show)
+    _add_if(sidebar, btn_show, "all_experiments")
 
     btn_backlog = icon_btn("Backlog", "backlog.png", "SidebarItem", on_open_backlog,
                             tab_capable=True, open_in_new_tab=open_in_new_tab)
-    btn_backlog.setVisible(access_level >= 2)
     # Verified offline-safe (tbltrialseriesimage/tbltrialseriespdf/
     # tbltrialretestflag added to EXTRA_REFERENCE_TABLES) - not gated.
-    if access_level >= 2:
+    if _allowed("backlog"):
         try:
             cnt = get_backlog_count()
         except Exception:
@@ -392,8 +406,6 @@ def build_navigation_items(
             sidebar.add_item(wrapped)
         except Exception:
             sidebar.add_item(btn_backlog)
-    else:
-        sidebar.add_item(btn_backlog)
 
     # Der frühere "Experiment Request"-Eintrag (Hub-Screen) ist entfernt
     # (Nutzerwunsch, 2026-08-27) - "Create Experiment Request"/"My Requests"
@@ -419,33 +431,29 @@ def build_navigation_items(
     btn_add_series = icon_btn("Add Trial Series", "series.png", "SidebarItem", on_add_series,
                                tab_capable=True, open_in_new_tab=open_in_new_tab)
 
-    can_see_purple = access_level >= 2
-    for _b in (btn_create, btn_add_series):
-        _b.setVisible(can_see_purple)
-
-    try:
-        cnt = get_approved_experiment_request_count()
-    except Exception:
-        cnt = 0
-    try:
-        wrapped, badge = wrap_with_badge(btn_create, cnt)
-        refs["approved_exp_req_badge"] = badge
-        badge.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-        badge.setCursor(Qt.PointingHandCursor)
-        badge.setToolTip("View pending experiment requests")
-        if callable(on_preview_requests):
-            badge.mousePressEvent = lambda _e: on_preview_requests()
-        sidebar.add_item(wrapped)
-        sidebar.add_item(btn_legacy_create)
-    except Exception:
-        sidebar.add_item(btn_create)
-        sidebar.add_item(btn_legacy_create)
-    sidebar.add_item(btn_add_series)
+    if _allowed("new_experiment"):
+        try:
+            cnt = get_approved_experiment_request_count()
+        except Exception:
+            cnt = 0
+        try:
+            wrapped, badge = wrap_with_badge(btn_create, cnt)
+            refs["approved_exp_req_badge"] = badge
+            badge.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            badge.setCursor(Qt.PointingHandCursor)
+            badge.setToolTip("View pending experiment requests")
+            if callable(on_preview_requests):
+                badge.mousePressEvent = lambda _e: on_preview_requests()
+            sidebar.add_item(wrapped)
+            sidebar.add_item(btn_legacy_create)
+        except Exception:
+            sidebar.add_item(btn_create)
+            sidebar.add_item(btn_legacy_create)
+    _add_if(sidebar, btn_add_series, "add_series")
 
     btn_lab_machines = icon_btn("Add Lab Machines", "lab.png", "SidebarItem", on_add_lab_machines,
                                  tab_capable=True, open_in_new_tab=open_in_new_tab)
-    btn_lab_machines.setVisible(can_see_purple)
-    sidebar.add_item(btn_lab_machines)
+    _add_if(sidebar, btn_lab_machines, "add_lab_machines")
 
     return refs
 
@@ -470,12 +478,16 @@ def build_experiment_requests_group(
     identische Zählung wie zuvor auf dem Hub-Screen selbst
     (ExperimentRequestScreen), seit 2026-09-08 um neue Requests erweitert.
     """
+    if not (_allowed("create_request") or _allowed("my_requests")):
+        return {"my_requests_badge": None}
     sidebar.add_section_header("experiment_requests_section_white.png", "Experiment Requests")
 
     btn_create = icon_btn(
         "Create Experiment Request", "create_experiment_request.png", "SidebarItem",
         on_create_experiment_request, tab_capable=True, open_in_new_tab=open_in_new_tab)
-    sidebar.add_item(btn_create)
+    _add_if(sidebar, btn_create, "create_request")
+    if not _allowed("my_requests"):
+        return {"my_requests_badge": None}
 
     btn_my_requests = icon_btn(
         "My Requests", "my_experiment_requests.png", "SidebarItem",
@@ -505,55 +517,64 @@ def build_tools_group(
     open_in_new_tab=None,
 ):
     """Fügt die Tools-Sektion (Canvas, Image Compare usw.) in die Sidebar ein."""
+    from db.feature_access import FEATURES
+    if not any(_allowed(f.key) for f in FEATURES if f.section == "Tools"):
+        return
     sidebar.add_section_header("tools.png", "Tools")
 
     btn_image_compare = icon_btn("Image Compare", "image_compare.png", "SidebarItem", on_image_compare,
                                   tab_capable=True, open_in_new_tab=open_in_new_tab)
     offline_gated_buttons.append(btn_image_compare)
-    sidebar.add_item(btn_image_compare)
+    _add_if(sidebar, btn_image_compare, "image_compare")
 
     btn_canvas = icon_btn("Canvas", "canvas.png", "SidebarItem", on_canvas,
                            tab_capable=True, open_in_new_tab=open_in_new_tab)
     offline_gated_buttons.append(btn_canvas)
-    sidebar.add_item(btn_canvas)
+    _add_if(sidebar, btn_canvas, "canvas")
 
     btn_nozzle_calc = icon_btn("Jet ROI Calculator", "nozzle_calculator.png", "SidebarItem", on_nozzle_calculator,
                                 tab_capable=True, open_in_new_tab=open_in_new_tab)
     offline_gated_buttons.append(btn_nozzle_calc)
-    sidebar.add_item(btn_nozzle_calc)
+    _add_if(sidebar, btn_nozzle_calc, "jet_roi")
 
     btn_air_supply = icon_btn("Air Supply Network", "air_supply.png", "SidebarItem", on_air_supply,
                                tab_capable=True, open_in_new_tab=open_in_new_tab)
     offline_gated_buttons.append(btn_air_supply)
-    sidebar.add_item(btn_air_supply)
+    _add_if(sidebar, btn_air_supply, "air_supply")
 
-    # Requirement Hub / Smart Chart (access_level >= 3)
-    if access_level >= 3:
+    # Dashboards: anschauen, was man selbst gebaut hat oder was einem freigegeben wurde - fuer alle
+    btn_dashboards = icon_btn("Dashboards", "dashboards.png", "SidebarItem", trigger_dashboards,
+                              tab_capable=True, open_in_new_tab=open_in_new_tab)
+    offline_gated_buttons.append(btn_dashboards)
+    _add_if(sidebar, btn_dashboards, "dashboards")
+
+    # Requirement Hub / Smart Chart (default from access_level 3 - db/feature_access.py)
+    if True:
         btn_req_hub = icon_btn("Requirement Hub", "requirement_hub.png", "SidebarItem", on_requirement_hub,
                                 tab_capable=True, open_in_new_tab=open_in_new_tab)
         offline_gated_buttons.append(btn_req_hub)
-        sidebar.add_item(btn_req_hub)
+        _add_if(sidebar, btn_req_hub, "requirement_hub")
 
         btn_smartchart = icon_btn("Smart Chart", "analytics.png", "SidebarItem", on_smartchart,
                                    tab_capable=True, open_in_new_tab=open_in_new_tab)
         offline_gated_buttons.append(btn_smartchart)
-        sidebar.add_item(btn_smartchart)
+        _add_if(sidebar, btn_smartchart, "smart_chart")
 
     btn_yarn_stock = icon_btn("Yarn Stock", "manage_yarn.png", "SidebarItem", on_yarn_stock,
                                tab_capable=True, open_in_new_tab=open_in_new_tab)
     offline_gated_buttons.append(btn_yarn_stock)
-    sidebar.add_item(btn_yarn_stock)
+    _add_if(sidebar, btn_yarn_stock, "yarn_stock")
 
     btn_label_gen = icon_btn("Label Generator", "label.png", "SidebarItem", on_label_generator,
                               tab_capable=True, open_in_new_tab=open_in_new_tab)
     offline_gated_buttons.append(btn_label_gen)
-    sidebar.add_item(btn_label_gen)
+    _add_if(sidebar, btn_label_gen, "label_generator")
 
     # TDMS Inspector - never DB-gated (see ui/screen_tdms_inspector.py), works
     # offline too, so it is deliberately NOT appended to offline_gated_buttons.
     btn_tdms_inspector = icon_btn("TDMS Inspector", "tdms_inspector.png", "SidebarItem", on_tdms_inspector,
                                    tab_capable=True, open_in_new_tab=open_in_new_tab)
-    sidebar.add_item(btn_tdms_inspector)
+    _add_if(sidebar, btn_tdms_inspector, "tdms_inspector")
 
 
 def build_admin_group(
@@ -569,6 +590,9 @@ def build_admin_group(
     open_in_new_tab=None,
 ):
     """Fügt die Admin-Sektion (Jets-, Yarn-, Material-Verwaltung usw.) in die Sidebar ein."""
+    from db.feature_access import FEATURES
+    if not any(_allowed(f.key) for f in FEATURES if f.section == "Admin"):
+        return
     sidebar.add_section_header("admin_white.png", "Admin")
 
     # Kein "Manage "-Präfix (Sektions-Überschrift "ADMIN" sagt das bereits).
@@ -579,15 +603,17 @@ def build_admin_group(
     # ManageYarnScreen construct fine and use the dialect-aware canonical
     # db.connection helpers) - Top Plates is not, gated below.
     offline_gated_buttons.append(btn_manage_top_plates)
-    for b in (btn_manage_jets, btn_manage_top_plates, btn_add_yarn):
-        sidebar.add_item(b)
+    for b, key in ((btn_manage_jets, "manage_jets"), (btn_manage_top_plates, "top_plates"),
+                   (btn_add_yarn, "manage_yarn")):
+        _add_if(sidebar, b, key)
 
     btn_order_type = green_btn("Order Type", on_manage_order_type, tab_capable=True, open_in_new_tab=open_in_new_tab)
     btn_product_groups = green_btn("Product Groups", on_manage_product_groups, tab_capable=True, open_in_new_tab=open_in_new_tab)
     btn_material = green_btn("Material", on_manage_material, tab_capable=True, open_in_new_tab=open_in_new_tab)
     offline_gated_buttons.extend([btn_order_type, btn_product_groups, btn_material])
-    for b in (btn_order_type, btn_product_groups, btn_material):
-        sidebar.add_item(b)
+    for b, key in ((btn_order_type, "order_type"), (btn_product_groups, "product_groups"),
+                   (btn_material, "material")):
+        _add_if(sidebar, b, key)
 
 
 def build_superuser_group(
@@ -657,6 +683,17 @@ def trigger_quick_search():
         import app_meta
         if callable(app_meta.open_quick_search):
             app_meta.open_quick_search()
+    except Exception:
+        pass
+
+
+def trigger_dashboards():
+    """Sidebar "Dashboards" (ui/screen_dashboards.py) - main.py setzt app_meta.open_dashboards,
+    so muss der Callback nicht durch alle Screen-Signaturen gereicht werden."""
+    try:
+        import app_meta
+        if callable(app_meta.open_dashboards):
+            app_meta.open_dashboards()
     except Exception:
         pass
 
@@ -967,7 +1004,7 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
     )
     sidebar.add_separator()
 
-    if access_level >= 1:
+    if True:            # who sees which entry: db/feature_access.py (default Admin from level 1)
         build_admin_group(
             sidebar, offline_gated,
             on_add_jet=cb.get("on_add_jet"),
@@ -1083,8 +1120,13 @@ def refresh_lazy_sidebar(screen, access_level: int, *, hide_self_link: Optional[
     jeweils selbst frisch aus app_meta.current_user gelesen (Screens werden
     typischerweise VOR dem ersten Login gebaut, der tatsächliche Level ist
     zum Konstruktionszeitpunkt daher noch nicht bekannt)."""
-    if access_level != getattr(screen, "_sidebar_built_for_level", None):
-        screen._sidebar_built_for_level = access_level
+    try:
+        from db.feature_access import signature
+        build_key = (access_level, signature())
+    except Exception:
+        build_key = (access_level, None)
+    if build_key != getattr(screen, "_sidebar_built_for_level", None):
+        screen._sidebar_built_for_level = build_key
         screen._sidebar.clear_content()
         refs = install_full_sidebar(
             screen._sidebar, screen._sidebar_nav_callbacks,

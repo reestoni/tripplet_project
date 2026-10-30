@@ -51,6 +51,8 @@ import ui.aty_yarnscope_tab as _aty_mod
 import ui.dty_yarnscope_tab as _dty_mod
 import ui.advisor_tab as _advisor_mod
 import ui.machine_tab as _machine_tab_mod
+import ui.widgets.yarn_locations as _yarn_locations
+import ui.cell_notes_ui as _cell_notes_ui
 from ui.advisor_worker import AdvisorWorker, load_api_key
 from ui.screen_create_experiment_request import (
     EXCLUDE_FIELDS as ER_EXCLUDE_FIELDS,
@@ -99,7 +101,7 @@ from collections import defaultdict
 logger = logging.getLogger(__name__)
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal, QObject, QEvent, QSize, QRect, QRegularExpression, QTimer, QItemSelectionModel
-from PySide6.QtGui import QShortcut, QKeySequence, QPainter, QPen, QBrush, QFont, QRegularExpressionValidator
+from PySide6.QtGui import QShortcut, QKeySequence, QPainter, QPen, QBrush, QFont, QRegularExpressionValidator, QCursor
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -1662,11 +1664,23 @@ class PivotEditModel(QAbstractTableModel):
             if role == Qt.DisplayRole:
                 vals = hdr.get("values", [])
                 return vals[c] if c < len(vals) else ""
+            if role == Qt.DecorationRole:
+                # colour square of the yarn in the ply header row (Nutzerwunsch 2026-10-22)
+                colours = hdr.get("colours") or []
+                colour = colours[c] if c < len(colours) else ""
+                if not colour:
+                    return None
+                from ui.widgets.yarn_colour import colour_icon
+                return colour_icon(colour)
             if role == Qt.ToolTipRole:
                 tips = hdr.get("tooltips", [])
                 tip = tips[c] if c < len(tips) else ""
                 if not tip and _is_ref_col:
                     tip = self._reference_cols[c - 1]
+                colours = hdr.get("colours") or []
+                colour = colours[c] if c < len(colours) else ""
+                if colour:
+                    tip = f"{tip}\nColour: {colour}" if tip else f"Colour: {colour}"
                 return tip if tip else None
             if role == Qt.TextAlignmentRole:
                 return Qt.AlignCenter
@@ -1809,6 +1823,32 @@ class PivotEditModel(QAbstractTableModel):
         if 0 <= row < len(self._binding) and 0 <= col < len(self._binding[row]):
             return self._binding[row][col]
         return None
+
+    # Notes on values (db/cell_notes.py, ui/cell_notes_ui.py). Set by the
+    # screen: _notes_by_key {(table, row id, field): [notes]} for data cells,
+    # _note_trial_cols {col (0-based): [notes]} for whole-trial notes, shown
+    # in header row 0 (trial number) of the machine tables.
+    _notes_by_key = None
+    _note_trial_cols = None
+
+    def notes_at(self, r: int, c: int) -> list:
+        """Notes of a view cell (row/column as in the view, column 0 = titles)."""
+        by_key = self._notes_by_key
+        if by_key is None or c <= 0:
+            return []
+        if r < self._n_hdr:
+            return list((self._note_trial_cols or {}).get(c - 1, [])) if r == 0 else []
+        b = self.get_binding(r - self._n_hdr, c - 1)
+        if b is None or not by_key:
+            return []
+        ids = b.id_values if isinstance(b, GroupCellBinding) else [b.id_value]
+        out: list = []
+        for i in ids:
+            try:
+                out += by_key.get((str(b.table).lower(), int(i), str(b.field).lower()), [])
+            except (TypeError, ValueError):
+                pass
+        return out
 
     def save_dirty(self) -> int:
         """Schreibt alle geänderten Zellen in die DB.
@@ -2312,455 +2352,6 @@ class LookupComboDelegate(QStyledItemDelegate):
         editor.setGeometry(option.rect)
 
 
-class _ManagePliesDialog(QDialog):
-    """Manage plies for a single trial (with optional multi-trial apply).
-
-    Shows all tblTrialSettings rows for the trial (Ply label, Yarn).
-    - Add ply: yarn dropdown + series-wide consistent ply number
-      → optionally apply to multiple trials in the same series
-    - Remove ply: delete selected row (with confirmation)
-
-    Ply numbering is series-wide consistent:
-    - If the selected yarn already has a ply number anywhere in the series → reuse it
-    - Otherwise → next free number not yet used anywhere in the series
-    """
-
-    def __init__(self, parent, trial_id: int, vno, series_pk: int,
-                 yarn_list: List[Tuple[int, str]],
-                 all_trials: List[Tuple[int, str]] | None = None):
-        super().__init__(parent)
-        self._trial_id = trial_id
-        self._series_pk = series_pk
-        self._yarn_list = yarn_list  # [(id, name), ...]
-        # all_trials: [(trial_id, vno_label), ...] alle Trials der Series
-        self._all_trials = all_trials or [(trial_id, str(vno))]
-        self.setWindowTitle(f"Manage Plies – {format_trial_number(vno)}")
-        self.setMinimumWidth(500)
-        self._build_ui()
-        self._load()
-
-    def _build_ui(self):
-        lay = QVBoxLayout(self)
-        lay.setSpacing(10)
-
-        # YarnUse-Liste laden
-        self._yarn_use_list: List[Tuple[Optional[int], str]] = [(None, "—")]
-        try:
-            for r in fetch_all("SELECT ID, Name FROM tblYarnUse ORDER BY ID"):
-                self._yarn_use_list.append((int(r["ID"]), str(r.get("Name") or "")))
-        except Exception:
-            pass
-
-        # Table: Ply | Yarn | Yarn Use
-        self.tbl = QTableWidget(0, 3)
-        self.tbl.setHorizontalHeaderLabels(["Ply", "Yarn", "Yarn Use"])
-        self.tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.tbl.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.tbl.setAlternatingRowColors(True)
-        self.tbl.verticalHeader().setVisible(False)
-        lay.addWidget(self.tbl)
-
-        # Add row
-        add_lay = QHBoxLayout()
-        add_lay.setSpacing(6)
-        self._cmb_yarn = QComboBox()
-        self._cmb_yarn.setPlaceholderText("Select yarn…")
-        self._cmb_yarn.addItem("", None)
-        for yid, yname in self._yarn_list:
-            self._cmb_yarn.addItem(yname, yid)
-        self._cmb_yarn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        # Multimaschinen-Halbfabrikat: statt eines Katalog-Garns den Output
-        # eines bestehenden Trials (ggf. auf einer anderen Maschine) als Ply
-        # verwenden - selbe Logik/Schatten-Garn wie in screen_create_experiment.
-        btn_trial_ply = QPushButton("+ Trial")
-        btn_trial_ply.setFixedWidth(70)
-        btn_trial_ply.setToolTip(
-            "Use the output of an existing trial (e.g. from another machine) as this ply's input, "
-            "instead of picking a catalog yarn."
-        )
-        btn_trial_ply.clicked.connect(self._add_trial_ply)
-
-        self._cmb_yarn_use = QComboBox()
-        self._cmb_yarn_use.setToolTip("Group (optional)")
-        for uid, uname in self._yarn_use_list:
-            self._cmb_yarn_use.addItem(uname, uid)
-        self._cmb_yarn_use.setFixedWidth(100)
-
-        from PySide6.QtWidgets import QSpinBox, QAbstractSpinBox, QLabel as _Lbl
-        lbl_ends = _Lbl("Ends:")
-        self._spn_ends = QSpinBox()
-        self._spn_ends.setMinimum(1)
-        self._spn_ends.setMaximum(20)
-        self._spn_ends.setValue(1)
-        self._spn_ends.setFixedWidth(55)
-        self._spn_ends.setToolTip("Number of ends")
-        # Up/down step buttons don't render/respond correctly in this dialog
-        # (2026-08-20, user report) - removed rather than debugged further,
-        # plain numeric entry (typing a number, default stays 1) works fine.
-        self._spn_ends.setButtonSymbols(QAbstractSpinBox.NoButtons)
-
-        btn_add = QPushButton("+ Add Ply")
-        btn_add.setFixedWidth(100)
-        btn_add.clicked.connect(self._on_add)
-        add_lay.addWidget(self._cmb_yarn)
-        add_lay.addWidget(btn_trial_ply)
-        add_lay.addWidget(self._cmb_yarn_use)
-        add_lay.addWidget(lbl_ends)
-        add_lay.addWidget(self._spn_ends)
-        add_lay.addWidget(btn_add)
-        lay.addLayout(add_lay)
-
-        # Remove button
-        btn_remove = QPushButton("Remove Selected Ply")
-        btn_remove.clicked.connect(self._on_remove)
-        lay.addWidget(btn_remove)
-
-        # Multi-trial apply (nur anzeigen wenn Series mehrere Trials hat)
-        if len(self._all_trials) > 1:
-            from PySide6.QtWidgets import QGroupBox, QScrollArea, QWidget
-            grp = QGroupBox("Also apply to:")
-            grp_lay = QVBoxLayout(grp)
-            grp_lay.setSpacing(2)
-            grp_lay.setContentsMargins(6, 4, 6, 4)
-
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            scroll.setMaximumHeight(120)
-            from PySide6.QtWidgets import QFrame
-            scroll.setFrameShape(QFrame.NoFrame)
-            inner = QWidget()
-            inner_lay = QVBoxLayout(inner)
-            inner_lay.setSpacing(1)
-            inner_lay.setContentsMargins(0, 0, 0, 0)
-
-            self._trial_checkboxes: List = []
-            for tid, vlabel in self._all_trials:
-                from PySide6.QtWidgets import QCheckBox
-                cb = QCheckBox(format_trial_number(vlabel))
-                cb.setChecked(tid == self._trial_id)
-                cb.setEnabled(tid != self._trial_id)  # aktueller Trial immer an, nicht abwählbar
-                inner_lay.addWidget(cb)
-                self._trial_checkboxes.append((tid, cb))
-
-            inner_lay.addStretch()
-            scroll.setWidget(inner)
-            grp_lay.addWidget(scroll)
-            lay.addWidget(grp)
-        else:
-            self._trial_checkboxes = [(self._trial_id, None)]
-
-        # Close button
-        btns = QDialogButtonBox(QDialogButtonBox.Close)
-        btns.rejected.connect(self.accept)  # Close = accept so rebuild happens
-        lay.addWidget(btns)
-
-    def _load(self):
-        self.tbl.setRowCount(0)
-        rows = fetch_all(
-            """
-            SELECT TS.ID, TS.Ply, Y.Name AS YarnName
-            FROM tblTrialSettings AS TS
-                     LEFT JOIN tblYarn AS Y ON Y.ID = TS.YarnID
-            WHERE TS.TrialID = ?
-            """,
-            [self._trial_id],
-        )
-
-        # Sort by numeric part of Ply label (Ply 1, Ply 2, ...)
-        def _ply_sort_key(r):
-            ply = (r.get("Ply") or "").strip()
-            m = re.search(r"\d+", ply)
-            return int(m.group()) if m else 9999
-
-        rows = sorted(rows, key=_ply_sort_key)
-        for r in rows:
-            rr = self.tbl.rowCount()
-            self.tbl.insertRow(rr)
-            self.tbl.setItem(rr, 0, QTableWidgetItem(str(r.get("Ply") or "")))
-            self.tbl.setItem(rr, 1, QTableWidgetItem(str(r.get("YarnName") or "")))
-            self.tbl.item(rr, 0).setData(Qt.UserRole, int(r["ID"]))  # settings ID
-
-    def _resolve_ply_label(self) -> str:
-        """Return the next free Ply label for this trial (1, 2, 3, ...).
-
-        Collects all numeric parts of existing Ply labels for this trial
-        and returns the lowest integer >= 1 not yet in use.
-        """
-        trial_rows = fetch_all(
-            "SELECT Ply FROM tblTrialSettings WHERE TrialID = ?",
-            [self._trial_id],
-        )
-        used_numbers: set = set()
-        for r in trial_rows:
-            ply = (r.get("Ply") or "").strip()
-            if ply:
-                m = re.search(r"\d+", ply)
-                if m:
-                    used_numbers.add(int(m.group()))
-        n = 1
-        while n in used_numbers:
-            n += 1
-        return f"Ply {n}"
-
-    def _on_add(self):
-        yarn_id = self._cmb_yarn.currentData()
-        if yarn_id is None:
-            QMessageBox.warning(self, "Add Ply", "Please select a yarn.")
-            return
-        self._add_ply(yarn_id)
-
-    def _add_trial_ply(self):
-        """Handler für "+ Trial": Halbfabrikat-Output eines bestehenden Trials
-        (ggf. andere Maschine) als Ply verwenden, statt eines Katalog-Garns -
-        siehe screen_create_experiment.get_or_create_shadow_yarn(). Fügt die
-        Ply direkt hinzu (analog zum "+ Trial"-Flow in CreateExperimentScreen),
-        ohne den Umweg über die Yarn-Combo, da Schatten-Garne dort bewusst
-        ausgeblendet sind."""
-        from ui.widgets.trial_picker import TrialPickerDialog
-        dlg = TrialPickerDialog(parent=self)
-        if dlg.exec() != QDialog.Accepted:
-            return
-        trial_id = dlg.selected_trial_id()
-        if trial_id is None:
-            return
-        from ui.screen_create_experiment import get_or_create_shadow_yarn
-        try:
-            yarn_id = get_or_create_shadow_yarn(trial_id)
-        except Exception as e:
-            show_error(self, "Trial Ply", "The yarn entry for this trial could not be created.", e)
-            return
-        if yarn_id is None:
-            QMessageBox.warning(self, "Trial Ply", "Could not find this trial.")
-            return
-        self._add_ply(yarn_id)
-
-    def _add_ply(self, yarn_id):
-        """Gemeinsame Add-Logik für _on_add() (Katalog-Garn aus der Combo)
-        und _add_trial_ply() (Halbfabrikat-Schatten-Garn)."""
-        n_ends = max(1, int(self._spn_ends.value()))
-        yarn_use_id = self._cmb_yarn_use.currentData()
-
-        # Welche Trials sind angewählt?
-        target_ids = []
-        for tid, cb in self._trial_checkboxes:
-            if cb is None or cb.isChecked():
-                target_ids.append(tid)
-        if not target_ids:
-            target_ids = [self._trial_id]
-
-        # Ply-Nummer bestimmen: alle n_ends Enden desselben Garns teilen sich
-        # EIN Label - vorher bekam jedes Ende sein eigenes hochgezaehltes
-        # Label (Ply 1/2/3/4 fuer 4x dasselbe Garn), was sich mit der
-        # Serien-weiten "gleiches Garn = gleiche Ply"-Regel biss, sobald ein
-        # anderer Trial eine dieser Nummern schon fuer ein anderes Garn belegt
-        # hatte (2026-08-20, Nutzer-Bugreport - derselbe Fix wie zuvor in
-        # screen_create_experiment.py::_add_material(), hier separat noetig,
-        # da dieser Dialog eine eigene, unabhaengige Ply-Berechnung hat).
-        # Zuerst: hat dieses Garn bereits eine einzige, eindeutige Ply-Nummer
-        # irgendwo in der Series? Falls ja, wiederverwenden statt neu zu
-        # vergeben (gleiches Prinzip wie _add_material()s existing_ply_for_yarn).
-        existing_ply_for_yarn: Optional[str] = None
-        try:
-            yarn_ply_rows = fetch_all(
-                """
-                SELECT DISTINCT ts.Ply
-                FROM tblTrialSettings ts
-                JOIN tblTrial t ON t.ID = ts.TrialID
-                WHERE t.TrialSeriesID = ? AND ts.YarnID = ?
-                """,
-                [self._series_pk, yarn_id],
-            )
-            yarn_plys = {r["Ply"] for r in yarn_ply_rows if r.get("Ply")}
-            if len(yarn_plys) == 1:
-                existing_ply_for_yarn = next(iter(yarn_plys))
-        except Exception:
-            existing_ply_for_yarn = None
-
-        if existing_ply_for_yarn:
-            ply_label = existing_ply_for_yarn
-        else:
-            # Neues Garn in der Series: naechste freie Nummer - serienweit,
-            # nicht nur innerhalb dieses Trials (2026-08-20, Nutzer-Bugreport:
-            # "Ply 1" war im AKTUELLEN Trial noch unbenutzt, serienweit aber
-            # schon durch ein anderes Garn belegt -> die alte, nur-trial-lokale
-            # Pruefung schlug "Ply 1" trotzdem vor und lief prompt in den
-            # Yarn-Conflict-Check unten. Jede in der Series irgendwo (von
-            # irgendeinem Garn/Trial) benutzte Nummer muss ausgeschlossen
-            # werden, nicht nur die im aktuellen Trial.
-            series_rows = fetch_all(
-                """
-                SELECT DISTINCT ts.Ply
-                FROM tblTrialSettings ts
-                JOIN tblTrial t ON t.ID = ts.TrialID
-                WHERE t.TrialSeriesID = ?
-                """,
-                [self._series_pk],
-            )
-            used_numbers: set = set()
-            for r in series_rows:
-                ply = (r.get("Ply") or "").strip()
-                if ply:
-                    m = re.search(r"\d+", ply)
-                    if m:
-                        used_numbers.add(int(m.group()))
-            n = 1
-            while n in used_numbers:
-                n += 1
-            ply_label = f"Ply {n}"
-
-        ply_labels = [ply_label] * n_ends
-
-        # Konsistenzprüfung für alle Ply-Labels
-        for ply_label in ply_labels:
-            conflict_rows = fetch_all(
-                """
-                SELECT DISTINCT y.Name AS YarnName
-                FROM tblTrialSettings ts
-                         JOIN tblTrial t ON t.ID = ts.TrialID
-                         JOIN tblYarn y ON y.ID = ts.YarnID
-                WHERE t.TrialSeriesID = ?
-                  AND ts.Ply = ?
-                  AND ts.YarnID != ?
-                """,
-                [self._series_pk, ply_label, yarn_id],
-            )
-            if conflict_rows:
-                existing = ", ".join(r["YarnName"] for r in conflict_rows)
-                QMessageBox.critical(
-                    self, "Yarn Conflict",
-                    f"Cannot add this yarn to {ply_label}.\n\n"
-                    f"This ply already has a different yarn in this series:\n"
-                    f"  {existing}\n\n"
-                    f"All trials in a series must use the same yarn per ply."
-                )
-                return
-
-        try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cols_map = _db_get_columns_map("tblTrialSettings")
-                has_gid = any(k == "globalid" for k in cols_map)
-                has_yarnuse = any(k == "yarnuseid" for k in cols_map)
-
-                for tid in target_ids:
-                    for ply_label in ply_labels:
-                        cols = ["TrialID", "YarnID", "Ply"]
-                        vals: list = [tid, yarn_id, ply_label]
-                        if has_yarnuse and yarn_use_id is not None:
-                            cols.append("YarnUseID")
-                            vals.append(yarn_use_id)
-                        if has_gid:
-                            cols.append("GlobalID")
-                            vals.append(new_global_id())
-                        ph = ", ".join(["?"] * len(vals))
-                        cur.execute(
-                            f"INSERT INTO tblTrialSettings ({', '.join(cols)}) VALUES ({ph})",
-                            vals,
-                        )
-                cn.commit()
-        except Exception as e:
-            show_error(self, "Error", "The ply could not be added.", e)
-            return
-
-        self._load()
-
-    def _on_remove(self):
-        row = self.tbl.currentRow()
-        if row < 0:
-            QMessageBox.information(self, "Remove Ply", "Please select a ply row.")
-            return
-
-        ply_label = self.tbl.item(row, 0).text() if self.tbl.item(row, 0) else "?"
-        yarn_name = self.tbl.item(row, 1).text() if self.tbl.item(row, 1) else "?"
-        settings_id = self.tbl.item(row, 0).data(Qt.UserRole) if self.tbl.item(row, 0) else None
-
-        if settings_id is None:
-            return
-
-        if self.tbl.rowCount() <= 1:
-            QMessageBox.warning(
-                self, "Remove Ply",
-                "Cannot remove the last ply.\nA trial must have at least one ply."
-            )
-            return
-
-        # Which trials are checked?
-        target_ids = []
-        for tid, cb in self._trial_checkboxes:
-            if cb is None or cb.isChecked():
-                target_ids.append(tid)
-        if not target_ids:
-            target_ids = [self._trial_id]
-
-        multi = len(target_ids) > 1
-        if multi:
-            answer = QMessageBox.question(
-                self, "Remove Ply",
-                f"Remove ply «{ply_label}» ({yarn_name}) from {len(target_ids)} trials?\n\n"
-                f"Trials where «{ply_label}» is the last remaining ply will be skipped.",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-        else:
-            answer = QMessageBox.question(
-                self, "Remove Ply",
-                f"Remove ply «{ply_label}» ({yarn_name}) and all its stored values?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-        if answer != QMessageBox.Yes:
-            return
-
-        skipped = []
-        try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                for tid in target_ids:
-                    # Check how many plies this trial has
-                    cur.execute(
-                        "SELECT COUNT(*) AS cnt FROM tblTrialSettings WHERE TrialID = ?",
-                        (tid,)
-                    )
-                    cnt_row = cur.fetchone()
-                    cnt = cnt_row[0] if cnt_row else 0
-                    if cnt <= 1:
-                        # Fetch vno label for warning message
-                        cur.execute(
-                            "SELECT Versuchsnummer FROM tblTrial WHERE ID = ?", (tid,))
-                        vno_row = cur.fetchone()
-                        vno_lbl = vno_row[0] if vno_row else str(tid)
-                        skipped.append(format_trial_number(vno_lbl))
-                        continue
-                    if tid == self._trial_id:
-                        # Current trial: delete by settings ID (exact row)
-                        cur.execute(
-                            "DELETE FROM tblTrialSettings WHERE ID = ?", (settings_id,))
-                    else:
-                        # Other trials: match by Ply label
-                        cur.execute(
-                            "DELETE FROM tblTrialSettings WHERE TrialID = ? AND Ply = ?",
-                            (tid, ply_label))
-                cn.commit()
-        except Exception as e:
-            show_error(self, "Error", "The ply could not be removed.", e)
-            return
-
-        if skipped:
-            QMessageBox.warning(
-                self, "Remove Ply — Partial",
-                f"Ply «{ply_label}» was removed from the selected trials.\n\n"
-                f"The following trials were skipped because «{ply_label}» "
-                f"was their last remaining ply:\n"
-                + "\n".join(f"  • {v}" for v in skipped)
-            )
-
-        self._load()
-
-
 def _add_cell_history_action(screen, model, index, menu) -> None:
     """Adds "Change history…" for a value (db/change_log.py) - superusers
     only (Nutzerentscheid 2026-10-15)."""
@@ -2785,6 +2376,7 @@ def _show_experiment_cell_menu(table, index, menu) -> None:
         w = w.parent()
     if w is None:
         return
+    _cell_notes_ui.add_cell_note_actions(w, table.model(), index, menu)
     _add_cell_history_action(w, table.model(), index, menu)
 
 
@@ -3561,6 +3153,8 @@ class ShowExperimentScreen(QWidget):
         model = getattr(self, attr_name, None)
         if model is not None and getattr(model, "_col_titles", None) is self._trial_labels:
             self._apply_reference_columns(model, self._trial_ids)
+        if model is not None:
+            _cell_notes_ui.apply_notes_to_model(self, attr_name)
 
     def _apply_reference_columns(self, model, trial_id_per_col) -> None:
         """Marks the columns of `model` that belong to a reference sample.
@@ -3921,6 +3515,8 @@ class ShowExperimentScreen(QWidget):
                 self.tabs.removeTab(idx)
             self.tabs.addTab(self.tab_notes, "Notes")
 
+        # Notizen an Werten laden (Dreiecke + Liste im Notes-Tab)
+        _cell_notes_ui.reload_notes(self)
         # Tab ist jetzt im Widget — Hervorhebung setzen
         self._update_notes_tab_style()
 
@@ -4143,12 +3739,10 @@ class ShowExperimentScreen(QWidget):
                                                  "color:#202020; background:#f8fff9;"
         )
         self.lbl_material_value.setMouseTracking(True)
-        self._material_label_hover_href = ""
         self.lbl_material_value.linkHovered.connect(
             self._on_material_label_link_hovered)
-        self.lbl_material_value.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.lbl_material_value.customContextMenuRequested.connect(
-            self._on_material_label_context_menu)
+        self.lbl_material_value.linkActivated.connect(
+            self._on_material_label_link_activated)
 
         mwl.addWidget(self.lbl_material_title, 0, Qt.AlignVCenter)
         mwl.addWidget(self.lbl_material_value, 1, Qt.AlignVCenter)
@@ -4337,6 +3931,15 @@ class ShowExperimentScreen(QWidget):
         self.btn_copy_trials.clicked.connect(self._on_copy_trials_button)
         _mfb_lay.addWidget(self.btn_copy_trials)
 
+        # ── "Yarns…" Button: yarns/plies of the whole series ───────────────
+        self.btn_series_yarns = QPushButton("Yarns…")
+        self.btn_series_yarns.setToolTip(
+            "Yarns of this series - change the yarn of a ply, add or remove plies\n"
+            "per trial, number of ends (also: right-click the Ply row)")
+        self.btn_series_yarns.setFixedHeight(30)
+        self.btn_series_yarns.clicked.connect(lambda: self._open_series_yarns())
+        _mfb_lay.addWidget(self.btn_series_yarns)
+
         vm.addWidget(self._mat_filter_bar)
 
         self.tbl_machine = FrozenFirstColumnTable()
@@ -4433,6 +4036,7 @@ class ShowExperimentScreen(QWidget):
                                                                    "QTextEdit:focus { border: 1px solid " + get_accent() + "; }"
         )
         vn.addWidget(self.txt_notes, 1)
+        _cell_notes_ui.build_notes_list(self, vn)
 
         # Auto-save: timer (debounce 1.5 s after last keystroke)
         from PySide6.QtCore import QTimer
@@ -5035,8 +4639,13 @@ class ShowExperimentScreen(QWidget):
         # No "Saved" message box any more (Nutzerwunsch 2026-10-16): the
         # yellow cells / "Save (n)" / tab dot disappear - that is the
         # confirmation. Saved values can't be undone with Ctrl+Z.
+        # Plus a short green tick (Nutzerwunsch 2026-10-19) - only if
+        # something was saved and nothing is left over (failed model).
         if not self._has_unsaved():
             self._undo.clear()
+            if total > 0:
+                from ui.widgets.save_tick import show_save_tick
+                show_save_tick(self)
         self._update_unsaved_indicator()
         """Gibt Debug-Info über den Save-Zustand zurück (für Diagnose)."""
         lines = []
@@ -5210,6 +4819,8 @@ class ShowExperimentScreen(QWidget):
                     cache["yarn_map"][int(yr["ID"])] = str(yr["Name"] or "")
                 except Exception:
                     pass
+        from ui.widgets.yarn_colour import load_yarn_colours
+        cache["yarn_colour_map"] = load_yarn_colours()[0]
 
         # tblYarnUse Map
         cache["yarn_use_map"] = {}
@@ -5704,11 +5315,13 @@ class ShowExperimentScreen(QWidget):
                 self.txt_notes is not None
                 and self.txt_notes.toPlainText().strip()
             )
+            n_cell = len(getattr(self, "_cell_notes", None) or [])
+            title = f"Notes ({n_cell})" if n_cell else "Notes"
             bar = self.tabs.tabBar()
             if has_notes:
-                bar.setTabText(idx, "🔴 Notes")
+                bar.setTabText(idx, "🔴 " + title)
             else:
-                bar.setTabText(idx, "Notes")
+                bar.setTabText(idx, title)
         except Exception:
             pass
 
@@ -5939,10 +5552,9 @@ class ShowExperimentScreen(QWidget):
         Pro Ply wird das häufigste Garn angezeigt (robust gegen vereinzelte Datenfehler).
 
         Gibt Rich-Text (HTML) zurück: jedes Ply ist ein Link-Anchor
-        ("yarn:<YarnID>"), damit ein Rechtsklick (siehe
-        _on_material_label_context_menu) per QLabel.anchorAt() erkennen
-        kann, auf welches Material genau geklickt wurde, und dessen
-        Lagerplätze (tblYarnSpool) als Tooltip zeigen kann.
+        ("yarn:<YarnID>") mit Spulen-Symbol dahinter ("stock:"/"nostock:");
+        ein Klick auf Garn oder grünes Symbol öffnet die Lagerplätze
+        (_on_material_label_link_activated).
         """
         if not getattr(self, "_series_pk", None):
             return ""
@@ -5981,80 +5593,70 @@ class ShowExperimentScreen(QWidget):
 
         result.sort(key=_ply_sort_key)
 
+        # Spulen-Symbol pro Ply (am Lager / nicht am Lager), Klick -> Lagerplaetze
+        stock = _yarn_locations.load_stock_summary(yid for _p, yid, _n in result)
+        self._material_stock_summary = stock
+        self._material_yarn_names = {int(yid): name for _p, yid, name in result if yid is not None}
+
         parts = []
         for ply, yid, name in result:
             label = html.escape(f"{ply}: {name}" if ply else name)
             if yid is not None:
                 parts.append(
-                    f'<a href="yarn:{int(yid)}" style="color:#202020; text-decoration:none;">{label}</a>')
+                    f'<a href="yarn:{int(yid)}" style="color:#202020; text-decoration:none;">{label}</a>'
+                    f'&nbsp;{_yarn_locations.stock_symbol_html(int(yid), stock.get(int(yid)))}')
             else:
                 parts.append(label)
         return " • ".join(parts)
 
     def _on_material_label_link_hovered(self, href: str) -> None:
-        """Verfolgt, über welchem Material-Link die Maus gerade steht.
-        QLabel hat kein anchorAt(pos) (anders als QTextEdit/QTextBrowser) -
-        der Rechtsklick-Handler muss sich deshalb auf die zuletzt per
-        linkHovered gemeldete Position verlassen (die Maus steht beim
-        Rechtsklick bereits dort, das vorangehende Hover-Event ist also
-        zuverlässig aktuell)."""
-        self._material_label_hover_href = href or ""
-
-    def _on_material_label_context_menu(self, pos) -> None:
-        """Rechtsklick auf ein Material in der Material-Infobox oben:
-        zeigt dessen Lagerplätze (tblYarnSpool) als Tooltip."""
-        href = getattr(self, "_material_label_hover_href", "")
-        if not href.startswith("yarn:"):
+        """Garn oder Spulen-Symbol in der Materialzeile: Bestand als Tooltip
+        (Klick öffnet die Lagerplätze)."""
+        href = href or ""
+        if href.startswith(("yarn:", "stock:", "nostock:")):
+            try:
+                yid = int(href.split(":", 1)[1])
+            except Exception:
+                return
+            summary = getattr(self, "_material_stock_summary", {}).get(yid)
+            QToolTip.showText(QCursor.pos(), _yarn_locations.stock_symbol_tooltip(summary),
+                              self.lbl_material_value)
+        else:
             QToolTip.hideText()
+
+    def _on_material_label_link_activated(self, href: str) -> None:
+        """Klick auf ein Garn oder auf dessen grünes Spulen-Symbol in der
+        Materialzeile: zeigt, wo die Spulen dieses Garns am Lager liegen
+        (inkl. Hülsenfarbe). Garn ohne Bestand: Dialog sagt, dass nichts da ist."""
+        if not href.startswith(("yarn:", "stock:")):
             return
         try:
             yarn_id = int(href.split(":", 1)[1])
         except Exception:
             return
-        tip = self._yarn_stock_tooltip_html(yarn_id)
-        QToolTip.showText(self.lbl_material_value.mapToGlobal(pos), tip, self.lbl_material_value)
-
-    def _yarn_stock_tooltip_html(self, yarn_id: int) -> str:
-        """Baut den Tooltip-Text mit den aktuellen Lagerplätzen (tblYarnSpool,
-        Status='in stock') für ein Garn - gleiche Datenquelle/Filterung wie
-        ManageYarn/Yarn Stock (screen_yarn_stock.py)."""
-        yname = f"Yarn {yarn_id}"
         try:
-            yrows = fetch_all("SELECT Name FROM tblYarn WHERE ID = ?", [yarn_id])
-            if yrows and yrows[0].get("Name"):
-                yname = str(yrows[0]["Name"])
+            from ui.widgets.yarn_colour import load_yarn_colours
+            colour = load_yarn_colours()[0].get(yarn_id)
+        except Exception:
+            colour = None
+        name = getattr(self, "_material_yarn_names", {}).get(yarn_id) or f"Yarn {yarn_id}"
+        win = self.window()
+        goto = getattr(win, "_go_yarn_stock_from_notification", None)
+        try:
+            dlg = _yarn_locations.YarnLocationsDialog(
+                yarn_id, name, colour,
+                _yarn_locations.load_series_spool_ids(getattr(self, "_series_pk", None)),
+                parent=self, on_open_yarn_stock=goto)
+        except Exception as e:
+            show_error(self, "Stock locations", "The stock locations could not be loaded.", e)
+            return
+        try:
+            from db.usage_log import log_usage_event
+            log_usage_event("feature", "yarn_stock_locations",
+                            "show_experiment_" + href.split(":", 1)[0])
         except Exception:
             pass
-        header = f"<b>{html.escape(yname)}</b>"
-
-        if not table_exists("tblYarnSpool"):
-            return header + "<br>Stock tracking not available."
-
-        try:
-            rows = fetch_all(
-                "SELECT Location, Charge, WeightKg FROM tblYarnSpool "
-                "WHERE YarnID = ? AND Status = 'in stock' "
-                "ORDER BY Location, Charge",
-                [yarn_id],
-            )
-        except Exception:
-            return header + "<br>Could not load stock."
-
-        if not rows:
-            return header + "<br>No stock in Yarn Stock."
-
-        lines = [header]
-        for r in rows:
-            loc = (r.get("Location") or "").strip() or "–"
-            charge = (r.get("Charge") or "").strip()
-            wt = r.get("WeightKg")
-            try:
-                wt_txt = f"{float(wt):.2f} kg"
-            except Exception:
-                wt_txt = "? kg"
-            charge_txt = f" (Charge {html.escape(charge)})" if charge else ""
-            lines.append(f"{html.escape(loc)}: {wt_txt}{charge_txt}")
-        return "<br>".join(lines)
+        dlg.exec()
 
     # ---------- Machine Data ----------
 
@@ -6091,9 +5693,12 @@ class ShowExperimentScreen(QWidget):
                 for cs in col_specs:
                     trial_cs_for_hdr.setdefault(cs["trial_id"], []).append(cs)
 
+                from ui.machine_tab import ply_header_colour
                 new_ply_vals = [""]
                 new_tooltips = [""]
+                new_colours = [""]
                 for cs in col_specs:
+                    new_colours.append(ply_header_colour(cs, trial_cs_for_hdr, compact_mode))
                     if compact_mode:
                         all_cs = trial_cs_for_hdr.get(cs["trial_id"], [cs])
                         new_ply_vals.append("Ply 1" if len(all_cs) == 1 else "div.")
@@ -6110,6 +5715,7 @@ class ShowExperimentScreen(QWidget):
 
                 model._header_rows[1]["values"] = new_ply_vals
                 model._header_rows[1]["tooltips"] = new_tooltips
+                model._header_rows[1]["colours"] = new_colours
                 model.layoutChanged.emit()
 
             self._apply_mat_column_filter()
@@ -6202,56 +5808,56 @@ class ShowExperimentScreen(QWidget):
             _mrv.apply(self)
 
     def _manage_plies_for_col_spec_idx(self, col_spec_idx: int) -> None:
-        """Öffnet den Manage-Plies-Dialog für den Trial, der col_spec_idx zugeordnet ist."""
+        """Right-click on the ply row of Machine Data: the yarns dialog of the
+        whole series, scrolled to the clicked trial."""
         col_specs = getattr(self, "_machine_col_specs", None)
-        if not col_specs or col_spec_idx < 0 or col_spec_idx >= len(col_specs):
+        trial_id = None
+        if col_specs and 0 <= col_spec_idx < len(col_specs):
+            trial_id = col_specs[col_spec_idx].get("trial_id")
+        self._open_series_yarns(focus_trial_id=trial_id)
+
+    def _open_series_yarns(self, focus_trial_id=None) -> None:
+        """Yarns of the whole series (ui/series_yarns_dialog.py): change the
+        yarn of a ply, switch plies on/off per trial, ends, add plies."""
+        if not getattr(self, "_series_pk", None):
             return
-        cs = col_specs[col_spec_idx]
-        trial_id = cs.get("trial_id")
-        vno = cs.get("vno", "?")
-
-        # Alle verfügbaren Yarns laden - Halbfabrikat-"Schatten"-Garne
-        # (Multimaschinen-Ply-Verknüpfung) bleiben hier aussen vor.
-        _src_col = resolve_field(['SourceTrialID'], get_columns_map('tblYarn'))
-        _where = f" WHERE [{_src_col}] IS NULL" if _src_col else ""
-        yarn_rows = fetch_all(f"SELECT ID, Name FROM tblYarn{_where} ORDER BY Name")
-        if not yarn_rows:
-            QMessageBox.warning(self, "Manage Plies", "No yarns found in tblYarn.")
+        editable = self._get_access_level() >= 2
+        if editable and not self._confirm_proceed_despite_unsaved():
             return
-        yarn_list = [(int(r["ID"]), str(r["Name"] or "")) for r in yarn_rows]
-
-        # Alle Trials der Series laden für Multi-Trial-Auswahl
-        all_trial_rows = fetch_all(
-            "SELECT ID, Versuchsnummer FROM tblTrial WHERE TrialSeriesID = ? ORDER BY Versuchsnummer",
-            [self._series_pk]
-        )
-        all_trials = [(int(r["ID"]), str(r["Versuchsnummer"])) for r in all_trial_rows]
-
-        dlg = _ManagePliesDialog(self, trial_id=trial_id, vno=vno,
-                                 series_pk=self._series_pk, yarn_list=yarn_list,
-                                 all_trials=all_trials)
+        from ui.series_yarns_dialog import SeriesYarnsDialog
+        label = " – ".join(x for x in (str(getattr(self, "_experiment_id_txt", "") or ""),
+                                        str(getattr(self, "_series_name_txt", "") or "")) if x)
+        try:
+            dlg = SeriesYarnsDialog(self, self._series_pk, label, editable=editable,
+                                    focus_trial_id=focus_trial_id)
+        except Exception as e:
+            show_error(self, "Yarns", "The yarns of this series could not be loaded.", e)
+            return
         if dlg.exec() == QDialog.Accepted:
-            # has_groups neu prüfen (könnte sich geändert haben)
-            if hasattr(self, "_machine_cache") and self._machine_cache:
-                try:
-                    ph = ",".join(["%s"] * len(self._trial_ids))
-                    use_rows = fetch_all(
-                        f"SELECT COUNT(*) AS cnt FROM tblTrialSettings "
-                        f"WHERE TrialID IN ({ph}) AND YarnUseID IS NOT NULL",
-                        self._trial_ids,
-                    )
-                    self._machine_cache["has_groups"] = (use_rows[0]["cnt"] > 0) if use_rows else False
-                except Exception:
-                    pass
-            self._build_machine_tab()
-            if hasattr(self, "_build_rd_machine_tab"):
-                try:
-                    self._build_rd_machine_tab()
-                except Exception:
-                    pass
-            txt = self._load_materials_summary()
-            if hasattr(self, "lbl_material_value"):
-                self.lbl_material_value.setText(txt or "—")
+            self._after_plies_changed()
+
+    def _after_plies_changed(self) -> None:
+        """Rebuild what shows plies/yarns after they were changed in the DB."""
+        if hasattr(self, "_machine_cache") and self._machine_cache:
+            try:
+                ph = ",".join(["%s"] * len(self._trial_ids))
+                use_rows = fetch_all(
+                    f"SELECT COUNT(*) AS cnt FROM tblTrialSettings "
+                    f"WHERE TrialID IN ({ph}) AND YarnUseID IS NOT NULL",
+                    self._trial_ids,
+                )
+                self._machine_cache["has_groups"] = (use_rows[0]["cnt"] > 0) if use_rows else False
+            except Exception:
+                pass
+        self._build_machine_tab()
+        if hasattr(self, "_build_rd_machine_tab"):
+            try:
+                self._build_rd_machine_tab()
+            except Exception:
+                pass
+        txt = self._load_materials_summary()
+        if hasattr(self, "lbl_material_value"):
+            self.lbl_material_value.setText(txt or "—")
 
     def _multiply_trial_from_col_spec_idx(self, col_spec_idx: int) -> None:
         """"Copy trials..." from the trial-number row (row 0 of the Machine
@@ -6411,6 +6017,7 @@ class ShowExperimentScreen(QWidget):
 
         menu = QMenu(self)
         act_copy = None if is_ref else menu.addAction("Copy trials…")
+        act_note = _cell_notes_ui.add_trial_note_action(self, menu, trial_id)
         menu.addSeparator()
         act_add = menu.addAction("Add reference sample…")
         act_mark = act_rename = act_unmark = None
@@ -6429,6 +6036,8 @@ class ShowExperimentScreen(QWidget):
             return
         if chosen is act_copy:
             self._multiply_trial_from_col_spec_idx(col_spec_idx)
+        elif act_note is not None and chosen is act_note:
+            _cell_notes_ui.open_trial_notes(self, trial_id)
         elif chosen is act_add:
             self._add_reference_sample()
         elif chosen is act_mark:

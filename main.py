@@ -177,6 +177,18 @@ except Exception as _report_err:
     ReportScreen = None
 
 try:
+    from ui.screen_smart_chart import SmartChartScreen
+except Exception as _smartchart_err:
+    print(f"[Smart Chart] Import fehler: {_smartchart_err}")
+    SmartChartScreen = None
+
+try:
+    from ui.screen_dashboards import DashboardsScreen
+except Exception as _dashboards_err:
+    print(f"[Dashboards] Import fehler: {_dashboards_err}")
+    DashboardsScreen = None
+
+try:
     from ui.screen_canvas import CanvasScreen
 except Exception as _canvas_err:
     print(f"[Canvas] Import fehler: {_canvas_err}")
@@ -541,6 +553,9 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        # vor allem anderen: alle spaeteren Referenzen auf self._go_xxx (Sidebar-Callbacks,
+        # _fresh_tab_targets) sollen schon die geprueften Varianten sein
+        self._install_feature_guards()
         self.setWindowTitle("TrippleT – Log In")
         self.setMinimumSize(1100, 700)
 
@@ -593,7 +608,12 @@ class MainWindow(QMainWindow):
             **self._sidebar_nav_kwargs(),
         )
         self.report_screen    = ReportScreen(on_back=self._go_back_to_show_experiment, mode="series", sidebar_callbacks=self._sidebar_nav_kwargs()) if ReportScreen else None
-        self.smartchart_screen = ReportScreen(on_back=self._go_home, mode="visual", sidebar_callbacks=self._sidebar_nav_kwargs()) if ReportScreen else None
+        # Smart Chart neu seit 2026-10-30 (ui/screen_smart_chart.py) - ersetzt
+        # ReportScreen(mode="visual") samt Free Query Builder
+        self.smartchart_screen = self._build_smartchart_screen() if SmartChartScreen else None
+        # Dashboards zum Anschauen (ui/screen_dashboards.py, Etappe 6) - erst beim ersten Oeffnen gebaut
+        self.dashboards_screen = None
+        app_meta.open_dashboards = self._go_dashboards
 
         # Prepare Manage Jets
         preview = self._load_jets_data(limit=1)
@@ -1396,7 +1416,13 @@ class MainWindow(QMainWindow):
         # siehe CLAUDE.md) - Home bleibt über den Header-"Home"-Button
         # weiterhin erreichbar (_go_home()), ist aber nicht mehr der
         # Einstiegspunkt, da die Sidebar jetzt die Navigation übernimmt.
-        self.stack.setCurrentWidget(self.backlog)
+        # Backlog kann ein Superuser sperren (db/feature_access.py) -> dann das erste erlaubte Ziel.
+        try:
+            from db import feature_access
+            feature_access.load(force=True)
+        except Exception:
+            pass
+        self._go_landing()
 
         # ── Notification Bell einrichten ──────────────────────────────────
         try:
@@ -1511,6 +1537,69 @@ class MainWindow(QMainWindow):
                 log_usage_event("screen_open", type(widget).__name__)
         except Exception:
             pass
+
+    # Tools/Screens, die ein Superuser pro Gruppe/Person ein- und ausschaltet
+    # (db/feature_access.py, Manage User -> Access…). Jeder Weg hinein laeuft
+    # ueber eine dieser Methoden - Sidebar, Strg+Klick, Recent, Hilfe "Take me
+    # there", Links zwischen Screens.
+    # Zuordnung Methode -> Tool steht in db/feature_access.py (GUARDED_METHODS, CREATE_MODE_FEATURE)
+
+    def _install_feature_guards(self) -> None:
+        import functools
+        from db.feature_access import BY_KEY, CREATE_MODE_FEATURE, GUARDED_METHODS, can_use
+
+        def blocked(key: str) -> bool:
+            if can_use(key):
+                return False
+            QMessageBox.information(self, "TrippleT",
+                                    f"“{BY_KEY[key].label}” is not switched on for you.\n"
+                                    "Ask a superuser if you need it.")
+            return True
+
+        for name, key in GUARDED_METHODS.items():
+            fn = getattr(self, name, None)
+            if fn is None:
+                continue
+
+            @functools.wraps(fn)
+            def guarded(*a, _fn=fn, _key=key, **kw):
+                if blocked(_key):
+                    return None
+                return _fn(*a, **kw)
+            setattr(self, name, guarded)
+
+        create = self._go_create_experiment
+
+        @functools.wraps(create)
+        def guarded_create(mode: str = "create", *a, **kw):
+            key = CREATE_MODE_FEATURE.get(mode)
+            if key and blocked(key):
+                return None
+            return create(mode, *a, **kw)
+        self._go_create_experiment = guarded_create
+
+    def _go_landing(self) -> None:
+        """Nach dem Login: die Startseite aus den eigenen Settings (Default Backlog) - ist sie
+        gesperrt, Backlog bzw. das erste erlaubte Ziel (feature_access.LANDING_ORDER)."""
+        from db.feature_access import landing_key
+        try:
+            from ui import display_prefs
+            preferred = display_prefs.current().get("start")
+        except Exception:
+            preferred = None
+        key = landing_key(preferred)
+        targets = {"backlog": self._go_backlog, "all_experiments": self._go_all_experiments,
+                   "dashboards": self._go_dashboards, "yarn_stock": self._go_yarn_stock,
+                   "smart_chart": self._go_smartchart, "my_requests": self._go_my_requests,
+                   "requirement_hub": self._go_requirement_hub, "image_compare": self._go_image_compare,
+                   "canvas": self._go_canvas, "jet_roi": self._go_nozzle_calculator,
+                   "air_supply": self._go_air_supply, "label_generator": self._go_label_generator,
+                   "tdms_inspector": self._go_tdms_inspector, "manage_jets": self._go_add_jet,
+                   "manage_yarn": self._go_add_yarn}
+        if key in targets:
+            targets[key]()
+        else:
+            self._go_home()
 
     def _go_home(self):
         """Navigiert zum Home-Screen."""
@@ -1701,14 +1790,16 @@ class MainWindow(QMainWindow):
 
     def _navigate_to_help_screen(self, screen: str, tab: str) -> None:
         """"Take me there" aus der Hilfe-Suche: oeffnet den passenden Screen.
-        Show Experiment und Report (ausser Smart Chart) brauchen eine Serie -
+        Show Experiment und Report brauchen eine Serie -
         dann geht es zu All Experiments, um eine zu waehlen."""
         targets = {
             "all_experiments": self._go_all_experiments,
             "backlog": self._go_backlog,
             "show_experiment": self._go_all_experiments,
             "create_experiment": lambda: self._go_create_experiment("create"),
-            "report": self._go_smartchart if tab == "smart" else self._go_all_experiments,
+            "report": self._go_all_experiments,
+            "smart_chart": self._go_smartchart,
+            "dashboards": self._go_dashboards,
             "manage_yarn": self._go_add_yarn,
             "manage_jets": self._go_add_jet,
             "yarn_stock": self._go_yarn_stock,
@@ -2396,15 +2487,44 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("TrippleT – Show Experiment")
         self.stack.setCurrentWidget(self.show_experiment)
 
+    def _build_smartchart_screen(self) -> "SmartChartScreen":
+        return SmartChartScreen(on_back=self._go_home, on_open_series=self._open_experiment_from_smartchart,
+                                sidebar_callbacks=self._sidebar_nav_kwargs())
+
+    def _go_dashboards(self) -> None:
+        """Dashboards (ui/screen_dashboards.py): eigene + freigegebene Dashboards anschauen."""
+        if DashboardsScreen is None:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Dashboards", "Dashboards are not available.")
+            return
+        if self.dashboards_screen is None:
+            self.dashboards_screen = DashboardsScreen(
+                on_open_series=lambda e, s, x: self._go_show_experiment(
+                    e, s, x, back_label="Dashboards", back_callback=self._go_dashboards),
+                on_edit=self._edit_dashboard_in_smartchart,
+                sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.dashboards_screen)
+        self.setWindowTitle("TrippleT – Dashboards")
+        self.stack.setCurrentWidget(self.dashboards_screen)
+
+    def _edit_dashboard_in_smartchart(self, view_id: int) -> None:
+        """Dashboards -> "Edit in Smart Chart"."""
+        self._go_smartchart()
+        if self.smartchart_screen is not None:
+            self.smartchart_screen.open_view_by_id(view_id)
+
+    def _open_experiment_from_smartchart(self, exp_pk: int, series_pk: int, experiment_id: str):
+        """Doppelklick in der Versuchsliste von Smart Chart; Back-Chip zurueck."""
+        self._go_show_experiment(exp_pk, series_pk, experiment_id,
+                                  back_label="Smart Chart", back_callback=self._go_smartchart)
+
     def _go_smartchart(self) -> None:
-        """Öffnet Smart Chart im Visual SQL Modus (aus Home)."""
+        """Öffnet Smart Chart (ui/screen_smart_chart.py)."""
         if self.smartchart_screen is None:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Smart Chart",
-                "Smart Chart not available – PySide6-WebEngine is not installed.")
+            QMessageBox.warning(self, "Smart Chart", "Smart Chart is not available.")
             return
         self.setWindowTitle("TrippleT – Smart Chart")
-        self.smartchart_screen.load_visual()
         self.stack.setCurrentWidget(self.smartchart_screen)
 
     def _open_smartchart_visual_in_new_tab(self) -> None:
@@ -2415,17 +2535,15 @@ class MainWindow(QMainWindow):
         open in, instead of actually opening a second, independent instance
         (focus-instead-of-duplicate logic, see the module docstring in
         ui/widgets/tab_container.py) - same as Backlog/All Experiments."""
-        if ReportScreen is None:
-            QMessageBox.warning(self, "Smart Chart",
-                "Smart Chart not available – PySide6-WebEngine is not installed.")
+        if SmartChartScreen is None:
+            QMessageBox.warning(self, "Smart Chart", "Smart Chart is not available.")
             return
 
         def _populate():
-            screen = ReportScreen(on_back=self._go_home, mode="visual", sidebar_callbacks=self._sidebar_nav_kwargs())
+            screen = self._build_smartchart_screen()
             self.setWindowTitle("TrippleT – Smart Chart")
             self.stack.addWidget(screen)
             self.stack.setCurrentWidget(screen)
-            screen.load_visual()
 
         self._tabs.open_in_new_tab(_populate)
 

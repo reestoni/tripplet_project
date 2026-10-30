@@ -58,6 +58,7 @@ from db.connection import (
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.widgets.spool_picker import SpoolPickerDialog, spool_label
+from ui.widgets.yarn_colour import colour_icon, colour_tooltip, load_yarn_colours
 from ui.pathutil import resource_path
 from ui.text_normalize import norm as _norm, resolve_field
 from db.trial_reference import exclude_references_sql, format_trial_number, next_trial_number
@@ -1781,6 +1782,7 @@ class CreateExperimentScreen(QWidget):
                 f"FROM {ytable}{_where_no_shadow} ORDER BY [{y_name}] ASC"
             )
 
+        self._yarn_colours, _ = load_yarn_colours()
         yarns_by_gid: dict[Any, list[dict]] = {}
         for r in yrows:
             yarns_by_gid.setdefault(r.get("GID"), []).append(r)
@@ -1816,6 +1818,8 @@ class CreateExperimentScreen(QWidget):
                     continue
                 child = QTreeWidgetItem([yname])
                 child.setData(0, Qt.UserRole, {"kind": "yarn", "yarn_id": yid, "yarn_name": yname})
+                child.setIcon(0, colour_icon(self._yarn_colours.get(int(yid))))
+                child.setToolTip(0, colour_tooltip(self._yarn_colours.get(int(yid))))
                 top.addChild(child)
                 any_children = True
 
@@ -3306,6 +3310,20 @@ class CreateExperimentScreen(QWidget):
         self._check_material()
         self._check_safe()
 
+    def _yarn_name_item(self, yarn_id: Any, name: str) -> QTableWidgetItem:
+        """Yarn name cell of tblYarns with the colour square of the yarn."""
+        if getattr(self, "_yarn_colours", None) is None:
+            self._yarn_colours, _ = load_yarn_colours()
+        it = QTableWidgetItem(name)
+        try:
+            colour = self._yarn_colours.get(int(yarn_id))
+        except (TypeError, ValueError):
+            colour = None
+        it.setIcon(colour_icon(colour))
+        if colour:
+            it.setToolTip(colour_tooltip(colour))
+        return it
+
     def _get_selected_yarn_from_tree(self) -> Optional[tuple[Any, str]]:
         items = self.treeMaterial.selectedItems() if hasattr(self, "treeMaterial") else []
         if not items:
@@ -3503,7 +3521,7 @@ class CreateExperimentScreen(QWidget):
             this_ply_label = ply_label
             rr = self.tblYarns.rowCount()
             self.tblYarns.insertRow(rr)
-            self.tblYarns.setItem(rr, 0, QTableWidgetItem(yarn_name))
+            self.tblYarns.setItem(rr, 0, self._yarn_name_item(yarn_id, yarn_name))
             self.tblYarns.setItem(rr, 1, QTableWidgetItem(this_ply_label))
             self.tblYarns.setItem(rr, 2, QTableWidgetItem(yarn_use_name))
             self.tblYarns.setItem(rr, 3, QTableWidgetItem(spool_display))
@@ -5441,7 +5459,7 @@ class CreateExperimentScreen(QWidget):
                 spool_cache[spool_id] = spool_display
             rr = self.tblYarns.rowCount()
             self.tblYarns.insertRow(rr)
-            self.tblYarns.setItem(rr, 0, QTableWidgetItem(name))
+            self.tblYarns.setItem(rr, 0, self._yarn_name_item(yarn_id, name))
             self.tblYarns.setItem(rr, 1, QTableWidgetItem(str(ply)))
             self.tblYarns.setItem(rr, 2, QTableWidgetItem(yuse_name))
             self.tblYarns.setItem(rr, 3, QTableWidgetItem(spool_display))

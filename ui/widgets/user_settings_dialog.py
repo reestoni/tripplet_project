@@ -125,6 +125,22 @@ class UserSettingsDialog(QDialog):
         gl.addWidget(hint)
         lay.addWidget(g_welcome)
 
+        # ── Start screen (after the login) ───────────────────────────────
+        from PySide6.QtWidgets import QComboBox
+        from db import feature_access as fa
+        g_start = QGroupBox("Start screen")
+        stl = QHBoxLayout(g_start)
+        stl.addWidget(QLabel("After the login open:"))
+        self.cmb_start = QComboBox()
+        for key in fa.START_SCREENS:
+            if fa.can_use(key):
+                self.cmb_start.addItem(fa.BY_KEY[key].label, key)
+        cur = self._orig_prefs.get("start") or "backlog"
+        idx = self.cmb_start.findData(cur)
+        self.cmb_start.setCurrentIndex(idx if idx >= 0 else max(0, self.cmb_start.findData("backlog")))
+        stl.addWidget(self.cmb_start, 1)
+        lay.addWidget(g_start)
+
         # ── Accent colour ────────────────────────────────────────────────
         g_accent = QGroupBox("Accent colour")
         al = QHBoxLayout(g_accent)
@@ -261,12 +277,15 @@ class UserSettingsDialog(QDialog):
                 save_accent(self._accent)
         except Exception as e:
             show_error(self, "Settings", "Not all settings could be saved.", e, warning=True)
+        if self.cmb_start.currentData():
+            display_prefs.update(persist=False, quiet=True, start=self.cmb_start.currentData())
         display_prefs.save_now()
         try:
             from db.usage_log import log_usage_event
             p = display_prefs.current()
             log_usage_event("feature", "user_settings",
-                            " ".join(f"{k}={int(v)}" for k, v in sorted(p.items())))
+                            " ".join(f"{k}={int(v)}" for k, v in sorted(p.items()) if isinstance(v, (bool, int)))
+                            + f" start={p.get('start')}")
         except Exception:
             pass
         self.accept()

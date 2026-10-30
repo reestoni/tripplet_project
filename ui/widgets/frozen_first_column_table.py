@@ -1,12 +1,12 @@
 # ui/widgets/frozen_first_column_table.py
 from __future__ import annotations
 from typing import Optional
-from PySide6.QtCore import Qt, Slot, QEvent
-from PySide6.QtGui import QFont, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, Slot, QEvent, QPointF
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QPolygonF, QShortcut
 from PySide6.QtCore import QSize
 from PySide6.QtWidgets import (
     QWidget, QGridLayout, QTableView, QAbstractItemView, QHeaderView, QSizePolicy, QLabel, QApplication,
-    QAbstractItemDelegate,
+    QAbstractItemDelegate, QToolTip,
 )
 from PySide6.QtCore import QItemSelectionModel
 
@@ -56,6 +56,65 @@ class _GridView(QTableView):
         super().closeEditor(editor, hint)
         if hint == QAbstractItemDelegate.SubmitModelCache:  # editor closed with Enter
             self._step(-1 if up else 1)
+
+    # ── Notes on values (db/cell_notes.py): models with notes_at(r, c) get a
+    # small triangle in the top right corner of a cell with notes (like Excel)
+    # and the notes appended to the tooltip.
+    NOTE_COLOUR = QColor("#5E35B1")
+
+    def _notes_model(self):
+        m = self.model()
+        return m if (m is not None and getattr(m, "_notes_by_key", None) is not None
+                     and hasattr(m, "notes_at")) else None
+
+    def paintEvent(self, event):  # noqa: N802
+        super().paintEvent(event)
+        m = self._notes_model()
+        if m is None or not (m._notes_by_key or getattr(m, "_note_trial_cols", None)):
+            return
+        vp = self.viewport()
+        r0, r1 = self.rowAt(0), self.rowAt(vp.height() - 1)
+        c0, c1 = self.columnAt(0), self.columnAt(vp.width() - 1)
+        r0 = 0 if r0 < 0 else r0
+        c0 = 0 if c0 < 0 else c0
+        r1 = m.rowCount() - 1 if r1 < 0 else r1
+        c1 = m.columnCount() - 1 if c1 < 0 else c1
+        p = None
+        for r in range(r0, r1 + 1):
+            if self.isRowHidden(r):
+                continue
+            for c in range(c0, c1 + 1):
+                if self.isColumnHidden(c) or not m.notes_at(r, c):
+                    continue
+                if p is None:
+                    p = QPainter(vp)
+                    p.setRenderHint(QPainter.Antialiasing, True)
+                    p.setPen(Qt.NoPen)
+                    p.setBrush(self.NOTE_COLOUR)
+                rect = self.visualRect(m.index(r, c))
+                k = max(6, min(10, rect.height() // 3))
+                p.drawPolygon(QPolygonF([QPointF(rect.right() - k + 1, rect.top()),
+                                         QPointF(rect.right() + 1, rect.top()),
+                                         QPointF(rect.right() + 1, rect.top() + k)]))
+        if p is not None:
+            p.end()
+
+    def viewportEvent(self, event):  # noqa: N802
+        if event.type() == QEvent.ToolTip:
+            m = self._notes_model()
+            if m is not None:
+                idx = self.indexAt(event.pos())
+                notes = m.notes_at(idx.row(), idx.column()) if idx.isValid() else []
+                if notes:
+                    from html import escape
+                    from ui.cell_notes_ui import notes_tooltip_html
+                    base = idx.data(Qt.ToolTipRole)
+                    tip = notes_tooltip_html(notes)
+                    if base:
+                        tip = escape(str(base)).replace(chr(10), "<br>") + "<hr>" + tip
+                    QToolTip.showText(event.globalPos(), tip, self.viewport())
+                    return True
+        return super().viewportEvent(event)
 
 
 class FrozenFirstColumnTable(QWidget):

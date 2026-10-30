@@ -3,7 +3,7 @@
 
 Spiegelt ui/screen_show_experiment.py (Werkzeugleiste in _build_ui, Kontext-
 menues: _MachineContextMenuFilter -> Copy trials / Reference samples /
-Manage plies / Fill row / Custom Group, Retest-Flag ueber den Spaltenkopf der Labor-Tabs, Shortcuts
+Yarns… (Plies der Serie) / Fill row / Custom Group, Retest-Flag ueber den Spaltenkopf der Labor-Tabs, Shortcuts
 Ctrl+S/F5/Ctrl+C/Ctrl+V, Read-only ab Level <= 1) und ui/machine_tab.py.
 Bei Aenderungen dort hier (alle 3 Sprachen) und in
 assets/images/help_show_experiment.svg nachziehen.
@@ -41,7 +41,7 @@ TEXTS = {
                 ("task", "Enter or change a value",
                  ["Click the cell (7) and type the value, or double-click to edit it. Press Enter - you land in the cell below for the next value (Shift+Enter goes up).",
                   f"Click {B('Save')} or press Ctrl+S."],
-                 "Changed cells stay <b>yellow</b> until you save; the button shows how many, e.g. "
+                 "Changed cells stay <b>yellow</b> until you save; a green tick in the middle confirms the save. The button shows how many, e.g. "
                  f"{B('Save (3)')}, and the tab gets a dot (●). If you leave the screen, close the tab or the "
                  "program with unsaved changes, TrippleT asks whether to save them. "
                  "With access level 1 the screen is read-only."),
@@ -51,6 +51,15 @@ TEXTS = {
                   "Choose the value and the range of trials, then OK.",
                   f"Click {B('Save')}."],
                  "Right-clicking a merged cell offers " + M("Fill row…") + " as well."),
+                ("task", "Add a note to a value or a trial",
+                 ["Right-click the value → " + M("Add note…") + ". For the whole trial, right-click the trial "
+                  "number (V1, V2, …) in <i>Machine Data</i>.",
+                  "Write the note and click " + B("Add note") + " (or Ctrl+Enter) - it is saved right away."],
+                 "A small purple triangle in the corner marks a value with notes; point at it to read them. "
+                 "The <i>Notes</i> tab lists all notes of the series - double-click a line to jump to the value. "
+                 "Everybody can write notes; only the author can edit one, the author or a superuser can delete "
+                 "it. In the Smart Chart, the <b>Notes</b> button shows them; the PDF only gets them if you tick "
+                 "<i>Include notes on values</i> when exporting."),
                 ("task", "See who changed a value and when",
                  ["Right-click the value → " + M("Change history…") + ".",
                   "The list shows every change with date, person, old and new value, newest first. "
@@ -110,8 +119,8 @@ TEXTS = {
                   f"Click {B('Copy n trials')}."],
                  "Machine settings and plies are copied. Lab values, comments and the yarn tensions before/after "
                  "the jet of the copies stay empty. The new trials are added at the end and highlighted in the "
-                 "table. Values per ply (e.g. T1/T2 tension) are changed afterwards in the table or in "
-                 "<i>Manage plies</i>. Reference samples are never copied."),
+                 "table. Values per ply (e.g. T1/T2 tension) are changed afterwards in the table, plies and "
+                 "yarns with " + B("Yarns…") + ". Reference samples are never copied."),
                 ("task", "Add a reference sample (e.g. a customer's original spool)",
                  [f"Click {B('+ Ref')} on the right of (2), or right-click a trial number (4) → "
                   + M("Add reference sample…") + ".",
@@ -124,8 +133,21 @@ TEXTS = {
                  "the report charts and left out of statistics, Smart Chart, Quick Scan, Athena and the jet data "
                  "export. Right-click the trial number of an existing trial to turn it into a reference sample "
                  "(it keeps its number) or back, or to rename it."),
-                ("task", "Change the plies or yarns of a trial",
-                 ["Right-click the ply row (5) of that trial → the <i>Manage plies</i> dialog opens."]),
+                ("task", "Change the yarn of a ply, or add / remove plies",
+                 [f"Click {B('Yarns…')} on the right of (2) (or right-click the ply row (5)). A table shows every "
+                  "ply of the series (rows) and every trial (columns).",
+                  "<b>Change a yarn:</b> click the yarn of the ply, type a part of the name (e.g. <i>167 dty</i>) "
+                  "and pick it - the whole ply gets the new yarn.",
+                  "<b>Ply on/off for one trial:</b> click its cell. Number of ends: select cells and type 1–9 "
+                  "(Delete = off), or right-click.",
+                  f"<b>New ply:</b> {B('+ Add ply')} (catalog yarn) or {B('+ Trial output')} (output of another "
+                  "trial) - it is on for every trial. A yarn always keeps its ply number in a series: added again (e.g. "
+                  "once as <i>DTY</i>, once as <i>Effect</i>) it becomes a second row of the same ply - choose the "
+                  "use in the <i>Use</i> column.",
+                  f"Click {B('Apply')} - TrippleT shows a summary first."],
+                 "Changed cells are yellow; nothing is saved before Apply (Cancel discards everything). A changed "
+                 "yarn keeps the machine values of the ply; removing a ply deletes its values in that trial. Every "
+                 "trial keeps at least one ply - reference samples may have no yarn at all. Needs write access."),
                 ("task", "Add another trial series or lab machines",
                  ["Use " + M("Add Trial Series") + " or " + M("Add Lab Machines") + " in the sidebar."],
                  "A lab tab (e.g. Statimat M) appears as soon as a lab machine is assigned to the series."),
@@ -158,12 +180,14 @@ TEXTS = {
                                     "Itemat import, report icon and saved reports (list + Go!), reload (↻), Save and this help."),
                     ("(2) Material line", "Material of the series, linked experiment request (ER), machine info, "
                                           "trial labels, <b>+T</b> (add trials), <b>+ Ref</b> (add reference sample) and "
-                                          "<b>Copy trials</b>."),
+                                          "<b>Copy trials</b>. Behind every ply a small spool: green = yarn in stock "
+                                          "(click the yarn or the spool to see the storage locations and tube colours), crossed-out tube "
+                                          "= nothing in stock."),
                     ("(3) Tabs", "One tab per kind of data, see the <i>Tabs</i> tab. Lab tabs only appear if the "
                                  "series uses that lab machine."),
                     ("(4) Trial row", "Trial numbers (V1, V2, …); reference samples come first as <b>Ref</b> "
                                       "(amber). Right-click: copy trials, reference samples."),
-                    ("(5) Ply row", "Ply of each column (a trial can have several plies). Right-click: manage plies."),
+                    ("(5) Ply row", "Ply of each column (a trial can have several plies). Right-click: Yarns of the series."),
                     ("(6) Parameter names", "One row per parameter. Right-click: fill row, show/hide the custom group."),
                     ("(7) Cells", "Values per trial. Editable where a value can be stored; changed cells wait for "
                                   "Save."),
@@ -205,7 +229,7 @@ TEXTS = {
                 ("task", "Einen Wert eingeben oder ändern",
                  ["Die Zelle (7) anklicken und den Wert eintippen, oder doppelklicken zum Bearbeiten. Enter drücken - du landest in der Zelle darunter für den nächsten Wert (Umschalt+Enter geht nach oben).",
                   f"Auf {B('Save')} klicken oder Strg+S drücken."],
-                 "Geänderte Zellen bleiben <b>gelb</b>, bis gespeichert ist; der Knopf zeigt die Anzahl, z.&nbsp;B. "
+                 "Geänderte Zellen bleiben <b>gelb</b>, bis gespeichert ist; ein grünes Häkchen in der Mitte bestätigt das Speichern. Der Knopf zeigt die Anzahl, z.&nbsp;B. "
                  f"{B('Save (3)')}, und der Tab bekommt einen Punkt (●). Verlässt du den Bildschirm oder schliesst "
                  "den Tab oder das Programm mit ungespeicherten Änderungen, fragt TrippleT, ob gespeichert werden soll. "
                  "Mit Access Level 1 ist der Bildschirm nur lesbar."),
@@ -215,6 +239,15 @@ TEXTS = {
                   "Wert und Versuchsbereich wählen, dann OK.",
                   f"Auf {B('Save')} klicken."],
                  "Ein Rechtsklick auf eine zusammengefasste Zelle bietet ebenfalls " + M("Fill row…") + " an."),
+                ("task", "Eine Notiz an einen Wert oder Versuch hängen",
+                 ["Rechtsklick auf den Wert → " + M("Add note…") + ". Für den ganzen Versuch: Rechtsklick auf die "
+                  "Versuchsnummer (V1, V2, …) in <i>Machine Data</i>.",
+                  "Notiz schreiben und " + B("Add note") + " klicken (oder Strg+Enter) - sie ist sofort gespeichert."],
+                 "Ein kleines violettes Dreieck in der Ecke zeigt einen Wert mit Notizen; mit der Maus darauf "
+                 "zeigen, um sie zu lesen. Der Tab <i>Notes</i> listet alle Notizen der Serie - Doppelklick auf "
+                 "eine Zeile springt zum Wert. Notizen schreiben darf jeder; ändern nur, wer sie geschrieben hat, "
+                 "löschen der Verfasser oder ein Superuser. Im Smart Chart zeigt der Knopf <b>Notes</b> sie an; ins "
+                 "PDF kommen sie nur mit dem Häkchen <i>Include notes on values</i> beim Export."),
                 ("task", "Sehen, wer einen Wert wann geändert hat",
                  ["Rechtsklick auf den Wert → " + M("Change history…") + ".",
                   "Die Liste zeigt jede Änderung mit Datum, Person, altem und neuem Wert, die neueste zuoberst. "
@@ -277,8 +310,8 @@ TEXTS = {
                   f"Auf {B('Copy n trials')} klicken."],
                  "Maschineneinstellungen und Plies werden kopiert. Die Laborwerte, Kommentare und die "
                  "Fadenspannungen vor/nach Jet der Kopien bleiben leer. Die neuen Versuche werden hinten angehängt und in der Tabelle "
-                 "markiert. Werte pro Ply (z.&nbsp;B. T1/T2-Spannung) werden danach in der Tabelle oder in "
-                 "<i>Manage plies</i> geändert. Referenzmuster werden nie mitkopiert."),
+                 "markiert. Werte pro Ply (z.&nbsp;B. T1/T2-Spannung) werden danach in der Tabelle geändert, "
+                 "Plies und Garne mit " + B("Yarns…") + ". Referenzmuster werden nie mitkopiert."),
                 ("task", "Ein Referenzmuster hinzufügen (z.&nbsp;B. Originalspule eines Kunden)",
                  [f"Rechts in (2) auf {B('+ Ref')} klicken oder Rechtsklick auf eine Versuchsnummer (4) → "
                   + M("Add reference sample…") + ".",
@@ -292,8 +325,21 @@ TEXTS = {
                  "und dem Jet-Datenexport herausgehalten. Per Rechtsklick auf die Versuchsnummer lässt sich ein "
                  "bestehender Versuch zum Referenzmuster machen (er behält seine Nummer) und zurück, oder das "
                  "Referenzmuster umbenennen."),
-                ("task", "Plies oder Garne eines Versuchs ändern",
-                 ["Rechtsklick auf die Ply-Zeile (5) dieses Versuchs → der Dialog <i>Manage plies</i> öffnet sich."]),
+                ("task", "Das Garn einer Ply ändern oder Plies hinzufügen / entfernen",
+                 [f"Rechts in (2) auf {B('Yarns…')} klicken (oder Rechtsklick auf die Ply-Zeile (5)). Eine Tabelle "
+                  "zeigt alle Plies der Serie (Zeilen) und alle Versuche (Spalten).",
+                  "<b>Garn ändern:</b> auf das Garn der Ply klicken, einen Teil des Namens tippen (z.&nbsp;B. "
+                  "<i>167 dty</i>) und auswählen - die ganze Ply bekommt das neue Garn.",
+                  "<b>Ply für einen Versuch ein/aus:</b> seine Zelle anklicken. Anzahl Enden: Zellen markieren und "
+                  "1–9 tippen (Entf = aus), oder Rechtsklick.",
+                  f"<b>Neue Ply:</b> {B('+ Add ply')} (Garn aus dem Katalog) oder {B('+ Trial output')} (Output "
+                  "eines anderen Versuchs) - sie gilt zuerst für alle Versuche. Ein Garn behält in einer Serie immer seine "
+                  "Ply-Nummer: nochmals hinzugefügt (z.&nbsp;B. einmal als <i>DTY</i>, einmal als <i>Effect</i>) wird "
+                  "es eine zweite Zeile derselben Ply - die Verwendung in der Spalte <i>Use</i> wählen.",
+                  f"Auf {B('Apply')} klicken - TrippleT zeigt vorher eine Zusammenfassung."],
+                 "Geänderte Zellen sind gelb; vor Apply wird nichts gespeichert (Cancel verwirft alles). Ein "
+                 "getauschtes Garn behält die Maschinenwerte der Ply; eine entfernte Ply verliert ihre Werte in "
+                 "diesem Versuch. Jeder Versuch behält mindestens eine Ply - Referenzmuster dürfen ganz ohne Garn sein. Braucht Schreibrechte."),
                 ("task", "Eine weitere Versuchsserie oder Labormaschinen hinzufügen",
                  [M("Add Trial Series") + " oder " + M("Add Lab Machines") + " in der Sidebar benutzen."],
                  "Ein Labor-Tab (z.&nbsp;B. Statimat M) erscheint, sobald der Serie eine Labormaschine zugewiesen ist."),
@@ -326,12 +372,14 @@ TEXTS = {
                                            "und Itemat-Import, Report-Symbol und gespeicherte Reports (Liste + Go!), neu laden (↻), Save und diese Hilfe."),
                     ("(2) Materialzeile", "Material der Serie, verknüpfter Experiment Request (ER), Maschineninfo, "
                                           "Versuchsetiketten, <b>+T</b> (Versuche hinzufügen), <b>+ Ref</b> "
-                                          "(Referenzmuster hinzufügen) und <b>Copy trials</b>."),
+                                          "(Referenzmuster hinzufügen) und <b>Copy trials</b>. Hinter jeder Ply eine "
+                                          "kleine Spule: grün = Garn am Lager (Klick aufs Garn oder die Spule zeigt Lagerplätze und "
+                                          "Hülsenfarben), durchgestrichene Hülse = nichts am Lager."),
                     ("(3) Tabs", "Ein Tab pro Datenart, siehe Tab <i>Tabs</i>. Labor-Tabs erscheinen nur, wenn die Serie "
                                  "diese Labormaschine verwendet."),
                     ("(4) Versuchszeile", "Versuchsnummern (V1, V2, …); Referenzmuster stehen zuerst als "
                                           "<b>Ref</b> (gelb). Rechtsklick: Versuche kopieren, Referenzmuster."),
-                    ("(5) Ply-Zeile", "Ply jeder Spalte (ein Versuch kann mehrere Plies haben). Rechtsklick: Plies verwalten."),
+                    ("(5) Ply-Zeile", "Ply jeder Spalte (ein Versuch kann mehrere Plies haben). Rechtsklick: Garne der Serie (Yarns)."),
                     ("(6) Parameternamen", "Eine Zeile pro Parameter. Rechtsklick: Zeile füllen, Custom Group ein-/ausblenden."),
                     ("(7) Zellen", "Werte pro Versuch. Bearbeitbar, wo ein Wert gespeichert werden kann; geänderte Zellen "
                                    "warten auf Save."),
@@ -375,7 +423,7 @@ TEXTS = {
                 ("task", "Introducir o cambiar un valor",
                  ["Haz clic en la celda (7) y escribe el valor, o haz doble clic para editarlo. Pulsa Enter: pasas a la celda de abajo para el siguiente valor (Mayús+Enter sube).",
                   f"Haz clic en {B('Save')} o pulsa Ctrl+S."],
-                 "Las celdas cambiadas quedan en <b>amarillo</b> hasta que guardas; el botón muestra cuántas, p.&nbsp;ej. "
+                 "Las celdas cambiadas quedan en <b>amarillo</b> hasta que guardas; una marca verde en el centro confirma el guardado. El botón muestra cuántas, p.&nbsp;ej. "
                  f"{B('Save (3)')}, y la pestaña recibe un punto (●). Si sales de la pantalla o cierras la pestaña o el "
                  "programa con cambios sin guardar, TrippleT pregunta si quieres guardarlos. "
                  "Con nivel de acceso 1 la pantalla es de solo lectura."),
@@ -385,6 +433,15 @@ TEXTS = {
                   "Elige el valor y el rango de ensayos y haz clic en OK.",
                   f"Haz clic en {B('Save')}."],
                  "El clic derecho en una celda combinada también ofrece " + M("Fill row…") + "."),
+                ("task", "Añadir una nota a un valor o a un ensayo",
+                 ["Clic derecho en el valor → " + M("Add note…") + ". Para todo el ensayo: clic derecho en el "
+                  "número de ensayo (V1, V2, …) en <i>Machine Data</i>.",
+                  "Escribe la nota y haz clic en " + B("Add note") + " (o Ctrl+Enter); se guarda al instante."],
+                 "Un pequeño triángulo violeta en la esquina marca un valor con notas; señálalo con el ratón para "
+                 "leerlas. La pestaña <i>Notes</i> lista todas las notas de la serie; doble clic en una línea "
+                 "salta al valor. Todos pueden escribir notas; solo el autor puede editarlas, el autor o un "
+                 "superusuario puede borrarlas. En el Smart Chart, el botón <b>Notes</b> las muestra; en el PDF solo "
+                 "aparecen si marcas <i>Include notes on values</i> al exportar."),
                 ("task", "Ver quién cambió un valor y cuándo",
                  ["Clic derecho en el valor → " + M("Change history…") + ".",
                   "La lista muestra cada cambio con fecha, persona, valor anterior y nuevo, el más reciente arriba. "
@@ -447,7 +504,7 @@ TEXTS = {
                  "Se copian los ajustes de máquina y los plies. Los valores de laboratorio, los comentarios y las "
                  "tensiones del hilo antes/después del jet de las copias quedan vacíos. Los ensayos nuevos se añaden al final y "
                  "se resaltan en la tabla. Los valores por ply (p.&nbsp;ej. tensión T1/T2) se cambian después en la "
-                 "tabla o en <i>Manage plies</i>. Las muestras de referencia nunca se copian."),
+                 "tabla, los plies y los hilos con " + B("Yarns…") + ". Las muestras de referencia nunca se copian."),
                 ("task", "Añadir una muestra de referencia (p.&nbsp;ej. la bobina original de un cliente)",
                  [f"Haz clic en {B('+ Ref')} a la derecha de (2), o clic derecho en un número de ensayo (4) → "
                   + M("Add reference sample…") + ".",
@@ -460,8 +517,21 @@ TEXTS = {
                  "horizontal en los gráficos del informe y queda fuera de las estadísticas, Smart Chart, Quick Scan, "
                  "Athena y la exportación de datos de jets. Con clic derecho en el número de un ensayo existente se "
                  "puede convertir en muestra de referencia (conserva su número) y al revés, o cambiarle el nombre."),
-                ("task", "Cambiar los plies o hilos de un ensayo",
-                 ["Clic derecho en la fila de ply (5) de ese ensayo → se abre el diálogo <i>Manage plies</i>."]),
+                ("task", "Cambiar el hilo de un ply, o añadir / quitar plies",
+                 [f"Haz clic en {B('Yarns…')} a la derecha de (2) (o clic derecho en la fila de ply (5)). Una tabla "
+                  "muestra todos los plies de la serie (filas) y todos los ensayos (columnas).",
+                  "<b>Cambiar un hilo:</b> haz clic en el hilo del ply, escribe parte del nombre (p.&nbsp;ej. "
+                  "<i>167 dty</i>) y elígelo: todo el ply recibe el hilo nuevo.",
+                  "<b>Ply sí/no para un ensayo:</b> haz clic en su celda. Número de cabos: marca celdas y escribe "
+                  "1–9 (Supr = no), o clic derecho.",
+                  f"<b>Ply nuevo:</b> {B('+ Add ply')} (hilo del catálogo) o {B('+ Trial output')} (salida de otro "
+                  "ensayo): vale para todos los ensayos. Un hilo conserva siempre su número de ply en una "
+                  "serie: si se añade otra vez (p.&nbsp;ej. una vez como <i>DTY</i> y otra como <i>Effect</i>) es una "
+                  "segunda fila del mismo ply; elige el uso en la columna <i>Use</i>.",
+                  f"Haz clic en {B('Apply')}: TrippleT muestra antes un resumen."],
+                 "Las celdas cambiadas están en amarillo; nada se guarda antes de Apply (Cancel lo descarta todo). Un "
+                 "hilo cambiado conserva los valores de máquina del ply; quitar un ply borra sus valores en ese "
+                 "ensayo. Cada ensayo conserva al menos un ply; las muestras de referencia pueden no tener hilo. Requiere permiso de escritura."),
                 ("task", "Añadir otra serie de ensayos o máquinas de laboratorio",
                  ["Usa " + M("Add Trial Series") + " o " + M("Add Lab Machines") + " en la barra lateral."],
                  "Una pestaña de laboratorio (p.&nbsp;ej. Statimat M) aparece en cuanto se asigna una máquina de "
@@ -497,12 +567,15 @@ TEXTS = {
                                                   "recargar (↻), Save y esta ayuda."),
                     ("(2) Línea de material", "Material de la serie, solicitud de experimento vinculada (ER), datos de "
                                               "la máquina, etiquetas de ensayos, <b>+T</b> (añadir ensayos), "
-                                              "<b>+ Ref</b> (añadir muestra de referencia) y <b>Copy trials</b>."),
+                                              "<b>+ Ref</b> (añadir muestra de referencia) y <b>Copy trials</b>. "
+                                              "Detrás de cada ply una pequeña bobina: verde = hilo en almacén (clic en el "
+                                              "hilo o la bobina para ver ubicaciones y colores del tubo), tubo tachado = nada en "
+                                              "almacén."),
                     ("(3) Pestañas", "Una pestaña por tipo de datos, ver la pestaña <i>Pestañas</i>. Las pestañas de "
                                      "laboratorio solo aparecen si la serie usa esa máquina."),
                     ("(4) Fila de ensayos", "Números de ensayo (V1, V2, …); las muestras de referencia van primero "
                                             "como <b>Ref</b> (ámbar). Clic derecho: copiar ensayos, muestras de referencia."),
-                    ("(5) Fila de ply", "Ply de cada columna (un ensayo puede tener varios plies). Clic derecho: gestionar plies."),
+                    ("(5) Fila de ply", "Ply de cada columna (un ensayo puede tener varios plies). Clic derecho: hilos de la serie (Yarns)."),
                     ("(6) Nombres de parámetros", "Una fila por parámetro. Clic derecho: rellenar fila, mostrar/ocultar el custom group."),
                     ("(7) Celdas", "Valores por ensayo. Editables donde se puede guardar un valor; las celdas cambiadas "
                                    "esperan a Save."),

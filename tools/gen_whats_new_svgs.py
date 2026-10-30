@@ -50,6 +50,233 @@ def save(s, name):
 
 
 # ── Show Experiment ─────────────────────────────────────────────────────
+s = new("Yarns of the series")
+s.text(12, 22, "Yarns", 11, INK, True)
+x0, y0 = 12, 30
+s.rect(x0, y0, 276, 18, "#4a4a4a", None, 2)
+for x, t in ((x0 + 6, "Ply"), (x0 + 44, "Yarn")):
+    s.text(x, y0 + 13, t, 9, "#ffffff", True)
+for i, t in enumerate(("V1", "V2", "V3")):
+    s.text(x0 + 186 + i * 32, y0 + 13, t, 9, "#ffffff", True, "middle")
+rows = (("Ply 1", "PES 167f48 DTY", ("1x", "1x", "2x"), True),
+        ("Ply 2", "PA 78f68", ("1x", "-", "1x"), False))
+for r, (ply, yarn, cells, changed) in enumerate(rows):
+    y = y0 + 18 + r * 24
+    s.rect(x0, y, 276, 24, STRIPE_A if r == 0 else STRIPE_B, "#c9dfcb", 0)
+    s.text(x0 + 6, y + 16, ply, 9, INK)
+    s.rect(x0 + 40, y + 3, 124, 18, AMBER_BG if changed else "#ffffff", BLUE if changed else LINE, 3)
+    s.text(x0 + 46, y + 16, yarn, 9, INK, changed)
+    s.text(x0 + 156, y + 16, "v", 8, MUTED, False, "middle")
+    for i, c in enumerate(cells):
+        cx = x0 + 186 + i * 32
+        if r == 0 and i == 2:
+            s.rect(cx - 15, y + 1, 30, 22, "#FFF3B0", None, 0)
+        s.text(cx, y + 16, c, 10, MUTED if c == "-" else INK, c != "-", "middle")
+s.btn(12, 98, "+ Add ply", 64, "grey", h=20, size=9)
+s.btn(80, 98, "+ Trial output", 86, "grey", h=20, size=9)
+s.btn(236, 98, "Apply", 52, "green", h=20, size=9)
+save(s, "wn_series_yarns.svg")
+
+
+def spool(s, x, y, in_stock):
+    """Spool symbol as in the Material line (16 x 16)."""
+    s.rect(x + 3, y + 1, 10, 2, "#8A8A8A", None, 1)
+    s.rect(x + 3, y + 13, 10, 2, "#8A8A8A", None, 1)
+    if in_stock:
+        s.rect(x + 4, y + 3, 8, 10, GREEN, None, 2)
+    else:
+        s.rect(x + 7, y + 3, 2, 10, "#8A8A8A", None, 0)
+        s.line(x + 2, y + 14, x + 14, y + 2, "#C0392B", 2)
+
+
+s = new("Where are my spools")
+s.rect(12, 10, 276, 22, "#f8fff9", GREEN, 4)
+s.text(20, 25, "Ply 1: PES 167f48", 9, INK)
+spool(s, 102, 13, True)
+s.text(124, 25, "Ply 2: PA 78f68", 9, INK)
+spool(s, 198, 13, False)
+s.line(110, 31, 110, 44, BLUE, 1.5)
+x0, y0 = 12, 46
+s.rect(x0, y0, 276, 16, "#4a4a4a", None, 2)
+for x, t in ((6, "Location"), (64, "Spool"), (110, "Batch"), (160, "kg"), (196, "Tube")):
+    s.text(x0 + x, y0 + 12, t, 9, "#ffffff", True)
+rows = (("C31", "#927", "GH11", "10.6", ("#ffc0cb", "#800080"), True),
+        ("C31", "#928", "GH11", "10.6", ("#ffc0cb", "#800080"), False),
+        ("D52", "#940", "GH12", "9.8", ("#1a1a1a", "#ffff00"), False))
+for r, (loc, sp, b, kg, tube, bold) in enumerate(rows):
+    y = y0 + 16 + r * 20
+    s.rect(x0, y, 276, 20, "#ffffff" if loc == "C31" else STRIPE_A, "#e0e0e0", 0)
+    for x, t in ((6, loc), (64, sp), (110, b), (160, kg)):
+        s.text(x0 + x, y + 14, t, 9, INK, bold)
+    s.rect(x0 + 196, y + 5, 5, 10, tube[0], None, 0)
+    s.rect(x0 + 201, y + 5, 5, 10, tube[1], None, 0)
+    s.rect(x0 + 196, y + 5, 10, 10, "none", "#7A7A7A", 0)
+save(s, "wn_spool_locations.svg")
+
+s = new("Notes on values")
+NOTE = "#5E35B1"
+grid(s, 12, 14, [("Air Pressure", ["3.5", "4.0", "3.5"]), ("Tenacity", ["38.2", "29.6", "37.9"])],
+     3, 34, 22, first_w=72, header=["V1", "V2", "V3"])
+# triangle on V2 / Tenacity
+tx, ty = 12 + 72 + 34 * 2, 14 + 22 * 2
+s.parts.append(f'  <polygon points="{tx - 7},{ty} {tx},{ty} {tx},{ty + 7}" fill="{NOTE}"/>')
+# tooltip with the note
+s.rect(186, 30, 104, 54, "#ffffff", NOTE, 4)
+s.text(193, 46, "Spool had knots,", 9, INK)
+s.text(193, 58, "measured again", 9, INK)
+s.text(193, 75, "- M. Keller, 28.10.", 8, MUTED)
+s.line(tx + 1, ty + 3, 186, 52, NOTE, 1)
+s.btn(12, 100, "Add note…", 70, "grey", h=20, size=9)
+s.text(90, 114, "right-click a value", 9, MUTED)
+save(s, "wn_cell_notes.svg")
+
+s = new("New Smart Chart")
+# filter chips
+for i, txt in enumerate(("Material: PES", "End titer 70 – 80 dtex", "Filaments 30 – 40")):
+    s.rect(12, 12 + i * 26, 108, 22, "#E6F2E9", GREEN, 5)
+    s.text(18, 27 + i * 26, txt, 8, INK)
+s.rect(12, 92, 108, 20, "#ffffff", "#9FB39F", 5)
+s.text(66, 106, "+ Add filter", 8, GREEN, True, "middle")
+# counter
+s.rect(130, 12, 158, 22, "#E6F2E9", "#BFDCC7", 5)
+s.text(138, 27, "312 trials · 41 series", 9, INK, True)
+# mini scatter
+s.line(140, 118, 284, 118, MUTED, 1)
+s.line(140, 42, 140, 118, MUTED, 1)
+pts = [(152, 98), (160, 92), (172, 90), (184, 84), (196, 80), (208, 74), (220, 70), (232, 66), (246, 60), (260, 56),
+       (166, 104), (190, 92), (214, 84), (238, 78), (262, 70), (274, 64)]
+for i, (x, y) in enumerate(pts):
+    s.parts.append(f'  <circle cx="{x}" cy="{y}" r="3.2" fill="{["#2F6DB5", "#D9822B"][i // 10]}"/>')
+s.text(212, 128, "Air pressure", 8, MUTED, anchor="middle")
+save(s, "wn_smart_chart.svg")
+
+s = new("Is this comparison fair")
+s.rect(12, 10, 276, 40, "#FFF4D6", "#E8C15A", 6)
+s.parts.append('  <circle cx="26" cy="23" r="6" fill="#C98A00"/>')
+s.text(38, 27, "Comparison partly fair", 10, INK, True)
+s.text(38, 41, "Groups differ in material and air pressure", 8, MUTED)
+s.btn(196, 16, "Details", 44, "grey", h=18, size=8)
+s.btn(244, 16, "Fairer", 40, "grey", h=18, size=8)
+for i, (lab, col, xs) in enumerate((("Jet A", "#2F6DB5", (160, 172, 184, 196, 208)),
+                                    ("Jet B", "#D9822B", (40, 52, 64, 76, 88)))):
+    for j, x in enumerate(xs):
+        s.parts.append(f'  <circle cx="{x + 10}" cy="{100 - j * 6 - i * 14}" r="3.4" fill="{col}"/>')
+    s.text(170 - i * 150, 126, f"{lab}: {'PES 3.5 bar' if i == 0 else 'PA 2 bar'}", 8, col, True)
+s.line(14, 112, 286, 112, MUTED, 1)
+save(s, "wn_fairness.svg")
+
+s = new("Dashboard like Power BI")
+# canvas with tiles
+for x, y, w, h in ((12, 12, 56, 26), (72, 12, 56, 26), (132, 12, 56, 26)):
+    s.rect(x, y, w, h, "#ffffff", LINE, 4)
+s.text(40, 30, "2'516", 10, GREEN, True, "middle")
+s.text(100, 30, "124", 10, GREEN, True, "middle")
+s.text(160, 30, "71 %", 10, GREEN, True, "middle")
+s.rect(12, 44, 86, 74, "#ffffff", LINE, 4)
+for i, (h, c) in enumerate(((30, "#2F6DB5"), (44, "#2F6DB5"), (22, "#2F6DB5"))):
+    s.rect(24 + i * 24, 108 - h, 14, h, c, None, 2)
+s.rect(102, 44, 86, 74, "#ffffff", LINE, 4)
+cols = ["#D8504A", "#F1A340", "#8CC63F", "#2E9E4F"]
+for r in range(3):
+    for c in range(4):
+        if (r, c) in ((0, 3), (2, 0)):
+            s.rect(108 + c * 19, 52 + r * 20, 17, 18, "#ffffff", "#B9C2B8", 2)
+        else:
+            s.rect(108 + c * 19, 52 + r * 20, 17, 18, cols[(r + c) % 4], None, 2)
+# fields pane
+s.rect(196, 12, 92, 106, "#ffffff", LINE, 4)
+s.text(204, 26, "Fields", 9, GREEN, True)
+for i, t in enumerate(("Yarn", "Jet", "Statimat", "Itemat Plus", "DTYoMat", "General")):
+    s.text(206, 42 + i * 13, "▸ " + t, 8, INK)
+save(s, "wn_dashboard.svg")
+
+s = new("Lab statistics in the dashboard")
+for i, (x, num, lab) in enumerate(((12, "140", "experiments"), (82, "392", "trial series"), (152, "13'520", "trials"))):
+    s.rect(x, 10, 66, 32, "#ffffff", LINE, 4)
+    s.text(x + 33, 26, num, 11, GREEN, True, "middle")
+    s.text(x + 33, 37, lab, 7, MUTED, anchor="middle")
+s.rect(12, 48, 206, 72, "#ffffff", LINE, 4)
+stack = ((10, 6, 3), (16, 4, 2), (12, 8, 0), (6, 3, 2), (18, 7, 4), (14, 5, 3), (9, 6, 1))
+for i, parts in enumerate(stack):
+    y = 112
+    for h, c in zip(parts, ("#2F6DB5", "#D9822B", "#4B5058")):
+        s.rect(26 + i * 26, y - h * 2, 16, h * 2, c, None, 0)
+        y -= h * 2
+s.rect(224, 10, 64, 110, "#ffffff", LINE, 4)
+s.text(232, 24, "Order type", 8, GREEN, True)
+for i, (t, on) in enumerate((("Development", True), ("Customer", True), ("Internal", False))):
+    s.rect(230, 32 + i * 18, 52, 14, "#1F7A3A" if on else "#ffffff", LINE, 3)
+    s.text(256, 42 + i * 18, t, 7, "#ffffff" if on else INK, anchor="middle")
+save(s, "wn_dashboard_stats.svg")
+
+s = new("Dashboards to look at and share")
+s.rect(12, 10, 86, 110, "#ffffff", LINE, 4)
+s.text(18, 24, "My dashboards", 8, INK, True)
+s.rect(16, 29, 78, 14, "#E3F1E6", None, 2)
+s.text(20, 39, "Lab statistics", 8, INK)
+s.text(20, 54, "Jet check", 8, INK)
+s.text(18, 72, "Shared with me", 8, INK, True)
+s.text(20, 87, "Yarn overview", 8, INK)
+s.text(20, 101, "Machines 2026", 8, INK)
+s.rect(104, 10, 120, 110, "#ffffff", LINE, 4)
+s.rect(110, 16, 52, 24, "#ffffff", LINE, 3)
+s.text(136, 32, "140", 10, GREEN, True, "middle")
+s.rect(166, 16, 52, 24, "#ffffff", LINE, 3)
+s.text(192, 32, "392", 10, GREEN, True, "middle")
+for i, h in enumerate((30, 46, 22, 38, 52)):
+    s.rect(116 + i * 20, 112 - h, 12, h, "#2F6DB5", None, 1)
+s.rect(230, 10, 58, 110, "#ffffff", LINE, 4)
+s.text(236, 24, "Share", 8, GREEN, True)
+for i, (t, r) in enumerate((("Anna", "view"), ("write", "edit"), ("Ben", "view"))):
+    y = 32 + i * 26
+    s.rect(234, y, 50, 22, "#F4F6F3", LINE, 3)
+    s.text(238, y + 10, t, 7, INK, True)
+    s.text(238, y + 19, r, 7, MUTED)
+save(s, "wn_dashboards.svg")
+
+s = new("Who may use which tool")
+s.rect(12, 10, 276, 110, "#ffffff", LINE, 4)
+cols = ("read", "write", "Anna", "Ben")
+for i, c in enumerate(cols):
+    s.text(128 + i * 40, 26, c, 8, INK, True, "middle")
+rows = (("Backlog", ("-", "No", "-", "Yes")), ("Smart Chart", ("-", "Yes", "yes", "No")),
+        ("Yarn Stock", ("yes", "yes", "yes", "yes")), ("Canvas", ("yes", "yes", "No", "yes")))
+for r, (lab, vals) in enumerate(rows):
+    y = 34 + r * 20
+    s.rect(16, y, 268, 18, "#F4F6F3" if r % 2 == 0 else "#ffffff", None, 0)
+    s.text(22, y + 13, lab, 8, INK)
+    for i, val in enumerate(vals):
+        col = GREEN if val == "Yes" else "#C62828" if val == "No" else MUTED
+        s.text(128 + i * 40, y + 13, val, 8, col, val in ("Yes", "No"), "middle")
+save(s, "wn_feature_access.svg")
+
+s = new("Your own start screen")
+s.rect(12, 14, 276, 44, "#ffffff", LINE, 4)
+s.text(22, 30, "Start screen", 9, GREEN, True)
+s.text(22, 48, "After the login open:", 9, INK)
+s.rect(140, 36, 140, 18, "#ffffff", BLUE, 3)
+s.text(146, 49, "Dashboards", 9, INK)
+s.text(270, 49, "v", 8, MUTED, anchor="middle")
+for i, t in enumerate(("Backlog", "All Experiments", "Dashboards", "Yarn Stock")):
+    y = 64 + i * 14
+    s.rect(140, y, 140, 14, "#E3F1E6" if t == "Dashboards" else "#ffffff", LINE, 0)
+    s.text(146, y + 10, t, 8, INK)
+s.text(22, 88, "Default: Backlog", 8, MUTED)
+save(s, "wn_start_screen.svg")
+
+s = new("Yarn colour")
+s.rect(12, 10, 200, 20, "#ffffff", BLUE, 3)
+s.text(20, 24, "Search yarn  e.g. 167 dty", 9, MUTED)
+for i, (name, fill) in enumerate((("PES 167f48 DTY", "#FFFFFF"), ("PES 154f48 dtex black", "#1A1A1A"),
+                                  ("CO spun Ne 30 natural", "#F3EAD3"), ("PA 78f68 grey", "#9A9A9A"))):
+    y = 36 + i * 21
+    s.rect(12, y, 200, 21, "#e8f0fb" if i == 1 else "#ffffff", LINE, 0)
+    s.rect(18, y + 5, 11, 11, fill, "#7A7A7A", 0)
+    s.text(36, y + 15, name, 9, INK)
+s.rect(196, 58, 92, 22, "#FFFFE1", "#888888", 2)
+s.text(242, 73, "Colour: black", 9, INK, anchor="middle")
+save(s, "wn_yarn_colour.svg")
+
 s = new("Reference sample")
 s.btn(206, 10, "+ Ref", 44, "amber")
 s.btn(254, 10, "+T", 30, "white")

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Lab statistics in the dashboard - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="10" width="66" height="32" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="45" y="26" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#39a650" text-anchor="middle" font-weight="bold">140</text>
+  <text x="45" y="37" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="middle">experiments</text>
+  <rect x="82" y="10" width="66" height="32" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="115" y="26" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#39a650" text-anchor="middle" font-weight="bold">392</text>
+  <text x="115" y="37" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="middle">trial series</text>
+  <rect x="152" y="10" width="66" height="32" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="185" y="26" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#39a650" text-anchor="middle" font-weight="bold">13'520</text>
+  <text x="185" y="37" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="middle">trials</text>
+  <rect x="12" y="48" width="206" height="72" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <rect x="26" y="92" width="16" height="20" rx="0" fill="#2F6DB5"/>
+  <rect x="26" y="80" width="16" height="12" rx="0" fill="#D9822B"/>
+  <rect x="26" y="74" width="16" height="6" rx="0" fill="#4B5058"/>
+  <rect x="52" y="80" width="16" height="32" rx="0" fill="#2F6DB5"/>
+  <rect x="52" y="72" width="16" height="8" rx="0" fill="#D9822B"/>
+  <rect x="52" y="68" width="16" height="4" rx="0" fill="#4B5058"/>
+  <rect x="78" y="88" width="16" height="24" rx="0" fill="#2F6DB5"/>
+  <rect x="78" y="72" width="16" height="16" rx="0" fill="#D9822B"/>
+  <rect x="78" y="72" width="16" height="0" rx="0" fill="#4B5058"/>
+  <rect x="104" y="100" width="16" height="12" rx="0" fill="#2F6DB5"/>
+  <rect x="104" y="94" width="16" height="6" rx="0" fill="#D9822B"/>
+  <rect x="104" y="90" width="16" height="4" rx="0" fill="#4B5058"/>
+  <rect x="130" y="76" width="16" height="36" rx="0" fill="#2F6DB5"/>
+  <rect x="130" y="62" width="16" height="14" rx="0" fill="#D9822B"/>
+  <rect x="130" y="54" width="16" height="8" rx="0" fill="#4B5058"/>
+  <rect x="156" y="84" width="16" height="28" rx="0" fill="#2F6DB5"/>
+  <rect x="156" y="74" width="16" height="10" rx="0" fill="#D9822B"/>
+  <rect x="156" y="68" width="16" height="6" rx="0" fill="#4B5058"/>
+  <rect x="182" y="94" width="16" height="18" rx="0" fill="#2F6DB5"/>
+  <rect x="182" y="82" width="16" height="12" rx="0" fill="#D9822B"/>
+  <rect x="182" y="80" width="16" height="2" rx="0" fill="#4B5058"/>
+  <rect x="224" y="10" width="64" height="110" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="232" y="24" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#39a650" text-anchor="start" font-weight="bold">Order type</text>
+  <rect x="230" y="32" width="52" height="14" rx="3" fill="#1F7A3A" stroke="#cccccc" stroke-width="1"/>
+  <text x="256" y="42" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle">Development</text>
+  <rect x="230" y="50" width="52" height="14" rx="3" fill="#1F7A3A" stroke="#cccccc" stroke-width="1"/>
+  <text x="256" y="60" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle">Customer</text>
+  <rect x="230" y="68" width="52" height="14" rx="3" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="256" y="78" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="middle">Internal</text>
+</svg>

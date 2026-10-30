@@ -95,8 +95,9 @@ s.text(56, 70, "Material:", 11, MUTED)
 s.text(112, 70, "PES POY 280/167f72 dtex", 11, INK, True)
 x = s.btn(270, 56, "ER", 30, "white") + 8
 s.text(x, 70, "Machine: RPR 3SDS · Jets …", 10, MUTED)
-s.btn(744, 56, "label", 38, "white"); s.btn(788, 56, "+", 30, "white"); s.btn(824, 56, "+ Ref", 46, "amber")
-s.btn(874, 56, "Copy trials", 54, "grey", size=8)
+s.btn(698, 56, "label", 38, "white"); s.btn(740, 56, "+", 30, "white"); s.btn(774, 56, "+ Ref", 46, "amber")
+s.btn(824, 56, "Copy trials", 54, "grey", size=8)
+s.btn(882, 56, "Yarns…", 46, "grey", size=8)
 # Tabs
 s.marker(22, 102, "3")
 x = 56
@@ -137,7 +138,7 @@ s.text(tx + 12, ty + 236, "{{keys_hint}}", 10, MUTED, italic=True)
 s.save("help_show_experiment.svg")
 
 # ═════════════════════════════ Report / Smart Chart ═════════════════════════════
-s = Svg(940, 424, "Report / Smart Chart help sketch")
+s = Svg(940, 424, "Report help sketch")
 s.rect(40, 6, 890, 412, "#f4f4f4", LINE, 8)
 s.marker(22, 30, "1")
 x = 56
@@ -152,46 +153,30 @@ for lbl in ["Series", "+ Compare", "+ Image"]:
 x += 6
 for lbl in ["Note", "Templates", "Save", "Open", "PDF"]:
     x = s.btn(x, 20, lbl) + 4
-# Builder (Smart Chart only)
-s.marker(22, 70, "2")
-s.rect(56, 54, 210, 360, "#ffffff", LINE, 4)
-s.text(66, 72, "Visual SQL Builder", 11, INK, True)
-s.btn(66, 80, "Trial Data", 92, "green"); s.btn(162, 80, "Free Query", 94)
-s.text(66, 122, "Group by (Legend)", 10, MUTED)
-s.rect(66, 128, 190, 20, "#ffffff", "#999999", 3); s.text(72, 142, "Jet ▾", 10, INK)
-s.btn(66, 156, "Simple", 60, "white"); s.btn(128, 156, "Advanced", 70)
-s.btn(66, 184, "+ Add Filter", 90)
-s.text(66, 222, "Trial Series", 10, MUTED)
-s.rect(66, 228, 190, 92, "#ffffff", "#999999", 3)
-for i, t in enumerate(["2026-73-035 X60.112", "2026-73-034 DTY trials", "2026-73-033 Jet S+"]):
-    s.text(72, 244 + i * 18, t, 9, INK)
-s.text(66, 334, "Hold Ctrl to select multiple", 9, MUTED, italic=True)
-s.btn(66, 346, "▶ Run Query", 140, "green"); s.btn(210, 346, "Templ.", 46)
-s.text(66, 400, "{{smart_only}}", 10, GREEN, True)
 # Drill bar
-s.marker(282, 64, "5")
-s.rect(296, 54, 626, 20, "#eef5ff", "#c7dbf5", 3)
-s.text(304, 68, "DRILL   Overfeed: 3.0 %  ›  Jet S+ 1.2", 10, "#2a5d9f")
+s.marker(42, 64, "4")
+s.rect(56, 54, 866, 20, "#eef5ff", "#c7dbf5", 3)
+s.text(64, 68, "DRILL   Overfeed: 3.0 %  ›  Jet S+ 1.2", 10, "#2a5d9f")
 # Chart cards
-s.marker(282, 96, "3")
+s.marker(42, 96, "2")
 for i in range(2):
-    cx = 296 + i * 316
-    s.rect(cx, 84, 306, 220, "#ffffff", LINE, 4)
+    cx = 56 + i * 436
+    s.rect(cx, 84, 426, 220, "#ffffff", LINE, 4)
     s.text(cx + 8, 101, "::", 11, MUTED, True)
     s.rect(cx + 22, 89, 130, 18, "#ffffff", "#999999", 3); s.text(cx + 28, 102, ["Tension T1 [cN] ▾", "Elongation [%] ▾"][i], 9, INK)
     s.text(cx + 158, 102, "+", 11, GREEN, True)
-    s.text(cx + 296, 102, "[ ]  ▲ ▼  x", 10, MUTED, anchor="end")
+    s.text(cx + 416, 102, "[ ]  ▲ ▼  x", 10, MUTED, anchor="end")
     s.rect(cx + 22, 112, 130, 18, "#ffffff", "#999999", 3); s.text(cx + 28, 125, "X: Overfeed [%] ▾", 9, INK)
     s.text(cx + 158, 125, "to all", 9, MUTED)
     # bars
     for j, hgt in enumerate([60, 82, 70, 95, 50]):
-        bx = cx + 30 + j * 52
-        s.rect(bx, 280 - hgt, 34, hgt, ["#4e79a7", "#f28e2b"][i], None, 2)
-        s.line(bx + 17, 280 - hgt - 10, bx + 17, 280 - hgt + 10, INK, 1)
-    s.line(cx + 22, 280, cx + 296, 280, LINE, 1)
+        bx = cx + 40 + j * 76
+        s.rect(bx, 280 - hgt, 44, hgt, ["#4e79a7", "#f28e2b"][i], None, 2)
+        s.line(bx + 22, 280 - hgt - 10, bx + 22, 280 - hgt + 10, INK, 1)
+    s.line(cx + 22, 280, cx + 416, 280, LINE, 1)
     s.text(cx + 22, 296, "note · gridlines e.g. 5, 10, 15", 9, MUTED, italic=True)
-s.marker(330, 180, "4", "#2b2b2b")
-s.text(296, 330, "{{drill_hint}}", 10, MUTED)
+s.marker(110, 180, "3", "#2b2b2b")
+s.text(56, 330, "{{drill_hint}}", 10, MUTED)
 s.save("help_report.svg")
 
 # ═════════════════════════════ All Experiments ═════════════════════════════

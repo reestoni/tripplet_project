@@ -11,7 +11,7 @@ implementiert), damit exakt derselbe DB-Wrapper wie vorher verwendet wird.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from db.trial_reference import (
     IS_REFERENCE_COL,
@@ -385,10 +385,68 @@ def _fetch_series_data(series_pk: int) -> List[Dict[str, Any]]:
         except Exception as e:
             logger.error("screen_report: Fehler beim Laden der Jet Air Consumption Daten: %s", e)
 
+        attach_notes(rows, list(axes_to_load) + list(active_x))
+
     except Exception as e:
         logger.error("screen_report: Fehler beim Laden: %s", e)
 
     return rows
+
+
+def attach_notes(rows: List[Dict[str, Any]], axis_defs: List[Dict[str, Any]]) -> None:
+    """Notes on values (db/cell_notes.py) for the Smart Chart: per trial row
+    "_notes" {axis key: [note]} for notes on the cell an axis reads
+    (table + field, alt table too) and "_tnotes" [note] for notes on the whole
+    trial. The chart shows them only with "Show notes" switched on, the PDF
+    only with "Include notes" (both off by default) - Nutzerentscheid 2026-10-30.
+    Best effort: without tblNote nothing is attached."""
+    try:
+        from db import cell_notes
+        if not cell_notes.available():
+            return
+        trial_ids = sorted({int(r["trial_id"]) for r in rows if int(r.get("trial_id") or 0) > 0})
+        if not trial_ids:
+            return
+        from db.connection import fetch_all
+        ph = ",".join(["?"] * len(trial_ids))
+        notes = fetch_all(
+            "SELECT n.ID, n.TableName, n.FieldName, n.TrialID, n.NoteText, n.CreatedAt, "
+            "TRIM(CONCAT(COALESCE(u.FirstName,''), ' ', COALESCE(u.LastName,''))) AS UserName "
+            f"FROM tblNote n LEFT JOIN tblUser u ON u.ID = n.CreatedBy WHERE n.TrialID IN ({ph}) "
+            "ORDER BY n.CreatedAt, n.ID", trial_ids)
+    except Exception as e:
+        logger.warning("attach_notes: %s", e)
+        return
+    if not notes:
+        return
+    keys_of: Dict[Tuple[str, str], List[str]] = {}
+    for a in axis_defs:
+        fld = str(a.get("field") or "").lower()
+        for tbl in (a.get("main_table"), a.get("alt_table")):
+            if tbl and fld:
+                keys_of.setdefault((str(tbl).lower(), fld), []).append(a["key"])
+    by_trial: Dict[int, Dict[str, Any]] = {}
+    for n in notes:
+        item = {"id": int(n["ID"]), "t": str(n.get("NoteText") or ""),
+                "by": str(n.get("UserName") or "").strip(),
+                "at": n["CreatedAt"].strftime("%d.%m.%Y") if hasattr(n.get("CreatedAt"), "strftime") else ""}
+        slot = by_trial.setdefault(int(n["TrialID"]), {"cell": {}, "trial": []})
+        table, field = str(n.get("TableName") or "").lower(), str(n.get("FieldName") or "").lower()
+        if table == "tbltrial" and not field:
+            slot["trial"].append(item)
+            continue
+        for key in keys_of.get((table, field), []):
+            lst = slot["cell"].setdefault(key, [])
+            if all(x["id"] != item["id"] for x in lst):
+                lst.append(item)
+    for r in rows:
+        slot = by_trial.get(int(r.get("trial_id") or 0))
+        if not slot:
+            continue
+        if slot["cell"]:
+            r["_notes"] = slot["cell"]
+        if slot["trial"]:
+            r["_tnotes"] = slot["trial"]
 
 
 def series_short_title(series_pk: int) -> Optional[str]:

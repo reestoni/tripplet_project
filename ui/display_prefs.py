@@ -16,6 +16,8 @@ tables, Nutzerwunsch 2026-10-15 (colleagues with poor eyesight).
                also kept locally because it must be known before login)
     whats_new_seen  id of the newest "What's new" release this user has seen
                (ui/whats_new.py) - stored here so it follows the login
+    start      start screen after the login (key of db/feature_access.START_SCREENS,
+               default "backlog"; blocked for the user -> main.py takes the next allowed)
 
 Stored per user in tblUser.DisplaySettings (JSON), so the settings follow
 the login to every PC. Without that column (not migrated yet, older offline
@@ -36,11 +38,14 @@ from PySide6.QtCore import QSettings, QTimer
 import app_meta
 
 COLUMN = "DisplaySettings"
-ADD_COLUMN_SQL = "ALTER TABLE tbluser ADD COLUMN DisplaySettings VARCHAR(255) NULL DEFAULT NULL"
+ADD_COLUMN_SQL = "ALTER TABLE tbluser ADD COLUMN DisplaySettings TEXT NULL DEFAULT NULL"
+# was VARCHAR(255) - too short for the Recent list (strict mode refused the UPDATE,
+# the settings silently stayed on this PC only); widen_column() makes it TEXT
+WIDEN_COLUMN_SQL = "ALTER TABLE tbluser MODIFY COLUMN DisplaySettings TEXT NULL DEFAULT NULL"
 
 DEFAULTS: Dict[str, Any] = {"scale": 100, "contrast": False, "crosshair": False, "readbar": False,
                             "alert_marks": False, "cb_colours": False, "app_scale": 100,
-                            "whats_new_seen": "", "recent_series": []}
+                            "whats_new_seen": "", "recent_series": [], "start": "backlog"}
 RECENT_MAX = 8  # Sidebar -> "Recent" (ui/recent_series.py)
 
 
@@ -87,7 +92,45 @@ def _clean(d: Dict[str, Any]) -> Dict[str, Any]:
         pass
     out["whats_new_seen"] = str(d.get("whats_new_seen") or "")[:40]
     out["recent_series"] = _clean_recent(d.get("recent_series"))
+    out["start"] = str(d.get("start") or "backlog")[:30]
     return out
+
+
+_col_len: Dict[str, Any] = {}
+
+
+def _column_max_len() -> int:
+    """Length of tblUser.DisplaySettings (0 = unlimited / unknown)."""
+    if "n" not in _col_len:
+        try:
+            from db.connection import fetch_all
+            rows = fetch_all("SELECT CHARACTER_MAXIMUM_LENGTH AS n, DATA_TYPE AS t FROM information_schema.COLUMNS "
+                             "WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'tbluser' "
+                             "AND COLUMN_NAME = 'DisplaySettings'")
+            n = rows[0].get("n") if rows else None
+            _col_len["n"] = int(n) if n and str(rows[0].get("t") or "").lower() == "varchar" else 0
+        except Exception:
+            _col_len["n"] = 0
+    return _col_len["n"]
+
+
+def _fit(prefs: Dict[str, Any], max_len: int) -> str:
+    """JSON of the settings - only what differs from DEFAULTS (_clean() fills in the rest);
+    in a short column the oldest Recent entries are left out so the rest still gets saved."""
+    data = {k: v for k, v in prefs.items() if v != DEFAULTS.get(k)}
+    raw = json.dumps(data, separators=(",", ":"))
+    while max_len and len(raw) > max_len and data.get("recent_series"):
+        data["recent_series"] = data["recent_series"][:-1]
+        raw = json.dumps(data, separators=(",", ":"))
+    return raw
+
+
+def widen_column() -> None:
+    """VARCHAR(255) -> TEXT. Only call deliberately - dev/prod only with explicit permission."""
+    from db import connection
+    connection.execute(WIDEN_COLUMN_SQL)
+    connection._COLUMNS_MAP_CACHE.clear()
+    _col_len.clear()
 
 
 def _has_column() -> bool:
@@ -128,7 +171,7 @@ def save_now() -> None:
     try:
         if uid and _has_column():
             from db.connection import execute
-            execute("UPDATE tblUser SET DisplaySettings = ? WHERE ID = ?", [raw, uid])
+            execute("UPDATE tblUser SET DisplaySettings = ? WHERE ID = ?", [_fit(_prefs, _column_max_len()), uid])
             return
     except Exception:
         pass
