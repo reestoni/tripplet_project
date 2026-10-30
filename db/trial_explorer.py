@@ -11,7 +11,10 @@ by their properties across all series, then chart any field against any other.
   plus its plies with their yarn. Field values are loaded lazily per field
   and cached, so only fields that are filtered/charted cost a query.
 - FILTERS: {"key", "min", "max"} for numbers, {"key", "values": [...]} for
-  lists. Yarn filters must hold for ONE ply together (PES + 70-80 dtex +
+  lists. Time fields (TIME_KEYS) also take a PERIOD that moves with the
+  calendar: {"key", "period": "this_year" | "last_year" | "last_12_months" |
+  "this_month" | "last_month"} or {"key", "period": "range", "from": "2025-01",
+  "to": "2025-06"} (either end may be missing) - see period_bounds(). Yarn filters must hold for ONE ply together (PES + 70-80 dtex +
   30-40 filaments = the same yarn), restricted to Core/Effect plies with
   ply_scope "core"/"effect". That ply is the trial's "matched ply" - yarn
   values in chart and list come from it.
@@ -119,8 +122,8 @@ EXTRA_KEYS = ("owner", "month", "trial_year", "trial_month", "exp_productgroup",
 # Time fields: labels sort chronologically ("2026-03"), gaps are filled in charts
 TIME_KEYS = {"year": "year", "month": "month", "trial_year": "year", "trial_month": "month",
              "exp_year": "year", "exp_month": "month"}
-# Lab machines for "Tested on" - the same list and names as the Statistics
-# page (ui/stats_suite_queries.py uses this one): DISTINCT TrialID per table.
+# Lab machines for "Tested on" - the same list and names as the former
+# superuser Statistics page had: DISTINCT TrialID per table.
 LAB_MACHINE_TABLES = [
     ("tbllabortiter", "Titer"),
     ("tbllaborstatimatm", "Statimat M"),
@@ -616,7 +619,67 @@ def _ply_no(ply: str) -> int:
     return int(digits) if digits else 999
 
 
+# ── periods on time fields ───────────────────────────────────────────────
+PERIODS = {"this_year": "This year", "last_year": "Last year", "last_12_months": "Last 12 months",
+           "this_month": "This month", "last_month": "Last month", "range": "From – to"}
+MONTH_PERIODS = ("this_month", "last_month", "last_12_months")
+
+
+def _month_add(y: int, m: int, delta: int) -> Tuple[int, int]:
+    n = y * 12 + (m - 1) + delta
+    return n // 12, n % 12 + 1
+
+
+def period_bounds(key: str, flt: Dict[str, Any], today=None) -> Tuple[Optional[str], Optional[str]]:
+    """(first, last) label of a period filter on a time field, e.g. ("2025-11", "2026-10") for the
+    last 12 months of a month field or ("2026", "2026") for this year of a year field. Labels
+    compare as text ("2026-03" < "2026-10")."""
+    import datetime
+    today = today or datetime.date.today()
+    kind = TIME_KEYS.get(key, "month")
+    y, m = today.year, today.month
+    p = flt.get("period")
+    if p == "range":
+        lo, hi = (str(flt.get("from") or "") or None), (str(flt.get("to") or "") or None)
+        if kind == "year":
+            lo, hi = (lo[:4] if lo else None), (hi[:4] if hi else None)
+        elif lo and len(lo) == 4:
+            lo += "-01"
+        if kind == "month" and hi and len(hi) == 4:
+            hi += "-12"
+        return lo, hi
+    if kind == "year":
+        if p == "last_year":
+            return str(y - 1), str(y - 1)
+        if p == "last_12_months":
+            return str(y - 1), str(y)
+        return str(y), str(y)                       # this year / this month / last month: the year itself
+    if p == "this_year":
+        return f"{y:04d}-01", f"{y:04d}-12"
+    if p == "last_year":
+        return f"{y - 1:04d}-01", f"{y - 1:04d}-12"
+    if p == "this_month":
+        return f"{y:04d}-{m:02d}", f"{y:04d}-{m:02d}"
+    if p == "last_month":
+        ly, lm = _month_add(y, m, -1)
+        return f"{ly:04d}-{lm:02d}", f"{ly:04d}-{lm:02d}"
+    if p == "last_12_months":
+        fy, fm = _month_add(y, m, -11)
+        return f"{fy:04d}-{fm:02d}", f"{y:04d}-{m:02d}"
+    return None, None
+
+
+def _in_period(key: str, v: Any, flt: Dict[str, Any]) -> bool:
+    lab = "" if v is None else str(v).strip()
+    if not lab:
+        return False
+    lo, hi = period_bounds(key, flt)
+    return (lo is None or lab >= lo) and (hi is None or lab <= hi)
+
+
 def _passes(f: Field, v: Any, flt: Dict[str, Any]) -> bool:
+    if f.kind == "cat" and flt.get("period") and f.key in TIME_KEYS:
+        return _in_period(f.key, v, flt)
     if f.kind == "cat":
         wanted = flt.get("values") or []
         return not wanted or any(lab in wanted for lab in cat_labels(v))
@@ -718,6 +781,12 @@ def describe_selection(flt: Dict[str, Any]) -> str:
 
 def describe_filter(f: Field, flt: Dict[str, Any]) -> str:
     """Chip text, e.g. "End titer 70 – 80 dtex", "Material: PES, PA"."""
+    if f.kind == "cat" and flt.get("period") and f.key in TIME_KEYS:
+        lo, hi = period_bounds(f.key, flt)
+        span = (f"{lo} – {hi}" if lo != hi else lo) if lo and hi else (f"from {lo}" if lo else f"until {hi}" if hi else "any")
+        if flt["period"] == "range":
+            return f"{f.title}: {span}"
+        return f"{f.title}: {PERIODS.get(flt['period'], flt['period']).lower()} ({span})"
     if f.kind == "cat":
         vals = flt.get("values") or []
         shown = ", ".join(vals[:3]) + (f" +{len(vals) - 3}" if len(vals) > 3 else "")

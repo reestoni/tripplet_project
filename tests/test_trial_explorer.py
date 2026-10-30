@@ -204,3 +204,45 @@ def test_field_picker(qapp=None):
     assert p.currentData() == ""
     menus = [a.text() for a in p.menu().actions() if a.menu()]
     assert menus[0].startswith("Yarn") and all("(" in m for m in menus)
+
+
+# ── periods on time fields (Year/Month …), move with the calendar ──
+def test_period_bounds_and_filter():
+    import datetime
+    d = datetime.date(2026, 10, 30)
+    pb = lambda key, **f: te.period_bounds(key, f, today=d)
+    assert pb("month", period="this_year") == ("2026-01", "2026-12")
+    assert pb("exp_month", period="last_12_months") == ("2025-11", "2026-10")
+    assert pb("month", period="last_month") == ("2026-09", "2026-09")
+    assert pb("trial_month", period="this_month") == ("2026-10", "2026-10")
+    assert pb("year", period="last_year") == ("2025", "2025")
+    assert pb("exp_year", period="last_12_months") == ("2025", "2026")
+    assert pb("month", period="range", **{"from": "2025-03", "to": None}) == ("2025-03", None)
+    assert pb("year", period="range", **{"from": "2024-05", "to": "2025-02"}) == ("2024", "2025")
+    assert pb("month", period="range", **{"from": "2024", "to": "2025"}) == ("2024-01", "2025-12")
+    f = next(x for x in te.GENERAL_FIELDS if x.key == "month")
+    rng = {"key": "month", "period": "range", "from": "2026-02", "to": "2026-04"}
+    assert te._passes(f, "2026-03", rng) and not te._passes(f, "2026-05", rng) and not te._passes(f, None, rng)
+    assert te.describe_filter(f, rng) == "Month: 2026-02 – 2026-04"
+    assert te.describe_filter(f, {"key": "month", "period": "this_year"}).startswith("Month: this year (")
+
+
+def test_filter_dialog_period():
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from ui.smart_chart_filter_dialog import AddFilterDialog
+    trials = []
+    for i, month in enumerate(("2025-12", "2026-01", "2026-03"), start=1):
+        t = te.Trial(id=i, nr=i, series_id=i, exp_pk=1, experiment="E", series=f"S{i}", machine="AFK", jet="",
+                     year=month[:4])
+        t.extra = {"month": month}
+        trials.append(t)
+    ds = te.TrialDataset(te.GENERAL_FIELDS, trials=trials, loader=lambda f: {})
+    dlg = AddFilterDialog(ds, te.GENERAL_FIELDS, [], edit={"key": "month", "period": "range", "from": "2026-01",
+                                                            "to": "2026-03"})
+    assert dlg.current_filter() == {"key": "month", "period": "range", "from": "2026-01", "to": "2026-03"}
+    assert ds.apply([dlg.current_filter()]).ids == [2, 3]
+    dlg.cmb_period.setCurrentIndex(dlg.cmb_period.findData("last_year"))
+    assert dlg.current_filter() == {"key": "month", "period": "last_year"}
+    dlg.cmb_period.setCurrentIndex(0)
+    assert dlg.current_filter() is None and dlg.lst_cats.isEnabled()          # back to picking values

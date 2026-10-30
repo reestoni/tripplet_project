@@ -158,7 +158,6 @@ from ui.screen_manage_order_types import ManageOrderTypeScreen
 from ui.screen_manage_product_groups import ManageProductGroupsScreen
 from ui.screen_manage_material import ManageMaterialScreen
 from ui.screen_usage_stats import UsageStatsScreen
-from ui.screen_stats_suite import StatsSuiteScreen
 from ui.screen_offline_sync import OfflineSyncScreen
 from ui.screen_lab_assistant import LabAssistantScreen
 from ui.screen_tdms_inspector import TdmsInspectorScreen
@@ -363,7 +362,6 @@ class MainWindow(QMainWindow):
             on_manage_material=self._go_manage_material,
             on_add_user=self._go_add_user,
             on_usage_stats=self._go_usage_stats,
-            on_statistics=self._go_statistics,
             on_offline_sync=self._go_offline_sync,
             on_lab_assistant=self._go_lab_assistant,
         )
@@ -709,13 +707,10 @@ class MainWindow(QMainWindow):
             on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
         self.manage_material = ManageMaterialScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
         self.usage_stats = UsageStatsScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
-        # stats_suite/offline_sync: lazy (built on first navigation, not here).
-        # Beide sind ohnehin nur fuer Superuser erreichbar (_go_statistics/
-        # _go_offline_sync), und stats_suite baut eagerly ein QWebEngineView
-        # (Chromium-Subprozess) - das eager in MainWindow.__init__ zu tun heisst,
-        # JEDER Login zahlt diesen Startaufwand, nicht nur die paar Superuser,
-        # die den Screen je oeffnen.
-        self.stats_suite = None
+        # offline_sync/lab_assistant: lazy (built on first navigation, not here) -
+        # nur fuer Superuser erreichbar, nicht jeder Login soll den Aufbau bezahlen.
+        # (Die fruehere Superuser-Seite "Statistics" ist seit 2026-10-30 entfernt -
+        # ersetzt durch Dashboards mit der Vorlage "Lab statistics".)
         self.offline_sync = None
         self.lab_assistant = None
         # TDMS Inspector: lazy too - builds several matplotlib canvases
@@ -765,7 +760,6 @@ class MainWindow(QMainWindow):
             on_manage_material=self._go_manage_material,
             on_add_user=self._go_add_user,
             on_usage_stats=self._go_usage_stats,
-            on_statistics=self._go_statistics,
             on_offline_sync=self._go_offline_sync,
             on_lab_assistant=self._go_lab_assistant,
             on_logout=self._logout,
@@ -1404,7 +1398,6 @@ class MainWindow(QMainWindow):
             on_nozzle_calculator=self._go_nozzle_calculator,
             on_air_supply=self._go_air_supply,
             on_usage_stats=self._go_usage_stats,
-            on_statistics=self._go_statistics,
             on_label_generator=self._go_label_generator,
             on_offline_sync=self._go_offline_sync,
             on_lab_assistant=self._go_lab_assistant,
@@ -3110,16 +3103,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("TrippleT – Usage Stats")
         self.usage_stats.reload_data()
         self.stack.setCurrentWidget(self.usage_stats)
-
-    def _go_statistics(self):
-        if not app_meta.is_superuser_level():
-            return
-        if self.stats_suite is None:
-            self.stats_suite = StatsSuiteScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
-            self.stack.addWidget(self.stats_suite)
-        self.setWindowTitle("TrippleT – Statistics")
-        self.stats_suite.reload_data()
-        self.stack.setCurrentWidget(self.stats_suite)
 
     def _go_offline_sync(self):
         if not app_meta.is_superuser_level():

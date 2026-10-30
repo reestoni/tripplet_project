@@ -109,8 +109,9 @@ TEXTS = {
                 ("task", "Add a slicer (pick values that filter the page)",
                  ["Click the <i>Slicer</i> type in Visualizations and drag a field into <i>Field</i>.",
                   "Choose the <i>Style</i>: <b>List</b> (tick boxes with counts and a search), <b>Dropdown</b> "
-                  "(the same, folded), <b>Tiles</b> (buttons) or <b>Between</b> (a range with two handles - number "
-                  "fields only).",
+                  "(the same, folded), <b>Tiles</b> (buttons), <b>Between</b> (a range with two handles - number "
+                  "fields only) or <b>Year › Month</b> (for Year/Month fields: the years fold open, below them the "
+                  "months Jan–Dec; click a year for all its months, or single months).",
                   "Switch <i>Multi-select</i> off if only one value may be chosen. <i>Clear selection</i> or "
                   "<i>All</i> takes the selection back.",
                   "<i>Applies to</i>: all visuals of the page (default) or only the ones you tick - they get a dashed "
@@ -170,8 +171,15 @@ TEXTS = {
                   "<i>Owner</i> or <i>Tested on (lab machine)</i>. A field in Legend splits the columns; choose "
                   "<i>Stacked</i>, <i>Side by side</i> or <i>100 % stacked</i> under Bars.",
                   "Months and years run in order, months without anything show as 0."],
-                 "Series without trials and experiments without series are counted too - the numbers match the "
-                 "Statistics page. A trial measured on two lab machines counts once for each."),
+                 "Series without trials and experiments without series are counted too. A trial measured on two "
+                 "lab machines counts once for each."),
+                ("task", "Show only this year, last year or the last 12 months",
+                 [f"Add a filter ({B('Add filter')}, or <i>+ Add filter</i> in the Filters pane) on a time field: "
+                  "<i>Month</i>, <i>Year</i>, <i>Trial month</i>, <i>Experiment month</i> …",
+                  "Under <i>Period</i> choose <i>This year</i>, <i>Last year</i>, <i>Last 12 months</i>, <i>This "
+                  "month</i>, <i>Last month</i> - or <i>From – to</i> with a first and a last month."],
+                 "These periods move with the calendar: in January <i>This year</i> means the new year, without "
+                 "changing the dashboard. Picking single values (e.g. 2026) stays as it is."),
                 ("task", "Line up several visuals",
                  ["Ctrl+click (or Shift+click) the visuals you want - they get a dashed green frame. Ctrl+A selects "
                   "all visuals of the page, Esc ends the selection.",
@@ -315,8 +323,9 @@ TEXTS = {
                 ("task", "Einen Slicer (Datenschnitt) hinzufügen",
                  ["In Visualizations den Typ <i>Slicer</i> anklicken und ein Feld nach <i>Field</i> ziehen.",
                   "Den <i>Style</i> wählen: <b>List</b> (Ankreuzliste mit Anzahl und Suche), <b>Dropdown</b> "
-                  "(dasselbe, zugeklappt), <b>Tiles</b> (Knöpfe) oder <b>Between</b> (Bereich mit zwei Griffen - "
-                  "nur Zahlenfelder).",
+                  "(dasselbe, zugeklappt), <b>Tiles</b> (Knöpfe), <b>Between</b> (Bereich mit zwei Griffen - "
+                  "nur Zahlenfelder) oder <b>Year › Month</b> (für Jahr-/Monatsfelder: die Jahre klappen auf, "
+                  "darunter die Monate Jan–Dec; Klick aufs Jahr wählt alle seine Monate, oder einzelne Monate).",
                   "<i>Multi-select</i> ausschalten, wenn nur ein Wert gewählt werden darf. <i>Clear selection</i> "
                   "oder <i>All</i> hebt die Auswahl auf.",
                   "<i>Applies to</i>: alle Visuals der Seite (Standard) oder nur die angekreuzten - sie bekommen einen "
@@ -378,9 +387,15 @@ TEXTS = {
                   "<i>Order type</i>, <i>Owner</i> oder <i>Tested on (lab machine)</i>. Ein Feld in Legend teilt die "
                   "Säulen auf; unter Bars <i>Stacked</i>, <i>Side by side</i> oder <i>100 % stacked</i> wählen.",
                   "Monate und Jahre laufen in der richtigen Reihenfolge, Monate ohne Einträge erscheinen als 0."],
-                 "Serien ohne Versuche und Experimente ohne Serien zählen mit - die Zahlen stimmen mit der "
-                 "Statistics-Seite überein. Ein Versuch, der auf zwei Labormaschinen gemessen wurde, zählt bei "
-                 "beiden."),
+                 "Serien ohne Versuche und Experimente ohne Serien zählen mit. Ein Versuch, der auf zwei "
+                 "Labormaschinen gemessen wurde, zählt bei beiden."),
+                ("task", "Nur dieses Jahr, letztes Jahr oder die letzten 12 Monate zeigen",
+                 [f"Einen Filter ({B('Add filter')} oder <i>+ Add filter</i> im Bereich Filters) auf ein Zeitfeld "
+                  "setzen: <i>Month</i>, <i>Year</i>, <i>Trial month</i>, <i>Experiment month</i> …",
+                  "Unter <i>Period</i> <i>This year</i>, <i>Last year</i>, <i>Last 12 months</i>, <i>This month</i>, "
+                  "<i>Last month</i> wählen - oder <i>From – to</i> mit erstem und letztem Monat."],
+                 "Diese Zeiträume wandern mit dem Kalender: im Januar heisst <i>This year</i> das neue Jahr, ohne "
+                 "dass man das Dashboard ändern muss. Einzelne Werte ankreuzen (z.&nbsp;B. 2026) bleibt fest."),
                 ("task", "Mehrere Visuals ausrichten",
                  ["Die gewünschten Visuals mit Strg+Klick (oder Umschalt+Klick) wählen - sie bekommen einen grün "
                   "gestrichelten Rahmen. Strg+A wählt alle Visuals der Seite, Esc beendet die Auswahl.",
@@ -525,8 +540,9 @@ TEXTS = {
                 ("task", "Añadir un slicer (segmentación de datos)",
                  ["Haz clic en el tipo <i>Slicer</i> en Visualizations y arrastra un campo a <i>Field</i>.",
                   "Elige el <i>Style</i>: <b>List</b> (casillas con cantidades y búsqueda), <b>Dropdown</b> (lo "
-                  "mismo, plegado), <b>Tiles</b> (botones) o <b>Between</b> (un rango con dos tiradores, solo "
-                  "campos numéricos).",
+                  "mismo, plegado), <b>Tiles</b> (botones), <b>Between</b> (un rango con dos tiradores, solo "
+                  "campos numéricos) o <b>Year › Month</b> (para campos de año/mes: los años se despliegan y debajo "
+                  "están los meses Jan–Dec; clic en un año elige todos sus meses, o meses sueltos).",
                   "Desactiva <i>Multi-select</i> si solo se puede elegir un valor. <i>Clear selection</i> o <i>All</i> "
                   "quita la selección.",
                   "<i>Applies to</i>: todos los visuales de la página (por defecto) o solo los que marques; se ven "
@@ -587,8 +603,15 @@ TEXTS = {
                   "<i>Order type</i>, <i>Owner</i> o <i>Tested on (lab machine)</i>. Un campo en Legend divide las "
                   "columnas; en Bars elige <i>Stacked</i>, <i>Side by side</i> o <i>100 % stacked</i>.",
                   "Meses y años van en orden; los meses sin nada aparecen como 0."],
-                 "También cuentan las series sin ensayos y los experimentos sin series: los números coinciden con "
-                 "la página Statistics. Un ensayo medido en dos máquinas cuenta en ambas."),
+                 "También cuentan las series sin ensayos y los experimentos sin series. Un ensayo medido en dos "
+                 "máquinas cuenta en ambas."),
+                ("task", "Mostrar solo este año, el año pasado o los últimos 12 meses",
+                 [f"Añade un filtro ({B('Add filter')} o <i>+ Add filter</i> en el panel Filters) sobre un campo de "
+                  "tiempo: <i>Month</i>, <i>Year</i>, <i>Trial month</i>, <i>Experiment month</i> …",
+                  "En <i>Period</i> elige <i>This year</i>, <i>Last year</i>, <i>Last 12 months</i>, <i>This "
+                  "month</i>, <i>Last month</i>, o <i>From – to</i> con un primer y un último mes."],
+                 "Estos periodos avanzan con el calendario: en enero <i>This year</i> es el año nuevo, sin cambiar el "
+                 "dashboard. Marcar valores sueltos (p.&nbsp;ej. 2026) queda fijo."),
                 ("task", "Alinear varios visuales",
                  ["Ctrl+clic (o Mayús+clic) en los visuales deseados: reciben un marco verde discontinuo. Ctrl+A "
                   "selecciona todos los visuales de la página, Esc termina la selección.",

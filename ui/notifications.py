@@ -372,7 +372,7 @@ def notify_experiment_owners_of_request_change(
 
     Empfaenger = BacklogOwner jeder verknuepften TrialSeries (dieselbe
     "wer ist verantwortlich, nicht wer hat's eingetippt"-Konvention wie
-    ui/stats_suite_queries.py's Owner-Gruppierung), dedupliziert, ohne
+    das Feld "Owner" in Smart Chart/db/trial_explorer.py), dedupliziert, ohne
     actor_user_id (der Superuser, der die Aenderung gerade akzeptiert hat -
     keine Selbstbenachrichtigung, falls er zufaellig selbst Owner ist).
 

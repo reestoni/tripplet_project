@@ -2143,7 +2143,7 @@ class BacklogScreen(QWidget):
                  on_tdms_inspector=None,
                  on_add_jet=None, on_add_top_plate=None, on_add_yarn=None,
                  on_manage_order_type=None, on_manage_product_groups=None, on_manage_material=None,
-                 on_add_user=None, on_usage_stats=None, on_statistics=None, on_offline_sync=None,
+                 on_add_user=None, on_usage_stats=None, on_offline_sync=None,
                  on_lab_assistant=None,
                  # Log-Out-Callback für die Sidebar-Account-Gruppe (Ersatz für
                  # den früheren Header-Log-Out-Button, der nur auf Home
@@ -2206,7 +2206,6 @@ class BacklogScreen(QWidget):
             on_manage_material=on_manage_material,
             on_add_user=on_add_user,
             on_usage_stats=on_usage_stats,
-            on_statistics=on_statistics,
             on_offline_sync=on_offline_sync,
             on_lab_assistant=on_lab_assistant,
             on_logout=on_logout,

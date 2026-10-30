@@ -73,7 +73,6 @@ class HomeScreen(QWidget):
                  on_nozzle_calculator=None,
                  on_air_supply=None,
                  on_usage_stats=None,
-                 on_statistics=None,
                  on_label_generator=None,
                  on_offline_sync=None,
                  on_lab_assistant=None,
@@ -102,7 +101,6 @@ class HomeScreen(QWidget):
         self.on_nozzle_calculator = on_nozzle_calculator
         self.on_air_supply = on_air_supply
         self.on_usage_stats = on_usage_stats
-        self.on_statistics = on_statistics
         self.on_label_generator = on_label_generator
         self.on_offline_sync = on_offline_sync
         self.on_lab_assistant = on_lab_assistant
@@ -417,7 +415,6 @@ class HomeScreen(QWidget):
                 sidebar, self._offline_gated_buttons,
                 on_add_user=self.on_add_user,
                 on_usage_stats=self.on_usage_stats,
-                on_statistics=self.on_statistics,
                 on_offline_sync=self.on_offline_sync,
                 on_lab_assistant=self.on_lab_assistant,
                 open_in_new_tab=self._open_in_new_tab,

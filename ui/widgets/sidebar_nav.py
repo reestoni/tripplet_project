@@ -622,7 +622,6 @@ def build_superuser_group(
     *,
     on_add_user,
     on_usage_stats,
-    on_statistics,
     on_offline_sync,
     on_lab_assistant,
     open_in_new_tab=None,
@@ -637,10 +636,6 @@ def build_superuser_group(
     btn_usage_stats = green_btn("Usage Stats", on_usage_stats, tab_capable=True, open_in_new_tab=open_in_new_tab)
     sidebar.add_item(btn_usage_stats)
     offline_gated_buttons.append(btn_usage_stats)
-
-    btn_statistics = green_btn("Statistics", on_statistics, tab_capable=True, open_in_new_tab=open_in_new_tab)
-    sidebar.add_item(btn_statistics)
-    offline_gated_buttons.append(btn_statistics)
 
     btn_offline_sync = green_btn("Offline Sync", on_offline_sync, tab_capable=True, open_in_new_tab=open_in_new_tab)
     sidebar.add_item(btn_offline_sync)
@@ -1022,7 +1017,6 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
             sidebar, offline_gated,
             on_add_user=cb.get("on_add_user"),
             on_usage_stats=cb.get("on_usage_stats"),
-            on_statistics=cb.get("on_statistics"),
             on_offline_sync=cb.get("on_offline_sync"),
             on_lab_assistant=cb.get("on_lab_assistant"),
             open_in_new_tab=open_in_new_tab,

@@ -286,6 +286,25 @@ class AddFilterDialog(QDialog):
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
+        # time fields (Year, Month …): a period that moves with the calendar, or from – to
+        self.period_box = QWidget()
+        pr = QHBoxLayout(self.period_box)
+        pr.setContentsMargins(0, 0, 0, 0)
+        pr.addWidget(QLabel("Period:"))
+        self.cmb_period = QComboBox()
+        self.cmb_period.addItem("Pick values below", "")
+        for k, lab in te.PERIODS.items():
+            self.cmb_period.addItem(lab, k)
+        self.cmb_period.currentIndexChanged.connect(self._on_period)
+        pr.addWidget(self.cmb_period)
+        self.cmb_from, self.cmb_to = QComboBox(), QComboBox()
+        for c in (self.cmb_from, self.cmb_to):
+            c.currentIndexChanged.connect(lambda _i: self._hit_timer.start())
+        self.lbl_from, self.lbl_to = QLabel("from"), QLabel("to")
+        for wdg in (self.lbl_from, self.cmb_from, self.lbl_to, self.cmb_to):
+            pr.addWidget(wdg)
+        pr.addStretch(1)
+        v.addWidget(self.period_box)
         self.txt_cat_search = QLineEdit()
         self.txt_cat_search.setPlaceholderText("Search a value…")
         self.txt_cat_search.textChanged.connect(self._filter_cats)
@@ -404,6 +423,21 @@ class AddFilterDialog(QDialog):
                 self.lst_cats.addItem(it2)
             self.lst_cats.blockSignals(False)
             self.txt_cat_search.clear()
+            is_time = f.key in te.TIME_KEYS
+            self.period_box.setVisible(is_time)
+            if is_time:
+                labels = sorted(lab for lab, _n in te.category_counts(vals) if lab != te.NONE_LABEL)
+                for c, empty in ((self.cmb_from, "(open)"), (self.cmb_to, "(open)")):
+                    c.blockSignals(True)
+                    c.clear()
+                    c.addItem(empty, "")
+                    for lab in labels:
+                        c.addItem(lab, lab)
+                    c.blockSignals(False)
+            self.cmb_period.blockSignals(True)
+            self.cmb_period.setCurrentIndex(0)
+            self.cmb_period.blockSignals(False)
+            self._on_period()
             self.stack.setCurrentIndex(2)
         self._update_hits()
 
@@ -424,6 +458,12 @@ class AddFilterDialog(QDialog):
                 self.cmb_step.blockSignals(False)
                 self.rb_step.setChecked(True)
             self._on_value_mode()
+        elif flt.get("period") and self.field.key in te.TIME_KEYS:
+            self.cmb_period.setCurrentIndex(max(0, self.cmb_period.findData(flt["period"])))
+            for c, k in ((self.cmb_from, "from"), (self.cmb_to, "to")):
+                i = c.findData(str(flt.get(k) or ""))
+                c.setCurrentIndex(i if i >= 0 else 0)
+            self._on_period()
         else:
             wanted = set(flt.get("values") or [])
             self.lst_cats.blockSignals(True)
@@ -445,6 +485,19 @@ class AddFilterDialog(QDialog):
         self.hist.set_range(_parse(self.txt_lo.text()), _parse(self.txt_hi.text()))
         if self.rb_pick.isChecked():
             self._fill_values()
+        self._hit_timer.start()
+
+    def _period(self) -> str:
+        if self.field is None or self.field.key not in te.TIME_KEYS:
+            return ""
+        return self.cmb_period.currentData() or ""
+
+    def _on_period(self, _i=None) -> None:
+        p = self._period()
+        for wdg in (self.lbl_from, self.cmb_from, self.lbl_to, self.cmb_to):
+            wdg.setVisible(p == "range")
+        self.lst_cats.setEnabled(not p)
+        self.txt_cat_search.setEnabled(not p)
         self._hit_timer.start()
 
     def _filter_cats(self, q: str) -> None:
@@ -479,6 +532,17 @@ class AddFilterDialog(QDialog):
                 if not picked:
                     return None
                 flt["only"] = picked
+            return flt
+        p = self._period()
+        if p:
+            flt = {"key": f.key, "period": p}
+            if p == "range":
+                lo, hi = self.cmb_from.currentData() or None, self.cmb_to.currentData() or None
+                if lo and hi and lo > hi:
+                    lo, hi = hi, lo
+                if not lo and not hi:
+                    return None
+                flt.update({"from": lo, "to": hi})
             return flt
         vals = [self.lst_cats.item(i).data(Qt.UserRole) for i in range(self.lst_cats.count())
                 if self.lst_cats.item(i).checkState() == Qt.Checked]

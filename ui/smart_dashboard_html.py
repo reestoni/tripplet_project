@@ -167,6 +167,14 @@ summary .cnt{color:#9AA59C;font-weight:400}
 .sl .tile:hover{border-color:#1F7A3A}
 .sl .tile.on{background:#1F7A3A;border-color:#1F7A3A;color:#fff}
 .sl .tile.on .n{color:#D7EBDC}
+.sl .yr{display:flex;align-items:center;gap:6px;padding:3px 4px;border-radius:4px;cursor:pointer;font-weight:600}
+.sl .yr:hover,.sl .mo:hover{background:#F0F7F2}
+.sl .yr .car{width:12px;color:#5A6460;font-size:10px;flex:none;text-align:center}
+.sl .mo{display:flex;align-items:center;gap:7px;padding:2px 4px 2px 24px;border-radius:4px;cursor:pointer}
+.sl .mo.zero{color:#B5BCB7}
+.sl .yr .l,.sl .mo .l{flex:1}
+.sl .box.part{background:#9CC8A9;border-color:#1F7A3A}
+.sl .on>.box{background:#1F7A3A;border-color:#1F7A3A}
 .sl .dd{position:relative}
 .sl .ddb{width:100%;height:32px;border:1px solid #C9D1C8;border-radius:6px;background:#fff;text-align:left;padding:0 28px 0 10px;cursor:pointer;font:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sl .ddb:after{content:'▾';position:absolute;right:10px;top:7px;color:#5A6460}
@@ -204,7 +212,7 @@ summary .cnt{color:#9AA59C;font-weight:400}
 </div>
 <div id="toast"></div>
 <script>
-var RO=false, STACKS={}, bridge=null, CATALOG=[], FIELDS={}, GROUPS=[], TREE=[], TYPES={}, WELLS={}, AGGS={}, SLSTYLES={}, DDOPEN={}, SLQ={};
+var MONTHOF={}, YOPEN={}, RO=false, STACKS={}, bridge=null, CATALOG=[], FIELDS={}, GROUPS=[], TREE=[], TYPES={}, WELLS={}, AGGS={}, SLSTYLES={}, DDOPEN={}, SLQ={};
 var SPEC={pages:[{id:'p1',title:'Page 1',visuals:[],filters:[]}],active:'p1'}, SEL=null, RESULTS={}, PFILTERS=[];
 var MSEL=[], GRID={cols:12,row:20}, GAP=10, FDATA={all:[],page:[],cross:[],slicers:[],ply:'any'};
 function PG(){for(var i=0;i<SPEC.pages.length;i++)if(SPEC.pages[i].id===SPEC.active)return SPEC.pages[i];return SPEC.pages[0];}
@@ -243,7 +251,7 @@ document.querySelectorAll('.strip').forEach(function(s){s.addEventListener('clic
 window.addEventListener('resize',function(){clearTimeout(window._rz);window._rz=setTimeout(resizePlots,120);});
 
 function init(data){
-  CATALOG=data.catalog;GROUPS=data.groups;TREE=data.tree||GROUPS.map(function(g){return [g,[]];});TYPES=data.types;WELLS=data.wells;AGGS=data.aggs;SLSTYLES=data.slicer_styles||{};STACKS=data.stacks||{};
+  CATALOG=data.catalog;GROUPS=data.groups;TREE=data.tree||GROUPS.map(function(g){return [g,[]];});TYPES=data.types;WELLS=data.wells;AGGS=data.aggs;SLSTYLES=data.slicer_styles||{};STACKS=data.stacks||{};MONTHOF=data.month_of||{};
   FIELDS={};CATALOG.forEach(function(f){FIELDS[f.key]=f;});
   SPEC=data.spec;SEL=null;MSEL=[];GRID=data.grid||GRID;LAST=JSON.stringify(SPEC);HIST=[];FUT=[];
   RO=!!data.readonly;document.body.classList.toggle('ro',RO);
@@ -399,9 +407,10 @@ function renderWells(){
       +'<select id="tgbetter"><option value="higher"'+(tg.better!=='lower'?' selected':'')+'>higher is better</option><option value="lower"'+(tg.better==='lower'?' selected':'')+'>lower is better</option></select></div></div>';
   }
   if(v.type==='slicer'){
-    var fk=(v.wells||{}).field, isNum=fk&&FIELDS[fk]&&FIELDS[fk].kind==='num', cur=v.style||(isNum?'between':'list');
+    var fk=(v.wells||{}).field, isNum=fk&&FIELDS[fk]&&FIELDS[fk].kind==='num', isTime=!!(fk&&MONTHOF[fk]),
+        cur=v.style||(isNum?'between':(isTime?'hierarchy':'list'));
     h+='<div class="well"><div class="lab">Style</div><select id="slstyle">';
-    Object.keys(SLSTYLES).forEach(function(k){if(k==='between'&&!isNum)return;h+='<option value="'+k+'"'+(cur===k?' selected':'')+'>'+esc(SLSTYLES[k])+'</option>';});
+    Object.keys(SLSTYLES).forEach(function(k){if(k==='between'&&!isNum)return;if(k==='hierarchy'&&!isTime)return;h+='<option value="'+k+'"'+(cur===k?' selected':'')+'>'+esc(SLSTYLES[k])+'</option>';});
     h+='</select></div><div class="well"><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="slmulti"'+(v.multi===false?'':' checked')+'> Multi-select</label></div>'
       +'<div class="well"><button class="btn" id="slclear" style="width:100%">Clear selection</button></div>';
     var others=PG().visuals.filter(function(o){return o.id!==v.id;}), tg=v.targets;
@@ -767,6 +776,22 @@ function renderSlicer(body,v,r){
       +'<input type="range" class="r1" min="'+rg.min+'" max="'+rg.max+'" step="'+rg.step+'" value="'+lo+'">'
       +'<input type="range" class="r2" min="'+rg.min+'" max="'+rg.max+'" step="'+rg.step+'" value="'+hi+'"></div>'
       +'<div class="info">'+esc(String(rg.min))+' – '+esc(String(rg.max))+(r.unit?' '+esc(r.unit):'')+' in the trials the other filters leave</div>';
+  } else if(st==='hierarchy'){
+    var tree=r.tree||[];
+    if(!tree.length&&!r.none){body.innerHTML='<div class="empty">No dates</div>';return;}
+    h+='<div class="acts"><a data-act="all" title="No selection = everything">All</a>'+(cur.length?'<a data-act="clr">Clear ('+cur.length+')</a>':'')+'</div><div class="opts">';
+    tree.forEach(function(t,ti){
+      var labs=t.months.map(function(m){return m.label;}), nOn=labs.filter(function(l){return cur.indexOf(l)>=0;}).length;
+      var key=v.id+':'+t.year, open=YOPEN[key]!=null?YOPEN[key]:(ti===0||nOn>0);
+      h+='<div class="yr'+(nOn===12?' on':'')+'" data-y="'+esc(t.year)+'"><span class="car">'+(open?'▾':'▸')+'</span>'
+        +'<span class="box'+(nOn&&nOn<12?' part':'')+'">'+(nOn===12?'✓':'')+'</span><span class="l">'+esc(t.year)+'</span><span class="n">'+t.n+'</span></div>';
+      if(open)t.months.forEach(function(m){var on=cur.indexOf(m.label)>=0;
+        h+='<div class="mo'+(on?' on':'')+(m.n?'':' zero')+'" data-l="'+esc(m.label)+'"><span class="box">'+(on?'✓':'')+'</span>'
+          +'<span class="l">'+esc(m.name)+'</span><span class="n">'+m.n+'</span></div>';});
+    });
+    if(r.none){var onN=cur.indexOf('(none)')>=0;
+      h+='<div class="mo'+(onN?' on':'')+'" data-l="(none)" style="padding-left:4px"><span class="box">'+(onN?'✓':'')+'</span><span class="l">(no date)</span><span class="n">'+r.none+'</span></div>';}
+    h+='</div>';
   } else if(st==='tiles'){
     h+='<div class="tiles">'+(r.options||[]).map(function(o){return '<button class="tile'+(cur.indexOf(o.label)>=0?' on':'')+'" data-l="'+esc(o.label)+'">'
       +esc(o.label)+' <span class="n">'+o.n+'</span></button>';}).join('')+'</div>'
@@ -793,6 +818,20 @@ function renderSlicer(body,v,r){
     mn.addEventListener('change',function(){commit(mn.value,mx.value);});
     mx.addEventListener('change',function(){commit(mn.value,mx.value);});
     paint();
+  } else if(st==='hierarchy'){
+    el.querySelectorAll('.yr').forEach(function(y){y.addEventListener('click',function(e){
+      var key=v.id+':'+y.dataset.y, t=(r.tree||[]).filter(function(x){return x.year===y.dataset.y;})[0];
+      if(e.target.classList.contains('car')){
+        var wasOpen=y.querySelector('.car').textContent==='▾';YOPEN[key]=!wasOpen;renderSlicer(body,v,r);return;}
+      var labs=t.months.map(function(m){return m.label;}), cur2=selVals(v);
+      var all=labs.every(function(l){return cur2.indexOf(l)>=0;});
+      if(!r.multi)cur2=all?[]:labs.slice();
+      else if(all)cur2=cur2.filter(function(l){return labs.indexOf(l)<0;});
+      else labs.forEach(function(l){if(cur2.indexOf(l)<0)cur2.push(l);});
+      YOPEN[key]=true;v.sel=cur2.length?{values:cur2}:{};push();});});
+    el.querySelectorAll('.mo').forEach(function(m){m.addEventListener('click',function(){toggleVal(v,m.dataset.l,r.multi);
+      m.classList.toggle('on');m.querySelector('.box').textContent=m.classList.contains('on')?'✓':'';});});
+    el.querySelectorAll('.acts a').forEach(function(a){a.addEventListener('click',function(){v.sel={};push();});});
   } else if(st==='tiles'){
     el.querySelectorAll('.tile').forEach(function(b){b.addEventListener('click',function(){toggleVal(v,b.dataset.l,r.multi);b.classList.toggle('on');});});
     el.querySelectorAll('.acts a').forEach(function(a){a.addEventListener('click',function(){v.sel={};push();});});

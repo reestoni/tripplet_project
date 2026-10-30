@@ -167,7 +167,7 @@ class SmartDashboard(QWidget):
                               "target": bool(t.get("target")), "defagg": t.get("defagg") or ""}
                           for k, t in en.VISUAL_TYPES.items()},
                 "wells": {k: list(v) for k, v in en.WELLS.items()}, "aggs": en.AGGS,
-                "slicer_styles": en.SLICER_STYLES, "stacks": en.STACK_MODES, "grid": {"cols": en.GRID_COLS, "row": en.GRID_ROW},
+                "slicer_styles": en.SLICER_STYLES, "stacks": en.STACK_MODES, "month_of": en.MONTH_OF, "grid": {"cols": en.GRID_COLS, "row": en.GRID_ROW},
                 "spec": self.spec, "panes": {} if self.read_only else self._panes(),
                 "readonly": self.read_only}
         self._sent_catalog = (id(self.screen.catalog), json.dumps(self.spec.get("calc") or [], sort_keys=True))

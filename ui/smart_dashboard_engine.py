@@ -48,7 +48,13 @@ WELLS: Dict[str, Tuple[str, str]] = {      # key -> (label, accepted kinds)
 MULTI_WELLS = ("columns", "drill")
 DRILL_TYPES = ("bar", "box", "violin", "line")
 # Slicer ("Datenschnitt", Nutzerwunsch 2026-10-30): how it looks
-SLICER_STYLES = {"list": "List", "dropdown": "Dropdown", "tiles": "Tiles", "between": "Between (range)"}
+SLICER_STYLES = {"list": "List", "dropdown": "Dropdown", "tiles": "Tiles", "between": "Between (range)",
+                 "hierarchy": "Year › Month"}
+# "Year › Month" (Nutzerwunsch 2026-10-30): years fold open, below them the months 1-12. Works on a year
+# or a month field and always filters the MONTH field of the same family.
+MONTH_OF = {"year": "month", "month": "month", "trial_year": "trial_month", "trial_month": "trial_month",
+            "exp_year": "exp_month", "exp_month": "exp_month"}
+MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 SLICER_MAX_OPTIONS = 300
 CHART_WELLS = ["x", "y", "legend", "split"]
 VISUAL_TYPES: Dict[str, Dict[str, Any]] = {
@@ -816,8 +822,11 @@ def _column(ds, res, xk, lk, vk, agg, stack="stacked", palette="trippleT") -> Di
 def slicer_style(ds: TrialDataset, v: Dict[str, Any]) -> str:
     key = (v.get("wells") or {}).get("field")
     f = ds.fields.get(key) if key else None
-    style = v.get("style") or ("between" if f is not None and f.kind == "num" else "list")
+    default = "between" if f is not None and f.kind == "num" else "hierarchy" if key in MONTH_OF else "list"
+    style = v.get("style") or default
     if style == "between" and (f is None or f.kind != "num"):
+        style = "list"
+    if style == "hierarchy" and key not in MONTH_OF:
         style = "list"
     return style if style in SLICER_STYLES else "list"
 
@@ -829,6 +838,8 @@ def _slicer(ds, res, key, v) -> Dict[str, Any]:
     style = slicer_style(ds, v)
     out: Dict[str, Any] = {"kind": "slicer", "style": style, "fkind": f.kind, "unit": f.unit,
                            "multi": v.get("multi", True) is not False, "sel": v.get("sel") or {}}
+    if style == "hierarchy":
+        return {**out, **_month_tree(ds, res, MONTH_OF[key])}
     vals = [ds.value(key, tid, res.matched.get(tid)) for tid in res.ids]
     if f.kind == "num":
         nums = sorted(x for x in (_num(a) for a in vals) if x is not None)
@@ -852,6 +863,25 @@ def _slicer(ds, res, key, v) -> Dict[str, Any]:
     return out
 
 
+def _month_tree(ds: TrialDataset, res: Result, mk: str) -> Dict[str, Any]:
+    """Years (newest first) with their months 1-12 and trial counts; "(none)" = without a date."""
+    counts: Dict[str, int] = {}
+    for tid in res.ids:
+        lab = cat_label(ds.value(mk, tid, res.matched.get(tid)))
+        counts[lab] = counts.get(lab, 0) + 1
+    years = sorted({lab[:4] for lab in counts if lab != NONE_LABEL and lab[:4].isdigit()}, reverse=True)
+    tree = []
+    for y in years:
+        months = [{"label": f"{y}-{m:02d}", "name": MONTH_NAMES[m - 1], "n": counts.get(f"{y}-{m:02d}", 0)}
+                  for m in range(1, 13)]
+        tree.append({"year": y, "n": sum(mo["n"] for mo in months), "months": months})
+    options = [{"label": mo["label"], "n": mo["n"]} for t in tree for mo in t["months"] if mo["n"]]
+    if counts.get(NONE_LABEL):
+        options.append({"label": NONE_LABEL, "n": counts[NONE_LABEL]})
+    return {"tree": tree, "none": counts.get(NONE_LABEL, 0), "options": options, "more": 0,
+            "month_field": ds.fields[mk].title if mk in ds.fields else mk}
+
+
 def slicer_filter(ds: TrialDataset, v: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """The filter a slicer's selection puts on the other visuals (None = nothing chosen)."""
     if v.get("type") != "slicer":
@@ -861,6 +891,9 @@ def slicer_filter(ds: TrialDataset, v: Dict[str, Any]) -> Optional[Dict[str, Any
     sel = v.get("sel") or {}
     if f is None or not sel:
         return None
+    if sel.get("values") and slicer_style(ds, v) == "hierarchy":
+        mk = MONTH_OF[key]
+        return {"key": mk, "values": [str(a) for a in sel["values"]]} if mk in ds.fields else None
     if sel.get("values"):
         if f.kind == "num":
             nums = [x for x in (_num(a) for a in sel["values"]) if x is not None]

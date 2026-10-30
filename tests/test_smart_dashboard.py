@@ -326,3 +326,18 @@ def test_stats_template_is_valid():
         for k in (vis.get("wells") or {}).values():
             assert k in keys
         assert (vis.get("agg") or "avg") in en.AGGS
+
+
+def test_year_month_slicer(sds):
+    v = {"id": "s1", "type": "slicer", "wells": {"field": "year"}}
+    assert en.slicer_style(sds, v) == "hierarchy"                          # default for time fields
+    r = en.compute_visual(sds, v, [])
+    tree = r["tree"]
+    assert [t["year"] for t in tree] == ["2026"] and len(tree[0]["months"]) == 12
+    months = {m["name"]: m["n"] for m in tree[0]["months"]}
+    assert months["Jan"] == 2 and months["Mar"] == 1 and months["Feb"] == 0
+    # selection = months, filters the MONTH field even when the slicer sits on Year
+    v["sel"] = {"values": ["2026-01"]}
+    assert en.slicer_filter(sds, v) == {"key": "month", "values": ["2026-01"]}
+    assert sds.apply([en.slicer_filter(sds, v)]).ids == [1, 2]
+    assert en.slicer_style(sds, {"type": "slicer", "wells": {"field": "owner"}, "style": "hierarchy"}) == "list"
