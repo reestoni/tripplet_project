@@ -165,26 +165,6 @@ class _ReportBridge(QObject):
         except Exception as e:
             logger.error("copyImageToClipboard: %s", e)
 
-    @Slot(str)
-    def getFilterValues(self, field_key: str) -> None:
-        try:
-            import json as _json
-            from db.connection import fetch_all
-            QUERIES = {
-                'jet':     "SELECT DISTINCT Jet AS val FROM tbljets WHERE Jet IS NOT NULL ORDER BY Jet",
-                'yarn':    "SELECT DISTINCT Name AS val FROM tblyarn WHERE Name IS NOT NULL ORDER BY Name",
-                'machine': "SELECT DISTINCT Maschine AS val FROM tblMaschine WHERE Maschine IS NOT NULL ORDER BY Maschine",
-            }
-            if field_key not in QUERIES:
-                return
-            rows   = fetch_all(QUERIES[field_key], [])
-            values = [str(r["val"]) for r in rows if r.get("val")]
-            js = "receiveFilterValues(" + _json.dumps(field_key) + ", " + _json.dumps(values) + ");"
-            if self._screen._web:
-                self._screen._web.page().runJavaScript(js)
-        except Exception as e:
-            logger.error("getFilterValues %s: %s", field_key, e)
-
     @Slot()
     def getSeriesList(self):
         try:
@@ -515,10 +495,7 @@ class _ReportBridge(QObject):
             logger.exception("runVisualQuery: %s", e)
             # don't leave the page on "Loading..." with an old chart
             if self._screen._web:
-                self._screen._web.page().runJavaScript(
-                    "receiveQueryResult([], 0);"
-                    "document.getElementById('result-info').textContent="
-                    + json.dumps("The query could not be run - check the filters and try again.") + ";")
+                self._screen._web.page().runJavaScript("receiveQueryResult([], 0);")
 
 
     @Slot(str)
@@ -1235,323 +1212,6 @@ class _ReportBridge(QObject):
         QMessageBox.critical(self._screen, "JS error", message)
 
     @Slot()
-    def getFreeQueryMeta(self) -> None:
-        import json as _json
-        try:
-            from db.connection import fetch_all, table_exists
-            if not table_exists('tblSmartChartFreeTable'):
-                logger.warning('getFreeQueryMeta: tblSmartChartFreeTable not found')
-                if self._screen._web: self._screen._web.page().runJavaScript('receiveFreeQueryMeta([],{},[]);')
-                return
-            tbl_rows = fetch_all(
-                "SELECT TableName, DisplayLabel FROM tblSmartChartFreeTable "
-                "WHERE IsActive=1 ORDER BY SortOrder, DisplayLabel", []
-            )
-            tables = [{"tableName": r["TableName"], "displayLabel": r["DisplayLabel"]} for r in tbl_rows]
-            join_rows = fetch_all(
-                "SELECT FromTable, ToTable, JoinSQL FROM tblSmartChartJoinPath "
-                "WHERE IsActive=1 ORDER BY SortOrder", []
-            )
-            join_paths = {}
-            for r in join_rows:
-                ft = r["FromTable"]
-                if ft not in join_paths: join_paths[ft] = []
-                join_paths[ft].append({"toTable": r["ToTable"], "joinSQL": r["JoinSQL"]})
-            columns = {}
-            skip_lower = {"id","globalid","userid","timestamp","createdat","createdby"}
-            for t in tbl_rows:
-                tname = t["TableName"]
-                try:
-                    col_rows = fetch_all(
-                        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
-                        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? "
-                        "ORDER BY ORDINAL_POSITION", [tname]
-                    )
-                    columns[tname] = [
-                        r["COLUMN_NAME"] for r in col_rows
-                        if r["COLUMN_NAME"].lower() not in skip_lower
-                        and not r["COLUMN_NAME"].lower().endswith("id")
-                    ]
-                except Exception as col_e:
-                    logger.warning("getFreeQueryMeta columns %s: %s", tname, col_e)
-                    columns[tname] = []
-            logger.info("getFreeQueryMeta: %d tables, %d join_paths", len(tables), len(join_rows))
-            js = (f'receiveFreeQueryMeta('
-                  f'{_json.dumps(tables)},'
-                  f'{_json.dumps(join_paths)},'
-                  f'{_json.dumps(columns)});')
-            if self._screen._web: self._screen._web.page().runJavaScript(js)
-        except Exception as e:
-            logger.error('getFreeQueryMeta: %s', e, exc_info=True)
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveFreeQueryMeta([],{},[]);')
-
-    @Slot(str)
-    def runFreeQuery(self, config_json: str) -> None:
-        import json as _json
-        try:
-            from db.connection import fetch_all
-            cfg = _json.loads(config_json)
-            base   = cfg.get('baseTable','')
-            joins  = cfg.get('joinTables',[])
-            x_fld  = cfg.get('xField','').split('::')
-            y_fld  = cfg.get('yField','').split('::')
-            c_fld  = cfg.get('colorField','').split('::') if cfg.get('colorField') else None
-            l_fld  = cfg.get('labelField','').split('::') if cfg.get('labelField') else None
-            filters= cfg.get('filters',[])
-            limit  = int(cfg.get('limit',500))
-
-            if not base or len(x_fld)<2 or len(y_fld)<2:
-                if self._screen._web: self._screen._web.page().runJavaScript('receiveFreeQueryResult([],0,{});')
-                return
-
-            # JoinPaths direkt aus DB
-            jp_rows = fetch_all("SELECT FromTable, ToTable, JoinSQL FROM tblSmartChartJoinPath WHERE IsActive=1", [])
-            join_paths = {}
-            for r in jp_rows:
-                ft = r["FromTable"]
-                if ft not in join_paths: join_paths[ft] = []
-                join_paths[ft].append({"toTable": r["ToTable"], "joinSQL": r["JoinSQL"]})
-            logger.info("runFreeQuery: base=%s joins=%s", base, joins)
-
-            # SELECT
-            sel_parts = [
-                f"`{x_fld[0]}`.`{x_fld[1]}` AS `__fqb_x`",
-                f"`{y_fld[0]}`.`{y_fld[1]}` AS `__fqb_y`",
-            ]
-            if c_fld: sel_parts.append(f"`{c_fld[0]}`.`{c_fld[1]}` AS `__fqb_color`")
-            if l_fld: sel_parts.append(f"`{l_fld[0]}`.`{l_fld[1]}` AS `__fqb_label`")
-
-            # JOINs
-            join_sql_parts = []
-            for jt in joins:
-                paths = join_paths.get(base, [])
-                path = next((p for p in paths if p['toTable']==jt), None)
-                if not path:
-                    for at in joins:
-                        if at == jt: continue
-                        p2 = next((p for p in join_paths.get(at,[]) if p['toTable']==jt), None)
-                        if p2: path = p2; break
-                if path: join_sql_parts.append(path['joinSQL'])
-
-            # WHERE — auto-JOIN für Tabellen die im Filter aber nicht in joins sind
-            where_parts, params = [], []
-            for f in filters:
-                tbl = f.get('table',''); fld = f.get('field','')
-                op  = f.get('op','=');   val = f.get('value')
-                if not tbl or not fld: continue
-                # Auto-JOIN falls Tabelle nicht explizit gejoint
-                if tbl != base and tbl not in joins:
-                    paths = join_paths.get(base, [])
-                    auto_path = next((p for p in paths if p['toTable']==tbl), None)
-                    if auto_path and auto_path['joinSQL'] not in join_sql_parts:
-                        join_sql_parts.append(auto_path['joinSQL'])
-                col_ref = f"`{tbl}`.`{fld}`"
-                if op == 'IS NULL':
-                    where_parts.append(f"{col_ref} IS NULL")
-                elif op in ('LIKE', 'NOT LIKE') and val:
-                    like_val = val if '%' in val else f'%{val}%'
-                    where_parts.append(f"{col_ref} {op} ?")
-                    params.append(like_val)
-                elif op == 'IS NOT NULL':
-                    where_parts.append(f"{col_ref} IS NOT NULL")
-                elif val is not None:
-                    where_parts.append(f"{col_ref} {op} ?")
-                    try: params.append(float(val))
-                    except: params.append(str(val))
-
-            sql = (f"SELECT {', '.join(sel_parts)} FROM `{base}` "
-                   + (' '.join(join_sql_parts) + ' ' if join_sql_parts else '')
-                   + ('WHERE ' + ' AND '.join(where_parts) + ' ' if where_parts else '')
-                   + f"LIMIT {limit}")
-
-            logger.info("runFreeQuery SQL: %s | params: %s", sql[:300], params)
-            rows = fetch_all(sql, params)
-            import decimal as _dec
-            def _safe(v):
-                if v is None: return None
-                if isinstance(v, _dec.Decimal): return float(v)
-                return v
-            result = []
-            for r in rows:
-                row = {'__fqb_x': _safe(r.get('__fqb_x')), '__fqb_y': _safe(r.get('__fqb_y'))}
-                if c_fld: row['__fqb_color'] = str(r.get('__fqb_color') or '')
-                if l_fld: row['__fqb_label'] = str(r.get('__fqb_label') or '')
-                result.append(row)
-            logger.info("runFreeQuery: %d rows", len(result))
-            js = (f'receiveFreeQueryResult('
-                  f'{_json.dumps(result)},'
-                  f'{len(result)},'
-                  f'{_json.dumps(cfg)});')
-            if self._screen._web: self._screen._web.page().runJavaScript(js)
-        except Exception as e:
-            logger.error('runFreeQuery FEHLER: %s', e, exc_info=True)
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveFreeQueryResult([],0,{});')
-
-    @Slot()
-    def getAdvancedFilterFields(self) -> None:
-        import json as _json
-        try:
-            from db.connection import fetch_all, table_exists
-            if not table_exists('tblSmartChartAllowedField'):
-                if self._screen._web: self._screen._web.page().runJavaScript('receiveAdvancedFilterFields([]);')
-                return
-            rows = fetch_all(
-                "SELECT TableName, FieldName, DisplayLabel, FieldType, LookupQuery "
-                "FROM tblSmartChartAllowedField WHERE IsActive=1 ORDER BY SortOrder, DisplayLabel",
-                []
-            )
-            result = [
-                {
-                    'table':        str(r['TableName']),
-                    'field':        str(r['FieldName']),
-                    'label':        str(r['DisplayLabel']),
-                    'type':         str(r['FieldType'] or 'numeric'),
-                    'lookupQuery':  str(r['LookupQuery'] or '') if r.get('LookupQuery') else '',
-                    'lookupVals':   [],
-                }
-                for r in rows
-            ]
-            js = 'receiveAdvancedFilterFields(' + _json.dumps(result) + ');'
-            if self._screen._web: self._screen._web.page().runJavaScript(js)
-        except Exception as e:
-            logger.error('getAdvancedFilterFields: %s', e)
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveAdvancedFilterFields([]);')
-
-    @Slot(str, str)
-    def getAdvancedFieldValues(self, table_name: str, field_name: str) -> None:
-        import json as _json
-        try:
-            from db.connection import fetch_all, table_exists
-            if not table_exists(table_name):
-                return
-            rows = fetch_all(
-                f"SELECT DISTINCT `{field_name}` AS val FROM `{table_name}` "
-                f"WHERE `{field_name}` IS NOT NULL ORDER BY `{field_name}` LIMIT 200",
-                []
-            )
-            values = [str(r['val']) for r in rows if r.get('val') is not None]
-            key = f"{table_name}::{field_name}"
-            js = f"receiveAdvancedFieldValues({_json.dumps(key)}, {_json.dumps(values)});"
-            if self._screen._web: self._screen._web.page().runJavaScript(js)
-        except Exception as e:
-            logger.error('getAdvancedFieldValues %s.%s: %s', table_name, field_name, e)
-
-    @Slot()
-    def getQueryTemplates(self) -> None:
-        import json as _json
-        try:
-            from db.connection import fetch_all, table_exists
-            import app_meta
-            username = str(getattr(app_meta, 'current_user', {}).get('username','') or '')
-            if not table_exists('tblSmartChartQueryTemplate'):
-                if self._screen._web: self._screen._web.page().runJavaScript('receiveQueryTemplates([]);')
-                return
-            rows = fetch_all(
-                "SELECT ID, Name, Description, VisibilityLevel, GroupBy, "
-                "FiltersJSON, SeriesPKsJSON, CreatedBy, CertifiedBy "
-                "FROM tblSmartChartQueryTemplate "
-                "WHERE IsActive=1 AND (VisibilityLevel>=2 OR CreatedBy=?) "
-                "ORDER BY VisibilityLevel ASC, Name ASC",
-                [username]
-            )
-            result = []
-            for r in rows:
-                try: filters = _json.loads(r.get('FiltersJSON') or '[]')
-                except: filters = []
-                try: series_pks = _json.loads(r.get('SeriesPKsJSON') or '[]')
-                except: series_pks = []
-                result.append({
-                    'id':              int(r['ID']),
-                    'name':            str(r.get('Name') or ''),
-                    'description':     str(r.get('Description') or ''),
-                    'visibilityLevel': int(r.get('VisibilityLevel') or 1),
-                    'groupBy':         str(r.get('GroupBy') or 'jet'),
-                    'filters':         filters,
-                    'seriesPKs':       series_pks,
-                    'createdBy':       str(r.get('CreatedBy') or ''),
-                    'certifiedBy':     str(r.get('CertifiedBy') or ''),
-                })
-            js = 'receiveQueryTemplates(' + _json.dumps(result) + ');'
-            if self._screen._web: self._screen._web.page().runJavaScript(js)
-        except Exception as e:
-            logger.error('getQueryTemplates: %s', e)
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveQueryTemplates([]);')
-
-    @Slot()
-    def checkSuperuser(self) -> None:
-        try:
-            import app_meta
-            from db.connection import is_superuser
-            username = str(getattr(app_meta, 'current_user', {}).get('username','') or '')
-            val = is_superuser(username) if username else False
-            js = f'receiveIsSuperuser({str(val).lower()});'
-            if self._screen._web: self._screen._web.page().runJavaScript(js)
-        except Exception as e:
-            logger.error('checkSuperuser: %s', e)
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveIsSuperuser(false);')
-
-    @Slot(str)
-    def saveQueryTemplate(self, payload_json: str) -> None:
-        import json as _json
-        try:
-            from db.connection import get_connection, table_exists
-            if not table_exists('tblSmartChartQueryTemplate'):
-                if self._screen._web: self._screen._web.page().runJavaScript('receiveQueryTemplateSaved(false,"Table not found");')
-                return
-            p = _json.loads(payload_json)
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute(
-                    "INSERT INTO tblSmartChartQueryTemplate "
-                    "(Name, Description, VisibilityLevel, GroupBy, FiltersJSON, SeriesPKsJSON, CreatedBy) "
-                    "VALUES (?,?,?,?,?,?,?)",
-                    [p['name'], p.get('description',''), int(p.get('visibilityLevel',1)),
-                     p.get('groupBy','jet'),
-                     _json.dumps(p.get('filters',[])),
-                     _json.dumps(p.get('seriesPKs',[])),
-                     p.get('createdBy','')]
-                )
-            logger.info("saveQueryTemplate: '%s' gespeichert", p['name'])
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveQueryTemplateSaved(true,"");')
-        except Exception as e:
-            logger.error('saveQueryTemplate: %s', e)
-            js = 'receiveQueryTemplateSaved(false,' + _json.dumps(str(e)) + ');'
-            if self._screen._web: self._screen._web.page().runJavaScript(js)
-
-    @Slot(str)
-    def certifyQueryTemplate(self, tpl_id_str: str) -> None:
-        import json as _json
-        try:
-            from db.connection import execute
-            import app_meta
-            from datetime import datetime
-            username = str(getattr(app_meta, 'current_user', {}).get('username','') or '')
-            tid = int(tpl_id_str)
-            execute(
-                "UPDATE tblSmartChartQueryTemplate "
-                "SET VisibilityLevel=3, CertifiedBy=?, CertifiedAt=? WHERE ID=?",
-                [username, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), tid]
-            )
-            logger.info("certifyQueryTemplate: ID=%d zertifiziert von %s", tid, username)
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveQueryTemplateCertified(true);')
-        except Exception as e:
-            logger.error('certifyQueryTemplate: %s', e)
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveQueryTemplateCertified(false);')
-
-    @Slot(str)
-    def deleteQueryTemplate(self, tpl_id_str: str) -> None:
-        import json as _json
-        try:
-            from db.connection import execute
-            tid = int(tpl_id_str)
-            execute("UPDATE tblSmartChartQueryTemplate SET IsActive=0 WHERE ID=?", [tid])
-            logger.info("deleteQueryTemplate: ID=%d deaktiviert", tid)
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveQueryTemplateDeleted(true);')
-        except Exception as e:
-            logger.error('deleteQueryTemplate: %s', e)
-            if self._screen._web: self._screen._web.page().runJavaScript('receiveQueryTemplateDeleted(false);')
-
-    @Slot()
     def getLayoutTemplates(self) -> None:
         import json as _json
         try:
@@ -1729,7 +1389,7 @@ class ReportScreen(QWidget):
     def __init__(self, on_back=None, mode="series", parent=None, sidebar_callbacks: Optional[dict] = None):
         super().__init__(parent)
         self.on_back = on_back
-        self.mode = mode  # "series" = from ShowExperiment | "visual" = from Home (Visual SQL)
+        self.mode = mode  # immer "series" (aus Show Experiment); der Visual-SQL-Modus ist entfernt
         self._series_pk: Optional[int] = None
         self._experiment_request_id: Optional[Any] = None
         self._expreq_popup = None
@@ -1743,8 +1403,7 @@ class ReportScreen(QWidget):
         # Keine TopBar (HeaderBar) mehr (2026-08-27, App-weiter Sidebar-
         # Rollout - siehe screen_home.py::_build_ui()-Docstring). Der frühere
         # Header-Back-Button lebt als kontextueller Back-Chip weiter (gleiches
-        # Muster wie ShowExperimentScreen) - Label je nach `mode` ("Show
-        # Experiment" bzw. "Home").
+        # Muster wie ShowExperimentScreen) - zurück zu Show Experiment.
         self._sidebar, content_layout = sidebar_nav.wrap_body_with_sidebar(root)
 
         tools = QFrame()
@@ -1752,8 +1411,7 @@ class ReportScreen(QWidget):
         tl.setContentsMargins(24, 12, 24, 0)
         tl.setSpacing(8)
 
-        back_label = "Show Experiment" if self.mode == "series" else "Home"
-        self.btn_back_chip = QPushButton(f"← {back_label}")
+        self.btn_back_chip = QPushButton("← Show Experiment")
         self.btn_back_chip.setCursor(Qt.PointingHandCursor)
         self.btn_back_chip.setStyleSheet(
             "QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
@@ -1881,18 +1539,15 @@ class ReportScreen(QWidget):
                 f'<option value="{t}">{t}</option>' for t in _get_known_tables()
             )
             x_axes_js = [{"id": x.get("id"), "key": x["key"], "title": x["title"], "unit": x.get("unit", ""), "field": x["field"], "sub_axis_id": x.get("sub_axis_id"), "is_group_by": x.get("is_group_by", False)} for x in active_x_axes]
-            g_axes_js = [{"key": g["key"], "title": g["title"], "join_sql": g.get("join_sql")} for g in (db_g_axes or [])]
             html = (
                 _HTML_TEMPLATE
                 .replace("{data_json}",     json.dumps(data))
                 .replace("{y_axes_json}",   json.dumps(y_axes_js))
                 .replace("{x_axes_json}",   json.dumps(with_category_axes(x_axes_js)))
-                .replace("{g_axes_json}",   json.dumps(g_axes_js))
                 .replace("{tbl_cols_json}", json.dumps(tbl_cols))
                 .replace("{table_options}", tbl_opts)
                 .replace("{infobox_json}",  json.dumps(infobox))
                 .replace("{primary_series_pk}", str(series_pk))
-                .replace("{is_visual_mode}", "false")
                 .replace("{current_user_json}", json.dumps(str(getattr(__import__("app_meta"), "current_user", {}).get("username","") or "")))
                 .replace("{is_superuser_json}", "true" if app_meta.is_superuser_level() else "false")
                 .replace("{initial_report_id_json}", json.dumps(initial_report_id))
@@ -1962,57 +1617,6 @@ class ReportScreen(QWidget):
             dlg.show()
         except Exception as e:
             QMessageBox.critical(self, "Experiment Request", str(e))
-
-    def load_visual(self) -> None:
-        """Load Smart Chart in Visual SQL mode — no series_pk needed."""
-        self._series_pk = None
-        db_y_axes, db_x_axes, db_g_axes = _load_axes_from_db()
-        active_y = db_y_axes if db_y_axes else Y_AXES
-        active_x = db_x_axes if db_x_axes else X_AXES
-        tbl_cols = _fetch_table_columns()
-
-        if self._web is not None:
-            y_axes_js = [{"key": y["key"], "title": y["title"], "unit": y.get("unit", "")} for y in active_y]
-            x_axes_js = [{"id": x.get("id"), "key": x["key"], "title": x["title"], "unit": x.get("unit", ""), "field": x["field"], "sub_axis_id": x.get("sub_axis_id"), "is_group_by": x.get("is_group_by", False)} for x in active_x]
-            g_axes_js = [{"key": g["key"], "title": g["title"], "join_sql": g.get("join_sql")} for g in (db_g_axes or [])]
-            tbl_opts  = "\n".join(f'<option value="{t}">{t}</option>' for t in _get_known_tables())
-            infobox   = {
-                "series_name": "", "material": "", "machine": "",
-                "air_pressures": [], "overfeeds": [], "speeds": [],
-                "n_trials": 0, "jets": [],
-            }
-            html = (
-                _HTML_TEMPLATE
-                .replace("{data_json}",       json.dumps([]))
-                .replace("{y_axes_json}",     json.dumps(y_axes_js))
-                .replace("{x_axes_json}",     json.dumps(with_category_axes(x_axes_js)))
-                .replace("{tbl_cols_json}",   json.dumps(tbl_cols))
-                .replace("{table_options}",   tbl_opts)
-                .replace("{g_axes_json}",     json.dumps(g_axes_js))
-                .replace("{infobox_json}",    json.dumps(infobox))
-                .replace("{primary_series_pk}", "0")
-                .replace("{is_visual_mode}", "true")
-                .replace("{current_user_json}", json.dumps(str(getattr(__import__("app_meta"), "current_user", {}).get("username","") or "")))
-                .replace("{is_superuser_json}", "true" if app_meta.is_superuser_level() else "false")
-                .replace("{initial_report_id_json}", "null")
-            )
-            # DEBUG: HTML in Datei schreiben
-            try:
-                import tempfile, os
-                _dbg_path = os.path.join(tempfile.gettempdir(), "tripplet_debug.html")
-                with open(_dbg_path, "w", encoding="utf-8") as _dbg:
-                    _dbg.write(html)
-                logger.info("DEBUG HTML: %s", _dbg_path)
-            except Exception as _de:
-                logger.error("DEBUG write failed: %s", _de)
-            try:
-                import tempfile as _tmp, os as _os
-                _p = _os.path.join(_tmp.gettempdir(), "tripplet_debug.html")
-                open(_p, "w", encoding="utf-8").write(html)
-                logger.info("DEBUG HTML: %s", _p)
-            except Exception as _e:
-                logger.error("DEBUG: %s", _e)
-            self._web.setHtml(html, web_base_url())
 
     def _open_help(self) -> None:
         from ui.widgets.multilang_help import show_help

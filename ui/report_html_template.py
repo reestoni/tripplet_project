@@ -50,147 +50,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   /* ── Main layout ── */
   #main-layout { display:flex; flex:1; min-height:0; }
 
-  /* ── SQL Builder Panel ── */
-  #builder-panel {
-    width:320px; min-width:280px; max-width:380px;
-    background:#fff; border-right:1px solid #e0e0e0;
-    display:flex; flex-direction:column; flex-shrink:0;
-    overflow:hidden;
-    /* Smooth slide + fade */
-    transition:
-      width      0.35s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity    0.3s  cubic-bezier(0.4, 0, 0.2, 1),
-      min-width  0.35s cubic-bezier(0.4, 0, 0.2, 1),
-      border-width 0.35s ease;
-    opacity:1;
-  }
-  #builder-panel.hidden {
-    width:0 !important;
-    min-width:0 !important;
-    opacity:0;
-    border-right-width:0;
-    pointer-events:none;
-  }
-
-  /* ── Builder Toggle Arrow ── */
-  #builder-arrow {
-    display:none; /* nur in visual mode */
-    position:absolute; left:0; top:50%; transform:translateY(-50%);
-    z-index:20; width:20px; height:52px;
-    background:linear-gradient(160deg, #1D3557 60%, #2c5f8a);
-    border-radius:0 8px 8px 0;
-    cursor:pointer; align-items:center; justify-content:center;
-    box-shadow:3px 0 10px rgba(29,53,87,0.25);
-    transition:
-      background   0.2s ease,
-      box-shadow   0.2s ease,
-      transform    0.2s ease;
-    flex-shrink:0;
-  }
-  #builder-arrow:hover {
-    background:linear-gradient(160deg, #2c4f7a 60%, #3a7ab8);
-    box-shadow:4px 0 16px rgba(29,53,87,0.38);
-    transform:translateY(-50%) scaleX(1.15);
-  }
-  #builder-arrow:active { transform:translateY(-50%) scaleX(0.95); }
-  #builder-arrow svg {
-    transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
-  }
-  #builder-arrow.open svg { transform:scaleX(-1); }
   #charts-wrapper { position:relative; flex:1; overflow-y:auto; padding:12px; }
-  .builder-header {
-    padding:10px 14px; background:#2c3e50; color:#fff;
-    font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
-    display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
-  }
-  .builder-body { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
-  .builder-section { display:flex; flex-direction:column; gap:6px; }
-  .builder-section-title { font-size:10px; font-weight:700; color:#7a9ab5; text-transform:uppercase; letter-spacing:1px; }
-
-  .builder-select, .builder-input {
-    width:100%; font-size:11px; padding:5px 8px;
-    border:1px solid #d0d0d0; border-radius:4px; background:#fafafa;
-    color:#1a1a2e; outline:none; font-family:inherit;
-  }
-  .builder-select:focus, .builder-input:focus { border-color:#39A650; }
-
-  /* Filter rows */
-  #filter-rows { display:flex; flex-direction:column; gap:6px; }
-  .filter-row {
-    display:grid; grid-template-columns:1fr 80px 1fr 24px;
-    gap:4px; align-items:start;
-  }
-  .filter-row select, .filter-row input {
-    font-size:11px; padding:4px 6px; border:1px solid #d0d0d0;
-    border-radius:4px; background:#fafafa; outline:none; font-family:inherit; width:100%;
-  }
-  .filter-row select:focus, .filter-row input:focus { border-color:#39A650; }
-  .filter-row-remove {
-    width:22px; height:22px; border:none; background:none;
-    color:#ccc; font-size:16px; cursor:pointer; line-height:1;
-    display:flex; align-items:center; justify-content:center; border-radius:3px;
-    padding:0;
-  }
-  .filter-row-remove:hover { color:#c0392b; background:#fef0f0; }
-
-  .btn-add-filter {
-    font-size:11px; padding:4px 10px; border:1px dashed #c8c8c8;
-    border-radius:4px; background:none; cursor:pointer; color:#888;
-    text-align:left; font-family:inherit; transition:all 0.15s;
-  }
-  .btn-add-filter:hover { border-color:#39A650; color:#1D6B32; }
-
-  .btn-run {
-    font-size:12px; font-weight:700; padding:7px 14px;
-    border:none; border-radius:4px; background:#39A650; color:#fff;
-    cursor:pointer; font-family:inherit; transition:background 0.15s;
-    display:flex; align-items:center; justify-content:center; gap:6px;
-  }
-  .btn-run:hover { background:#2d8a40; }
-  .btn-run:disabled { background:#aaa; cursor:default; }
-
-  .builder-divider { height:1px; background:#f0f0f0; margin:2px 0; }
-
-  /* ── Builder Tabs ── */
-  .builder-tabs {
-    display:flex; gap:0; border-bottom:2px solid #e0e0e0; margin-bottom:8px; flex-shrink:0;
-  }
-  .builder-tab {
-    font-size:11px; font-weight:600; padding:5px 14px; cursor:pointer;
-    border:none; background:none; color:#888; border-bottom:2px solid transparent;
-    margin-bottom:-2px; transition:all 0.15s; font-family:inherit; outline:none;
-  }
-  .builder-tab.active { color:#1D3557; border-bottom-color:#1D3557; }
-  .builder-tab:hover:not(.active) { color:#565656; }
-  .builder-tab-panel { display:none; flex-direction:column; gap:10px; flex:1; }
-  .builder-tab-panel.active { display:flex; }
-
-  /* ── Advanced Filter Rows ── */
-  .adv-filter-row {
-    display:grid; grid-template-columns:auto 1fr 70px 1fr 22px;
-    gap:4px; align-items:start; font-size:11px;
-  }
-  .adv-filter-row .adv-connector {
-    font-size:9px; font-weight:700; color:#7a9ab5; padding:5px 2px 0;
-    text-transform:uppercase; white-space:nowrap;
-  }
-  .adv-filter-row select, .adv-filter-row input {
-    font-size:11px; padding:4px 6px; border:1px solid #d0d0d0;
-    border-radius:4px; background:#fafafa; outline:none; font-family:inherit; width:100%;
-  }
-  .adv-filter-row select:focus, .adv-filter-row input:focus { border-color:#1D3557; }
-  .adv-field-select { font-size:11px; padding:4px 6px; border:1px solid #d0d0d0; border-radius:4px; background:#fafafa; outline:none; font-family:inherit; width:100%; }
-  .adv-preview {
-    font-size:9px; color:#7a9ab5; font-family:monospace;
-    background:#f0f4ff; border:1px solid #d8e4f8; border-radius:3px;
-    padding:4px 8px; margin-top:2px; word-break:break-all; white-space:pre-wrap;
-  }
-
-  /* Result info */
-  #result-info {
-    font-size:10px; color:#888; padding:4px 0;
-    border-top:1px solid #f0f0f0; margin-top:4px; flex-shrink:0; padding:6px 12px;
-  }
 
   /* ── Charts area ── */
   #charts-area { flex:1; overflow-y:auto; padding:12px; }
@@ -329,73 +189,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .chart-card.expanded .chart-plot { flex:1; height:auto !important; min-height:0 !important; }
   .btn-expand { font-size:13px; padding:2px 6px; border:none; background:none; cursor:pointer; color:#bbb; border-radius:3px; transition:color 0.15s; }
   .btn-expand:hover { color:#1D3557; }
-
-  /* ── Mode Toggle ── */
-  .builder-mode-toggle {
-    display:flex; gap:0; background:#e8edf2; border-radius:6px;
-    padding:3px; margin-bottom:8px; flex-shrink:0;
-  }
-  .builder-mode-btn {
-    flex:1; padding:5px 8px; border:none; border-radius:4px;
-    font-size:11px; font-weight:600; cursor:pointer; transition:all 0.15s;
-    background:none; color:#7a9ab5; font-family:inherit;
-  }
-  .builder-mode-btn.active {
-    background:#fff; color:#1D3557;
-    box-shadow:0 1px 3px rgba(0,0,0,0.15);
-  }
-
-  /* ── Block Selector ── */
-
-
-  /* ── Free Query Builder ── */
-  .fqb-section { display:flex; flex-direction:column; gap:6px; }
-  .fqb-section-title { font-size:10px; font-weight:700; color:#7a9ab5; text-transform:uppercase; letter-spacing:1px; }
-  .fqb-table-pill {
-    display:flex; align-items:center; gap:5px; padding:3px 8px;
-    border:1px solid #d0d0d0; border-radius:12px; background:#f0f4ff;
-    font-size:11px; color:#1D3557; cursor:default;
-  }
-  .fqb-table-pill .fqb-rm { cursor:pointer; color:#aaa; font-size:13px; margin-left:2px; }
-  .fqb-table-pill .fqb-rm:hover { color:#c0392b; }
-  .fqb-axis-row { display:grid; grid-template-columns:50px 1fr; gap:4px; align-items:center; font-size:11px; }
-  .fqb-axis-row label { color:#565656; font-weight:600; }
-  .fqb-select { font-size:11px; padding:4px 6px; border:1px solid #b0bec8; border-radius:4px; background:#f0f4f8; outline:none; font-family:inherit; width:100%; }
-  .fqb-select:focus { border-color:#1D3557; }
-  .fqb-preview { font-size:9px; color:#7a9ab5; font-family:monospace; background:#f0f4ff; border:1px solid #d8e4f8; border-radius:3px; padding:4px 8px; margin-top:4px; white-space:pre-wrap; word-break:break-all; }
-  #fqb-join-pills { display:flex; flex-wrap:wrap; gap:4px; min-height:20px; }
-
-  /* ── Query Templates ── */
-  .qtpl-list { display:flex; flex-direction:column; gap:5px; max-height:300px; overflow-y:auto; padding:2px 0; }
-  .qtpl-item {
-    display:flex; align-items:center; gap:8px; padding:8px 11px;
-    border:1px solid #e0e0e0; border-radius:5px; cursor:pointer;
-    background:#fafafa; transition:all 0.15s;
-  }
-  .qtpl-item:hover { border-color:#1D3557; background:#eef2ff; }
-  .qtpl-item.selected { border-color:#1D3557; background:#dce8f5; }
-  .qtpl-badge {
-    font-size:9px; font-weight:700; padding:2px 6px; border-radius:8px;
-    white-space:nowrap; flex-shrink:0; text-transform:uppercase; letter-spacing:0.5px;
-  }
-  .qtpl-badge.lvl1 { background:#e8f4fd; color:#1D3557; border:1px solid #b8d8f0; }
-  .qtpl-badge.lvl2 { background:#e8f5ee; color:#1D6B32; border:1px solid #b0ddb8; }
-  .qtpl-badge.lvl3 { background:#fff3cd; color:#856404; border:1px solid #ffd666; }
-  .qtpl-name { font-size:12px; font-weight:600; color:#1a1a2e; flex:1; }
-  .qtpl-desc { font-size:10px; color:#888; }
-  .qtpl-meta { font-size:9px; color:#aaa; margin-top:1px; }
-  .qtpl-actions { display:flex; gap:4px; flex-shrink:0; }
-  .qtpl-btn { font-size:10px; padding:2px 7px; border-radius:3px; border:1px solid #ddd; background:none; cursor:pointer; color:#666; transition:all 0.15s; }
-  .qtpl-btn:hover { border-color:#1D3557; color:#1D3557; background:#eef2ff; }
-  .qtpl-btn.certify { border-color:#e0a800; color:#856404; }
-  .qtpl-btn.certify:hover { background:#fff3cd; }
-  .qtpl-btn.del { border-color:#f0c0c0; color:#c0392b; }
-  .qtpl-btn.del:hover { background:#fef0f0; }
-  .qtpl-save-row { display:flex; flex-direction:column; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid #f0f0f0; }
-  .qtpl-save-row label { font-size:11px; color:#565656; }
-  .qtpl-save-row input, .qtpl-save-row select { font-size:11px; padding:4px 8px; border:1px solid #d0d0d0; border-radius:4px; outline:none; font-family:inherit; }
-  .qtpl-save-row input:focus, .qtpl-save-row select:focus { border-color:#1D3557; }
-  .qtpl-filter-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
 
   /* ── Template Modal ── */
   .template-list { display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto; padding:2px 0; }
@@ -557,8 +350,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <button id="btn-value-notes" class="btn-toolbar" title="Show notes on values (from Show Experiment): values with a note get a purple outline, the note is in the tooltip. Not printed in the PDF unless you tick it there.">Notes</button>
   <button id="btn-legend-order" class="btn-toolbar" title="Legend order &amp; colours">🎨 Legend</button>
   <div class="tb-sep"></div>
-  <button id="btn-toggle-builder" class="btn-toolbar" title="Toggle SQL Builder" style="display:none">⚙ Filter</button>
-  <div class="tb-sep" id="sep-builder" style="display:none"></div>
   <div id="series-list"></div>
   <button id="btn-pick-series" class="btn-toolbar" style="font-weight:600;">📊 Series</button>
   <button id="btn-add-series" class="btn-toolbar">+ Compare</button>
@@ -580,164 +371,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
 <div id="main-layout">
 
-  <!-- SQL Builder Panel (only in visual mode) -->
-  <div id="builder-panel" class="hidden">
-    <div class="builder-header">
-      <span>🔍 Visual SQL Builder</span>
-      <span id="builder-result-count" style="font-size:10px;font-weight:normal;opacity:0.7;"></span>
-    </div>
-    <div class="builder-body">
-
-      <!-- Mode Toggle (nur im Visual Mode sichtbar) -->
-      <div class="builder-mode-toggle" id="builder-mode-toggle" style="display:none;">
-        <button class="builder-mode-btn active" id="btn-mode-trial" onclick="_setBuilderMode('trial')">📊 Trial Data</button>
-        <button class="builder-mode-btn" id="btn-mode-free" onclick="_setBuilderMode('free')">🔓 Free Query</button>
-      </div>
-
-      <!-- ═══ TRIAL DATA PANEL ═══ -->
-      <div id="panel-trial-mode">
-
-        <!-- Group By -->
-        <div class="builder-section" id="builder-groupby-section" style="flex-shrink:0;">
-          <div class="builder-section-title">Group by (Legend)</div>
-          <select class="builder-select" id="b-groupby">
-            <option value="jet">Jet</option>
-          </select>
-        </div>
-
-        <div class="builder-divider" id="builder-groupby-divider" style="flex-shrink:0;"></div>
-
-        <!-- Filter Tabs -->
-        <div class="builder-tabs" style="flex-shrink:0;">
-          <button class="builder-tab active" id="tab-simple">Simple</button>
-          <button class="builder-tab" id="tab-advanced">Advanced</button>
-        </div>
-
-        <!-- Simple Tab -->
-        <div class="builder-tab-panel active" id="panel-simple">
-          <div class="builder-section">
-            <div id="filter-rows"></div>
-            <button class="btn-add-filter" id="btn-add-filter">+ Add Filter</button>
-          </div>
-        </div>
-
-        <!-- Advanced Tab -->
-        <div class="builder-tab-panel" id="panel-advanced">
-          <div class="builder-section">
-            <div id="adv-filter-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
-            <button class="btn-add-filter" id="btn-add-adv-filter">+ Add Condition</button>
-          </div>
-          <div class="adv-preview" id="adv-preview" style="display:none;"></div>
-        </div>
-
-        <!-- Trial Series -->
-        <div class="builder-divider" style="flex-shrink:0;margin-top:4px;"></div>
-        <div class="builder-section" id="builder-series-section" style="flex-shrink:0;">
-          <div class="builder-section-title">Trial Series</div>
-          <select class="builder-select" id="b-series" size="5" multiple style="height:105px;">
-            <option value="">Loading...</option>
-          </select>
-          <div style="font-size:10px;color:#aaa;margin-top:3px;">Hold Ctrl to select multiple</div>
-        </div>
-
-      </div>
-
-      <!-- ═══ FREE QUERY PANEL ═══ -->
-      <div id="panel-free-mode" style="display:none;flex-direction:column;gap:10px;">
-
-      <!-- Block Selector -->
-        <div class="fqb-section" style="flex-shrink:0;">
-          <div class="fqb-section-title">Configure Chart</div>
-          <select class="builder-select" id="fqb-block-selector">
-            <option value="0">Chart 1</option>
-          </select>
-        </div>
-
-      <!-- Free Query Tab (content) -->
-      <div id="panel-free">
-        <div class="fqb-section">
-          <div class="fqb-section-title">Chart Title</div>
-          <input type="text" id="fqb-chart-title" placeholder="e.g. Jet Geometry Overview"
-            style="width:100%;font-size:11px;padding:5px 8px;border:1px solid #d0d0d0;border-radius:4px;background:#fafafa;outline:none;font-family:inherit;box-sizing:border-box;">
-        </div>
-        <div class="fqb-section">
-          <div class="fqb-section-title">Chart Type</div>
-          <select class="fqb-select" id="fqb-chart-type">
-            <option value="scatter">◉ Scatter</option>
-            <option value="bar">▦ Bar</option>
-            <option value="stack">▦ Stacked Bar</option>
-            <option value="line">╱ Line</option>
-            <option value="box">⊡ Box Plot</option>
-            <option value="heat">⊞ Heatmap</option>
-            <option value="3d">◈ 3D</option>
-          </select>
-        </div>
-        <div class="fqb-section">
-          <div class="fqb-section-title">Base Table</div>
-          <select class="fqb-select" id="fqb-base-table">
-            <option value="">— Select table —</option>
-          </select>
-        </div>
-        <div class="fqb-section" id="fqb-join-section" style="display:none;">
-          <div class="fqb-section-title">Add Tables (JOIN)</div>
-          <div style="display:flex;gap:4px;">
-            <select class="fqb-select" id="fqb-join-select" style="flex:1;"><option value="">— Available tables —</option></select>
-            <button class="btn-add-filter" id="btn-fqb-add-join" style="white-space:nowrap;padding:4px 8px;">+ Join</button>
-          </div>
-          <div id="fqb-join-pills"></div>
-        </div>
-        <div class="fqb-section" id="fqb-axes-section" style="display:none;">
-          <div class="fqb-section-title">Axes &amp; Fields</div>
-          <div class="fqb-axis-row"><label>X</label><select class="fqb-select" id="fqb-x"></select></div>
-          <div class="fqb-axis-row"><label>Y</label><select class="fqb-select" id="fqb-y"></select></div>
-          <div class="fqb-axis-row" id="fqb-row-z" style="display:none;"><label>Z</label><select class="fqb-select" id="fqb-z"><option value="">— none —</option></select></div>
-          <div class="fqb-axis-row" id="fqb-row-color"><label>Color</label><select class="fqb-select" id="fqb-color"><option value="">— none —</option></select></div>
-          <div class="fqb-axis-row" id="fqb-row-label"><label>Label</label><select class="fqb-select" id="fqb-label"><option value="">— none —</option></select></div>
-        </div>
-        <div class="fqb-section" id="fqb-filter-section" style="display:none;">
-          <div class="fqb-section-title">Where</div>
-          <div id="fqb-filter-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
-          <button class="btn-add-filter" id="btn-fqb-add-filter">+ Add Filter</button>
-        </div>
-        <div class="fqb-section" id="fqb-groupby-section" style="display:none;">
-          <div class="fqb-section-title">Group By (Legend)</div>
-          <select class="fqb-select" id="fqb-groupby">
-            <option value="">— none —</option>
-          </select>
-        </div>
-        <div class="fqb-section" id="fqb-series-section" style="display:none;">
-          <div class="fqb-section-title">Trial Series (optional)</div>
-          <select class="fqb-select" id="fqb-series-sel" size="4" multiple style="height:88px;">
-            <option value="">Loading...</option>
-          </select>
-          <div style="font-size:10px;color:#aaa;margin-top:3px;">Hold Ctrl for multiple</div>
-        </div>
-        <div class="fqb-section" id="fqb-limit-section" style="display:none;">
-          <div class="fqb-section-title">Limit</div>
-          <input type="number" id="fqb-limit" value="500" min="1" max="5000" class="fqb-select" style="width:100px;">
-        </div>
-        <div class="fqb-preview" id="fqb-sql-preview" style="display:none;"></div>
-      </div><!-- end panel-free -->
-
-      </div><!-- end panel-free-mode -->
-
-    </div>
-
-    <div style="padding:10px 12px;border-top:1px solid #f0f0f0;flex-shrink:0;display:flex;gap:6px;">
-      <button class="btn-run" id="btn-run-query" style="flex:1;">▶ Run Query</button>
-      <button class="btn-run" id="btn-query-templates" style="background:#1D3557;flex-shrink:0;padding:7px 10px;" title="Query Templates">📋</button>
-    </div>
-    <div id="result-info"></div>
-  </div>
-
   <!-- Charts wrapper (right side of main-layout) -->
   <div id="charts-wrapper" style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative;">
-    <!-- Builder Toggle Arrow (visual mode only) -->
-    <div id="builder-arrow" title="Toggle SQL Builder">
-      <svg id="builder-arrow-svg" width="10" height="16" viewBox="0 0 10 16" fill="none">
-        <polyline points="7,2 2,8 7,14" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
     <div id="global-note-bar" style="display:none;margin-bottom:10px;background:#fffef5;border:1px solid #e0d88a;border-radius:6px;padding:10px 14px;flex-direction:column;gap:6px;">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:11px;font-weight:700;color:#7a6000;">📝 Report Note</span>
@@ -847,44 +482,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 </div>
 
-<!-- Query Templates Modal -->
-<div class="modal-backdrop" id="modal-query-templates">
-  <div class="modal" style="min-width:560px;max-width:680px;">
-    <h3>📋 Query Templates</h3>
-
-    <!-- Filter Tabs -->
-    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
-      <button class="qtpl-btn" id="qtpl-tab-all" style="border-color:#1D3557;color:#1D3557;">All</button>
-      <button class="qtpl-btn" id="qtpl-tab-1">👤 Personal</button>
-      <button class="qtpl-btn" id="qtpl-tab-2">👥 Shared</button>
-      <button class="qtpl-btn" id="qtpl-tab-3">⭐ Certified</button>
-    </div>
-
-    <div class="qtpl-list" id="qtpl-list-container">
-      <div style="padding:20px;text-align:center;color:#aaa;font-size:12px;">Loading...</div>
-    </div>
-
-    <!-- Save current query as template -->
-    <div class="qtpl-save-row" id="qtpl-save-section">
-      <label>💾 Save current query as template:</label>
-      <input type="text" id="qtpl-name" placeholder="Template name...">
-      <input type="text" id="qtpl-desc" placeholder="Description (optional)">
-      <div class="qtpl-filter-row">
-        <select id="qtpl-level">
-          <option value="1">👤 Personal (only me)</option>
-          <option value="2">👥 Shared (all users)</option>
-        </select>
-        <button class="btn-ok" id="btn-qtpl-save" style="padding:4px 14px;">Save</button>
-      </div>
-    </div>
-
-    <div class="modal-footer">
-      <button class="btn-cancel" id="qtpl-modal-cancel">Close</button>
-      <button class="btn-ok" id="btn-qtpl-apply" disabled>Apply Template</button>
-    </div>
-  </div>
-</div>
-
 <!-- Layout Templates Modal -->
 <div class="modal-backdrop" id="modal-templates">
   <div class="modal" style="min-width:520px;">
@@ -944,11 +541,9 @@ var CURRENT_USER  = {current_user_json};
 var IS_SUPERUSER  = {is_superuser_json};
 var Y_AXES        = {y_axes_json};
 var X_AXES        = {x_axes_json};
-var G_AXES        = {g_axes_json};
 var TBL_COLS      = {tbl_cols_json};
 var INFOBOX       = {infobox_json};
 var PRIMARY_PK    = {primary_series_pk};
-var IS_VISUAL     = {is_visual_mode};  // true = Visual SQL mode
 var INITIAL_REPORT_ID = {initial_report_id_json};  // gesetzt, wenn ueber das
   // "Go!"-Dropdown in Show Experiment direkt ein bestimmter Report geoeffnet
   // werden soll (siehe screen_show_experiment.py/screen_report.py::load_series())
@@ -1206,319 +801,19 @@ function _buildReferenceAnnotations(lines){
 var _primarySplit = _splitReferences(DATA);
 var SERIES_REGISTRY = [{pk:PRIMARY_PK, name:INFOBOX.series_name||('Series '+PRIMARY_PK), color:'#39A650', data:_primarySplit.data, refs:_primarySplit.refs, machine:INFOBOX.machine||'', material:INFOBOX.material||''}];
 
-// ── SQL Builder ───────────────────────────────────────────────────────────────
-var _allSeriesForBuilder = [];
-
-// Filter field definitions
-var FILTER_FIELDS = [
-  {key:'jet',          label:'Jet',               type:'lookup'},
-  {key:'yarn',         label:'Yarn',              type:'lookup'},
-  {key:'machine',      label:'Machine',           type:'lookup'},
-  {key:'air_pressure', label:'Air Pressure (bar)',type:'numeric'},
-  {key:'overfeed',     label:'Overfeed (%)',      type:'numeric'},
-  {key:'speed',        label:'Speed (m/min)',     type:'numeric'},
-  {key:'jet_plate',    label:'Jet Plate Number',  type:'numeric'},
-];
-var _lookupCache = {};
-var _pendingSelects = {};
-
-function populateValueSelect(sel, values){
-  sel.innerHTML = values.map(function(v){
-    return '<option value="'+v+'">'+v+'</option>';
-  }).join('');
-}
-
-function receiveFilterValues(fieldKey, values){
-  _lookupCache[fieldKey] = values;
-  (_pendingSelects[fieldKey]||[]).forEach(function(sel){
-    if(sel.parentNode) populateValueSelect(sel, values);
-  });
-  _pendingSelects[fieldKey] = [];
-}
-
-function initBuilder(){
-  if(!IS_VISUAL){
-    // Sicherheit: Panel und Pfeil in Series-Mode komplett versteckt
-    var p=document.getElementById('builder-panel');
-    var a=document.getElementById('builder-arrow');
-    if(p) p.classList.add('hidden');
-    if(a) a.style.display='none';
-    return;
-  }
-
-  // Pfeil-Button sichtbar, Panel ist per default offen
-  var arrow = document.getElementById('builder-arrow');
-  if(arrow){
-    arrow.style.display = 'flex';
-    arrow.classList.add('open'); // default: offen
-  }
-  // Panel öffnen
-  var panel = document.getElementById('builder-panel');
-  if(panel) panel.classList.remove('hidden');
-
-  // Alter toggle-builder Button ausblenden (Pfeil übernimmt)
-  document.getElementById('btn-toggle-builder').style.display='none';
-  document.getElementById('sep-builder').style.display='none';
-
-  // In Visual-Mode: "Compare" ausblenden, Series-Picker bleibt
-  document.getElementById('btn-add-series').style.display='none';
-
-  if(_bridge){
-    _bridge.getSeriesList();
-    FILTER_FIELDS.filter(function(f){return f.type==='lookup';}).forEach(function(f){
-      _bridge.getFilterValues(f.key);
-    });
-  }
-  document.getElementById('btn-add-filter').addEventListener('click', function(){ addFilterRow(); });
-  document.getElementById('btn-run-query').addEventListener('click', runQuery);
-  document.getElementById('btn-query-templates').addEventListener('click', openQueryTemplatesModal);
-  initFilterTabs();
-  initFreeQueryTab();
-  _populateGroupBy();
-
-  if(IS_VISUAL){
-    // Mode Toggle einblenden
-    var toggle = document.getElementById('builder-mode-toggle');
-    if(toggle) toggle.style.display='flex';
-    // Standard: Trial Mode
-    _setBuilderMode('trial');
-  }
-
-  // Pfeil-Button Toggle
-  function _toggleBuilder(){
-    var panel  = document.getElementById('builder-panel');
-    var hidden = panel.classList.toggle('hidden');
-    arrow.classList.toggle('open', !hidden);
-  }
-  arrow.addEventListener('click', _toggleBuilder);
-  addFilterRow();
-}
-
-var _filterCount = 0;
-function addFilterRow(prefill){
-  var row = document.createElement('div');
-  row.className = 'filter-row';
-  row.id = 'frow_'+(++_filterCount);
-
-  var selField = document.createElement('select');
-  selField.innerHTML = FILTER_FIELDS.map(function(f){
-    return '<option value="'+f.key+'">'+f.label+'</option>';
-  }).join('');
-
-  var selOp = document.createElement('select');
-
-  var valContainer = document.createElement('div');
-  valContainer.style.cssText = 'flex:1;min-width:0;';
-
-  function updateRow(){
-    var fdef = FILTER_FIELDS.find(function(f){return f.key===selField.value;})||FILTER_FIELDS[0];
-    var ops  = fdef.type==='numeric' ? ['=','!=','>','<','>=','<='] : ['=','!='];
-    selOp.innerHTML = ops.map(function(o){return'<option value="'+o+'">'+o+'</option>';}).join('');
-    valContainer.innerHTML='';
-    if(fdef.type==='numeric'){
-      var inp=document.createElement('input');
-      inp.type='number'; inp.step='any'; inp.placeholder='Value';
-      inp.className='filter-value-widget';
-      inp.style.cssText='width:100%;font-size:11px;padding:4px 6px;border:1px solid #d0d0d0;border-radius:4px;background:#fafafa;outline:none;font-family:inherit;';
-      valContainer.appendChild(inp);
-    } else {
-      var sel=document.createElement('select');
-      sel.className='filter-value-widget';
-      sel.multiple=true;
-      sel.size=4;
-      sel.style.cssText='width:100%;font-size:11px;padding:2px 4px;border:1px solid #d0d0d0;border-radius:4px;background:#fafafa;outline:none;font-family:inherit;';
-      sel.title='Hold Ctrl to select multiple';
-      if(_lookupCache[fdef.key]&&_lookupCache[fdef.key].length){
-        populateValueSelect(sel, _lookupCache[fdef.key]);
-      } else {
-        sel.innerHTML='<option value="">Loading...</option>';
-        _pendingSelects[fdef.key]=_pendingSelects[fdef.key]||[];
-        _pendingSelects[fdef.key].push(sel);
-        if(_bridge) _bridge.getFilterValues(fdef.key);
-      }
-      // hint label
-      var hint=document.createElement('div');
-      hint.style.cssText='font-size:9px;color:#aaa;margin-top:2px;';
-      hint.textContent='Ctrl+Click for multiple';
-      valContainer.appendChild(sel);
-      valContainer.appendChild(hint);
-    }
-  }
-
-  selField.addEventListener('change', updateRow);
-  var btnRm=document.createElement('button');
-  btnRm.className='filter-row-remove'; btnRm.textContent='×';
-  btnRm.addEventListener('click',function(){document.getElementById('filter-rows').removeChild(row);});
-
-  row.appendChild(selField);
-  row.appendChild(selOp);
-  row.appendChild(valContainer);
-  row.appendChild(btnRm);
-  document.getElementById('filter-rows').appendChild(row);
-  updateRow();
-  // Vorausgefüllte Werte setzen falls vorhanden
-  if(prefill){
-    selField.value = prefill.filterKey || selField.value;
-    updateRow(); // Neu rendern mit richtigem Feld
-    if(prefill.op && selOp) selOp.value = prefill.op;
-    setTimeout(function(){
-      var w = row.querySelector('.filter-value-widget');
-      if(!w) return;
-      if(prefill.values && w.tagName==='SELECT'){
-        for(var i=0;i<w.options.length;i++){
-          w.options[i].selected = prefill.values.indexOf(w.options[i].value)!==-1;
-        }
-      } else if(prefill.value !== undefined){
-        w.value = prefill.value;
-      }
-    }, 100);
-  }
-}
-
-function getFilters(){
-  var rows=document.getElementById('filter-rows').querySelectorAll('.filter-row');
-  var filters=[];
-  rows.forEach(function(row){
-    var selField=row.querySelector('select');
-    var selOp=row.querySelectorAll('select')[1];
-    var widget=row.querySelector('.filter-value-widget');
-    if(!widget)return;
-    var fdef=FILTER_FIELDS.find(function(f){return f.key===selField.value;})||FILTER_FIELDS[0];
-    // For multi-select, collect all selected values
-    if(fdef.type==='lookup' && widget.tagName==='SELECT'){
-      var selected=[];
-      for(var oi=0;oi<widget.options.length;oi++){
-        if(widget.options[oi].selected&&widget.options[oi].value)
-          selected.push(widget.options[oi].value);
-      }
-      if(selected.length===0)return;
-      filters.push({filterKey:fdef.key, type:fdef.type, op:'IN', values:selected});
-    } else {
-      if(!widget.value||!widget.value.trim())return;
-      filters.push({filterKey:fdef.key, type:fdef.type, op:selOp?selOp.value:'=', value:widget.value.trim()});
-    }
-  });
-  return filters;
-}
-
-function getSelectedSeries(){
-  var sel=document.getElementById('b-series'),pks=[];
-  for(var i=0;i<sel.options.length;i++){if(sel.options[i].selected&&sel.options[i].value)pks.push(parseInt(sel.options[i].value));}
-  return pks;
-}
-
+// ── Group-by X axis ───────────────────────────────────────────────────────────
+// Wechsel der X-Achse auf/von einer Achse mit is_group_by (rebuildGrid) fuehrt
+// die Abfrage ueber alle Serien neu aus (runVisualQuery). Das fruehere Builder-
+// Panel des Visual-Modus (entfernt) lieferte dazu Serien/Gruppierung/Filter -
+// im Series-Modus waren die immer leer bzw. 'jet'.
 function runQuery(){
-  var btn=document.getElementById('btn-run-query');
-  btn.disabled=true; btn.textContent='⏳ Running...';
-  if(_builderMode==='free'||_activeFilterTab==='free'){
-    var cfg=getFreeQueryConfig();
-    if(!cfg.baseTable||!cfg.xField||!cfg.yField){
-      btn.disabled=false;btn.textContent='▶ Run Query';
-      alert('Please select Base Table, X and Y fields.');
-      return;
-    }
-    cfg._blockIdx = _activeFqbBlockIdx;
-    _saveFqbStateForBlock(_activeFqbBlockIdx);
-    if(_bridge) _bridge.runFreeQuery(JSON.stringify(cfg));
-    return;
-  }
-  var simpleFilters = _activeFilterTab==='advanced' ? [] : getFilters();
-  var advFilters    = _activeFilterTab==='advanced' ? getAdvFilters() : [];
-  if(_bridge) _bridge.runVisualQuery(
-    JSON.stringify(getSelectedSeries()),
-    document.getElementById('b-groupby').value,
-    JSON.stringify(simpleFilters),
-    JSON.stringify(advFilters)
-  );
-}
-
-function getFreeQuerySeriesPKs(){
-  var sel = document.getElementById('fqb-series-sel');
-  if(!sel) return [];
-  var pks=[];
-  for(var i=0;i<sel.options.length;i++){
-    if(sel.options[i].selected&&sel.options[i].value) pks.push(parseInt(sel.options[i].value));
-  }
-  return pks;
+  if(_bridge) _bridge.runVisualQuery('[]', 'jet', '[]', '[]');
 }
 
 function receiveQueryResult(data, resultCount){
   _resetLegendOverrides();
   SERIES_REGISTRY=[{pk:0,name:'Query Result',color:'#39A650',data:data,machine:'',material:''}];
-  document.getElementById('result-info').textContent=resultCount+' rows found';
-  var btn=document.getElementById('btn-run-query');btn.disabled=false;btn.textContent='▶ Run Query';
   renderSeriesPills();buildInfobox();refreshAllCharts();
-}
-
-function receiveFreeQueryResult(rows, resultCount, cfg){
-  // Free Query: Scatter/Bar mit X/Y/Color aus freien Feldern
-  document.getElementById('result-info').textContent=resultCount+' rows';
-  var btn=document.getElementById('btn-run-query');btn.disabled=false;btn.textContent='▶ Run Query';
-  // Achsentitel aus cfg extrahieren (table::field → field)
-  function _fqbLabel(fieldStr){
-    if(!fieldStr) return '';
-    var p=fieldStr.split('::');
-    return p.length>1 ? p[1] : fieldStr;
-  }
-  _fqbXTitle     = _fqbLabel(cfg.xField);
-  _fqbYTitle     = _fqbLabel(cfg.yField);
-  _fqbColorTitle = _fqbLabel(cfg.colorField);
-  _fqbLabelTitle = _fqbLabel(cfg.labelField);
-  if(!rows||!rows.length){ refreshAllCharts(); return; }
-  // Chart direkt als Scatter aufbauen
-  var xKey   = '__fqb_x';
-  var yKey   = '__fqb_y';
-  var colorKey = cfg.colorField ? '__fqb_color' : null;
-  var labelKey = cfg.labelField ? '__fqb_label' : null;
-  // Daten normalisieren
-  var data = rows.map(function(r){
-    // jet_name = Color-Feld für Legende, Label separat für Punkt-Beschriftung
-    var d = {trial_id:0, trial_nr:0,
-             jet_name: colorKey ? (r['__fqb_color']||'?') : (labelKey ? '' : '?')};
-    var _rawX=r['__fqb_x']; var _numX=parseFloat(_rawX); d[xKey]=isNaN(_numX)?(_rawX||''):_numX;
-    d[yKey]   = parseFloat(r['__fqb_y']);
-    if(colorKey) d[colorKey] = r['__fqb_color']||'';
-    if(labelKey) d[labelKey] = r['__fqb_label']||'';
-    return d;
-  });
-  // Daten im Block-State speichern
-  var blockIdx = (cfg._blockIdx !== undefined) ? parseInt(cfg._blockIdx) : _activeFqbBlockIdx;
-  if(!_blockFqbStates[blockIdx]) _blockFqbStates[blockIdx] = {};
-  _blockFqbStates[blockIdx].data   = data;
-  _blockFqbStates[blockIdx].xKey      = xKey;
-  _blockFqbStates[blockIdx].yKey      = yKey;
-  _blockFqbStates[blockIdx].xTitle    = _fqbXTitle;
-  _blockFqbStates[blockIdx].yTitle    = _fqbYTitle;
-  _blockFqbStates[blockIdx].chartTitle = cfg.chartTitle || '';
-  // Chart-State für diesen Block setzen (Chart-Typ beibehalten)
-  var s = getState(blockIdx);
-  if(s.blockType !== 'image'){
-    // Chart-Typ aus FQB übernehmen
-    var fqbType = cfg.chartType || 'scatter';
-    s.chartType = fqbType;
-    s.xField = xKey;
-    s.yKey   = yKey;
-    // Z-Feld für 3D/Heatmap
-    if(cfg.zField && (fqbType==='3d'||fqbType==='heat')){
-      s.zField = '__fqb_z';
-    }
-    chartStates[blockIdx] = s;
-  }
-  // SERIES_REGISTRY temporär auf diesen Block setzen und nur diesen Chart rendern
-  SERIES_REGISTRY = [{pk:0, name:'Free Query', color:'#39A650', data:data, machine:'', material:''}];
-  renderSeriesPills(); buildInfobox();
-  // Nur den aktiven Block neu rendern
-  if(document.getElementById('chart_'+blockIdx)){
-    updateChart(blockIdx);
-  } else {
-    rebuildGrid();
-  }
-}
-
-function populateBuilderSeriesList(list){
-  _allSeriesForBuilder=list;
-  var sel=document.getElementById('b-series');
-  sel.innerHTML=list.map(function(s){return'<option value="'+s.pk+'">'+s.name+'</option>';}).join('');
 }
 
 // ── Slicer ────────────────────────────────────────────────────────────────────
@@ -1731,8 +1026,6 @@ function getLegendLabel(jetKey){
 }
 
 // ── Y/X title helpers ─────────────────────────────────────────────────────────
-// FQB: aktiver Block-Index
-var _activeFqbBlockIdx = 0;
 var _expandedChartIdx = null;
 
 function _expandChart(idx){
@@ -1814,85 +1107,8 @@ function _collapseChart(){
     }
   }, 50);
 }
-// Pro Block: {fqbConfig, fqbData}
-var _blockFqbStates = {};
-
-function _syncFqbBlockSelector(){
-  var sel = document.getElementById('fqb-block-selector');
-  if(!sel) return;
-  var total = Math.max(1, parseInt(document.getElementById('inp-count').value)||1);
-  var cur = _activeFqbBlockIdx;
-  sel.innerHTML = '';
-  for(var i=0; i<total; i++){
-    var opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = 'Chart ' + (i+1);
-    if(i===cur) opt.selected = true;
-    sel.appendChild(opt);
-  }
-}
-
-function _saveFqbStateForBlock(idx){
-  // Aktuellen Builder-State für Block speichern
-  var cfg = getFreeQueryConfig ? getFreeQueryConfig() : null;
-  if(!cfg||!cfg.baseTable) return;
-  if(!_blockFqbStates[idx]) _blockFqbStates[idx] = {};
-  _blockFqbStates[idx].config = cfg;
-}
-
-function _loadFqbStateForBlock(idx){
-  var state = _blockFqbStates[idx];
-  if(!state||!state.config) return;
-  var cfg = state.config;
-  // Base Table
-  var bt = document.getElementById('fqb-base-table');
-  if(bt && cfg.baseTable) bt.value = cfg.baseTable;
-  // Trigger change um JOINs + Felder zu laden
-  if(bt) bt.dispatchEvent(new Event('change'));
-  // Nach kurzer Verzögerung Rest setzen
-  setTimeout(function(){
-    // Joins neu aufbauen
-    _fqbActiveTables = [cfg.baseTable];
-    (cfg.joinTables||[]).forEach(function(jt){ _fqbActiveTables.push(jt); });
-    _fqbRenderJoinPills();
-    _fqbUpdateJoinSelect();
-    _fqbUpdateAxes();
-    // Achsen setzen
-    setTimeout(function(){
-      var fx=document.getElementById('fqb-x'),fy=document.getElementById('fqb-y'),
-          fc=document.getElementById('fqb-color'),fl=document.getElementById('fqb-label');
-      var fct=document.getElementById('fqb-chart-type');
-      if(fct&&cfg.chartType) fct.value=cfg.chartType;
-      _fqbUpdateFieldVisibility();
-      var ftitle=document.getElementById('fqb-chart-title');
-      if(ftitle) ftitle.value=cfg.chartTitle||'';
-      var gbEl=document.getElementById('fqb-groupby');
-      if(gbEl&&cfg.groupBy) gbEl.value=cfg.groupBy;
-      var seSel=document.getElementById('fqb-series-sel');
-      if(seSel&&cfg.seriesPKs&&cfg.seriesPKs.length){
-        for(var si=0;si<seSel.options.length;si++){
-          seSel.options[si].selected=cfg.seriesPKs.indexOf(parseInt(seSel.options[si].value))!==-1;
-        }
-      }
-      if(fx&&cfg.xField) fx.value=cfg.xField;
-      if(fy&&cfg.yField) fy.value=cfg.yField;
-      var fz=document.getElementById('fqb-z');
-      if(fz) fz.value=cfg.zField||'';
-      if(fc) fc.value=cfg.colorField||'';
-      if(fl) fl.value=cfg.labelField||'';
-      // Filter neu aufbauen
-      document.getElementById('fqb-filter-rows').innerHTML='';
-      _fqbFilterCnt=0;
-      (cfg.filters||[]).forEach(function(f){ _fqbAddFilterRow(f); });
-      // Limit
-      var lim=document.getElementById('fqb-limit');
-      if(lim) lim.value=cfg.limit||500;
-      _fqbUpdatePreview();
-    }, 150);
-  }, 100);
-}
-
-// FQB Achsentitel (gesetzt von receiveFreeQueryResult)
+// FQB Achsentitel (frueher von receiveFreeQueryResult im Visual-Modus gesetzt, jetzt
+// immer leer - nur noch fuer alte Visual-Reports mit '__fqb_x'-Bloecken relevant)
 var _fqbXTitle = '', _fqbYTitle = '', _fqbColorTitle = '', _fqbLabelTitle = '', _fqbChartTitle = '';
 
 function getYTitle(yKey){
@@ -2689,15 +1905,6 @@ function _updateSdButton(){
 }
 function updateChart(idx){
   var s=getState(idx),el=document.getElementById('chart_'+idx);if(!el)return;
-  // FQB-Daten für diesen Block laden falls vorhanden
-  var _bfs=_blockFqbStates[idx];
-  if(_bfs&&_bfs.data&&_bfs.data.length){
-    SERIES_REGISTRY=[{pk:0,name:'Free Query',color:'#39A650',data:_bfs.data,machine:'',material:''}];
-    _fqbXTitle=_bfs.xTitle||'';_fqbYTitle=_bfs.yTitle||'';
-    _fqbChartTitle=_bfs.chartTitle||'';
-  } else {
-    _fqbChartTitle='';
-  }
   var ct=s.chartType||'bar';
   var dmb=ct==='3d';
   var yKeys=s.yKeys&&s.yKeys.length?s.yKeys:[s.yKey||(Y_AXES[0]?Y_AXES[0].key:'titer')];
@@ -2705,11 +1912,6 @@ function updateChart(idx){
   var xUse=useX2?_comboField(s.xField,s.x2Field):s.xField;
   var traces=buildTracesForKeys(ct,xUse,s.zField,yKeys);
   var layout=makeLayoutForKeys(ct,xUse,s.zField,yKeys,_lastNJets);
-  // FQB Chart-Titel überschreiben falls gesetzt
-  if(_fqbChartTitle && s.xField && s.xField.indexOf('__fqb')===0){
-    if(layout.title) layout.title.text='<b>'+_fqbChartTitle+'</b>';
-    else layout.title={text:'<b>'+_fqbChartTitle+'</b>'};
-  }
   // Kategoriewerte explizit aus Traces ableiten → kein Achsen-Caching
   if(useX2){
     _toMulticategory(traces,layout,ct,s);
@@ -3025,7 +2227,6 @@ function receiveSeriesList(list){
   list.sort(function(a,b){return b.pk-a.pk;});
   _allSeriesList=list;
   if(document.getElementById('modal-series').classList.contains('open'))renderSeriesListModal(list);
-  if(IS_VISUAL)populateBuilderSeriesList(list);
 }
 function receiveSeriesData(pk,name,color,data,meta){
   var existing=SERIES_REGISTRY.findIndex(function(s){return s.pk===pk;});
@@ -3154,7 +2355,6 @@ new QWebChannel(qt.webChannelTransport,function(channel){
   _bridge=channel.objects.bridge;
   _bridge.getSeriesList();
   _bridge.getLayoutTemplates();
-  if(IS_VISUAL)initBuilder();
   if(INITIAL_REPORT_ID) _bridge.loadReport(String(INITIAL_REPORT_ID));
 });
 function receiveFreeFieldData(chartIdx,yKey,values){DATA.forEach(function(d){var v=values[d.trial_id];d[yKey]=(v!==undefined&&v!==null)?v:null;});updateChart(chartIdx);}
@@ -3331,823 +2531,11 @@ function applyDefaultTemplate(){
   if(def) applyTemplate(def);
 }
 
-// ── Free Query Builder ───────────────────────────────────────────────────────
-var _fqbTables      = [];   // [{tableName, displayLabel}]
-var _fqbJoinPaths   = {};   // {fromTable: [{toTable, joinSQL}]}
-var _fqbActiveTables= [];   // [tableName] — Basistabelle + gejointen Tabellen
-var _fqbColumns     = {};   // {tableName: [colName]}
-var _fqbFilterCount = 0;
-
-// Welche Felder pro Chart-Typ sichtbar sind
-var FQB_CHART_FIELDS = {
-  scatter: {z:false, color:true,  label:true,  xLabel:'X',          yLabel:'Y'},
-  bar:     {z:false, color:true,  label:false, xLabel:'X (Kategorie)', yLabel:'Y (Wert)'},
-  stack:   {z:false, color:true,  label:false, xLabel:'X (Kategorie)', yLabel:'Y (Wert)'},
-  line:    {z:false, color:true,  label:false, xLabel:'X',          yLabel:'Y'},
-  box:     {z:false, color:false, label:false, xLabel:'X (Kategorie)', yLabel:'Y (Wert)'},
-  heat:    {z:true,  color:false, label:false, xLabel:'X',          yLabel:'Y'},
-  '3d':    {z:true,  color:true,  label:false, xLabel:'X',          yLabel:'Y'},
-};
-
-function _fqbUpdateFieldVisibility(){
-  var ct = document.getElementById('fqb-chart-type');
-  if(!ct) return;
-  var type = ct.value || 'scatter';
-  var cfg  = FQB_CHART_FIELDS[type] || FQB_CHART_FIELDS.scatter;
-  // Z-Feld
-  var rowZ = document.getElementById('fqb-row-z');
-  if(rowZ) rowZ.style.display = cfg.z ? '' : 'none';
-  // Color
-  var rowC = document.getElementById('fqb-row-color');
-  if(rowC) rowC.style.display = cfg.color ? '' : 'none';
-  // Label
-  var rowL = document.getElementById('fqb-row-label');
-  if(rowL) rowL.style.display = cfg.label ? '' : 'none';
-  // X/Y Labels anpassen
-  var axRows = document.querySelectorAll('#fqb-axes-section .fqb-axis-row');
-  axRows.forEach(function(row){
-    var lbl = row.querySelector('label');
-    var sel = row.querySelector('select');
-    if(!lbl||!sel) return;
-    if(sel.id==='fqb-x') lbl.textContent = cfg.xLabel;
-    if(sel.id==='fqb-y') lbl.textContent = cfg.yLabel;
-  });
-  // Z-Achsen-Label
-  if(cfg.z){
-    var rowZlbl = document.querySelector('#fqb-row-z label');
-    if(rowZlbl) rowZlbl.textContent = type==='heat' ? 'Value' : 'Z';
-  }
-}
-
-function initFreeQueryTab(){
-  // Block-Selector EventListener
-  var blockSel = document.getElementById('fqb-block-selector');
-  if(blockSel){
-    blockSel.addEventListener('change', function(){
-      // State des aktuellen Blocks speichern
-      _saveFqbStateForBlock(_activeFqbBlockIdx);
-      // Neuen Block laden
-      _activeFqbBlockIdx = parseInt(this.value)||0;
-      _loadFqbStateForBlock(_activeFqbBlockIdx);
-    });
-  }
-
-  // Chart-Typ Change
-  var ctSel = document.getElementById('fqb-chart-type');
-  if(ctSel){
-    ctSel.addEventListener('change', function(){
-      _fqbUpdateFieldVisibility();
-      _fqbUpdatePreview();
-    });
-    _fqbUpdateFieldVisibility(); // Initial
-  }
-
-  // tab-free wird nicht mehr als Tab verwendet — Mode Toggle übernimmt
-  var _tabFreeEl = document.getElementById('tab-free');
-  if(_tabFreeEl) _tabFreeEl.addEventListener('click', function(){
-    _activeFilterTab = 'free';
-    if(_fqbTables.length===0 && _bridge) _bridge.getFreeQueryMeta();
-  });
-
-  document.getElementById('fqb-base-table').addEventListener('change', function(){
-    var tbl = this.value;
-    _fqbActiveTables = tbl ? [tbl] : [];
-    _fqbUpdateJoinSelect();
-    _fqbUpdateAxes();
-    _fqbUpdatePreview();
-    document.getElementById('fqb-join-section').style.display    = tbl ? '' : 'none';
-    document.getElementById('fqb-axes-section').style.display    = tbl ? '' : 'none';
-    document.getElementById('fqb-filter-section').style.display  = tbl ? '' : 'none';
-    document.getElementById('fqb-groupby-section').style.display = tbl ? '' : 'none';
-    document.getElementById('fqb-series-section').style.display  = tbl ? '' : 'none';
-    document.getElementById('fqb-limit-section').style.display   = tbl ? '' : 'none';
-    document.getElementById('fqb-join-pills').innerHTML = '';
-  });
-
-  document.getElementById('btn-fqb-add-join').addEventListener('click', function(){
-    var sel = document.getElementById('fqb-join-select');
-    var tbl = sel.value;
-    if(!tbl || _fqbActiveTables.indexOf(tbl)!==-1) return;
-    _fqbActiveTables.push(tbl);
-    _fqbRenderJoinPills();
-    _fqbUpdateJoinSelect();
-    _fqbUpdateAxes();
-    _fqbUpdatePreview();
-    sel.value = '';
-  });
-
-  document.getElementById('btn-fqb-add-filter').addEventListener('click', function(){
-    _fqbAddFilterRow();
-  });
-}
-
-function receiveFreeQueryMeta(tables, joinPaths, columns){
-  _fqbTables    = tables;
-  _fqbJoinPaths = joinPaths;
-  _fqbColumns   = columns;
-  // Group By Dropdown im Free Tab befüllen
-  var gbSel = document.getElementById('fqb-groupby');
-  if(gbSel && G_AXES && G_AXES.length){
-    gbSel.innerHTML = '<option value="">— none —</option>' +
-      G_AXES.map(function(g){return'<option value="'+g.key+'">'+g.title+'</option>';}).join('');
-  }
-  // Trial Series im Free Tab befüllen
-  var seSel = document.getElementById('fqb-series-sel');
-  if(seSel && _allSeriesForBuilder && _allSeriesForBuilder.length){
-    seSel.innerHTML = _allSeriesForBuilder.map(function(s){
-      return'<option value="'+s.pk+'">'+s.name+'</option>';
-    }).join('');
-  }
-
-
-  var sel = document.getElementById('fqb-base-table');
-  sel.innerHTML = '<option value="">— Select table —</option>' +
-    tables.map(function(t){
-      return '<option value="'+t.tableName+'">'+t.displayLabel+'</option>';
-    }).join('');
-}
-
-function _fqbUpdateJoinSelect(){
-  var sel = document.getElementById('fqb-join-select');
-
-  // Erreichbare Tabellen: aus JoinPaths von allen aktiven Tabellen
-  var reachable = [];
-  _fqbActiveTables.forEach(function(tbl){
-    var paths = _fqbJoinPaths[tbl] || [];
-    paths.forEach(function(p){
-      if(_fqbActiveTables.indexOf(p.toTable)===-1 &&
-         reachable.indexOf(p.toTable)===-1){
-        reachable.push(p.toTable);
-      }
-    });
-  });
-  sel.innerHTML = '<option value="">— Available tables —</option>' +
-    reachable.map(function(t){
-      var meta = _fqbTables.find(function(x){return x.tableName===t;});
-      var label = meta ? meta.displayLabel : t;
-      return '<option value="'+t+'">'+label+'</option>';
-    }).join('');
-}
-
-function _fqbRenderJoinPills(){
-  var container = document.getElementById('fqb-join-pills');
-  container.innerHTML = '';
-  // Nur gejointen Tabellen (ohne Basistabelle)
-  _fqbActiveTables.slice(1).forEach(function(tbl){
-    var meta = _fqbTables.find(function(x){return x.tableName===tbl;});
-    var label = meta ? meta.displayLabel : tbl;
-    var pill = document.createElement('span');
-    pill.className = 'fqb-table-pill';
-    pill.innerHTML = label + '<span class="fqb-rm" data-tbl="'+tbl+'">×</span>';
-    pill.querySelector('.fqb-rm').addEventListener('click', function(){
-      var t = this.dataset.tbl;
-      _fqbActiveTables = _fqbActiveTables.filter(function(x){return x!==t;});
-      _fqbRenderJoinPills();
-      _fqbUpdateJoinSelect();
-      _fqbUpdateAxes();
-      _fqbUpdatePreview();
-    });
-    container.appendChild(pill);
-  });
-}
-
-function _fqbGetAllColumns(){
-  // Alle Spalten aller aktiven Tabellen als [{table, col, label}]
-  var result = [];
-  _fqbActiveTables.forEach(function(tbl){
-    var cols = _fqbColumns[tbl] || [];
-    var meta = _fqbTables.find(function(x){return x.tableName===tbl;});
-    var tblLabel = meta ? meta.displayLabel : tbl;
-    cols.forEach(function(col){
-      result.push({table:tbl, col:col, label:tblLabel+'.'+col, value:tbl+'::'+col});
-    });
-  });
-  return result;
-}
-
-function _fqbUpdateAxes(){
-  var cols = _fqbGetAllColumns();
-  var opts = '<option value="">— none —</option>' +
-    cols.map(function(c){return'<option value="'+c.value+'">'+c.label+'</option>';}).join('');
-  var optsReq = cols.map(function(c){return'<option value="'+c.value+'">'+c.label+'</option>';}).join('');
-  document.getElementById('fqb-x').innerHTML     = optsReq;
-  document.getElementById('fqb-y').innerHTML     = optsReq;
-  var fqbZ = document.getElementById('fqb-z');
-  if(fqbZ) fqbZ.innerHTML = opts;
-  document.getElementById('fqb-color').innerHTML = opts;
-  document.getElementById('fqb-label').innerHTML = opts;
-  _fqbUpdateFieldVisibility();
-  // Filter-Felder aktualisieren
-  _fqbUpdateFilterFields();
-}
-
-function _fqbUpdateFilterFields(){
-  // Bestehende Filter-Rows neu befüllen mit aktuellen Feldern
-  var opts = _fqbGetAllColumns().map(function(c){
-    return '<option value="'+c.value+'">'+c.label+'</option>';
-  }).join('');
-  document.querySelectorAll('#fqb-filter-rows .fqb-field-sel').forEach(function(sel){
-    var cur = sel.value;
-    sel.innerHTML = '<option value="">— Field —</option>'+opts;
-    if(cur) sel.value = cur;
-  });
-}
-
-var _fqbFilterCnt = 0;
-function _fqbAddFilterRow(prefill){
-  var container = document.getElementById('fqb-filter-rows');
-  var isFirst   = container.children.length===0;
-  var cols      = _fqbGetAllColumns();
-  var rowIdx    = ++_fqbFilterCnt;
-
-  var row = document.createElement('div');
-  row.className='adv-filter-row'; row.id='fqbrow_'+rowIdx;
-
-  var conn=document.createElement('div');conn.className='adv-connector';
-  conn.textContent=isFirst?'WHERE':'AND';
-
-  var selField=document.createElement('select');
-  selField.className='adv-field-select fqb-field-sel';
-  selField.innerHTML='<option value="">— Field —</option>'+
-    cols.map(function(c){return'<option value="'+c.value+'">'+c.label+'</option>';}).join('');
-
-  var selOp=document.createElement('select');
-  selOp.style.cssText='font-size:11px;padding:4px;border:1px solid #d0d0d0;border-radius:4px;background:#fafafa;outline:none;font-family:inherit;width:100%;';
-  selOp.innerHTML=['=','!=','>','<','>=','<=','LIKE','NOT LIKE','IS NULL','IS NOT NULL'].map(function(o){
-    return'<option value="'+o+'">'+o+'</option>';
-  }).join('');
-
-  var inp=document.createElement('input');
-  inp.type='text';inp.placeholder='Value...';
-  inp.style.cssText='width:100%;font-size:11px;padding:4px 6px;border:1px solid #d0d0d0;border-radius:4px;background:#fafafa;outline:none;font-family:inherit;';
-  inp.addEventListener('input',_fqbUpdatePreview);
-
-  selOp.addEventListener('change',function(){
-    inp.style.display=(this.value==='IS NULL'||this.value==='IS NOT NULL')?'none':'';
-    _fqbUpdatePreview();
-  });
-  selField.addEventListener('change',_fqbUpdatePreview);
-
-  var btnRm=document.createElement('button');
-  btnRm.style.cssText='width:22px;height:22px;border:none;background:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;border-radius:3px;';
-  btnRm.textContent='×';
-  btnRm.addEventListener('click',function(){
-    container.removeChild(row);
-    Array.from(container.children).forEach(function(r,i){
-      var c2=r.querySelector('.adv-connector');if(c2)c2.textContent=i===0?'WHERE':'AND';
-    });
-    _fqbUpdatePreview();
-  });
-
-  row.appendChild(conn);row.appendChild(selField);row.appendChild(selOp);row.appendChild(inp);row.appendChild(btnRm);
-  container.appendChild(row);
-
-  if(prefill){
-    selField.value=prefill.field||'';
-    if(prefill.op) selOp.value=prefill.op;
-    if(prefill.value) inp.value=prefill.value;
-    if(prefill.op==='IS NULL'||prefill.op==='IS NOT NULL') inp.style.display='none';
-  }
-  _fqbUpdatePreview();
-}
-
-function _fqbGetFilters(){
-  var result=[];
-  document.querySelectorAll('#fqb-filter-rows .adv-filter-row').forEach(function(row){
-    var f=row.querySelector('.fqb-field-sel');
-    var o=row.querySelector('select:not(.fqb-field-sel)');
-    var v=row.querySelector('input');
-    if(!f||!f.value) return;
-    var parts=f.value.split('::');
-    var op=o?o.value:'=';
-    if(op==='IS NULL'||op==='IS NOT NULL'){result.push({table:parts[0],field:parts[1],op:op,value:null});return;}
-    if(!v||!v.value.trim()) return;
-    result.push({table:parts[0],field:parts[1],op:op,value:v.value.trim()});
-  });
-  return result;
-}
-
-function _fqbUpdatePreview(){
-  var preview=document.getElementById('fqb-sql-preview');
-  if(!preview) return;
-  var base=document.getElementById('fqb-base-table').value;
-  if(!base){preview.style.display='none';return;}
-  var xVal=document.getElementById('fqb-x').value;
-  var yVal=document.getElementById('fqb-y').value;
-  var colorVal=document.getElementById('fqb-color').value;
-  var filters=_fqbGetFilters();
-  var limit=document.getElementById('fqb-limit').value||500;
-  var lines=['SELECT'];
-  var selCols=[];
-  if(xVal) selCols.push(xVal.replace('::','.'));
-  if(yVal) selCols.push(yVal.replace('::','.'));
-  if(colorVal) selCols.push(colorVal.replace('::','.'));
-  lines.push('  '+(selCols.length?selCols.join(', '):'*'));
-  lines.push('FROM '+base);
-  _fqbActiveTables.slice(1).forEach(function(tbl){
-    var path=(_fqbJoinPaths[base]||[]).find(function(p){return p.toTable===tbl;}) ||
-             (_fqbJoinPaths[_fqbActiveTables[0]]||[]).find(function(p){return p.toTable===tbl;});
-    if(path) lines.push(path.joinSQL);
-  });
-  if(filters.length){
-    filters.forEach(function(f,i){
-      var prefix=i===0?'WHERE':'AND  ';
-      var expr=f.table+'.'+f.field+' '+f.op+((f.op==='IS NULL'||f.op==='IS NOT NULL')?'':' '+f.value);
-      lines.push(prefix+' '+expr);
-    });
-  }
-  lines.push('LIMIT '+limit);
-  preview.style.display='block';
-  preview.textContent=lines.join(String.fromCharCode(10));
-}
-
-function getFreeQueryConfig(){
-  var xVal=document.getElementById('fqb-x').value;
-  var yVal=document.getElementById('fqb-y').value;
-  var colorVal=document.getElementById('fqb-color').value;
-  var labelVal=document.getElementById('fqb-label').value;
-  var ctEl=document.getElementById('fqb-chart-type');
-  var zEl =document.getElementById('fqb-z');
-  var titleEl=document.getElementById('fqb-chart-title');
-  var gbEl=document.getElementById('fqb-groupby');
-  var seSel=document.getElementById('fqb-series-sel');
-  var seriesPKs=[];
-  if(seSel){for(var i=0;i<seSel.options.length;i++){if(seSel.options[i].selected&&seSel.options[i].value)seriesPKs.push(parseInt(seSel.options[i].value));}}
-  return {baseTable:    document.getElementById('fqb-base-table').value,
-    joinTables:   _fqbActiveTables.slice(1),
-    chartType:    ctEl ? ctEl.value : 'scatter',
-    chartTitle:   titleEl ? titleEl.value.trim() : '',
-    xField:       xVal,
-    yField:       yVal,
-    zField:       zEl ? zEl.value : '',
-    colorField:   colorVal,
-    labelField:   labelVal,
-    groupBy:      gbEl ? gbEl.value : '',
-    seriesPKs:    seriesPKs,
-    filters:      _fqbGetFilters(),
-    limit:        parseInt(document.getElementById('fqb-limit').value)||500,
-  };
-}
-
-// ── Advanced Filter ──────────────────────────────────────────────────────────
-var _advFields = [];
-var _advFilterCount = 0;
-var _activeFilterTab = 'simple';
-
-var _builderMode = 'trial'; // 'trial' | 'free'
-
-function _setBuilderMode(mode){
-  _builderMode = mode;
-  // Toggle Buttons
-  document.getElementById('btn-mode-trial').classList.toggle('active', mode==='trial');
-  document.getElementById('btn-mode-free').classList.toggle('active',  mode==='free');
-  // Panels
-  document.getElementById('panel-trial-mode').style.display = mode==='trial' ? '' : 'none';
-  document.getElementById('panel-free-mode').style.display  = mode==='free'  ? 'flex' : 'none';
-  // Block-Selector ist im Free Panel — automatisch sichtbar wenn Panel sichtbar
-  // activeFilterTab
-  _activeFilterTab = mode==='free' ? 'free' : 'simple';
-  if(mode==='free' && _fqbTables.length===0 && _bridge) _bridge.getFreeQueryMeta();
-  // Block-Selector aktualisieren
-  _syncFqbBlockSelector();
-  // Grid neu bauen damit Toolbars korrekt sind
-  rebuildGrid();
-}
-
-function _fqbPopulateAxesFromTrialData(){
-  // X-Achsen aus X_AXES
-  var xSel = document.getElementById('fqb-x');
-  var ySel = document.getElementById('fqb-y');
-  if(!xSel||!ySel) return;
-  var xOpts = X_AXES.filter(function(a){return !a.hidden;}).map(function(a){
-    var l=a.unit?a.title+' ('+a.unit+')':a.title;
-    return '<option value="'+a.key+'">'+l+'</option>';
-  }).join('');
-  var yOpts = Y_AXES.map(function(a){
-    var l=a.unit?a.title+' ('+a.unit+')':a.title;
-    return '<option value="'+a.key+'">'+l+'</option>';
-  }).join('');
-  xSel.innerHTML = xOpts;
-  ySel.innerHTML = yOpts;
-  // Color + Label aus G_AXES
-  var colorSel = document.getElementById('fqb-color');
-  var labelSel = document.getElementById('fqb-label');
-  var gOpts = '<option value="">— none —</option>'+
-    G_AXES.map(function(g){return'<option value="'+g.key+'">'+g.title+'</option>';}).join('');
-  if(colorSel) colorSel.innerHTML = gOpts;
-  if(labelSel) labelSel.innerHTML = gOpts;
-  // Group By
-  var gbSel = document.getElementById('fqb-groupby');
-  if(gbSel && G_AXES.length){
-    gbSel.innerHTML = '<option value="">— none —</option>'+
-      G_AXES.map(function(g){return'<option value="'+g.key+'">'+g.title+'</option>';}).join('');
-  }
-  _fqbUpdateFieldVisibility();
-}
-
-function _populateGroupBy(){
-  var sel = document.getElementById('b-groupby');
-  if(!sel) return;
-  var current = sel.value;
-  // Komplett aus G_AXES (DB) — keine Hardcodes
-  if(G_AXES && G_AXES.length){
-    sel.innerHTML = G_AXES.map(function(g){
-      return '<option value="'+g.key+'"'+(g.key===current?' selected':'')+'>'+g.title+'</option>';
-    }).join('');
-  }
-}
-
-function initFilterTabs(){
-  document.getElementById('tab-simple').addEventListener('click', function(){
-    _activeFilterTab='simple';
-    this.classList.add('active');
-    document.getElementById('tab-advanced').classList.remove('active');
-    document.getElementById('panel-simple').classList.add('active');
-    document.getElementById('panel-advanced').classList.remove('active');
-  });
-  document.getElementById('tab-advanced').addEventListener('click', function(){
-    _activeFilterTab='advanced';
-    this.classList.add('active');
-    document.getElementById('tab-simple').classList.remove('active');
-    document.getElementById('panel-advanced').classList.add('active');
-    document.getElementById('panel-simple').classList.remove('active');
-    if(_advFields.length===0 && _bridge) _bridge.getAdvancedFilterFields();
-  });
-  document.getElementById('btn-add-adv-filter').addEventListener('click', function(){ addAdvFilterRow(); });
-  // tab-free existiert nicht mehr in den Tabs — wird über Mode Toggle gesteuert
-  var tabFree = document.getElementById('tab-free');
-  if(tabFree) tabFree.style.display='none';
-}
-
-function receiveAdvancedFilterFields(fields){
-  _advFields = fields;
-  var container = document.getElementById('adv-filter-rows');
-  if(container && container.children.length===0) addAdvFilterRow();
-  _updateAdvPreview();
-}
-
-function receiveAdvancedFieldValues(tableField, values){
-  _advFields.forEach(function(f){
-    if((f.table+'::'+f.field)===tableField) f.lookupVals=values;
-  });
-  document.querySelectorAll('[data-lookup="'+tableField+'"]').forEach(function(sel){
-    var prev = Array.from(sel.selectedOptions).map(function(o){return o.value;});
-    sel.innerHTML = values.map(function(v){
-      return '<option value="'+v+'"'+(prev.indexOf(v)!==-1?' selected':'')+'>'+v+'</option>';
-    }).join('');
-  });
-}
-
-function addAdvFilterRow(prefill){
-  var container = document.getElementById('adv-filter-rows');
-  if(!container) return;
-  var isFirst = container.children.length===0;
-  var rowIdx  = ++_advFilterCount;
-
-  var row = document.createElement('div');
-  row.className='adv-filter-row'; row.id='advrow_'+rowIdx;
-
-  var conn = document.createElement('div');
-  conn.className='adv-connector';
-  conn.textContent = isFirst ? 'WHERE' : 'AND';
-
-  var selField = document.createElement('select');
-  selField.className='adv-field-select';
-  selField.innerHTML='<option value="">— Field —</option>'+
-    _advFields.map(function(f){
-      return '<option value="'+f.table+'::'+f.field+'">'+f.label+'</option>';
-    }).join('');
-
-  var selOp = document.createElement('select');
-  selOp.style.cssText='font-size:11px;padding:4px;border:1px solid #d0d0d0;border-radius:4px;background:#fafafa;outline:none;font-family:inherit;width:100%;';
-
-  var valWrap = document.createElement('div');
-  valWrap.style.cssText='min-width:0;';
-
-  function getOpsForType(type){
-    if(type==='numeric') return ['=','!=','>','<','>=','<=','IS NULL'];
-    if(type==='lookup')  return ['=','!=','IN','IS NULL'];
-    return ['=','!=','LIKE','IS NULL'];
-  }
-
-  function buildValueWidget(fdef, op){
-    valWrap.innerHTML='';
-    if(op==='IS NULL'){
-      var s=document.createElement('span');
-      s.style.cssText='font-size:10px;color:#aaa;padding:5px 4px;display:block;';
-      s.textContent='(no value)'; valWrap.appendChild(s); return;
-    }
-    if(fdef && (fdef.type==='lookup') && op!=='LIKE'){
-      var sel=document.createElement('select');
-      sel.multiple=true; sel.size=3;
-      sel.style.cssText='width:100%;font-size:11px;padding:2px 4px;border:1px solid #d0d0d0;border-radius:4px;background:#fafafa;outline:none;font-family:inherit;';
-      sel.dataset.lookup=fdef.table+'::'+fdef.field;
-      if(fdef.lookupVals && fdef.lookupVals.length){
-        sel.innerHTML=fdef.lookupVals.map(function(v){return'<option value="'+v+'">'+v+'</option>';}).join('');
-      } else {
-        sel.innerHTML='<option>Loading...</option>';
-        if(_bridge) _bridge.getAdvancedFieldValues(fdef.table,fdef.field);
-      }
-      sel.addEventListener('change',_updateAdvPreview);
-      valWrap.appendChild(sel);
-    } else {
-      var inp=document.createElement('input');
-      inp.type=(fdef&&fdef.type==='numeric')?'number':'text';
-      inp.step='any'; inp.placeholder='Value...';
-      inp.style.cssText='width:100%;font-size:11px;padding:4px 6px;border:1px solid #d0d0d0;border-radius:4px;background:#fafafa;outline:none;font-family:inherit;';
-      inp.addEventListener('input',_updateAdvPreview);
-      valWrap.appendChild(inp);
-    }
-  }
-
-  function refreshRow(){
-    var parts=(selField.value||'').split('::');
-    var fdef=_advFields.find(function(f){return f.table===parts[0]&&f.field===parts[1];})||null;
-    var ops=getOpsForType(fdef?fdef.type:'text');
-    selOp.innerHTML=ops.map(function(o){return'<option value="'+o+'">'+o+'</option>';}).join('');
-    buildValueWidget(fdef, selOp.value);
-    _updateAdvPreview();
-  }
-
-  selField.addEventListener('change', refreshRow);
-  selOp.addEventListener('change', function(){
-    var parts=(selField.value||'').split('::');
-    var fdef=_advFields.find(function(f){return f.table===parts[0]&&f.field===parts[1];})||null;
-    buildValueWidget(fdef,selOp.value);
-    _updateAdvPreview();
-  });
-
-  var btnRm=document.createElement('button');
-  btnRm.style.cssText='width:22px;height:22px;border:none;background:none;color:#ccc;font-size:16px;cursor:pointer;padding:0;border-radius:3px;';
-  btnRm.textContent='×';
-  btnRm.addEventListener('click',function(){
-    container.removeChild(row);
-    // WHERE/AND Labels neu setzen
-    Array.from(container.children).forEach(function(r,i){
-      var c2=r.querySelector('.adv-connector');
-      if(c2) c2.textContent=i===0?'WHERE':'AND';
-    });
-    _updateAdvPreview();
-  });
-
-  row.appendChild(conn); row.appendChild(selField); row.appendChild(selOp);
-  row.appendChild(valWrap); row.appendChild(btnRm);
-  container.appendChild(row);
-
-  // Prefill
-  if(prefill){
-    var matchField=_advFields.find(function(f){return f.table===prefill.table&&f.field===prefill.field;});
-    if(matchField) selField.value=prefill.table+'::'+prefill.field;
-    refreshRow();
-    if(prefill.op) selOp.value=prefill.op;
-    setTimeout(function(){
-      buildValueWidget(matchField||null,selOp.value);
-      setTimeout(function(){
-        var w=valWrap.querySelector('input,select');
-        if(!w) return;
-        if(prefill.values && w.tagName==='SELECT'){
-          Array.from(w.options).forEach(function(o){o.selected=prefill.values.indexOf(o.value)!==-1;});
-        } else if(prefill.value!==undefined){ w.value=prefill.value; }
-        _updateAdvPreview();
-      },120);
-    },50);
-  } else {
-    refreshRow();
-  }
-}
-
-function getAdvFilters(){
-  var rows=document.querySelectorAll('#adv-filter-rows .adv-filter-row');
-  var result=[];
-  rows.forEach(function(row){
-    var selField=row.querySelector('.adv-field-select');
-    var selOp=row.querySelector('select:not(.adv-field-select)');
-    if(!selField||!selField.value) return;
-    var parts=selField.value.split('::');
-    var table=parts[0],field=parts[1];
-    var op=selOp?selOp.value:'=';
-    if(op==='IS NULL'){ result.push({table,field,op,value:null,values:[]}); return; }
-    var w=row.querySelector('.filter-value-widget, input, select:not(.adv-field-select):not([data-lookup])');
-    // Lookup multi-select
-    var lookup=row.querySelector('[data-lookup]');
-    if(lookup){
-      var vals=Array.from(lookup.selectedOptions).map(function(o){return o.value;}).filter(Boolean);
-      if(!vals.length) return;
-      result.push({table,field,op:'IN',value:null,values:vals});
-    } else {
-      var inp=row.querySelector('input');
-      if(!inp||!inp.value.trim()) return;
-      result.push({table,field,op,value:inp.value.trim(),values:[]});
-    }
-  });
-  return result;
-}
-
-function _updateAdvPreview(){
-  var preview=document.getElementById('adv-preview');
-  if(!preview) return;
-  var filters=getAdvFilters();
-  if(!filters.length){ preview.style.display='none'; return; }
-  preview.style.display='block';
-  preview.textContent=filters.map(function(f,i){
-    var prefix=i===0?'WHERE':'AND  ';
-    if(f.op==='IS NULL') return prefix+f.table+'.'+f.field+' IS NULL';
-    if(f.op==='IN') return prefix+f.table+'.'+f.field+' IN ('+f.values.join(', ')+')';
-    return prefix+f.table+'.'+f.field+' '+f.op+' '+f.value;
-  }).join(String.fromCharCode(10));
-}
-
-// ── Query Templates ──────────────────────────────────────────────────────────
-var _allQueryTemplates = [], _selectedQTplId = null, _qtplTabFilter = 0;
-var IS_SUPERUSER = false; // wird vom Bridge gesetzt
-
-function openQueryTemplatesModal(){
-  _selectedQTplId = null;
-  document.getElementById('btn-qtpl-apply').disabled = true;
-  document.getElementById('qtpl-name').value = '';
-  document.getElementById('qtpl-desc').value = '';
-  document.getElementById('modal-query-templates').classList.add('open');
-  if(_bridge){ _bridge.getQueryTemplates(); _bridge.checkSuperuser(); }
-}
-
-function receiveQueryTemplates(templates){
-  _allQueryTemplates = templates;
-  _renderQTplList();
-}
-
-function receiveIsSuperuser(val){
-  IS_SUPERUSER = !!val;
-  // Superuser darf Level 3 Option anbieten
-  var lvlSel = document.getElementById('qtpl-level');
-  if(lvlSel && IS_SUPERUSER){
-    if(!lvlSel.querySelector('option[value="3"]')){
-      var opt = document.createElement('option');
-      opt.value='3'; opt.textContent='⭐ Certified (superuser only)';
-      lvlSel.appendChild(opt);
-    }
-  }
-  _renderQTplList(); // re-render mit Superuser-Buttons
-}
-
-function _renderQTplList(){
-  var container = document.getElementById('qtpl-list-container');
-  if(!container) return;
-  container.innerHTML = '';
-
-  var filtered = _allQueryTemplates.filter(function(t){
-    if(_qtplTabFilter === 0) return true;
-    return t.visibilityLevel === _qtplTabFilter;
-  });
-
-  if(!filtered.length){
-    container.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa;font-size:12px;">No templates found</div>';
-    return;
-  }
-
-  var levelLabel = ['','👤 Personal','👥 Shared','⭐ Certified'];
-  var levelClass = ['','lvl1','lvl2','lvl3'];
-
-  filtered.forEach(function(tpl){
-    var item = document.createElement('div');
-    item.className = 'qtpl-item';
-    item.dataset.id = tpl.id;
-
-    var badge = document.createElement('span');
-    badge.className = 'qtpl-badge ' + (levelClass[tpl.visibilityLevel]||'lvl1');
-    badge.textContent = levelLabel[tpl.visibilityLevel]||'Personal';
-
-    var info = document.createElement('div');info.style.flex='1';info.style.minWidth='0';
-    var name = document.createElement('div');name.className='qtpl-name';name.textContent=tpl.name;
-    var meta = document.createElement('div');meta.className='qtpl-meta';
-    meta.textContent = 'By '+tpl.createdBy + (tpl.certifiedBy?' • ⭐ '+tpl.certifiedBy:'');
-    if(tpl.description){var desc=document.createElement('div');desc.className='qtpl-desc';desc.textContent=tpl.description;info.appendChild(desc);}
-    info.appendChild(name);info.appendChild(meta);
-
-    var actions = document.createElement('div');actions.className='qtpl-actions';
-
-    // Certify Button (nur Superuser, nur Level 2)
-    if(IS_SUPERUSER && tpl.visibilityLevel === 2){
-      var btnCert = document.createElement('button');
-      btnCert.className='qtpl-btn certify';btnCert.textContent='⭐ Certify';
-      btnCert.addEventListener('click',function(e){
-        e.stopPropagation();
-        if(confirm('Certify "'+tpl.name+'" as Level 3?'))
-          if(_bridge) _bridge.certifyQueryTemplate(String(tpl.id));
-      });
-      actions.appendChild(btnCert);
-    }
-
-    // Delete Button (eigene oder Superuser)
-    var currentUser = CURRENT_USER || '';
-    if(tpl.createdBy === currentUser || IS_SUPERUSER){
-      var btnDel = document.createElement('button');
-      btnDel.className='qtpl-btn del';btnDel.textContent='✕';
-      btnDel.addEventListener('click',function(e){
-        e.stopPropagation();
-        if(confirm('Delete "'+tpl.name+'"?'))
-          if(_bridge) _bridge.deleteQueryTemplate(String(tpl.id));
-      });
-      actions.appendChild(btnDel);
-    }
-
-    item.appendChild(badge);item.appendChild(info);item.appendChild(actions);
-    item.addEventListener('click',function(){
-      container.querySelectorAll('.qtpl-item').forEach(function(el){el.classList.remove('selected');});
-      item.classList.add('selected');
-      _selectedQTplId = tpl.id;
-      document.getElementById('btn-qtpl-apply').disabled = false;
-    });
-    item.addEventListener('dblclick',function(){
-      _applyQueryTemplate(tpl);
-      document.getElementById('modal-query-templates').classList.remove('open');
-    });
-    container.appendChild(item);
-  });
-}
-
-function _applyQueryTemplate(tpl){
-  // GroupBy setzen
-  var gb = document.getElementById('b-groupby');
-  if(gb && tpl.groupBy) gb.value = tpl.groupBy;
-
-  // Series setzen
-  var ser = document.getElementById('b-series');
-  if(ser && tpl.seriesPKs && tpl.seriesPKs.length){
-    for(var i=0;i<ser.options.length;i++){
-      ser.options[i].selected = tpl.seriesPKs.indexOf(parseInt(ser.options[i].value)) !== -1;
-    }
-  }
-
-  // Filter-Rows neu aufbauen
-  document.getElementById('filter-rows').innerHTML = '';
-  _filterCount = 0;
-  if(tpl.filters && tpl.filters.length){
-    tpl.filters.forEach(function(f){
-      addFilterRow(f);
-    });
-  } else {
-    addFilterRow();
-  }
-
-  runQuery();
-}
-
-// Tab-Buttons
-['all','1','2','3'].forEach(function(tab){
-  var btn = document.getElementById('qtpl-tab-'+(tab==='all'?'all':tab));
-  if(!btn) return;
-  btn.addEventListener('click',function(){
-    _qtplTabFilter = tab==='all' ? 0 : parseInt(tab);
-    document.querySelectorAll('[id^="qtpl-tab-"]').forEach(function(b){
-      b.style.borderColor=''; b.style.color='';
-    });
-    this.style.borderColor='#1D3557'; this.style.color='#1D3557';
-    _renderQTplList();
-  });
-});
-
-document.getElementById('btn-qtpl-apply').addEventListener('click',function(){
-  var tpl = _allQueryTemplates.find(function(t){return t.id===_selectedQTplId;});
-  if(tpl){ _applyQueryTemplate(tpl); document.getElementById('modal-query-templates').classList.remove('open'); }
-});
-
-document.getElementById('btn-qtpl-save').addEventListener('click',function(){
-  var name = document.getElementById('qtpl-name').value.trim();
-  if(!name){ document.getElementById('qtpl-name').style.borderColor='#e74c3c'; return; }
-  document.getElementById('qtpl-name').style.borderColor='';
-  var level = parseInt(document.getElementById('qtpl-level').value)||1;
-  var payload = {
-    name:        name,
-    description: document.getElementById('qtpl-desc').value.trim(),
-    visibilityLevel: level,
-    groupBy:     document.getElementById('b-groupby').value,
-    filters:     getFilters(),
-    seriesPKs:   getSelectedSeries(),
-    createdBy:   CURRENT_USER||'',
-  };
-  if(_bridge) _bridge.saveQueryTemplate(JSON.stringify(payload));
-});
-
-document.getElementById('qtpl-modal-cancel').addEventListener('click',function(){
-  document.getElementById('modal-query-templates').classList.remove('open');
-});
-document.getElementById('modal-query-templates').addEventListener('click',function(e){
-  if(e.target===this) this.classList.remove('open');
-});
-
-function receiveQueryTemplateSaved(success, message){
-  if(success){
-    document.getElementById('qtpl-name').value='';
-    document.getElementById('qtpl-desc').value='';
-    if(_bridge) _bridge.getQueryTemplates();
-  } else { alert('Save failed: '+message); }
-}
-function receiveQueryTemplateDeleted(success){
-  if(success && _bridge) _bridge.getQueryTemplates();
-}
-function receiveQueryTemplateCertified(success){
-  if(success && _bridge) _bridge.getQueryTemplates();
-}
+// Ueberschreibt den Wert aus Python (is_superuser_json, Kopf) beim Laden - stand
+// frueher im Abschnitt Query Templates (Visual-Modus, entfernt) und wurde dort
+// per checkSuperuser() gesetzt; bewusst unveraendert gelassen, Layout Templates
+// (Overwrite-Knopf beim Standard-Template) lesen IS_SUPERUSER.
+var IS_SUPERUSER = false;
 
 // ── PDF Template (global, called by Bridge) ───────────────────────────────
 var _pdfTemplates = [];
@@ -4323,8 +2711,6 @@ function rebuildGrid(){
   var _wasExpanded = _expandedChartIdx;
   var _scrollContainer = document.getElementById('charts-wrapper');
   var _scrollY = _scrollContainer ? _scrollContainer.scrollTop : (window.scrollY || 0);
-  // Block-Selector aktualisieren
-  _syncFqbBlockSelector();
   var grid=document.getElementById('grid');
   // Ursprüngliche X-Felder für Drill-Down-Reset merken (nur wenn Stack leer)
   if(_drillStack.length === 0){
@@ -4415,202 +2801,174 @@ function rebuildGrid(){
       btnGrid.className='btn-gridline';btnGrid.textContent='± Line';btnGrid.title='Click, then click on the chart to place a horizontal reference line (drag it afterwards to move it, Esc to cancel)';
       toolbar.appendChild(dragHandle);
 
-      var _hasFqb = IS_VISUAL && _builderMode === 'free';
-      if(_hasFqb){
-        // ── Free Query Block: nur Focus-Button ──
-        var btnFocus=document.createElement('button');
-        btnFocus.className='btn-toolbar';
-        btnFocus.style.cssText='font-weight:600;color:#1D3557;font-size:11px;';
-        btnFocus.textContent='⚙ Chart '+(idx+1);
-        btnFocus.title='Configure in SQL Builder (Free)';
-        btnFocus.addEventListener('click',function(e){
-          e.stopPropagation();
-          var panel=document.getElementById('builder-panel');
-          if(panel&&panel.classList.contains('hidden')){
-            panel.classList.remove('hidden');
-            var arrow=document.getElementById('builder-arrow');
-            if(arrow) arrow.classList.add('open');
-          }
-          document.getElementById('tab-free').click();
-          var bsel=document.getElementById('fqb-block-selector');
-          if(bsel){
-            _saveFqbStateForBlock(_activeFqbBlockIdx);
-            bsel.value=idx;
-            _activeFqbBlockIdx=idx;
-            _loadFqbStateForBlock(idx);
-          }
-        });
-        toolbar.appendChild(btnFocus);
-      } else {
-        // ── Simple/Advanced/Series-Mode: volle Toolbar ──
-        toolbar.appendChild(selCtype);toolbar.appendChild(lblX);toolbar.appendChild(selX);
-        toolbar.appendChild(lblX2);toolbar.appendChild(selX2);_syncX2();
-        selX2.addEventListener('change',function(){var s=getState(idx);s.x2Field=selX2.value;chartStates[idx]=s;updateChart(idx);});
-        var btnXAll=document.createElement('button');
-        btnXAll.className='btn-toolbar';
-        btnXAll.textContent='→ All';
-        btnXAll.title='Diese X-Achse auf alle Charts anwenden';
-        btnXAll.style.cssText='font-size:10px;padding:2px 6px;color:#1D6B32;';
-        btnXAll.addEventListener('click',function(e){
-          e.stopPropagation();
-          var xVal=selX.value, x2Val=selX2.value;
-          var total=Math.max(1,parseInt(document.getElementById('inp-count').value)||1);
-          syncNotesToState();
-          for(var j=0;j<total;j++){
-            if(j===idx) continue;
-            var s=getState(j);
-            if(s.blockType==='image') continue;
-            s.xField=xVal;
-            s.x2Field=x2Val;
-            chartStates[j]=s;
-          }
-          rebuildGrid();
-        });
-        toolbar.appendChild(btnXAll);
-        toolbar.appendChild(zControls);toolbar.appendChild(lblY);toolbar.appendChild(selY);
-        toolbar.appendChild(btnCustom);
-        // + Y Button für zusätzliche Y-Reihen
-        var btnAddY=document.createElement('button');
-        btnAddY.className='btn-custom';
-        btnAddY.textContent='+ Y';
-        btnAddY.title='Add another Y series';
-        btnAddY.style.cssText='font-weight:600;color:#1D6B32;';
-        toolbar.appendChild(btnAddY);
-        // Pills-Zeile für aktive Y-Keys (unter Toolbar, bei >1 Y-Keys sichtbar)
-        var pillsDiv=document.createElement('div');
-        pillsDiv.className='y-pills-row';
-        pillsDiv.style.cssText='display:none;flex-wrap:wrap;gap:4px;padding:3px 8px 2px 8px;min-height:0;';
-        // pillsDiv wird nach toolbar in card eingefügt (siehe unten bei card.appendChild)
-        _renderYPills(idx, pillsDiv);
-        // Event-Handler (innerhalb else-Block, damit btnAddY/pillsDiv verfügbar)
-        selX.addEventListener('change',function(){
-          var s=getState(idx);
-          var newKey=selX.value;
-          var oldKey=s.xField;
-          s.xField=newKey;
-          if(s.x2Field===newKey)s.x2Field='';
-          chartStates[idx]=s;
-          _syncX2();
-          // If switching to/from a is_group_by axis, re-run the query
-          // so Python fetches the correct group_label values
-          var newDef=X_AXES.find(function(a){return a.key===newKey;})||{};
-          var oldDef=X_AXES.find(function(a){return a.key===oldKey;})||{};
-          if(newDef.is_group_by || oldDef.is_group_by){
-            runQuery();
-          } else {
-            updateChart(idx);
-          }
-        });
-        selZ.addEventListener('change',function(){var s=getState(idx);s.zField=selZ.value;chartStates[idx]=s;updateChart(idx);});
-        selY.addEventListener('change',function(){
-          var s=getState(idx);
-          s.yKeys=[selY.value];s.yKey=selY.value;
-          // Jet Air Consumption: X-Achse fix auf Air Pressure (Jet Cal)
-          // setzen und sperren (bzw. beim Wechsel weg davon wieder freigeben).
-          var _xOpts=_xAxisOptionsHtmlFor(s.yKey, s.xField);
-          selX.innerHTML=_xOpts.html;
-          selX.disabled=(s.yKey===JET_AIR_Y_KEY);
-          s.xField=_xOpts.key;
-          chartStates[idx]=s;
-          _syncX2();
-          _renderYPills(idx,pillsDiv);
+      // ── volle Toolbar ──
+      toolbar.appendChild(selCtype);toolbar.appendChild(lblX);toolbar.appendChild(selX);
+      toolbar.appendChild(lblX2);toolbar.appendChild(selX2);_syncX2();
+      selX2.addEventListener('change',function(){var s=getState(idx);s.x2Field=selX2.value;chartStates[idx]=s;updateChart(idx);});
+      var btnXAll=document.createElement('button');
+      btnXAll.className='btn-toolbar';
+      btnXAll.textContent='→ All';
+      btnXAll.title='Diese X-Achse auf alle Charts anwenden';
+      btnXAll.style.cssText='font-size:10px;padding:2px 6px;color:#1D6B32;';
+      btnXAll.addEventListener('click',function(e){
+        e.stopPropagation();
+        var xVal=selX.value, x2Val=selX2.value;
+        var total=Math.max(1,parseInt(document.getElementById('inp-count').value)||1);
+        syncNotesToState();
+        for(var j=0;j<total;j++){
+          if(j===idx) continue;
+          var s=getState(j);
+          if(s.blockType==='image') continue;
+          s.xField=xVal;
+          s.x2Field=x2Val;
+          chartStates[j]=s;
+        }
+        rebuildGrid();
+      });
+      toolbar.appendChild(btnXAll);
+      toolbar.appendChild(zControls);toolbar.appendChild(lblY);toolbar.appendChild(selY);
+      toolbar.appendChild(btnCustom);
+      // + Y Button für zusätzliche Y-Reihen
+      var btnAddY=document.createElement('button');
+      btnAddY.className='btn-custom';
+      btnAddY.textContent='+ Y';
+      btnAddY.title='Add another Y series';
+      btnAddY.style.cssText='font-weight:600;color:#1D6B32;';
+      toolbar.appendChild(btnAddY);
+      // Pills-Zeile für aktive Y-Keys (unter Toolbar, bei >1 Y-Keys sichtbar)
+      var pillsDiv=document.createElement('div');
+      pillsDiv.className='y-pills-row';
+      pillsDiv.style.cssText='display:none;flex-wrap:wrap;gap:4px;padding:3px 8px 2px 8px;min-height:0;';
+      // pillsDiv wird nach toolbar in card eingefügt (siehe unten bei card.appendChild)
+      _renderYPills(idx, pillsDiv);
+      // Event-Handler (innerhalb else-Block, damit btnAddY/pillsDiv verfügbar)
+      selX.addEventListener('change',function(){
+        var s=getState(idx);
+        var newKey=selX.value;
+        var oldKey=s.xField;
+        s.xField=newKey;
+        if(s.x2Field===newKey)s.x2Field='';
+        chartStates[idx]=s;
+        _syncX2();
+        // If switching to/from a is_group_by axis, re-run the query
+        // so Python fetches the correct group_label values
+        var newDef=X_AXES.find(function(a){return a.key===newKey;})||{};
+        var oldDef=X_AXES.find(function(a){return a.key===oldKey;})||{};
+        if(newDef.is_group_by || oldDef.is_group_by){
+          runQuery();
+        } else {
           updateChart(idx);
+        }
+      });
+      selZ.addEventListener('change',function(){var s=getState(idx);s.zField=selZ.value;chartStates[idx]=s;updateChart(idx);});
+      selY.addEventListener('change',function(){
+        var s=getState(idx);
+        s.yKeys=[selY.value];s.yKey=selY.value;
+        // Jet Air Consumption: X-Achse fix auf Air Pressure (Jet Cal)
+        // setzen und sperren (bzw. beim Wechsel weg davon wieder freigeben).
+        var _xOpts=_xAxisOptionsHtmlFor(s.yKey, s.xField);
+        selX.innerHTML=_xOpts.html;
+        selX.disabled=(s.yKey===JET_AIR_Y_KEY);
+        s.xField=_xOpts.key;
+        chartStates[idx]=s;
+        _syncX2();
+        _renderYPills(idx,pillsDiv);
+        updateChart(idx);
+      });
+      btnCustom.addEventListener('click',function(){
+        openModal(function(key,label){
+          var ex=selY.querySelector('option[value^="free:"]');if(ex)selY.removeChild(ex);
+          var opt=document.createElement('option');opt.value=key;opt.textContent='⚙ '+label;selY.appendChild(opt);selY.value=key;
+          var s=getState(idx);s.yKeys=[key];s.yKey=key;chartStates[idx]=s;
+          _renderYPills(idx,pillsDiv);
+          var parts=key.split(':');if(_bridge)_bridge.loadFreeField(parts[1]||'',parts[2]||'',parts[3]||'',String(idx),key);else updateChart(idx);
         });
-        btnCustom.addEventListener('click',function(){
-          openModal(function(key,label){
-            var ex=selY.querySelector('option[value^="free:"]');if(ex)selY.removeChild(ex);
-            var opt=document.createElement('option');opt.value=key;opt.textContent='⚙ '+label;selY.appendChild(opt);selY.value=key;
-            var s=getState(idx);s.yKeys=[key];s.yKey=key;chartStates[idx]=s;
-            _renderYPills(idx,pillsDiv);
-            var parts=key.split(':');if(_bridge)_bridge.loadFreeField(parts[1]||'',parts[2]||'',parts[3]||'',String(idx),key);else updateChart(idx);
-          });
-        });
-        btnAddY.addEventListener('click',function(e){
-          e.stopPropagation();
-          // Bestehendes Popup entfernen
-          var existing = document.getElementById('_ykey_popup');
-          if(existing){ existing.remove(); return; }
+      });
+      btnAddY.addEventListener('click',function(e){
+        e.stopPropagation();
+        // Bestehendes Popup entfernen
+        var existing = document.getElementById('_ykey_popup');
+        if(existing){ existing.remove(); return; }
 
-          var popup = document.createElement('div');
-          popup.id = '_ykey_popup';
-          popup.style.cssText = 'position:absolute;z-index:9999;background:#fff;border:1px solid #c8c8c8;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:220px;max-height:320px;overflow-y:auto;padding:4px 0;';
+        var popup = document.createElement('div');
+        popup.id = '_ykey_popup';
+        popup.style.cssText = 'position:absolute;z-index:9999;background:#fff;border:1px solid #c8c8c8;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:220px;max-height:320px;overflow-y:auto;padding:4px 0;';
 
-          // Position unter dem Button
-          var rect = btnAddY.getBoundingClientRect();
-          var wrapRect = (document.getElementById('charts-wrapper')||document.body).getBoundingClientRect();
-          popup.style.top = (rect.bottom - wrapRect.top + 4) + 'px';
-          popup.style.left = (rect.left - wrapRect.left) + 'px';
+        // Position unter dem Button
+        var rect = btnAddY.getBoundingClientRect();
+        var wrapRect = (document.getElementById('charts-wrapper')||document.body).getBoundingClientRect();
+        popup.style.top = (rect.bottom - wrapRect.top + 4) + 'px';
+        popup.style.left = (rect.left - wrapRect.left) + 'px';
 
-          // Aktuell gewählte yKeys
-          var s = getState(idx);
-          var currentKeys = s.yKeys || [s.yKey];
+        // Aktuell gewählte yKeys
+        var s = getState(idx);
+        var currentKeys = s.yKeys || [s.yKey];
 
-          // Vordefinierte Y-Achsen
-          Y_AXES.forEach(function(axis){
-            var item = document.createElement('div');
-            var alreadyAdded = currentKeys.indexOf(axis.key) !== -1;
-            item.style.cssText = 'padding:7px 14px;cursor:'+(alreadyAdded?'default':'pointer')+';font-size:12px;color:'+(alreadyAdded?'#aaa':'#222')+';white-space:nowrap;display:flex;align-items:center;gap:6px;';
-            item.textContent = (alreadyAdded ? '✓ ' : '') + axis.title + (axis.unit ? ' ('+axis.unit+')' : '');
-            if(!alreadyAdded){
-              item.addEventListener('mouseenter', function(){ item.style.background='#f0faf0'; });
-              item.addEventListener('mouseleave', function(){ item.style.background=''; });
-              item.addEventListener('click', function(){
-                popup.remove();
-                var st = getState(idx);
-                if(!st.yKeys||!st.yKeys.length) st.yKeys=[st.yKey||Y_AXES[0].key];
-                if(st.yKeys.indexOf(axis.key)===-1){
-                  st.yKeys = st.yKeys.concat([axis.key]);
-                  st.yKey = st.yKeys[0];
-                  chartStates[idx] = st;
-                  _renderYPills(idx, pillsDiv);
-                  updateChart(idx);
-                }
-              });
-            }
-            popup.appendChild(item);
-          });
-
-          // Separator + Custom
-          var sep = document.createElement('div');
-          sep.style.cssText = 'border-top:1px solid #eee;margin:4px 0;';
-          popup.appendChild(sep);
-          var customItem = document.createElement('div');
-          customItem.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;color:#1D6B32;font-weight:600;white-space:nowrap;';
-          customItem.textContent = '⚙ Custom Field...';
-          customItem.addEventListener('mouseenter', function(){ customItem.style.background='#f0faf0'; });
-          customItem.addEventListener('mouseleave', function(){ customItem.style.background=''; });
-          customItem.addEventListener('click', function(){
-            popup.remove();
-            openModal(function(key,label){
-              var st=getState(idx);
+        // Vordefinierte Y-Achsen
+        Y_AXES.forEach(function(axis){
+          var item = document.createElement('div');
+          var alreadyAdded = currentKeys.indexOf(axis.key) !== -1;
+          item.style.cssText = 'padding:7px 14px;cursor:'+(alreadyAdded?'default':'pointer')+';font-size:12px;color:'+(alreadyAdded?'#aaa':'#222')+';white-space:nowrap;display:flex;align-items:center;gap:6px;';
+          item.textContent = (alreadyAdded ? '✓ ' : '') + axis.title + (axis.unit ? ' ('+axis.unit+')' : '');
+          if(!alreadyAdded){
+            item.addEventListener('mouseenter', function(){ item.style.background='#f0faf0'; });
+            item.addEventListener('mouseleave', function(){ item.style.background=''; });
+            item.addEventListener('click', function(){
+              popup.remove();
+              var st = getState(idx);
               if(!st.yKeys||!st.yKeys.length) st.yKeys=[st.yKey||Y_AXES[0].key];
-              if(st.yKeys.indexOf(key)===-1){
-                st.yKeys=st.yKeys.concat([key]);
-                st.yKey=st.yKeys[0];
-                chartStates[idx]=st;
-                _renderYPills(idx,pillsDiv);
-                var parts=key.split(':');
-                if(_bridge) _bridge.loadFreeField(parts[1]||'',parts[2]||'',parts[3]||'',String(idx),key);
-                else updateChart(idx);
+              if(st.yKeys.indexOf(axis.key)===-1){
+                st.yKeys = st.yKeys.concat([axis.key]);
+                st.yKey = st.yKeys[0];
+                chartStates[idx] = st;
+                _renderYPills(idx, pillsDiv);
+                updateChart(idx);
               }
             });
-          });
-          popup.appendChild(customItem);
-
-          // Popup in charts-wrapper einfügen
-          var wrapper = document.getElementById('charts-wrapper') || document.body;
-          wrapper.appendChild(popup);
-
-          // Klick ausserhalb schliesst Popup
-          function _closePopup(ev){
-            if(!popup.contains(ev.target)){
-              popup.remove();
-              document.removeEventListener('click', _closePopup, true);
-            }
           }
-          setTimeout(function(){ document.addEventListener('click', _closePopup, true); }, 10);
+          popup.appendChild(item);
         });
-      } // end else (simple/advanced mode)
+
+        // Separator + Custom
+        var sep = document.createElement('div');
+        sep.style.cssText = 'border-top:1px solid #eee;margin:4px 0;';
+        popup.appendChild(sep);
+        var customItem = document.createElement('div');
+        customItem.style.cssText = 'padding:7px 14px;cursor:pointer;font-size:12px;color:#1D6B32;font-weight:600;white-space:nowrap;';
+        customItem.textContent = '⚙ Custom Field...';
+        customItem.addEventListener('mouseenter', function(){ customItem.style.background='#f0faf0'; });
+        customItem.addEventListener('mouseleave', function(){ customItem.style.background=''; });
+        customItem.addEventListener('click', function(){
+          popup.remove();
+          openModal(function(key,label){
+            var st=getState(idx);
+            if(!st.yKeys||!st.yKeys.length) st.yKeys=[st.yKey||Y_AXES[0].key];
+            if(st.yKeys.indexOf(key)===-1){
+              st.yKeys=st.yKeys.concat([key]);
+              st.yKey=st.yKeys[0];
+              chartStates[idx]=st;
+              _renderYPills(idx,pillsDiv);
+              var parts=key.split(':');
+              if(_bridge) _bridge.loadFreeField(parts[1]||'',parts[2]||'',parts[3]||'',String(idx),key);
+              else updateChart(idx);
+            }
+          });
+        });
+        popup.appendChild(customItem);
+
+        // Popup in charts-wrapper einfügen
+        var wrapper = document.getElementById('charts-wrapper') || document.body;
+        wrapper.appendChild(popup);
+
+        // Klick ausserhalb schliesst Popup
+        function _closePopup(ev){
+          if(!popup.contains(ev.target)){
+            popup.remove();
+            document.removeEventListener('click', _closePopup, true);
+          }
+        }
+        setTimeout(function(){ document.addEventListener('click', _closePopup, true); }, 10);
+      });
 
       var cBtnUp=document.createElement('button');
       cBtnUp.className='btn-toolbar';cBtnUp.style.cssText='font-size:11px;padding:2px 6px;';cBtnUp.textContent='↑';cBtnUp.title='Move up';
@@ -4855,7 +3213,7 @@ function exportPdf(){
       reportTitle:     ((document.getElementById('pdf-export-title')&&document.getElementById('pdf-export-title').value.trim())||_currentReportTitle||document.getElementById('save-title').value||'SmartChart Report').trim(),
       author:          (document.getElementById('save-author').value||'').trim(),
       reportId:        _currentReportId,
-      sourceType:      IS_VISUAL ? 'Visual SQL' : 'Trial Series',
+      sourceType:      'Trial Series',
       globalNote:      (document.getElementById('global-note-text').value||'').trim(),
       showInfobox:     infoboxSetting !== 'none',
       infoboxPosition: infoboxSetting,
@@ -5109,7 +3467,7 @@ function _initDragDrop(){
 }
 
 function init(){
-  if(!IS_VISUAL&&(!DATA||DATA.length===0)){document.getElementById('grid').style.display='none';document.getElementById('no-data').style.display='block';return;}
+  if(!DATA||DATA.length===0){document.getElementById('grid').style.display='none';document.getElementById('no-data').style.display='block';return;}
   renderSeriesPills();
   var inp=document.getElementById('inp-count');
   inp.addEventListener('change',rebuildGrid);
@@ -5159,13 +3517,9 @@ function init(){
 
   // Series Picker: immer sichtbar
   document.getElementById('btn-pick-series').addEventListener('click', openPickSeriesModal);
-  // Add Series (Vergleich): nur in Series-Mode
-  if(!IS_VISUAL){
-    document.getElementById('btn-add-series').style.display=''; // explizit sichtbar
-    document.getElementById('btn-add-series').addEventListener('click', openAddSeriesModal);
-  } else {
-    document.getElementById('btn-add-series').style.display='none';
-  }
+  // Add Series (Vergleich)
+  document.getElementById('btn-add-series').style.display=''; // explizit sichtbar
+  document.getElementById('btn-add-series').addEventListener('click', openAddSeriesModal);
   document.getElementById('btn-save-report').addEventListener('click', openSaveModal);
   document.getElementById('btn-open-report').addEventListener('click', openOpenModal);
   document.getElementById('btn-export-pdf').addEventListener('click', openPdfExportModal);
@@ -5255,7 +3609,6 @@ function getCurrentReportData() {
         noteVisible:!!s.noteVisible,
       });
     } else {
-      var _bfsCfg = (_blockFqbStates[i]&&_blockFqbStates[i].config) ? _blockFqbStates[i].config : null;
       blocks.push({
         blockType:   'chart',
         sortOrder:   i,
@@ -5271,20 +3624,11 @@ function getCurrentReportData() {
         noteVisible: !!s.noteVisible,
         gridlinesY:      s.gridlinesY   || '',
         gridlinesVisible:!!s.gridlinesVisible,
-        fqbConfig:   _bfsCfg,
       });
     }
   }
 
-  var queryConfig = IS_VISUAL ? {
-    groupBy:    document.getElementById('b-groupby')?document.getElementById('b-groupby').value:'jet',
-    filters:    getFilters(),
-    seriesPKs:  getSelectedSeries(),
-    showSD:     showSD,
-    showMinMax: showMinMax,
-    series:     seriesState,
-    chartCount: total,
-  } : {
+  var queryConfig = {
     seriesPK:   PRIMARY_PK,
     showSD:     showSD,
     showMinMax: showMinMax,
@@ -5295,8 +3639,8 @@ function getCurrentReportData() {
   return {id:              _currentReportId,
     title:           document.getElementById('save-title')?document.getElementById('save-title').value.trim():'',
     author:          document.getElementById('save-author')?document.getElementById('save-author').value.trim():'',
-    sourceType:      IS_VISUAL ? 'visual' : 'series',
-    seriesPK:        IS_VISUAL ? null : PRIMARY_PK,
+    sourceType:      'series',
+    seriesPK:        PRIMARY_PK,
     queryConfig:     queryConfig,
     globalNote:      (document.getElementById('global-note-text')?document.getElementById('global-note-text').value:'').trim(),
     showInfobox:     infoboxVal !== 'none',
@@ -5545,25 +3889,8 @@ function receiveReport(report){
         gridlinesY:      b.gridlinesY   || '',
         gridlinesVisible:!!b.gridlinesVisible,
       };
-      // FQB Config wiederherstellen
-      if(b.fqbConfig){
-        if(!_blockFqbStates[sortIdx]) _blockFqbStates[sortIdx]={};
-        _blockFqbStates[sortIdx].config = b.fqbConfig;
-      }
     }
   });
-  // FQB Queries für alle Blocks ausführen die eine Config haben
-  if(IS_VISUAL){
-    Object.keys(_blockFqbStates).forEach(function(idxStr){
-      var idx = parseInt(idxStr);
-      var bfs = _blockFqbStates[idx];
-      if(bfs && bfs.config && bfs.config.baseTable && bfs.config.xField && bfs.config.yField){
-        var cfg = bfs.config;
-        cfg._blockIdx = idx;
-        if(_bridge) _bridge.runFreeQuery(JSON.stringify(cfg));
-      }
-    });
-  }
 
   // Restore slicer filter state
   if(report.slicerState){
@@ -5591,30 +3918,6 @@ function receiveReport(report){
     rebuildGrid();
     renderSeriesPills();
     if(_bridge) _bridge.loadSeriesData(String(spk), scolor);
-
-  // ── Visual SQL mode: reset registry + re-run query ────────────────────────
-  } else if(report.sourceType==='visual' && IS_VISUAL && report.queryConfig){
-    var qc = report.queryConfig;
-    SERIES_REGISTRY = [{pk:0, name:'Loading...', color:'#39A650', data:[], machine:'', material:''}];
-    if(qc.groupBy && document.getElementById('b-groupby'))
-      document.getElementById('b-groupby').value = qc.groupBy;
-    if(document.getElementById('b-series')){
-      var bsel=document.getElementById('b-series');
-      for(var i=0;i<bsel.options.length;i++){
-        bsel.options[i].selected=(qc.seriesPKs||[]).indexOf(parseInt(bsel.options[i].value))!==-1;
-      }
-    }
-    rebuildGrid();
-    renderSeriesPills();
-    if(_bridge && qc.filters !== undefined){
-      var btn=document.getElementById('btn-run-query');
-      if(btn){btn.disabled=true;btn.textContent='⏳ Loading...';}
-      _bridge.runVisualQuery(
-        JSON.stringify(qc.seriesPKs||[]),
-        qc.groupBy||'jet',
-        JSON.stringify(qc.filters||[])
-      );
-    }
   } else {
     rebuildGrid();
   }
