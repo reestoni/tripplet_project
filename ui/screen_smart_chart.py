@@ -1,49 +1,37 @@
 # ui/screen_smart_chart.py
 """Smart Chart, rebuilt 2026-10-30 (Nutzerwunsch): find trials by their
-properties across ALL series, then chart any field against any other.
+properties across ALL series and show them in a dashboard like Power BI
+(ui/smart_dashboard.py: pages with visuals, Filters / Visualizations / Fields).
 
-Replaces the old "Visual SQL" Smart Chart (ReportScreen mode="visual", incl.
-the Free Query Builder - removed on purpose). The series report opened from
-Show Experiment (ReportScreen mode="series") is unchanged.
+Since 2026-11-02 (Nutzerwunsch "Dashboard ist schöner") there is only the
+dashboard - the former chart mode (one chart + list of trials) is gone; its
+parts live on in the dashboard: Focus mode (⤢, the trials below a visual),
+fairness details (click the dot), log axes / shapes / point size in Format.
+No saved chart views existed (prod and dev_local checked), so nothing had to
+be converted.
 
-Layout (concept: claude.ai artifact "Smart Chart Konzept"):
-- left  "1 Find trials": filter chips (click = edit, × = remove), "+ Add
-  filter" (ui/smart_chart_filter_dialog.py), "Yarn filters apply to" Any
-  ply / Core only / Effect only
-- right: live counter, "2 Build the chart" (X, Y, Colour by, Split by,
-  Each trial / Mean per X), the Plotly chart (QWebEngineView), and the list
-  of the trials in the chart (double-click = open in Show Experiment)
-- top: Open view / Save view (db/smart_chart_views.py), Excel, PDF, Reload
+The filters on all pages (= "Find trials") are self.filters / self.ply_scope;
+the dashboard edits them in its Filters pane. Top: New, Open view, Save view
+(db/smart_chart_views.py), Share…, Excel, Reload, PDF.
 
-Data and filtering: db/trial_explorer.py, figure: ui/smart_chart_figure.py.
+Data and filtering: db/trial_explorer.py.
 """
 from __future__ import annotations
 
-import base64
 import datetime
-import json
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from PySide6.QtCore import QObject, QTimer, QUrl, Qt, Signal, Slot
-from PySide6.QtGui import QAction, QActionGroup, QColor, QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QColor, QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
-    QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
-    QMenu, QPushButton, QScrollArea, QSizePolicy, QSplitter, QTableWidget, QTableWidgetItem, QToolButton,
+    QAbstractItemView, QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
+    QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
-try:
-    from PySide6.QtWebChannel import QWebChannel
-    from PySide6.QtWebEngineWidgets import QWebEngineView
-    _WEB = True
-except Exception:  # pragma: no cover - WebEngine missing
-    _WEB = False
-
 from db import smart_chart_views as views
 from db import trial_explorer as te
-from ui.smart_chart_figure import CHART_TYPES, MODE_TO_CHART, PALETTES, build_figure
 from ui.widgets import sidebar_nav
 from ui.widgets.footer import FooterBar
 from ui.widgets.friendly_error import show_error
@@ -51,62 +39,14 @@ from ui.widgets.friendly_error import show_error
 logger = logging.getLogger(__name__)
 
 ACCENT = "#1F7A3A"
-DEFAULT_X, DEFAULT_Y = "air_pressure", "tenacity"
 
 _BTN = ("QPushButton{background:#FFFFFF;color:#1C2321;border:1px solid #C9D1C8;border-radius:6px;"
         "padding:6px 14px;font-weight:500;}QPushButton:hover{background:#F0F4EF;}"
         "QPushButton:disabled{color:#9AA59C;}")
 _BTN_PRIMARY = ("QPushButton{background:#1F7A3A;color:#FFFFFF;border:1px solid #1F7A3A;border-radius:6px;"
                 "padding:6px 14px;font-weight:600;}QPushButton:hover{background:#165C2B;}")
-_SEG = ("QPushButton{background:#FFFFFF;color:#1C2321;border:1px solid #C9D1C8;padding:6px 10px;}"
-        "QPushButton:checked{background:#1F7A3A;color:#FFFFFF;border-color:#1F7A3A;font-weight:600;}")
 _PANEL = "QFrame#Panel{background:#FFFFFF;border:1px solid #DADFD8;border-radius:10px;}"
-
-_CHART_HTML = """<!doctype html><html><head><meta charset="utf-8">
-<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
-<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-<style>html,body{margin:0;height:100%;background:#fff;font-family:'Segoe UI',sans-serif}
-#c{position:absolute;inset:0}#msg{position:absolute;inset:0;display:flex;align-items:center;
-justify-content:center;color:#5A6460;font-size:14px;text-align:center;padding:24px;pointer-events:none}</style>
-</head><body><div id="c"></div><div id="msg">Loading…</div><script>
-var bridge=null;
-new QWebChannel(qt.webChannelTransport,function(ch){bridge=ch.objects.bridge;bridge.ready();});
-function render(fig,msg){
-  document.getElementById('msg').textContent=msg||'';
-  if(typeof Plotly==='undefined'){document.getElementById('msg').textContent='The chart library could not be loaded (internet connection?).';return;}
-  var el=document.getElementById('c');
-  Plotly.react(el,fig.data,fig.layout,{responsive:true,displaylogo:false,
-    modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d','toggleSpikelines']});
-  if(!el._sc){el._sc=1;el.on('plotly_click',function(e){
-    var p=e&&e.points&&e.points[0];if(bridge&&p&&p.customdata!=null)bridge.pointClicked(String(p.customdata));});}
-}
-function snapshot(){
-  if(typeof Plotly==='undefined'){bridge.snapshotReady('');return;}
-  Plotly.toImage('c',{format:'png',width:1500,height:820,scale:2}).then(function(u){bridge.snapshotReady(u.split(',')[1]);})
-    .catch(function(){bridge.snapshotReady('');});
-}
-</script></body></html>"""
-
-
-class _ChartBridge(QObject):
-    readySignal = Signal()
-    clicked = Signal(int)
-    snapshot = Signal(str)
-
-    @Slot()
-    def ready(self):
-        self.readySignal.emit()
-
-    @Slot(str)
-    def pointClicked(self, tid: str):
-        try:
-            self.clicked.emit(int(tid))
-        except ValueError:
-            pass
-
-    @Slot(str)
-    def snapshotReady(self, b64: str):
-        self.snapshot.emit(b64 or "")
+_NEW_TITLE = "New dashboard"
 
 
 def _fmt_n(n: int) -> str:
@@ -123,16 +63,9 @@ class SmartChartScreen(QWidget):
         self._sidebar_built_for_level = None
         self.ds: Optional[te.TrialDataset] = None
         self.catalog: List[te.Field] = []
-        self.filters: List[Dict[str, Any]] = []
+        self.filters: List[Dict[str, Any]] = []      # filters on all pages = "Find trials"
         self.ply_scope = "any"
         self.view: Optional[Dict[str, Any]] = None   # loaded saved view
-        self._chart_ready = False
-        self._pending_fig = None
-        self._rows: List[Dict[str, Any]] = []
-        self._snapshot_cb: Optional[Callable[[str], None]] = None
-        self.colour_map: Dict[str, str] = {}   # own colours per value ("Colours…")
-        self.mode = "chart"                    # "chart" | "dashboard" (ui/smart_dashboard.py)
-        self._info: Dict[str, Any] = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -144,7 +77,7 @@ class SmartChartScreen(QWidget):
         content.addWidget(page)
         pv = QVBoxLayout(page)
         pv.setContentsMargins(20, 14, 20, 12)
-        pv.setSpacing(12)
+        pv.setSpacing(10)
 
         # ── header ──────────────────────────────────────────────────────
         head = QHBoxLayout()
@@ -159,35 +92,19 @@ class SmartChartScreen(QWidget):
         tbox.setSpacing(0)
         lbl_kicker = QLabel("SMART CHART")
         lbl_kicker.setStyleSheet(f"color:{ACCENT}; font-size:11px; font-weight:700; letter-spacing:1px;")
-        self.lbl_title = QLabel("New chart")
+        self.lbl_title = QLabel(_NEW_TITLE)
         self.lbl_title.setStyleSheet("font-size:20px; font-weight:700; color:#1C2321;")
         tbox.addWidget(lbl_kicker)
         tbox.addWidget(self.lbl_title)
         head.addLayout(tbox, 1)
-        mseg = QHBoxLayout()
-        mseg.setSpacing(0)
-        self.grp_mode = QButtonGroup(self)
-        for i, (lab, tip) in enumerate((("Chart", "One chart with its list of trials"),
-                                        ("Dashboard", "A page with several visuals, fields of all tables, "
-                                                      "click to filter the others - like Power BI"))):
-            b = QPushButton(lab)
-            b.setCheckable(True)
-            b.setChecked(i == 0)
-            b.setToolTip(tip)
-            b.setStyleSheet(_SEG + "QPushButton{padding:7px 16px;font-size:13px;}")
-            self.grp_mode.addButton(b, i)
-            mseg.addWidget(b)
-        self.grp_mode.idClicked.connect(lambda i: self.set_mode("dashboard" if i == 1 else "chart"))
-        head.addLayout(mseg)
-        head.addSpacing(12)
         self.btn_new = QPushButton("New")
-        self.btn_new.setToolTip("Start again with no filters")
+        self.btn_new.setToolTip("New dashboard: empty, example or from a template")
         self.btn_open = QPushButton("Open view")
         self.btn_save = QPushButton("Save view")
         self.btn_share = QPushButton("Share…")
         self.btn_share.setToolTip("Share this view with people or groups - to view or to edit")
         self.btn_excel = QPushButton("Excel")
-        self.btn_excel.setToolTip("Export the list of trials in the chart to Excel")
+        self.btn_excel.setToolTip("Export the data of every visual of this page to Excel (one sheet per visual)")
         self.btn_reload = QPushButton("Reload")
         self.btn_reload.setToolTip("Load the latest data from the database (F5)")
         self.btn_pdf = QPushButton("PDF")
@@ -208,260 +125,16 @@ class SmartChartScreen(QWidget):
         self.btn_pdf.clicked.connect(self._export_pdf)
         QShortcut(QKeySequence("F5"), self, activated=lambda: self.load_data(force=True))
 
-        # ── body ────────────────────────────────────────────────────────
-        body = QHBoxLayout()
-        body.setSpacing(14)
-        pv.addLayout(body, 1)
-
-        # step 1: find trials
-        left = QFrame()
-        left.setObjectName("Panel")
-        left.setFixedWidth(330)
-        lv = QVBoxLayout(left)
-        lv.setContentsMargins(14, 14, 14, 14)
-        lv.setSpacing(10)
-        lv.addWidget(self._step_label("1", "Find trials"))
-        self.chip_host = QWidget()
-        self.chip_lay = QVBoxLayout(self.chip_host)
-        self.chip_lay.setContentsMargins(0, 0, 0, 0)
-        self.chip_lay.setSpacing(6)
-        sc = QScrollArea()
-        sc.setWidgetResizable(True)
-        sc.setFrameShape(QFrame.NoFrame)
-        sc.setWidget(self.chip_host)
-        lv.addWidget(sc, 1)
-        self.btn_add = QPushButton("+  Add filter")
-        self.btn_add.setStyleSheet(f"QPushButton{{background:#FFFFFF;color:{ACCENT};border:1px dashed #9FB39F;"
-                                   "border-radius:8px;padding:10px;font-weight:600;}"
-                                   "QPushButton:hover{background:#F0F7F2;}")
-        self.btn_add.clicked.connect(lambda: self._edit_filter(None))
-        lv.addWidget(self.btn_add)
-        lv.addWidget(self._small("Yarn filters apply to"))
-        seg = QHBoxLayout()
-        seg.setSpacing(0)
-        self.grp_scope = QButtonGroup(self)
-        for i, (k, lab) in enumerate((("any", "Any ply"), ("core", "Core only"), ("effect", "Effect only"))):
-            b = QPushButton(lab)
-            b.setCheckable(True)
-            b.setStyleSheet(_SEG)
-            b.setChecked(k == "any")
-            b.setToolTip("Yarn filters must all fit the same ply" if k == "any"
-                         else f"Yarn filters must fit a ply with yarn use {lab.split()[0]}")
-            self.grp_scope.addButton(b, i)
-            seg.addWidget(b)
-        self.grp_scope.idClicked.connect(self._on_scope)
-        lv.addLayout(seg)
-        hint = QLabel("<b>Yarn</b>: material, end titer, filaments, dpf, yarn type…<br>"
-                      "<b>Jet</b>: air hole, yarn channel, swirl chamber, cone, titer range, maker…<br>"
-                      "<b>Machine</b>: jet, air pressure, overfeed, speed, temperatures…<br>"
-                      "<b>Lab</b>: tenacity, elongation, titer, FP/m, stability…<br>"
-                      "<b>General</b>: machine, series, experiment, year")
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color:#3E4744; font-size:12px; border-top:1px solid #E6EAE5; padding-top:8px;")
-        lv.addWidget(hint)
-        body.addWidget(left)
-        self.left_panel = left          # hidden in dashboard mode (its Filters pane has "On all pages")
-
-        # step 2: chart + list
-        right = QVBoxLayout()
-        right.setSpacing(10)
-        body.addLayout(right, 1)
+        # ── body: the count of matching trials, then the dashboard ──────
         self.lbl_count = QLabel("Loading trials…")
         self.lbl_count.setStyleSheet("background:#E6F2E9; border:1px solid #BFDCC7; border-radius:10px;"
-                                     "padding:10px 14px; color:#165C2B; font-size:14px;")
-        right.addWidget(self.lbl_count)
-
-        # fairness check (db/fairness.py): light + sentence + Details / Make it fairer
-        self.fair_box = QFrame()
-        fb = QHBoxLayout(self.fair_box)
-        fb.setContentsMargins(12, 8, 10, 8)
-        fb.setSpacing(10)
-        self.fair_dot = QLabel()
-        self.fair_dot.setFixedSize(16, 16)
-        fb.addWidget(self.fair_dot, 0, Qt.AlignTop)
-        self.fair_text = QLabel()
-        self.fair_text.setWordWrap(True)
-        self.fair_text.setTextFormat(Qt.RichText)
-        fb.addWidget(self.fair_text, 1)
-        self.btn_fair_fix = QPushButton("Make it fairer")
-        self.btn_fair_fix.setStyleSheet(_BTN)
-        self.btn_fair_fix.clicked.connect(self._make_fairer)
-        fb.addWidget(self.btn_fair_fix, 0, Qt.AlignTop)
-        self.btn_fair_details = QPushButton("Details")
-        self.btn_fair_details.setStyleSheet(_BTN)
-        self.btn_fair_details.clicked.connect(self._fair_details)
-        fb.addWidget(self.btn_fair_details, 0, Qt.AlignTop)
-        self.fair_box.setVisible(False)
-        from PySide6.QtWidgets import QStackedWidget
-        self.mode_stack = QStackedWidget()
-        chart_page = QWidget()
-        cpl = QVBoxLayout(chart_page)
-        cpl.setContentsMargins(0, 0, 0, 0)
-        cpl.setSpacing(10)
-        cpl.addWidget(self.fair_box)
-        self.mode_stack.addWidget(chart_page)
-        right.addWidget(self.mode_stack, 1)
-        self._fair = None
-
-        chart_panel = QFrame()
-        chart_panel.setObjectName("Panel")
-        cv = QVBoxLayout(chart_panel)
-        cv.setContentsMargins(14, 12, 14, 12)
-        cv.setSpacing(8)
-        cv.addWidget(self._step_label("2", "Build the chart"))
-        ctr = QHBoxLayout()
-        ctr.setSpacing(10)
-        from ui.smart_chart_style import FieldPicker
-        self.cmb_x, self.cmb_y = FieldPicker(), FieldPicker()
-        self.cmb_colour, self.cmb_split = FieldPicker(), FieldPicker()
-        for lab, cmb in (("X axis", self.cmb_x), ("Y axis", self.cmb_y),
-                         ("Colour by", self.cmb_colour), ("Split by", self.cmb_split)):
-            box = QVBoxLayout()
-            box.setSpacing(2)
-            box.addWidget(self._small(lab))
-            cmb.changed.connect(self._schedule)
-            box.addWidget(cmb)
-            ctr.addLayout(box)
-        self.cmb_colour.changed.connect(self.colour_map.clear)
-        ctr.addStretch(1)
-        cv.addLayout(ctr)
-
-        from ui.smart_chart_style import chart_icon, palette_icon
-        look = QHBoxLayout()
-        look.setSpacing(10)
-        tbox = QVBoxLayout()
-        tbox.setSpacing(2)
-        tbox.addWidget(self._small("Chart"))
-        self.cmb_chart = QComboBox()
-        self.cmb_chart.setMinimumWidth(200)
-        self.cmb_chart.setIconSize(self.cmb_chart.iconSize() * 1.4)
-        for key, (lab, tip) in CHART_TYPES.items():
-            self.cmb_chart.addItem(chart_icon(key), lab, key)
-            self.cmb_chart.setItemData(self.cmb_chart.count() - 1, tip, Qt.ToolTipRole)
-        self.cmb_chart.currentIndexChanged.connect(self._on_chart_type)
-        tbox.addWidget(self.cmb_chart)
-        look.addLayout(tbox)
-        pbox = QVBoxLayout()
-        pbox.setSpacing(2)
-        pbox.addWidget(self._small("Colours"))
-        prow = QHBoxLayout()
-        prow.setSpacing(6)
-        self.cmb_palette = QComboBox()
-        self.cmb_palette.setMinimumWidth(190)
-        for key, pal in PALETTES.items():
-            self.cmb_palette.addItem(palette_icon(key), pal["label"], key)
-        self.cmb_palette.currentIndexChanged.connect(self._schedule)
-        prow.addWidget(self.cmb_palette)
-        self.btn_colours = QPushButton("Colours…")
-        self.btn_colours.setToolTip("Choose your own colour for each value in the chart")
-        self.btn_colours.setStyleSheet(_BTN)
-        self.btn_colours.clicked.connect(self._edit_colours)
-        prow.addWidget(self.btn_colours)
-        pbox.addLayout(prow)
-        look.addLayout(pbox)
-        obox = QVBoxLayout()
-        obox.setSpacing(2)
-        obox.addWidget(self._small("Options"))
-        self.btn_options = QPushButton("Options")
-        self.btn_options.setStyleSheet(_BTN)
-        menu = QMenu(self.btn_options)
-        self.act_shapes = menu.addAction("Different shapes per colour")
-        self.act_shapes.setToolTip("Circle, square, diamond… - readable in black and white too")
-        self.act_logx = menu.addAction("Logarithmic X axis")
-        self.act_logy = menu.addAction("Logarithmic Y axis")
-        self.act_dark = menu.addAction("Dark background")
-        for a in (self.act_shapes, self.act_logx, self.act_logy, self.act_dark):
-            a.setCheckable(True)
-            a.toggled.connect(self._schedule)
-        sizes = menu.addMenu("Point size")
-        self.grp_size = QActionGroup(self)
-        self.size_actions = {}
-        for lab, px in (("Small", 5), ("Medium", 8), ("Large", 12)):
-            a = sizes.addAction(lab)
-            a.setCheckable(True)
-            a.setChecked(px == 8)
-            a.setData(px)
-            self.grp_size.addAction(a)
-            a.toggled.connect(self._schedule)
-            self.size_actions[px] = a
-        self.btn_options.setMenu(menu)
-        obox.addWidget(self.btn_options)
-        look.addLayout(obox)
-        look.addStretch(1)
-        cv.addLayout(look)
-
-        self.split = QSplitter(Qt.Vertical)
-        if _WEB:
-            self.web = QWebEngineView()
-            self.web.setMinimumHeight(260)
-            self.bridge = _ChartBridge()
-            self.bridge.readySignal.connect(self._on_chart_ready)
-            self.bridge.clicked.connect(self._select_trial)
-            self.bridge.snapshot.connect(self._on_snapshot)
-            self.channel = QWebChannel()
-            self.channel.registerObject("bridge", self.bridge)
-            self.web.page().setWebChannel(self.channel)
-            self.web.setHtml(_CHART_HTML, QUrl("about:blank"))
-            self.split.addWidget(self.web)
-        else:
-            self.web = None
-            msg = QLabel("Charts need PySide6-WebEngine.")
-            msg.setAlignment(Qt.AlignCenter)
-            self.split.addWidget(msg)
-
-        list_box = QWidget()
-        lb = QVBoxLayout(list_box)
-        lb.setContentsMargins(0, 6, 0, 0)
-        lb.setSpacing(4)
-        lh = QHBoxLayout()
-        lbl_list = QLabel("<b>Trials in the chart</b>")
-        lh.addWidget(lbl_list)
-        self.lbl_list_hint = QLabel("double-click a line to open it in Show Experiment · click a point to find it here")
-        self.lbl_list_hint.setStyleSheet("color:#5A6460; font-size:12px;")
-        lh.addWidget(self.lbl_list_hint)
-        lh.addStretch(1)
-        lb.addLayout(lh)
-        self.tbl = QTableWidget(0, 7)
-        self.tbl.verticalHeader().setVisible(False)
-        self.tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tbl.setAlternatingRowColors(True)
-        self.tbl.setSortingEnabled(True)
-        self.tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.tbl.horizontalHeader().setStretchLastSection(True)
-        self.tbl.itemDoubleClicked.connect(self._open_row)
-        lb.addWidget(self.tbl, 1)
-        self.split.addWidget(list_box)
-        self.split.setStretchFactor(0, 3)
-        self.split.setStretchFactor(1, 2)
-        cv.addWidget(self.split, 1)
-        cpl.addWidget(chart_panel, 1)
+                                     "padding:8px 14px; color:#165C2B; font-size:14px;")
+        pv.addWidget(self.lbl_count)
         from ui.smart_dashboard import SmartDashboard
         self.dashboard = SmartDashboard(self)
-        self.mode_stack.addWidget(self.dashboard)
-
+        pv.addWidget(self.dashboard, 1)
         root.addWidget(FooterBar())
-
-        self._timer = QTimer(self)
-        self._timer.setSingleShot(True)
-        self._timer.setInterval(120)
-        self._timer.timeout.connect(self.refresh)
-        self._render_chips()
         self._update_view_buttons()
-        self._sync_controls()
-
-    # ── small widgets ───────────────────────────────────────────────────
-    @staticmethod
-    def _step_label(no: str, text: str) -> QLabel:
-        lab = QLabel(f"<span style='background:{ACCENT};color:#fff;border-radius:9px;padding:1px 7px;"
-                     f"font-weight:700;'>{no}</span>&nbsp;&nbsp;<b style='font-size:15px'>{text}</b>")
-        return lab
-
-    @staticmethod
-    def _small(text: str) -> QLabel:
-        lab = QLabel(text)
-        lab.setStyleSheet("color:#5A6460; font-size:12px; font-weight:600;")
-        return lab
 
     # ── lifecycle ───────────────────────────────────────────────────────
     def showEvent(self, event):  # noqa: N802
@@ -476,7 +149,7 @@ class SmartChartScreen(QWidget):
             QTimer.singleShot(0, self.load_data)
 
     def load_data(self, force: bool = False) -> None:
-        """Load (or reload) all trials. Keeps filters and chart settings."""
+        """Load (or reload) all trials. Keeps the filters and the dashboard."""
         if self.ds is not None and not force:
             return
         QGuiApplication.setOverrideCursor(Qt.WaitCursor)
@@ -493,306 +166,32 @@ class SmartChartScreen(QWidget):
                 QGuiApplication.restoreOverrideCursor()
         known = set(self.ds.fields)
         self.filters = [f for f in self.filters if f.get("key") in known]
-        self._fill_combos()
-        self._render_chips()
+        if not force:
+            _log("smart_dashboard_open")
         self.refresh()
 
-    def _fill_combos(self) -> None:
-        cur = {c: c.currentData() for c in (self.cmb_x, self.cmb_y, self.cmb_colour, self.cmb_split)}
-        for cmb, kinds, none_label in ((self.cmb_x, ("num", "cat"), None), (self.cmb_y, ("num",), None),
-                                       (self.cmb_colour, ("cat", "num"), "— none —"),
-                                       (self.cmb_split, ("cat",), "— none —")):
-            cmb.blockSignals(True)
-            cmb.set_fields(self.catalog, kinds, none_label)
-        self._set_combo(self.cmb_x, cur[self.cmb_x] or DEFAULT_X)
-        self._set_combo(self.cmb_y, cur[self.cmb_y] or DEFAULT_Y)
-        self._set_combo(self.cmb_colour, cur[self.cmb_colour] or "")
-        self._set_combo(self.cmb_split, cur[self.cmb_split] or "")
-        for c in cur:
-            c.blockSignals(False)
-
-    @staticmethod
-    def _set_combo(cmb, key: Optional[str]) -> None:
-        if hasattr(cmb, "set_key"):   # FieldPicker
-            cmb.set_key(key, emit=True)
-            return
-        i = cmb.findData(key)
-        if i < 0:
-            i = next((j for j in range(cmb.count()) if cmb.itemData(j)), 0)
-        cmb.setCurrentIndex(i)
-
-    # ── filters ─────────────────────────────────────────────────────────
-    def _render_chips(self) -> None:
-        while self.chip_lay.count():
-            it = self.chip_lay.takeAt(0)
-            if it.widget() is not None:
-                it.widget().deleteLater()
-        if not self.filters:
-            lab = QLabel("No filters yet - all trials are included.\nClick “+ Add filter” to narrow them down.")
-            lab.setWordWrap(True)
-            lab.setStyleSheet("color:#5A6460; font-size:12px; padding:4px 2px;")
-            self.chip_lay.addWidget(lab)
-        for i, flt in enumerate(self.filters):
-            f = self.ds.fields.get(flt["key"]) if self.ds else None
-            if f is None:
-                continue
-            chip = QFrame()
-            chip.setStyleSheet("QFrame{background:#E6F2E9;border:1px solid #1F7A3A;border-radius:8px;}"
-                               "QLabel{border:none;background:transparent;}")
-            h = QHBoxLayout(chip)
-            h.setContentsMargins(10, 6, 6, 6)
-            btn = QPushButton()
-            btn.setFlat(True)
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setToolTip("Click to change this filter")
-            btn.setStyleSheet("QPushButton{text-align:left;border:none;color:#165C2B;padding:0;}")
-            group = f.group + (" · " + {"any": "any ply", "core": "core", "effect": "effect"}[self.ply_scope]
-                               if f.level == "yarn" else "")
-            btn.setText(f"{group.upper()}\n{te.describe_filter(f, flt)}")
-            btn.clicked.connect(lambda _=False, k=i: self._edit_filter(k))
-            h.addWidget(btn, 1)
-            x = QToolButton()
-            x.setText("×")
-            x.setToolTip("Remove this filter")
-            x.setStyleSheet("QToolButton{border:none;color:#165C2B;font-size:18px;padding:0 6px;}"
-                            "QToolButton:hover{color:#B00020;}")
-            x.clicked.connect(lambda _=False, k=i: self._remove_filter(k))
-            h.addWidget(x)
-            self.chip_lay.addWidget(chip)
-        self.chip_lay.addStretch(1)
-
-    def _edit_filter(self, index: Optional[int]) -> None:
-        if self.ds is None:
-            return
-        from ui.smart_chart_filter_dialog import AddFilterDialog
-        edit = self.filters[index] if index is not None else None
-        dlg = AddFilterDialog(self.ds, self.catalog, self.filters, self.ply_scope, edit=edit, parent=self)
-        if dlg.exec() != QDialog.Accepted or dlg.result_filter is None:
-            return
-        new = dlg.result_filter
-        if index is not None:
-            self.filters[index] = new
-        else:
-            same = next((j for j, f in enumerate(self.filters) if f["key"] == new["key"]), None)
-            if same is not None:
-                self.filters[same] = new
-            else:
-                self.filters.append(new)
-            _log("smart_chart_filter", new["key"])
-        self._render_chips()
-        self.refresh()
-
-    def _remove_filter(self, index: int) -> None:
-        if 0 <= index < len(self.filters):
-            del self.filters[index]
-            self._render_chips()
+    # ── filters on all pages (edited in the dashboard's Filters pane) ──────
+    def set_ply_scope(self, scope: str) -> None:
+        if scope in te.PLY_SCOPES and scope != self.ply_scope:
+            self.ply_scope = scope
             self.refresh()
-
-    def _on_scope(self, i: int) -> None:
-        self.ply_scope = te.PLY_SCOPES[i]
-        self._render_chips()
-        self.refresh()
-
-    # ── refresh ─────────────────────────────────────────────────────────
-    def _schedule(self, *_a) -> None:
-        self._timer.start()
 
     def settings(self) -> Dict[str, Any]:
         return {"filters": [dict(f) for f in self.filters], "ply_scope": self.ply_scope,
-                "x": self.cmb_x.currentData() or DEFAULT_X, "y": self.cmb_y.currentData() or DEFAULT_Y,
-                "colour": self.cmb_colour.currentData() or "", "split": self.cmb_split.currentData() or "",
-                "chart": self.cmb_chart.currentData() or "points",
-                "palette": self.cmb_palette.currentData() or "trippleT", "colour_map": dict(self.colour_map),
-                "shapes": self.act_shapes.isChecked(), "logx": self.act_logx.isChecked(),
-                "logy": self.act_logy.isChecked(), "dark": self.act_dark.isChecked(),
-                "size": int(self.grp_size.checkedAction().data()) if self.grp_size.checkedAction() else 8,
-                "mode": self.mode, "dashboard": getattr(self, "dashboard", None) and self.dashboard.spec}
-
-    def set_mode(self, mode: str) -> None:
-        """Chart (one chart + list) or Dashboard (several visuals). Filters stay."""
-        self.mode = "dashboard" if mode == "dashboard" else "chart"
-        self.grp_mode.button(1 if self.mode == "dashboard" else 0).setChecked(True)
-        self.mode_stack.setCurrentIndex(1 if self.mode == "dashboard" else 0)
-        self.left_panel.setVisible(self.mode == "chart")
-        self.btn_excel.setToolTip("Export the list of trials in the chart to Excel" if self.mode == "chart" else
-                                  "Export the data of every visual of this page to Excel (one sheet per visual)")
-        self.btn_new.setToolTip("Start again with no filters" if self.mode == "chart" else
-                                "New dashboard: empty, example or from a template")
-        if self.mode == "dashboard":
-            _log("smart_dashboard_open")
-        self.refresh()
+                "mode": "dashboard", "dashboard": self.dashboard.spec}
 
     def refresh(self) -> None:
         if self.ds is None:
             return
-        s = self.settings()
-        if self.mode == "dashboard":
-            res = self.ds.apply(s["filters"], s["ply_scope"])
-            summ = self.ds.summary(res)
-            self.res = res
-            self.lbl_count.setText(
-                f"<span style='font-size:22px;font-weight:700'>{_fmt_n(summ['trials'])}</span>"
-                f"&nbsp; <b>trials match</b> &nbsp;in {_fmt_n(summ['series'])} series · {summ['machines']} machines · "
-                f"{summ['jets']} jets &nbsp;&nbsp;<span style='color:#2F4A37;font-size:12px'>"
-                f"these filters apply to every visual of the page · reference samples excluded</span>")
-            self.dashboard.refresh()
-            return
-        QGuiApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            res = self.ds.apply(s["filters"], s["ply_scope"])
-            summ = self.ds.summary(res)
-            fig, rows, info = build_figure(
-                self.ds, res, s["x"], s["y"], s["colour"] or None, s["split"] or None, chart=s["chart"],
-                palette=s["palette"], colour_map=s["colour_map"], shapes=s["shapes"], logx=s["logx"],
-                logy=s["logy"], size=s["size"], dark=s["dark"])
-        except Exception as e:
-            QGuiApplication.restoreOverrideCursor()
-            show_error(self, "Smart Chart", "The chart could not be built.", e)
-            return
-        QGuiApplication.restoreOverrideCursor()
-        self.res, self._rows, self._info = res, rows, info
+        res = self.ds.apply(self.filters, self.ply_scope)
+        summ = self.ds.summary(res)
+        self.res = res
         self.lbl_count.setText(
-            f"<span style='font-size:22px;font-weight:700'>{_fmt_n(summ['trials'])}</span>"
+            f"<span style='font-size:20px;font-weight:700'>{_fmt_n(summ['trials'])}</span>"
             f"&nbsp; <b>trials match</b> &nbsp;in {_fmt_n(summ['series'])} series · {summ['machines']} machines · "
             f"{summ['jets']} jets &nbsp;&nbsp;<span style='color:#2F4A37;font-size:12px'>"
-            f"{_fmt_n(info['plotted'])} {'have a Y value' if s['chart'] == 'hist' else 'have both X and Y'} "
-            f"and are in the chart · reference samples excluded</span>")
-        self.btn_colours.setEnabled(bool(info.get("colour_groups")))
-        msg = ""
-        if not rows:
-            msg = ("No trial matches the filters." if not res.ids else
-                   "None of the matching trials has a value for both X and Y.")
-        elif info["hidden_panels"]:
-            msg = ""
-        self._render(fig, msg)
-        self._fill_table(rows, s)
-        self._update_fairness(s, res, rows, info)
-
-    # ── fairness check ──────────────────────────────────────────────────
-    _FAIR_STYLE = {
-        "green": ("#E6F2E9", "#BFDCC7", "#1F7A3A"),
-        "amber": ("#FFF4D6", "#E8C15A", "#C98A00"),
-        "red": ("#FDECEA", "#E3A39C", "#C62828"),
-    }
-
-    def _update_fairness(self, s, res, rows, info) -> None:
-        from db import fairness as fz
-        a = fz.assess_chart(self.ds, res, rows, info, s, self.filters)
-        self._fair = a
-        if a is None or a.level == fz.NONE:
-            self.fair_box.setVisible(False)
-            return
-        bg, border, dot = self._FAIR_STYLE[a.level]
-        self.fair_box.setStyleSheet(f"QFrame{{background:{bg};border:1px solid {border};border-radius:10px;}}"
-                                    "QLabel{border:none;background:transparent;}")
-        self.fair_dot.setStyleSheet(f"background:{dot};border-radius:8px;")
-        import html as _html
-        self.fair_text.setText(f"<b>{_html.escape(a.headline)}</b> <span style='color:#5A6460'>"
-                               f"({_html.escape(a.grouping)})</span><br>{_html.escape(a.sentence)}")
-        self.btn_fair_fix.setVisible(a.fix is not None)
-        self.btn_fair_fix.setToolTip(a.fix_text)
-        self.fair_box.setVisible(True)
-
-    def _make_fairer(self) -> None:
-        a = self._fair
-        if a is None or a.fix is None:
-            return
-        new = dict(a.fix)
-        same = next((i for i, flt in enumerate(self.filters) if flt["key"] == new["key"]), None)
-        if same is not None:
-            self.filters[same] = new
-        else:
-            self.filters.append(new)
-        _log("smart_chart_fairer", new["key"])
-        self._render_chips()
-        self.refresh()
-
-    def _fair_details(self) -> None:
-        if self._fair is None:
-            return
-        _log("smart_chart_fairness_details", self._fair.level)
-        dlg = _FairnessDialog(self._fair, self)
-        if dlg.exec() == QDialog.Accepted and dlg.apply_fix:
-            self._make_fairer()
-
-    def _on_chart_type(self, *_a) -> None:
-        self._sync_controls()
-        self._schedule()
-
-    def _sync_controls(self) -> None:
-        chart = self.cmb_chart.currentData() or "points"
-        self.cmb_x.setEnabled(chart != "hist")
-        self.cmb_x.setToolTip("Not used by the histogram" if chart == "hist" else "")
-        self.cmb_colour.setEnabled(chart != "density")
-        self.cmb_colour.setToolTip("The density map colours by the number of trials" if chart == "density" else
-                                   "List fields: one colour per value. Number fields: a colour scale "
-                                   "(points) or 5 ranges (other charts).")
-
-    def _edit_colours(self) -> None:
-        groups = self._info.get("colour_groups") or []
-        if not groups:
-            return
-        from ui.smart_chart_style import ColoursDialog
-        dlg = ColoursDialog(groups, self._info.get("colour_defaults") or {}, self.colour_map, self)
-        if dlg.exec() == QDialog.Accepted:
-            self.colour_map = dlg.result_map
-            _log("smart_chart_colours")
-            self.refresh()
-
-    def _render(self, fig, msg: str = "") -> None:
-        if self.web is None:
-            return
-        self._pending_fig = (fig, msg)
-        if self._chart_ready:
-            self.web.page().runJavaScript(f"render({json.dumps(fig)}, {json.dumps(msg)});")
-
-    def _on_chart_ready(self) -> None:
-        self._chart_ready = True
-        if self._pending_fig is not None:
-            self._render(*self._pending_fig)
-
-    def _fill_table(self, rows: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
-        fx, fy = self.ds.fields[s["x"]], self.ds.fields[s["y"]]
-        heads = ["Trial", "Series", "Yarn", "Machine", "Jet", fx.label, fy.label]
-        rows = [dict(p, x=p["x"] if p["x"] is not None else "") for p in rows]
-        self.tbl.setSortingEnabled(False)
-        self.tbl.clear()
-        self.tbl.setColumnCount(len(heads))
-        self.tbl.setHorizontalHeaderLabels(heads)
-        self.tbl.setRowCount(len(rows))
-        for r, p in enumerate(rows):
-            vals = [p["trial"], p["series"], p["yarn"], p["machine"], p["jet"], p["x"], p["y"]]
-            for c, v in enumerate(vals):
-                it = QTableWidgetItem()
-                if isinstance(v, float):
-                    it.setData(Qt.DisplayRole, round(v, 3))
-                    it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                elif c == 0:
-                    it.setData(Qt.DisplayRole, p["trial"])
-                else:
-                    it.setText(str(v))
-                if c == 0:
-                    it.setData(Qt.UserRole, p["tid"])
-                self.tbl.setItem(r, c, it)
-        self.tbl.setSortingEnabled(True)
-        self.tbl.resizeColumnsToContents()
-        for c in range(self.tbl.columnCount()):
-            self.tbl.setColumnWidth(c, min(self.tbl.columnWidth(c), 320))
-
-    def _select_trial(self, tid: int) -> None:
-        for r in range(self.tbl.rowCount()):
-            it = self.tbl.item(r, 0)
-            if it is not None and it.data(Qt.UserRole) == tid:
-                self.tbl.selectRow(r)
-                self.tbl.scrollToItem(it, QAbstractItemView.PositionAtCenter)
-                return
-
-    def _open_row(self, item) -> None:
-        tid = self.tbl.item(item.row(), 0).data(Qt.UserRole)
-        t = self.ds.by_id.get(tid) if self.ds else None
-        if t is None or not callable(self.on_open_series) or t.exp_pk is None:
-            return
-        self.on_open_series(t.exp_pk, t.series_id, t.experiment)
+            f"filters on all pages apply to every visual · reference samples excluded</span>")
+        self.dashboard.refresh()
 
     # ── views ───────────────────────────────────────────────────────────
     def _update_view_buttons(self) -> None:
@@ -835,9 +234,6 @@ class SmartChartScreen(QWidget):
         return True
 
     def _on_new(self) -> None:
-        if self.mode != "dashboard":
-            self._new_chart()
-            return
         from ui import smart_dashboard_engine as en
         menu = QMenu(self)
         menu.addAction("Empty page", lambda: self._new_dashboard(""))
@@ -852,22 +248,11 @@ class SmartChartScreen(QWidget):
         menu.exec(self.btn_new.mapToGlobal(self.btn_new.rect().bottomLeft()))
 
     def _new_dashboard(self, template) -> None:
-        """New dashboard (filters on all pages stay - they belong to Find trials)."""
+        """New dashboard (the filters on all pages stay - they belong to Find trials)."""
         self.view = None
         self._update_share_button()
-        self.lbl_title.setText("New dashboard")
+        self.lbl_title.setText(_NEW_TITLE)
         self.dashboard.start_from(template)
-        self.refresh()
-
-    def _new_chart(self) -> None:
-        self.dashboard.set_spec(None)
-        self.filters = []
-        self.view = None
-        self._update_share_button()
-        self.lbl_title.setText("New chart")
-        self.grp_scope.button(0).setChecked(True)
-        self.ply_scope = "any"
-        self._render_chips()
         self.refresh()
 
     def apply_settings(self, cfg: Dict[str, Any]) -> List[str]:
@@ -881,36 +266,7 @@ class SmartChartScreen(QWidget):
             else:
                 missing.append(str(f.get("key")))
         self.ply_scope = cfg.get("ply_scope") if cfg.get("ply_scope") in te.PLY_SCOPES else "any"
-        self.grp_scope.button(te.PLY_SCOPES.index(self.ply_scope)).setChecked(True)
-        for cmb, key in ((self.cmb_x, cfg.get("x")), (self.cmb_y, cfg.get("y")),
-                         (self.cmb_colour, cfg.get("colour") or ""), (self.cmb_split, cfg.get("split") or "")):
-            cmb.blockSignals(True)
-            if key and key not in known:
-                missing.append(str(key))
-            self._set_combo(cmb, key if (key in known or key == "") else None)
-            cmb.blockSignals(False)
-        chart = cfg.get("chart") or MODE_TO_CHART.get(cfg.get("mode"), "points")
-        for cmb, key in ((self.cmb_chart, chart), (self.cmb_palette, cfg.get("palette") or "trippleT")):
-            cmb.blockSignals(True)
-            self._set_combo(cmb, key)
-            cmb.blockSignals(False)
-        self.colour_map = dict(cfg.get("colour_map") or {})
-        for act, key in ((self.act_shapes, "shapes"), (self.act_logx, "logx"), (self.act_logy, "logy"),
-                         (self.act_dark, "dark")):
-            act.blockSignals(True)
-            act.setChecked(bool(cfg.get(key)))
-            act.blockSignals(False)
         self.dashboard.set_spec(cfg.get("dashboard"))
-        self.mode = "dashboard" if cfg.get("mode") == "dashboard" else "chart"
-        self.grp_mode.button(1 if self.mode == "dashboard" else 0).setChecked(True)
-        self.mode_stack.setCurrentIndex(1 if self.mode == "dashboard" else 0)
-        self.left_panel.setVisible(self.mode == "chart")
-        size_act = self.size_actions.get(int(cfg.get("size") or 8)) or self.size_actions[8]
-        size_act.blockSignals(True)
-        size_act.setChecked(True)
-        size_act.blockSignals(False)
-        self._sync_controls()
-        self._render_chips()
         self.refresh()
         return missing
 
@@ -954,115 +310,42 @@ class SmartChartScreen(QWidget):
         _log("smart_chart_view_save", "shared" if shared else "private" if shared is not None else "edit share")
 
     # ── export ──────────────────────────────────────────────────────────
-    def filter_lines(self) -> List[str]:
-        if self.ds is None:
-            return []
-        lines = [te.describe_filter(self.ds.fields[f["key"]], f) for f in self.filters if f["key"] in self.ds.fields]
-        if any(self.ds.fields[f["key"]].level == "yarn" for f in self.filters if f["key"] in self.ds.fields):
-            lines.append({"any": "Yarn filters: any ply", "core": "Yarn filters: core plies",
-                          "effect": "Yarn filters: effect plies"}[self.ply_scope])
-        return lines or ["No filters (all trials)"]
-
     def _export_excel(self) -> None:
-        if self.mode == "dashboard":
-            from ui import smart_dashboard_engine as en
-            visuals = en.active_page(self.dashboard.spec)["visuals"]
-            if not visuals:
-                QMessageBox.information(self, "Excel", "This page has no visuals.")
-                return
-            path, _ = QFileDialog.getSaveFileName(self, "Export page to Excel",
-                                                  f"SmartChart_dashboard_{datetime.date.today():%Y%m%d}.xlsx",
-                                                  "Excel (*.xlsx)")
-            if path:
-                try:
-                    self.dashboard.write_excel(path, visuals)
-                    _log("smart_dashboard_excel", "page")
-                except Exception as e:
-                    show_error(self, "Excel", "The Excel file could not be written.", e)
+        from ui import smart_dashboard_engine as en
+        visuals = en.active_page(self.dashboard.spec)["visuals"]
+        if not visuals:
+            QMessageBox.information(self, "Excel", "This page has no visuals.")
             return
-        if not self._rows:
-            QMessageBox.information(self, "Excel", "There are no trials in the chart.")
-            return
-        path, _ = QFileDialog.getSaveFileName(self, "Export to Excel",
-                                              f"SmartChart_{datetime.date.today():%Y%m%d}.xlsx", "Excel (*.xlsx)")
-        if not path:
-            return
-        try:
-            from openpyxl import Workbook
-            from openpyxl.styles import Font
-            s = self.settings()
-            fx, fy = self.ds.fields[s["x"]], self.ds.fields[s["y"]]
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Trials"
-            heads = ["Trial", "Series", "Experiment", "Yarn", "Machine", "Jet", fx.label, fy.label]
-            ws.append(heads)
-            for c in ws[1]:
-                c.font = Font(bold=True)
-            for p in self._rows:
-                ws.append([p["trial"], p["series"], p["experiment"], p["yarn"], p["machine"], p["jet"], p["x"], p["y"]])
-            info = wb.create_sheet("Filters")
-            info.append(["Smart Chart", self.lbl_title.text()])
-            info.append(["Exported", datetime.datetime.now().strftime("%d.%m.%Y %H:%M")])
-            for line in self.filter_lines():
-                info.append(["Filter", line])
-            wb.save(path)
-            _log("smart_chart_excel")
-        except Exception as e:
-            show_error(self, "Excel", "The Excel file could not be written.", e)
+        path, _ = QFileDialog.getSaveFileName(self, "Export page to Excel",
+                                              f"SmartChart_dashboard_{datetime.date.today():%Y%m%d}.xlsx",
+                                              "Excel (*.xlsx)")
+        if path:
+            try:
+                self.dashboard.write_excel(path, visuals)
+                _log("smart_dashboard_excel", "page")
+            except Exception as e:
+                show_error(self, "Excel", "The Excel file could not be written.", e)
 
     def _export_pdf(self) -> None:
-        if self.mode == "dashboard":
-            pages = self.dashboard.spec["pages"]
-            all_pages = False
-            if len(pages) > 1:
-                box = QMessageBox(self)
-                box.setWindowTitle("PDF")
-                box.setText("Which pages should go into the PDF?")
-                b_this = box.addButton("This page", QMessageBox.AcceptRole)
-                b_all = box.addButton(f"All {len(pages)} pages", QMessageBox.AcceptRole)
-                box.addButton(QMessageBox.Cancel)
-                box.exec()
-                if box.clickedButton() not in (b_this, b_all):
-                    return
-                all_pages = box.clickedButton() is b_all
-            path, _ = QFileDialog.getSaveFileName(self, "Save PDF",
-                                                  f"SmartChart_dashboard_{datetime.date.today():%Y%m%d}.pdf",
-                                                  "PDF (*.pdf)")
-            if path:
-                title = self.lbl_title.text()
-                self.dashboard.export_pdf(path, all_pages, "" if title in ("New chart", "New dashboard") else title)
-            return
-        if self.web is None or not self._rows:
-            QMessageBox.information(self, "PDF", "There is no chart to export.")
-            return
+        pages = self.dashboard.spec["pages"]
+        all_pages = False
+        if len(pages) > 1:
+            box = QMessageBox(self)
+            box.setWindowTitle("PDF")
+            box.setText("Which pages should go into the PDF?")
+            b_this = box.addButton("This page", QMessageBox.AcceptRole)
+            b_all = box.addButton(f"All {len(pages)} pages", QMessageBox.AcceptRole)
+            box.addButton(QMessageBox.Cancel)
+            box.exec()
+            if box.clickedButton() not in (b_this, b_all):
+                return
+            all_pages = box.clickedButton() is b_all
         path, _ = QFileDialog.getSaveFileName(self, "Save PDF",
-                                              f"SmartChart_{datetime.date.today():%Y%m%d}.pdf", "PDF (*.pdf)")
-        if not path:
-            return
-        self._snapshot_cb = lambda b64: self._write_pdf(path, b64)
-        self.web.page().runJavaScript("snapshot();")
-
-    def _on_snapshot(self, b64: str) -> None:
-        cb, self._snapshot_cb = self._snapshot_cb, None
-        if cb is not None:
-            cb(b64)
-
-    def _write_pdf(self, path: str, b64: str) -> None:
-        try:
-            from ui.smart_chart_pdf import write_pdf
-            s = self.settings()
-            summary = self.lbl_count.text()
-            if self._fair is not None and self._fair.level != "none":
-                summary += f"<br>Fairness check: {self._fair.headline} - {self._fair.sentence}"
-            write_pdf(path, title=self.lbl_title.text(), filters=self.filter_lines(),
-                      summary=summary, chart_png=base64.b64decode(b64) if b64 else None,
-                      rows=self._rows, x_label=self.ds.fields[s["x"]].label, y_label=self.ds.fields[s["y"]].label)
-            _log("smart_chart_pdf")
-        except Exception as e:
-            show_error(self, "PDF", "The PDF could not be written.", e)
-            return
-        QMessageBox.information(self, "PDF", f"PDF saved:\n{path}")
+                                              f"SmartChart_dashboard_{datetime.date.today():%Y%m%d}.pdf",
+                                              "PDF (*.pdf)")
+        if path:
+            title = self.lbl_title.text()
+            self.dashboard.export_pdf(path, all_pages, "" if title == _NEW_TITLE else title)
 
     def _open_help(self) -> None:
         from ui.widgets.help_texts_smart_chart import TEXTS
@@ -1280,12 +563,11 @@ class _SaveViewDialog(QDialog):
 
 
 def _view_kind(cfg: Dict[str, Any]) -> str:
-    """'Dashboard · 2 pages · 9 visuals' or 'Chart · Box plot'."""
-    if cfg.get("mode") == "dashboard" and isinstance(cfg.get("dashboard"), dict):
-        pages = cfg["dashboard"].get("pages") or ([{"visuals": cfg["dashboard"].get("visuals") or []}])
-        n_v = sum(len(p.get("visuals") or []) for p in pages)
-        return f"Dashboard · {len(pages)} page{'s' if len(pages) != 1 else ''} · {n_v} visuals"
-    return f"Chart · {CHART_TYPES.get(cfg.get('chart') or 'points', ('Points', ''))[0]}"
+    """'Dashboard · 2 pages · 9 visuals'."""
+    d = cfg.get("dashboard") if isinstance(cfg.get("dashboard"), dict) else {}
+    pages = d.get("pages") or ([{"visuals": d.get("visuals") or []}])
+    n_v = sum(len(p.get("visuals") or []) for p in pages)
+    return f"Dashboard · {len(pages)} page{'s' if len(pages) != 1 else ''} · {n_v} visuals"
 
 
 def _uid():

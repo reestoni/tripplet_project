@@ -36,3 +36,10 @@ def resource_path(rel_path: str) -> str:
         Absoluter Pfad als String, direkt nutzbar für QPixmap(), QIcon() usw.
     """
     return os.path.join(app_root(), rel_path.replace("/", os.sep))
+
+
+def web_base_url():
+    """Basis-URL für QWebEngine-Seiten aus setHtml(): relative <script src> zeigen
+    auf assets/js (Plotly liegt lokal, damit Charts ohne Internet funktionieren)."""
+    from PySide6.QtCore import QUrl
+    return QUrl.fromLocalFile(resource_path("assets/js") + "/")

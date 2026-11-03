@@ -73,6 +73,31 @@ X_AXES = [
      "main_table": "tblLaborJetAirConsumption"},
 ]
 
+# List fields as X (Nutzerwunsch 2026-11-02): every data row has yarn_short
+# (tblYarn.Kurzname, else Name; "A / B" with several yarns) and jet_name. Added to the X list of
+# the report on top of tblSmartChartAxis / X_AXES ("cat" = not a number axis).
+CATEGORY_X_AXES = [
+    {"id": None, "key": "yarn_short", "title": "Yarn", "unit": "", "field": "yarn_short", "sub_axis_id": None,
+     "is_group_by": False, "cat": True},
+    {"id": None, "key": "jet_name", "title": "Jet", "unit": "", "field": "jet_name", "sub_axis_id": None,
+     "is_group_by": False, "cat": True},
+]
+
+
+def _column_in(table: str, column: str) -> bool:
+    try:
+        from db.connection import get_columns_map
+        return column.lower() in get_columns_map(table)
+    except Exception:
+        return False
+
+
+def with_category_axes(x_axes_js: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The X list for the report page plus Yarn and Jet (unless the DB already has those keys)."""
+    known = {x.get("key") for x in x_axes_js}
+    return list(x_axes_js) + [dict(c) for c in CATEGORY_X_AXES if c["key"] not in known]
+
+
 # Fallback-Liste falls tblSmartChartAxis nicht verfügbar
 _KNOWN_TABLES_FALLBACK = [
     "tbllabortiter",
@@ -262,6 +287,11 @@ def _fetch_series_data(series_pk: int) -> List[Dict[str, Any]]:
             _extra_selects += (f", T.{IS_REFERENCE_COL} AS is_reference"
                                f", T.{REFERENCE_NAME_COL} AS reference_name")
 
+        # X axis "Yarn": the short name (tblYarn.Kurzname), the full name where it is empty
+        _yarn_short = ("GROUP_CONCAT(DISTINCT COALESCE(NULLIF(TRIM(GY.Kurzname), ''), GY.Name) "
+                       "ORDER BY COALESCE(NULLIF(TRIM(GY.Kurzname), ''), GY.Name) SEPARATOR ' / ')"
+                       if _column_in("tblYarn", "Kurzname") else
+                       "GROUP_CONCAT(DISTINCT GY.Name ORDER BY GY.Name SEPARATOR ' / ')")
         sql_base = f"""
             SELECT T.ID AS trial_id, T.Versuchsnummer AS trial_nr,
                    T.AirPressure AS air_pressure, T.Shaft2x_OF AS overfeed,
@@ -270,7 +300,8 @@ def _fetch_series_data(series_pk: int) -> List[Dict[str, Any]]:
                    J.Jet AS jet_name,
                    J.Luftverbrauch AS air_cons,
                    MC.Maschine AS machine_name,
-                   YarnSub.yarn_label AS yarn_name
+                   YarnSub.yarn_label AS yarn_name,
+                   YarnSub.yarn_short AS yarn_short
                    {_extra_selects}
             FROM tblTrial AS T
             LEFT JOIN tbljets AS J ON J.ID = T.JetID
@@ -278,7 +309,8 @@ def _fetch_series_data(series_pk: int) -> List[Dict[str, Any]]:
             LEFT JOIN tblMaschine AS MC ON MC.ID = TS.MachineID
             LEFT JOIN (
                 SELECT GTS.TrialID,
-                       GROUP_CONCAT(DISTINCT GY.Name ORDER BY GY.Name SEPARATOR ' / ') AS yarn_label
+                       GROUP_CONCAT(DISTINCT GY.Name ORDER BY GY.Name SEPARATOR ' / ') AS yarn_label,
+                       {_yarn_short} AS yarn_short
                 FROM tblTrialSettings AS GTS
                 INNER JOIN tblYarn AS GY ON GY.ID = GTS.YarnID
                 GROUP BY GTS.TrialID
@@ -337,6 +369,7 @@ def _fetch_series_data(series_pk: int) -> List[Dict[str, Any]]:
                 "jet_name":     str(r.get("jet_name") or "Unbekannt"),
                 "machine_name": str(r.get("machine_name") or ""),
                 "yarn_name":    str(r.get("yarn_name") or ""),
+                "yarn_short":   str(r.get("yarn_short") or ""),
             }
             # Extra X-axis fields from tbltrial
             for xdef in _extra_x:

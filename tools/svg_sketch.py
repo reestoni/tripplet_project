@@ -43,6 +43,21 @@ class Svg:
         d = f' stroke-dasharray="{dash}"' if dash else ""
         self.parts.append(f'  <line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="{sw}"{d}/>')
 
+    def circle(self, cx, cy, r, fill=GREEN):
+        self.parts.append(f'  <circle cx="{cx}" cy="{cy}" r="{r}" fill="{fill}"/>')
+
+    def path(self, d, fill=GREEN):
+        self.parts.append(f'  <path d="{d}" fill="{fill}"/>')
+
+    def polyline(self, points, color=MUTED, sw=1.5):
+        pts = " ".join(f"{x},{y}" for x, y in points)
+        self.parts.append(f'  <polyline points="{pts}" fill="none" stroke="{color}" stroke-width="{sw}"/>')
+
+    def polygon(self, points, fill=None, stroke=None, sw=1, fill_opacity=1):
+        pts = " ".join(f"{x},{y}" for x, y in points)
+        st = f' stroke="{stroke}" stroke-width="{sw}"' if stroke else ""
+        self.parts.append(f'  <polygon points="{pts}" fill="{fill or "none"}" fill-opacity="{fill_opacity}"{st}/>')
+
     def arrow_right(self, x1, y, x2, color=MUTED):
         self.line(x1, y, x2 - 7, y, color)
         self.parts.append(f'  <polygon points="{x2},{y} {x2-8},{y-4} {x2-8},{y+4}" fill="{color}"/>')

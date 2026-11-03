@@ -14,7 +14,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TrippleT Smart Chart</title>
-<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<script src="plotly-2.32.0.min.js"></script>
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -1014,6 +1014,13 @@ function _drillDown(chartIdx, clickedXValue, clickedJetKey){
   }
 
   var label = xDef.title + ': ' + clickedXValue + (xDef.unit?' '+xDef.unit:'');
+  var x2Pair = null;
+  if(state.x2Field && Array.isArray(clickedXValue) && clickedXValue.length===2){
+    x2Pair = [clickedXValue[0] in MC_LABELS[0] ? MC_LABELS[0][clickedXValue[0]] : clickedXValue[0],
+              clickedXValue[1] in MC_LABELS[1] ? MC_LABELS[1][clickedXValue[1]] : clickedXValue[1]];
+    var x2Def = X_AXES.find(function(a){return a.key===state.x2Field;})||{title:state.x2Field,unit:''};
+    label = xDef.title + ': ' + x2Pair[0] + ' · ' + x2Def.title + ': ' + x2Pair[1];
+  }
   if(jetName) label += ' · ' + jetName;
 
   // Root-States merken (beim ersten Drill)
@@ -1034,8 +1041,9 @@ function _drillDown(chartIdx, clickedXValue, clickedJetKey){
     prevFilters: JSON.parse(JSON.stringify(_drillFilters)),
   });
 
-  // Filter: genau dieser X-Wert UND dieser Jet
-  _drillFilters[xKey] = clickedXValue;
+  // Filter: genau dieser X-Wert UND dieser Jet (zweistufige X-Achse: beide Felder)
+  if(x2Pair){ _drillFilters[xKey] = x2Pair[0]; _drillFilters[state.x2Field] = x2Pair[1]; }
+  else _drillFilters[xKey] = clickedXValue;
   if(jetName) _drillFilters['__drill_jet'] = jetName;
 
   // Alle Charts auf trial_nr umschalten
@@ -2442,7 +2450,7 @@ var X_DEFAULT=X_AXES[0]?X_AXES[0].key:'air_pressure';
 var Y_DEFAULTS=['titer','fpm','fpm_dtyomat','fpm_cv','cv_fp_dtyomat','elongation','elongation_cv','tenacity','tenacity_cv'];
 var chartStates={};
 function getState(idx){
-  var def={xField:X_DEFAULT,zField:X_DEFAULT,yKey:Y_DEFAULTS[idx]||Y_AXES[0].key,yKeys:null,mode:'2d',chartType:'bar'};
+  var def={xField:X_DEFAULT,x2Field:'',zField:X_DEFAULT,yKey:Y_DEFAULTS[idx]||Y_AXES[0].key,yKeys:null,mode:'2d',chartType:'bar'};
   var s=chartStates[idx]||def;
   // Rückwärtskompatibilität: yKeys aus yKey ableiten falls nicht gesetzt
   if(!s.yKeys||!s.yKeys.length) s.yKeys=[s.yKey||(Y_DEFAULTS[idx]||Y_AXES[0].key)];
@@ -2693,15 +2701,19 @@ function updateChart(idx){
   var ct=s.chartType||'bar';
   var dmb=ct==='3d';
   var yKeys=s.yKeys&&s.yKeys.length?s.yKeys:[s.yKey||(Y_AXES[0]?Y_AXES[0].key:'titer')];
-  var traces=buildTracesForKeys(ct,s.xField,s.zField,yKeys);
-  var layout=makeLayoutForKeys(ct,s.xField,s.zField,yKeys,_lastNJets);
+  var useX2=_x2Active(s,ct);
+  var xUse=useX2?_comboField(s.xField,s.x2Field):s.xField;
+  var traces=buildTracesForKeys(ct,xUse,s.zField,yKeys);
+  var layout=makeLayoutForKeys(ct,xUse,s.zField,yKeys,_lastNJets);
   // FQB Chart-Titel überschreiben falls gesetzt
   if(_fqbChartTitle && s.xField && s.xField.indexOf('__fqb')===0){
     if(layout.title) layout.title.text='<b>'+_fqbChartTitle+'</b>';
     else layout.title={text:'<b>'+_fqbChartTitle+'</b>'};
   }
   // Kategoriewerte explizit aus Traces ableiten → kein Achsen-Caching
-  if(ct!=='3d' && ct!=='heat' && layout.xaxis){
+  if(useX2){
+    _toMulticategory(traces,layout,ct,s);
+  } else if(ct!=='3d' && ct!=='heat' && layout.xaxis){
     var xVals=[];
     traces.forEach(function(t){(t.x||[]).forEach(function(v){if(xVals.indexOf(String(v))===-1)xVals.push(String(v));});});
     // Prüfen ob alle Werte numerisch sind
@@ -2755,7 +2767,7 @@ function updateChart(idx){
       setTimeout(function(){
         try{
           var gd=el;
-          var visCount=(gd.data||[]).filter(function(t){return t.visible!==false&&t.visible!=='legendonly';}).length;
+          var visCount=(gd.data||[]).filter(function(t){return !t._order&&t.visible!==false&&t.visible!=='legendonly';}).length;
           // Nach dem Klick ist der geklickte Trace noch nicht in gd.data aktualisiert -
           // ev.data zeigt den Zielzustand direkt an.
           if(ev&&typeof ev.curveNumber==='number'&&ev.data&&ev.data[ev.curveNumber]){
@@ -3235,6 +3247,7 @@ function applyTemplate(tpl){
       blockType: 'chart',
       chartType: b.chartType || 'bar',
       xField:    b.xKey     || X_DEFAULT,
+      x2Field:   b.x2Key    || '',
       yKey:      b.yKey     || (Y_AXES[0]?Y_AXES[0].key:'titer'),
       yKeys:     b.yKeys    || [b.yKey || (Y_AXES[0]?Y_AXES[0].key:'titer')],
       zField:    b.zKey     || X_DEFAULT,
@@ -3706,7 +3719,7 @@ function _fqbPopulateAxesFromTrialData(){
   var xSel = document.getElementById('fqb-x');
   var ySel = document.getElementById('fqb-y');
   if(!xSel||!ySel) return;
-  var xOpts = X_AXES.map(function(a){
+  var xOpts = X_AXES.filter(function(a){return !a.hidden;}).map(function(a){
     var l=a.unit?a.title+' ('+a.unit+')':a.title;
     return '<option value="'+a.key+'">'+l+'</option>';
   }).join('');
@@ -4169,8 +4182,95 @@ var JET_AIR_Y_KEY = 'jet_air_consumption';
 var JET_AIR_X_KEY = 'jetcal_pressure';
 function _xAxisChoicesFor(yKey){
   if(yKey===JET_AIR_Y_KEY) return X_AXES.filter(function(a){return a.key===JET_AIR_X_KEY;});
-  return X_AXES;
+  return X_AXES.filter(function(a){return !a.hidden;});
 }
+// ── second X level (Nutzerwunsch 2026-11-02): e.g. Yarn on the X axis and under it the Jets ──
+// Each chart may have s.x2Field. For bar / stacked / box / scatter a combined field "x1 ␟ x2"
+// is written into every data row, the chart is built on it as usual (only combinations that
+// occur get a category) and the axis is then split into two rows (Plotly "multicategory").
+var X2_TYPES={bar:1,stack:1,box:1,scatter:1};
+var MC_SEP='\u241F';
+var MC_LABELS=[{},{}];   // shown (wrapped) label -> real value, per level - for a click / drill-down
+function _mcPart(v){
+  if(v===null||v===undefined||v==='')return null;
+  var n=parseFloat(v);
+  return (!isNaN(n)&&isFinite(v))?String(+n.toFixed(6)):String(v);
+}
+function _x2Active(s,ct){return !!(s&&s.x2Field&&s.x2Field!==s.xField&&X2_TYPES[ct||s.chartType||'bar']&&!_isDrillActive());}
+function _comboField(x1,x2){
+  var key='__mc__'+x1+'__'+x2;
+  if(!X_AXES.some(function(a){return a.key===key;})){
+    var d1=X_AXES.filter(function(a){return a.key===x1;})[0]||{title:x1},d2=X_AXES.filter(function(a){return a.key===x2;})[0]||{title:x2};
+    X_AXES.push({key:key,title:d1.title+' / '+d2.title,unit:'',field:key,hidden:true});
+  }
+  SERIES_REGISTRY.forEach(function(sr){(sr.data||[]).forEach(function(d){
+    var a=_mcPart(d[x1]),b=_mcPart(d[x2]);d[key]=(a===null||b===null)?null:a+MC_SEP+b;});});
+  return key;
+}
+function _mcCmp(a,b){
+  var na=parseFloat(a),nb=parseFloat(b);
+  return (!isNaN(na)&&!isNaN(nb)&&isFinite(a)&&isFinite(b))?na-nb:String(a).localeCompare(String(b));
+}
+function _axisLabel(key){
+  var d=X_AXES.filter(function(a){return a.key===key;})[0]||{title:key,unit:''};
+  return d.unit?d.title+' ('+d.unit+')':d.title;
+}
+function _toMulticategory(traces,layout,ct,s){
+  var combos=[],per={};
+  traces.forEach(function(t){var seen={};(t.x||[]).forEach(function(v){v=String(v);if(v.indexOf(MC_SEP)<0)return;
+    if(combos.indexOf(v)<0)combos.push(v);if(!seen[v]){seen[v]=1;per[v]=(per[v]||0)+1;}});});
+  combos.sort(function(a,b){var pa=a.split(MC_SEP),pb=b.split(MC_SEP);return _mcCmp(pa[0],pb[0])||_mcCmp(pa[1],pb[1]);});
+  // long labels (several yarns "A / B") wrap: one part per line, a part longer than `cut` is shortened
+  function wrap(t,width,cut){
+    var lines=[];
+    String(t).split(' / ').forEach(function(part){
+      if(part.length>cut)part=part.slice(0,cut-1)+'…';
+      var cur='';
+      part.split(' ').forEach(function(w){if(cur&&(cur+' '+w).length>width){lines.push(cur);cur=w;}else cur=cur?cur+' '+w:w;});
+      if(cur)lines.push(cur);
+    });
+    return lines.join('<br>');
+  }
+  var wrapped={};
+  function lab(v,i){var p=String(v).split(MC_SEP)[i]||'';var k=i+MC_SEP+p;
+    if(!(k in wrapped)){wrapped[k]=i===0?wrap(p,22,40):wrap(p,12,24);MC_LABELS[i][wrapped[k]]=p;}
+    return wrapped[k];}
+  function split(arr){return [arr.map(function(v){return lab(v,0);}),arr.map(function(v){return lab(v,1);})];}
+  function clean(h){return typeof h==='string'?h.split(MC_SEP).join(' · '):h;}
+  traces.forEach(function(t){
+    if(!t.x)return;t.x=split(t.x);
+    if(Array.isArray(t.hovertext))t.hovertext=t.hovertext.map(clean);else if(t.hovertext)t.hovertext=clean(t.hovertext);
+  });
+  // first trace (invisible) = the order of the categories: by the first level, then the second
+  traces.unshift({type:'scatter',mode:'markers',x:split(combos),y:combos.map(function(){return null;}),
+                  showlegend:false,hoverinfo:'skip',marker:{opacity:0},name:'',_order:true});
+  var xa=Object.assign({},layout.xaxis||{});
+  delete xa.categoryarray;delete xa.categoryorder;delete xa.range;
+  xa.type='multicategory';xa.autorange=true;xa.showdividers=true;xa.dividercolor='#C9D1C8';
+  xa.title={text:_axisLabel(s.xField)+' › '+_axisLabel(s.x2Field),font:{size:11}};
+  xa.tickfont={size:10};xa.tickangle=0;xa.automargin=true;
+  layout.xaxis=xa;
+  // room for the two label rows; the legend goes below them (anchored to the bottom of the chart)
+  var lines=function(i){var m=1;combos.forEach(function(c){m=Math.max(m,lab(c,i).split('<br>').length);});return m;};
+  var nLegend=traces.filter(function(t){return t.showlegend!==false&&!t._order;}).length;
+  var legRows=Math.ceil(nLegend/4);
+  layout.legend=Object.assign({},layout.legend||{},{orientation:'h',x:0.5,xanchor:'center',yref:'container',y:0,yanchor:'bottom'});
+  // one bar / box per category (e.g. the second level is the jet = the colour): full width, centred
+  var maxPer=0;for(var k in per)if(per.hasOwnProperty(k))maxPer=Math.max(maxPer,per[k]);
+  if(maxPer<=1){if(ct==='bar')layout.barmode='relative';if(ct==='box')layout.boxmode='overlay';}
+  layout.margin=Object.assign({},layout.margin||{});
+  layout.margin.b=30+(lines(0)+lines(1))*13+18+legRows*22;
+}
+function _x2OptionsHtml(state){
+  var opts='<option value="">— none —</option>';
+  X_AXES.forEach(function(a){
+    if(a.hidden||a.key===state.xField||a.key===JET_AIR_X_KEY)return;
+    var l=a.unit?a.title+' ('+a.unit+')':a.title;
+    opts+='<option value="'+a.key+'"'+(a.key===state.x2Field?' selected':'')+'>'+l+'</option>';
+  });
+  return opts;
+}
+
 function _xAxisOptionsHtmlFor(yKey, selectedKey){
   var choices=_xAxisChoicesFor(yKey);
   // Falls die aktuell gewaehlte X-Achse in der eingeschraenkten Liste nicht
@@ -4271,6 +4371,7 @@ function rebuildGrid(){
         var s=getState(idx);s.chartType=this.value;
         s.mode=this.value==='3d'?'3d':'2d';
         chartStates[idx]=s;
+        if(typeof _syncX2==='function')_syncX2();
         zControls.className='z-controls'+(this.value==='3d'?' visible':'');
         updateChart(idx);
       });
@@ -4281,9 +4382,16 @@ function rebuildGrid(){
       selX.innerHTML=_xOptsInit.html;
       selX.disabled=(state.yKey===JET_AIR_Y_KEY);
       if(_xOptsInit.key!==state.xField){state.xField=_xOptsInit.key;chartStates[idx]=state;}
+      var lblX2=document.createElement('label');lblX2.textContent='›';lblX2.className='lbl-x2';
+      lblX2.title='Second level under X - e.g. X = Yarn and under it the Jets';
+      var selX2=document.createElement('select');selX2.className='sel-x2';
+      selX2.title='Second level under X (bars, stacked bars, box plot, scatter): e.g. X = Yarn and under it the Jets. Empty = only X';
+      selX2.innerHTML=_x2OptionsHtml(state);
+      function _syncX2(){var st=getState(idx);var ok=!!X2_TYPES[st.chartType||'bar']&&st.yKey!==JET_AIR_Y_KEY;
+        lblX2.style.display=ok?'':'none';selX2.style.display=ok?'':'none';selX2.innerHTML=_x2OptionsHtml(st);}
       var zControls=document.createElement('div');zControls.className='z-controls'+(curType==='3d'?' visible':'');
       var lblZ=document.createElement('label');lblZ.textContent='Z:';
-      var selZ=document.createElement('select');selZ.innerHTML=X_AXES.map(function(a){var l=a.unit?a.title+' ('+a.unit+')':a.title;return'<option value="'+a.key+'"'+(a.key===state.zField?' selected':'')+'>'+l+'</option>';}).join('');
+      var selZ=document.createElement('select');selZ.innerHTML=X_AXES.filter(function(a){return !a.hidden&&!a.cat;}).map(function(a){var l=a.unit?a.title+' ('+a.unit+')':a.title;return'<option value="'+a.key+'"'+(a.key===state.zField?' selected':'')+'>'+l+'</option>';}).join('');
       zControls.appendChild(lblZ);zControls.appendChild(selZ);
       var lblY=document.createElement('label');lblY.textContent='Y:';
       var selY=document.createElement('select');selY.innerHTML=buildYOptions(state.yKey);
@@ -4336,6 +4444,8 @@ function rebuildGrid(){
       } else {
         // ── Simple/Advanced/Series-Mode: volle Toolbar ──
         toolbar.appendChild(selCtype);toolbar.appendChild(lblX);toolbar.appendChild(selX);
+        toolbar.appendChild(lblX2);toolbar.appendChild(selX2);_syncX2();
+        selX2.addEventListener('change',function(){var s=getState(idx);s.x2Field=selX2.value;chartStates[idx]=s;updateChart(idx);});
         var btnXAll=document.createElement('button');
         btnXAll.className='btn-toolbar';
         btnXAll.textContent='→ All';
@@ -4343,7 +4453,7 @@ function rebuildGrid(){
         btnXAll.style.cssText='font-size:10px;padding:2px 6px;color:#1D6B32;';
         btnXAll.addEventListener('click',function(e){
           e.stopPropagation();
-          var xVal=selX.value;
+          var xVal=selX.value, x2Val=selX2.value;
           var total=Math.max(1,parseInt(document.getElementById('inp-count').value)||1);
           syncNotesToState();
           for(var j=0;j<total;j++){
@@ -4351,6 +4461,7 @@ function rebuildGrid(){
             var s=getState(j);
             if(s.blockType==='image') continue;
             s.xField=xVal;
+            s.x2Field=x2Val;
             chartStates[j]=s;
           }
           rebuildGrid();
@@ -4377,7 +4488,9 @@ function rebuildGrid(){
           var newKey=selX.value;
           var oldKey=s.xField;
           s.xField=newKey;
+          if(s.x2Field===newKey)s.x2Field='';
           chartStates[idx]=s;
+          _syncX2();
           // If switching to/from a is_group_by axis, re-run the query
           // so Python fetches the correct group_label values
           var newDef=X_AXES.find(function(a){return a.key===newKey;})||{};
@@ -4399,6 +4512,7 @@ function rebuildGrid(){
           selX.disabled=(s.yKey===JET_AIR_Y_KEY);
           s.xField=_xOpts.key;
           chartStates[idx]=s;
+          _syncX2();
           _renderYPills(idx,pillsDiv);
           updateChart(idx);
         });
@@ -4590,9 +4704,14 @@ function rebuildGrid(){
       card.appendChild(toolbar);card.appendChild(pillsDiv||document.createElement('div'));card.appendChild(plotDiv);card.appendChild(noteBar);card.appendChild(gridlineBar);grid.appendChild(card);
       var _ct=state.chartType||'bar';
       var _yKeys=state.yKeys&&state.yKeys.length?state.yKeys:[state.yKey||Y_AXES[0].key];
-      var _initTraces=buildTracesForKeys(_ct,state.xField,state.zField,_yKeys);
-      var _initLayout=makeLayoutForKeys(_ct,state.xField,state.zField,_yKeys,_lastNJets);
-      if(_ct!=='3d' && _ct!=='heat' && _initLayout.xaxis){
+      // second X level (also when a saved report opens or "→ All" rebuilds the grid)
+      var _useX2=_x2Active(state,_ct);
+      var _xUse=_useX2?_comboField(state.xField,state.x2Field):state.xField;
+      var _initTraces=buildTracesForKeys(_ct,_xUse,state.zField,_yKeys);
+      var _initLayout=makeLayoutForKeys(_ct,_xUse,state.zField,_yKeys,_lastNJets);
+      if(_useX2){
+        _toMulticategory(_initTraces,_initLayout,_ct,state);
+      } else if(_ct!=='3d' && _ct!=='heat' && _initLayout.xaxis){
         var _initXVals=[];
         _initTraces.forEach(function(t){(t.x||[]).forEach(function(v){if(_initXVals.indexOf(String(v))===-1)_initXVals.push(String(v));});});
         var _allNumInit=_initXVals.length>0&&_initXVals.every(function(v){return !isNaN(parseFloat(v))&&isFinite(v);});
@@ -5142,6 +5261,7 @@ function getCurrentReportData() {
         sortOrder:   i,
         chartIndex:  i,
         xField:      s.xField     || X_DEFAULT,
+        x2Field:     s.x2Field    || '',
         yKey:        s.yKey       || (Y_AXES[0]?Y_AXES[0].key:'titer'),
         zField:      s.zField     || X_DEFAULT,
         chartMode:   s.mode       || '2d',
@@ -5414,6 +5534,7 @@ function receiveReport(report){
       chartStates[sortIdx] = {
         blockType:   'chart',
         xField:      b.xField    || X_DEFAULT,
+        x2Field:     b.x2Field   || '',
         yKey:        b.yKey      || (Y_AXES[0]?Y_AXES[0].key:'titer'),
         zField:      b.zField    || X_DEFAULT,
         mode:        b.chartMode || '2d',

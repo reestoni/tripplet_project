@@ -188,24 +188,6 @@ def test_jet_group_comes_second():
     assert any(c[0] == "Luftbohrung" for c in te.JET_COLUMNS)
 
 
-def test_field_picker(qapp=None):
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-    from ui.smart_chart_style import FieldPicker
-    fields = te.YARN_FIELDS + te.GENERAL_FIELDS
-    p = FieldPicker()
-    p.set_fields(fields, ("cat",), "— none —")
-    assert p.currentData() == "" and p.text() == "— none —"
-    seen = []
-    p.changed.connect(lambda: seen.append(p.currentData()))
-    p.set_key("machine", emit=True)
-    assert p.currentData() == "machine" and seen == ["machine"]
-    p.set_key("does-not-exist", emit=True)
-    assert p.currentData() == ""
-    menus = [a.text() for a in p.menu().actions() if a.menu()]
-    assert menus[0].startswith("Yarn") and all("(" in m for m in menus)
-
-
 # ── periods on time fields (Year/Month …), move with the calendar ──
 def test_period_bounds_and_filter():
     import datetime

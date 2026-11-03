@@ -34,6 +34,14 @@ TEXTS = {
                  ["At the top of a chart card (2), choose the value in the first list (Y axis).",
                   "Choose the X axis in the second list. <i>to all</i> applies this X axis to every chart.",
                   "<b>+</b> next to the Y list adds another value to the same chart."]),
+                ("task", "Two levels on the X axis, e.g. Yarn and under it the Jets",
+                 ["Choose the first level in the X list, e.g. <i>Yarn</i> (the short name of the yarn).",
+                  "In the list right of it (after ›) choose the second level, e.g. <i>Jet</i>. The X axis then shows "
+                  "each yarn with its jets below it - only the combinations that were really tested.",
+                  "<i>— none —</i> goes back to one level."],
+                 "Works with grouped and stacked bars, box plots and scatter. A double-click on a bar shows the "
+                 "trials of exactly that yarn and jet. A trial with several yarns appears under all of them "
+                 "together (\"A / B\")."),
                 ("task", "Show more or fewer charts",
                  ["Change the number in <i>Charts:</i> in the toolbar (1)."]),
                 ("task", "Show scatter and range",
@@ -101,6 +109,15 @@ TEXTS = {
                  ["Oben in einer Diagramm-Kachel (2) in der ersten Liste den Wert wählen (Y-Achse).",
                   "In der zweiten Liste die X-Achse wählen. <i>to all</i> übernimmt diese X-Achse für alle Diagramme.",
                   "<b>+</b> neben der Y-Liste fügt dem Diagramm einen weiteren Wert hinzu."]),
+                ("task", "Zwei Ebenen auf der X-Achse, z.&nbsp;B. Garn und darunter die Jets",
+                 ["In der X-Liste die erste Ebene wählen, z.&nbsp;B. <i>Yarn</i> (Kurzname des Garns).",
+                  "In der Liste rechts daneben (nach ›) die zweite Ebene wählen, z.&nbsp;B. <i>Jet</i>. Die X-Achse "
+                  "zeigt dann jedes Garn mit seinen Jets darunter - nur die Kombinationen, die wirklich getestet "
+                  "wurden.",
+                  "<i>— none —</i> geht zurück zu einer Ebene."],
+                 "Geht mit gruppierten und gestapelten Balken, Boxplots und Punkten. Doppelklick auf einen Balken "
+                 "zeigt die Versuche genau dieses Garns und Jets. Ein Versuch mit mehreren Garnen steht unter allen "
+                 "zusammen (\"A / B\")."),
                 ("task", "Mehr oder weniger Diagramme anzeigen",
                  ["In der Werkzeugleiste (1) die Zahl bei <i>Charts:</i> ändern."]),
                 ("task", "Streuung und Bereich anzeigen",
@@ -168,6 +185,13 @@ TEXTS = {
                  ["Arriba en la tarjeta del gráfico (2), elige el valor en la primera lista (eje Y).",
                   "Elige el eje X en la segunda lista. <i>to all</i> aplica este eje X a todos los gráficos.",
                   "<b>+</b> junto a la lista Y añade otro valor al mismo gráfico."]),
+                ("task", "Dos niveles en el eje X, p.&nbsp;ej. hilo y debajo los jets",
+                 ["Elige el primer nivel en la lista X, p.&nbsp;ej. <i>Yarn</i> (el nombre corto del hilo).",
+                  "En la lista de la derecha (tras ›) elige el segundo nivel, p.&nbsp;ej. <i>Jet</i>. El eje X muestra "
+                  "entonces cada hilo con sus jets debajo, solo las combinaciones realmente ensayadas.",
+                  "<i>— none —</i> vuelve a un solo nivel."],
+                 "Funciona con barras agrupadas y apiladas, box plots y dispersión. Un doble clic en una barra muestra "
+                 "los ensayos de ese hilo y jet. Un ensayo con varios hilos aparece bajo todos juntos (\"A / B\")."),
                 ("task", "Mostrar más o menos gráficos",
                  ["Cambia el número en <i>Charts:</i> en la barra de herramientas (1)."]),
                 ("task", "Mostrar dispersión y rango",

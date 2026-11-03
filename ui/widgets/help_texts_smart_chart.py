@@ -1,12 +1,10 @@
 # ui/widgets/help_texts_smart_chart.py
 """Hilfetexte Smart Chart (EN/DE/ES) fuer ui/widgets/multilang_help.py.
 
-Spiegelt ui/screen_smart_chart.py (neu seit 2026-10-30): links "1 Find
-trials" mit Filter-Kaertchen, "+ Add filter" (ui/smart_chart_filter_dialog.py,
-Histogramm/Ankreuzliste) und "Yarn filters apply to"; rechts Zaehler,
-"2 Build the chart" (X, Y, Colour by, Split by, Chart, Colours, Options),
-Diagramm und Trefferliste; oben New, Open view, Save view, Excel, Reload,
-PDF. Bei Aenderungen dort hier (alle 3 Sprachen) nachziehen.
+Spiegelt ui/screen_smart_chart.py: seit 2026-11-02 nur noch das Dashboard
+(ui/smart_dashboard*.py); "1 Find trials" = Filter auf allen Seiten in der
+Filters-Leiste ("+ Add filter" -> ui/smart_chart_filter_dialog.py). Bei
+Aenderungen dort hier (alle 3 Sprachen) nachziehen.
 """
 
 
@@ -22,8 +20,9 @@ TEXTS = {
         "tabs": [
             {"key": "tasks", "title": "How do I…?", "blocks": [
                 ("p", "Smart Chart finds trials by their properties - yarn, machine settings, lab results - across "
-                      "<b>all</b> trial series, and charts any field against any other. Two steps: "
-                      "<b>1 Find trials</b> (left) and <b>2 Build the chart</b> (right)."),
+                      "<b>all</b> trial series and shows them in a dashboard like Power BI: pages with charts, cards, "
+                      "tables and slicers. The <b>filters on all pages</b> (Filters pane, right) decide which trials "
+                      "take part."),
                 ("h", "1 Find trials"),
                 ("task", "Find e.g. all polyester trials with 70–80 dtex and 30–40 filaments",
                  [f"Click {B('+ Add filter')}, choose <i>Material</i>, tick <i>PES</i> and click {B('Add filter')}.",
@@ -33,7 +32,8 @@ TEXTS = {
                  "The green box at the top always shows how many trials match, in how many series. "
                  "Reference samples are never included."),
                 ("task", "Change or remove a filter",
-                 ["Click the filter card to change it, or its <b>×</b> to remove it."]),
+                 ["In the Filters pane under <i>On all pages</i>, click a filter to change it, or its <b>×</b> to "
+                  "remove it."]),
                 ("task", "Only look at the core (or effect) yarn",
                  ["Under <i>Yarn filters apply to</i> choose <i>Core only</i> or <i>Effect only</i>."],
                  "With <i>Any ply</i>, all yarn filters must fit the <b>same</b> ply of the trial - PES + 70–80 dtex "
@@ -46,7 +46,7 @@ TEXTS = {
                  [f"In {B('+ Add filter')} the fields are grouped (Yarn, Jet, Machine, Lab, General); click a group "
                   "to open or close it.",
                   "Or type part of the name into <i>Search a field…</i> - the matching groups open by themselves.",
-                  "X axis, Y axis, Colour by and Split by work the same way: one sub-menu per group."],
+                  "The <i>Fields</i> pane of the dashboard is grouped the same way and has its own search box."],
                  "The <i>Jet</i> group has the data of the jet used in the trial: air hole, yarn channel, swirl "
                  "chamber, cone, titer range, maker, material and more. All lab tables (Statimat, Itemat, DTYoMat, "
                  "shrinkage …) are in the <i>Lab</i> folder."),
@@ -56,44 +56,31 @@ TEXTS = {
                   "Or choose <i>Pick values</i>: every value that occurs in the range is listed with its number of "
                   "trials; tick the ones you want."],
                  "The filter card shows it, e.g. <i>Overfeed 1 – 5 % · every 0.5</i>."),
-                ("h", "2 Build the chart"),
-                ("task", "Choose what the chart shows",
-                 ["Choose the <i>X axis</i> and the <i>Y axis</i>.",
-                  "Choose the kind of chart under <i>Chart</i>: <i>Points</i>, <i>Points + trend line</i> (straight "
-                  "line per colour with R²), <i>Mean line</i>, <i>Bars</i>, <i>Box plot</i>, <i>Violin</i>, "
-                  "<i>Histogram of Y</i> (how Y is spread, X is not used) or <i>Density map</i> (where most trials lie)."],
-                 "Only trials with a value for both X and Y are drawn; the green box says how many."),
-                ("task", "Play with the colours",
-                 ["<i>Colour by</i> a list field (Jet, Machine, Material…) gives each value its own colour; a number "
-                  "field (e.g. Speed) colours the points along a colour scale.",
-                  "Choose a palette under <i>Colours</i>, e.g. <i>Heberlein green</i>, <i>Colour-blind safe</i> or "
-                  "<i>Greyscale (print)</i>.",
-                  f"{B('Colours…')} lets you pick your own colour for each value.",
-                  f"{B('Options')}: different shapes per colour, logarithmic axes, point size, dark background."],
-                 "Click a legend entry to hide it, double-click to show only that one. Your colours and options are "
-                 "saved with the view."),
+                ("h", "2 Read the charts"),
                 ("task", "Compare machines (or materials) side by side",
-                 ["Choose a field under <i>Split by</i>, e.g. Machine. You get one small chart per value, all with "
-                  "the same axes."],
-                 "At most 9 panels are shown (the most frequent values)."),
+                 ["Drag a field into <i>Small multiples</i>, e.g. Machine. You get one small chart per value, all "
+                  "with the same axes."],
+                 "At most 9 panels are shown (the most frequent values). Click a legend entry to hide it, "
+                 "double-click to show only that one."),
                 ("task", "Find out which trial a point is",
                  ["Point at it: the tooltip shows trial, series and yarn.",
-                  "Click it: the trial is selected in the list below the chart.",
-                  "Double-click the line in the list to open the series in Show Experiment."]),
+                  "Click ⤢ in the title bar of the visual (Focus): below the chart is the list of its trials. "
+                  "Click a point to find its line, double-click the line to open the series in Show Experiment."]),
                 ("task", "Know whether a comparison is fair",
-                 ["Look at the coloured bar above the chart. It checks whether the groups you compare (colours, "
-                  "panels or X categories - or the X range) also differ in other conditions that change the Y "
-                  "value: material, titer, filaments, yarn type, machine, jet, air pressure, overfeed, speed.",
+                 ["Look at the coloured dot in the title bar of a chart. It checks whether the groups you compare "
+                  "(colours, panels or X categories - or the X range) also differ in other conditions that change "
+                  "the Y value: material, titer, filaments, yarn type, machine, jet, air pressure, overfeed, speed.",
                   "<b>Green</b>: nothing conspicuous. <b>Yellow</b>: partly fair or few data. <b>Red</b>: the chart "
                   "may show the effect of those conditions rather than of what you compare.",
-                  f"{B('Details')} shows every condition: how differently it is spread over the groups and how "
-                  f"much it affects Y. {B('Make it fairer')} adds a filter for the part all groups share."],
+                  "Click the dot for the details: every condition, how differently it is spread over the groups and "
+                  "how much it affects Y. <i>Make it fairer</i> adds a filter to this visual for the part all groups "
+                  "share."],
                  "It also warns about groups with very few trials, groups that come from one single trial series, "
                  "and groups that lie in different X ranges. A warning light, not a proof: only conditions "
                  "recorded in TrippleT are checked."),
                 ("h", "Dashboard"),
                 ("task", "Build a page with several visuals (like Power BI)",
-                 [f"Switch from {B('Chart')} to {B('Dashboard')} at the top.",
+                 ["Smart Chart opens straight in the dashboard (<i>Report</i> at the top left).",
                   "Click a visual on the page to select it, or click a type in <i>Visualizations</i> to add a new one "
                   f"({B('+ New visual')} adds an empty one).",
                   "Drag fields from <i>Fields</i> - all tables, grouped and collapsible - into the wells "
@@ -142,6 +129,24 @@ TEXTS = {
                   "<i>higher is better</i> or <i>lower is better</i>."],
                  "Cards turn green or red, charts get a dashed target line, the matrix is coloured green on the "
                  "good side of the target and red on the bad side."),
+                ("task", "Add an average line, ± standard deviations or spec limits (Analytics)",
+                 ["Select a chart and click <i>Analytics</i> in Visualizations (next to Build and Format).",
+                  "Choose <i>+ Add a line…</i>: Average, Median, Mean ± 1/2/3 SD, Percentile, Min, Max, a "
+                  "<i>Constant line</i> or a <i>Band</i> from - to (e.g. the spec limits).",
+                  "Give it a label and a colour if you like; × removes it."],
+                 "Average, median and the others are calculated from the single trials in the chart, in each small "
+                 "multiple separately (for Columns from the columns). Works for bars, box, violin, line, points, "
+                 "trend, histogram, columns and control charts. Copy format does not copy these lines."),
+                ("task", "Jump to a detail page for one machine, jet … (drill-through)",
+                 ["Make the detail page: open it, in <i>Filters</i> under <i>Drill-through to this page</i> "
+                  "choose the field, e.g. <i>Machine</i>.",
+                  "On another page, right-click a bar, box, matrix cell or pie slice of a visual that uses "
+                  "Machine and choose the page under <i>Drill through</i>.",
+                  "The detail page shows only that machine. <i>← Back to …</i> returns, <i>Clear</i> shows the "
+                  "page without the drill-through filter."],
+                 "With <i>Keep all filters of the clicked visual</i> (standard) the page, visual, click and slicer "
+                 "filters of the clicked visual come along too. The drill-through is not saved with the dashboard. "
+                 "Works on the Dashboards page as well."),
                 ("task", "Drill down (e.g. machine → jet)",
                  ["In a bar, box, violin or line visual, drag one or more fields into <i>Drill down to</i>.",
                   "Double-click a bar: the visual shows the next level for that value. The path is shown in the "
@@ -199,6 +204,64 @@ TEXTS = {
                   "Drag one of the selected visuals by its title bar and all of them move together. The arrow keys "
                   "move the selected visuals one step."],
                  "Ctrl+Z undoes it."),
+                ("task", "Format a visual: order, Top N, decimals, labels, colours, axes, legend",
+                 ["Click the visual, then the tab <i>Format</i> at the top of Visualizations (<i>Build</i> brings "
+                  "back the fields). Click the empty page or press Esc to select nothing.",
+                  "<i>Sort and Top N</i>: order by value (high to low, low to high) or by name, and show only the "
+                  "top 5, 10 … - e.g. the best 10 jets. The note under the chart says how many are left out.",
+                  "<i>Numbers</i>: decimal places for the axis, the card, the matrix and the values on the chart. "
+                  "<i>Data labels</i>: show the values on bars and lines, or switch them off. <i>Error bars</i> (Bars, Mean line): <i>Standard deviation</i> (how much the trials scatter), <i>95 % confidence</i> (where the true mean lies - if two bars hardly overlap, the difference is probably real; with few trials it gets wide, and with one trial there is none), <i>Min – Max</i> (worst and best trial) or <i>Off</i>.",
+                  "<i>Axes</i>: your own title, or <i>hide</i>; fix where the Y axis starts and ends (one or both). "
+                  "<i>Legend</i>: right, top, bottom or off.",
+                  "<i>Colours</i>: another palette, or click the colour box next to a value to pick your own "
+                  "(× goes back). Matrix: the colour scale. <i>Text and grid</i>: text size, grid lines on or off.",
+                  "Card: size of the number, show or hide the unit and the line below. Table: click a column "
+                  "heading to sort (again = the other way round); <i>+ Add colour rule</i> colours cells, e.g. "
+                  "FP/m greater than 100 green, Machine is SSM red.",
+                  "Every change shows at once. A green dot marks what differs from the standard; <i>Reset</i> sets "
+                  "one section back, <i>Reset all</i> the whole visual.",
+                  "<b>Dashboard theme</b>: click the empty page (nothing selected), then <i>Format</i>. Palette, "
+                  "text size, grid lines, decimals, values on bars and legend there apply to every visual on every "
+                  "page; a visual's own Format wins. In a visual, <i>Dashboard: …</i> shows what the theme gives.",
+                  "<b>Copy a format</b>: click the visual with the right format, then <i>Copy format</i> at the top "
+                  "of the page (next to + New visual), then the visual that should get it. A double-click on "
+                  "<i>Copy format</i> keeps it on for several visuals - Esc ends it. Axis titles and ranges are not "
+                  "copied - they belong to the fields.",
+                  "<i>Points and lines</i>: a different shape per colour, the point size. <i>Axes</i>: also "
+                  "logarithmic X / Y axes."],
+                 "PDF and the Dashboards page show the visual the same way. Ctrl+Z undoes a change."),
+                ("task", "Look at one visual big, with its trials (Focus)",
+                 ["Point at a visual and click ⤢ in its title bar.",
+                  "The visual fills the page; below it are all trials it is made of, with the fields you used. Click "
+                  "a point to find its line, click a line to light up its point, double-click a line to open the "
+                  "trial in Show Experiment.",
+                  "<i>Back to the page</i> or Esc goes back. A click on the coloured dot in a title bar shows the "
+                  "fairness details, with <i>Make it fairer</i>."],
+                 "Works on the Dashboards page too."),
+                ("task", "Pie, donut, control chart, radar, text",
+                 ["<i>Pie / donut</i>: drag a field into Legend - it counts trials (or series, experiments), or "
+                  "drag a number into Value and choose Sum. <i>Shape</i> in Build: Pie or Donut (the total stands "
+                  "in the middle). Click a piece to filter the page.",
+                  "<i>Control chart</i>: a number into Y axis. The trials run in order of series and trial number - "
+                  "or of the field in X axis (e.g. Trial month). Lines: mean and the limits ±3σ; red = outside the "
+                  "limits, amber = 7 or more in a row on one side of the mean.",
+                  "<i>Radar</i>: three or more number fields into Values, a field into Legend (jet, yarn, machine …). "
+                  "Each axis runs from the lowest group (inside) to the highest (outside); the real values are in "
+                  "the tooltip.",
+                  "<i>Text</i>: write in Build. A line starting with # is a heading, **text** is bold."],
+                 "All of them are in the PDF too."),
+                ("task", "See how the tables hang together (Model)",
+                 ["Click <i>Model</i> at the top left of the dashboard (<i>Report</i> brings the pages back).",
+                  "The trial is in the middle; on the left what it refers to (yarn, jet, experiment, time, machine), "
+                  "on the right the lab tables. 1 : n = several rows per trial, averaged; n : 1 = many trials share "
+                  "one row.",
+                  "Click a table: what it holds, how a value per trial comes about, and per field how many trials "
+                  "have a value."],
+                 "Read only - nobody can change the links there."),
+                ("task", "Make the side panes wider or narrower",
+                 ["Drag the left edge of Filters, Visualizations or Fields. A double-click on the edge gives the "
+                  "standard width back; › folds a pane away."],
+                 "TrippleT remembers the widths for you."),
                 ("task", "Undo a change, see notes",
                  ["Ctrl+Z undoes the last change of the page (layout, fields, filters …), Ctrl+Y redoes it. "
                   "Delete removes the selected visual.",
@@ -209,7 +272,7 @@ TEXTS = {
                   "chip at the top says what was clicked.",
                   "Click the same place again, or the blue chip, to undo it."]),
                 ("h", "Keeping and sharing"),
-                ("task", "Save a chart to open it again later",
+                ("task", "Save a dashboard to open it again later",
                  [f"Click {B('Save view')}, enter a name, tick <i>Share with everybody</i> if others should see it.",
                   f"Open it again with {B('Open view')}.",
                   f"To share it with single people or groups (read, write, admin, superuser): {B('Share…')} - "
@@ -218,21 +281,21 @@ TEXTS = {
                  "The filters are saved, not the list of trials - a view always shows today's data. "
                  "Only its creator can share it; change it: the creator, people with <i>edit</i> and superusers; "
                  "delete it: the creator or a superuser."),
-                ("task", "Export the chart or the list",
-                 [f"{B('PDF')}: title, filters, chart and the list of trials.",
-                  f"{B('Excel')}: the list of trials in the chart, with a sheet listing the filters."]),
                 ("task", "Get the latest data",
-                 [f"Click {B('Reload')} or press F5. Your filters and chart settings stay."]),
+                 [f"Click {B('Reload')} or press F5. Your filters and the dashboard stay."]),
             ]},
             {"key": "screen", "title": "Screen guide", "blocks": [
                 ("areas", [
-                    ("Top", "New (start again), Open view, Save view, Excel, Reload (F5), PDF and this help."),
-                    ("1 Find trials", "Filter cards, + Add filter, Yarn filters apply to (Any ply / Core only / Effect only) "
-                                      "and an overview of the fields you can filter by."),
-                    ("Green box", "How many trials match, in how many series, machines and jets - and how many are in the chart."),
-                    ("2 Build the chart", "X axis, Y axis, Colour by, Split by; Chart (kind), Colours (palette, Colours…), "
-                                          "Options; below it the chart."),
-                    ("Trials in the chart", "Every trial in the chart; click a column header to sort, double-click to open."),
+                    ("Top", "New (empty page, example or template), Open view, Save view, Share…, Excel, Reload (F5), "
+                            "PDF and this help."),
+                    ("Green box", "How many trials match the filters on all pages, in how many series, machines and jets."),
+                    ("Page", "Report | Model, page name, + New visual, Copy format; the visuals; the page tabs at the "
+                             "bottom."),
+                    ("Filters", "On all pages (= find trials, Yarn filters apply to), on this page, on this visual, "
+                                "clicks and slicers."),
+                    ("Visualizations", "The visual types; Build (fields, options) and Format (sort, numbers, colours, "
+                                       "axes …) of the selected visual - or the dashboard theme."),
+                    ("Fields", "All fields of all tables in folders, with a search box and + New calculated field."),
                 ]),
             ]},
         ],
@@ -245,8 +308,9 @@ TEXTS = {
         "tabs": [
             {"key": "tasks", "title": "Wie mache ich…?", "blocks": [
                 ("p", "Smart Chart findet Versuche über ihre Eigenschaften - Garn, Maschineneinstellungen, "
-                      "Laborwerte - über <b>alle</b> Versuchsserien hinweg und stellt jedes Feld gegen jedes andere dar. "
-                      "Zwei Schritte: <b>1 Find trials</b> (links) und <b>2 Build the chart</b> (rechts)."),
+                      "Laborwerte - über <b>alle</b> Versuchsserien hinweg und zeigt sie in einem Dashboard wie Power BI: "
+                      "Seiten mit Diagrammen, Cards, Tabellen und Slicern. Die <b>Filter auf allen Seiten</b> "
+                      "(Filters-Leiste rechts) bestimmen, welche Versuche dabei sind."),
                 ("h", "1 Versuche finden"),
                 ("task", "Z. B. alle Polyester-Versuche mit 70–80 dtex und 30–40 Filamenten finden",
                  [f"Auf {B('+ Add filter')} klicken, <i>Material</i> wählen, <i>PES</i> ankreuzen und {B('Add filter')} klicken.",
@@ -256,7 +320,8 @@ TEXTS = {
                  "Das grüne Feld oben zeigt immer, wie viele Versuche passen und aus wie vielen Serien. "
                  "Referenzmuster sind nie dabei."),
                 ("task", "Einen Filter ändern oder entfernen",
-                 ["Auf das Filter-Kärtchen klicken, um es zu ändern, oder auf sein <b>×</b>, um es zu entfernen."]),
+                 ["In der Filters-Leiste unter <i>On all pages</i> auf einen Filter klicken, um ihn zu ändern, oder "
+                  "auf sein <b>×</b>, um ihn zu entfernen."]),
                 ("task", "Nur das Core- (oder Effekt-)Garn betrachten",
                  ["Unter <i>Yarn filters apply to</i> <i>Core only</i> oder <i>Effect only</i> wählen."],
                  "Bei <i>Any ply</i> müssen alle Garnfilter auf <b>dieselbe</b> Ply des Versuchs passen - PES + "
@@ -269,7 +334,7 @@ TEXTS = {
                  [f"In {B('+ Add filter')} sind die Felder gruppiert (Yarn, Jet, Machine, Lab, General); Klick auf "
                   "eine Gruppe klappt sie auf oder zu.",
                   "Oder einen Teil des Namens bei <i>Search a field…</i> tippen - die passenden Gruppen klappen von selbst auf.",
-                  "X axis, Y axis, Colour by und Split by funktionieren gleich: ein Untermenü pro Gruppe."],
+                  "Die <i>Fields</i>-Leiste des Dashboards ist gleich gruppiert und hat ein eigenes Suchfeld."],
                  "Die Gruppe <i>Jet</i> enthält die Daten des im Versuch verwendeten Jets: Luftbohrung, Garnkanal, "
                  "Wirbelkammer, Konus, Titerbereich, Hersteller, Werkstoff und mehr. Alle Labortabellen (Statimat, "
                  "Itemat, DTYoMat, Schrumpf …) liegen im Ordner <i>Lab</i>."),
@@ -279,46 +344,33 @@ TEXTS = {
                   "Oder <i>Pick values</i> wählen: Jeder Wert, der im Bereich vorkommt, steht mit seiner Anzahl "
                   "Versuche in einer Liste; die gewünschten ankreuzen."],
                  "Das Filter-Kärtchen zeigt es an, z. B. <i>Overfeed 1 – 5 % · every 0.5</i>."),
-                ("h", "2 Diagramm bauen"),
-                ("task", "Festlegen, was das Diagramm zeigt",
-                 ["<i>X axis</i> und <i>Y axis</i> wählen.",
-                  "Unter <i>Chart</i> die Art wählen: <i>Points</i>, <i>Points + trend line</i> (gerade Linie pro "
-                  "Farbe mit R²), <i>Mean line</i>, <i>Bars</i>, <i>Box plot</i>, <i>Violin</i>, <i>Histogram of Y</i> "
-                  "(wie Y verteilt ist, X wird nicht gebraucht) oder <i>Density map</i> (wo die meisten Versuche liegen)."],
-                 "Gezeichnet werden nur Versuche mit einem Wert für X und Y; das grüne Feld sagt, wie viele."),
-                ("task", "Mit den Farben spielen",
-                 ["<i>Colour by</i> mit einem Listenfeld (Jet, Maschine, Material…) gibt jedem Wert eine eigene Farbe; "
-                  "ein Zahlenfeld (z. B. Speed) färbt die Punkte entlang einer Farbskala.",
-                  "Unter <i>Colours</i> eine Palette wählen, z. B. <i>Heberlein green</i>, <i>Colour-blind safe</i> "
-                  "oder <i>Greyscale (print)</i>.",
-                  f"Mit {B('Colours…')} für jeden Wert eine eigene Farbe wählen.",
-                  f"{B('Options')}: unterschiedliche Formen pro Farbe, logarithmische Achsen, Punktgrösse, dunkler Hintergrund."],
-                 "Klick auf einen Legenden-Eintrag blendet ihn aus, Doppelklick zeigt nur diesen. Farben und "
-                 "Optionen werden mit der View gespeichert."),
+                ("h", "2 Diagramme lesen"),
                 ("task", "Maschinen (oder Materialien) nebeneinander vergleichen",
-                 ["Unter <i>Split by</i> ein Feld wählen, z. B. Machine. Pro Wert entsteht ein kleines Diagramm, "
-                  "alle mit denselben Achsen."],
-                 "Höchstens 9 Felder werden gezeigt (die häufigsten Werte)."),
+                 ["Ein Feld in <i>Small multiples</i> ziehen, z.&nbsp;B. Machine. Es gibt ein kleines Diagramm pro "
+                  "Wert, alle mit denselben Achsen."],
+                 "Höchstens 9 Felder werden gezeigt (die häufigsten Werte). Klick auf einen Legendeneintrag blendet "
+                 "ihn aus, Doppelklick zeigt nur diesen."),
                 ("task", "Herausfinden, welcher Versuch ein Punkt ist",
-                 ["Mit der Maus darauf zeigen: Der Tooltip zeigt Versuch, Serie und Garn.",
-                  "Anklicken: Der Versuch wird in der Liste unter dem Diagramm markiert.",
-                  "Doppelklick auf die Zeile in der Liste öffnet die Serie in Show Experiment."]),
+                 ["Mit der Maus darauf zeigen: der Tooltip nennt Versuch, Serie und Garn.",
+                  "In der Titelzeile des Visuals auf ⤢ klicken (Focus): unter dem Diagramm steht die Liste seiner "
+                  "Versuche. Klick auf einen Punkt zeigt seine Zeile, Doppelklick auf die Zeile öffnet die Serie in "
+                  "Show Experiment."]),
                 ("task", "Erkennen, ob ein Vergleich fair ist",
-                 ["Auf die farbige Leiste über dem Diagramm schauen. Sie prüft, ob sich die verglichenen Gruppen "
-                  "(Farben, Felder oder X-Kategorien - oder der X-Bereich) auch in anderen Bedingungen "
-                  "unterscheiden, die den Y-Wert verändern: Material, Titer, Filamente, Garntyp, Maschine, Jet, "
-                  "Luftdruck, Overfeed, Speed.",
-                  "<b>Grün</b>: nichts Auffälliges. <b>Gelb</b>: teilweise fair oder wenig Daten. <b>Rot</b>: Das "
-                  "Diagramm zeigt womöglich die Wirkung dieser Bedingungen statt dessen, was du vergleichst.",
-                  f"{B('Details')} zeigt jede Bedingung: wie ungleich sie auf die Gruppen verteilt ist und wie "
-                  f"stark sie Y beeinflusst. {B('Make it fairer')} setzt einen Filter auf den Teil, den alle "
-                  "Gruppen gemeinsam haben."],
-                 "Gewarnt wird auch bei Gruppen mit sehr wenigen Versuchen, Gruppen aus einer einzigen "
-                 "Versuchsserie und Gruppen in verschiedenen X-Bereichen. Eine Warnlampe, kein Beweis: geprüft "
-                 "werden nur Bedingungen, die in TrippleT erfasst sind."),
+                 ["Auf den farbigen Punkt in der Titelzeile eines Diagramms achten. Er prüft, ob sich die "
+                  "verglichenen Gruppen (Farben, Felder oder X-Kategorien - oder der X-Bereich) auch in anderen "
+                  "Bedingungen unterscheiden, die den Y-Wert verändern: Material, Titer, Filamente, Garntyp, "
+                  "Maschine, Jet, Luftdruck, Voreilung, Geschwindigkeit.",
+                  "<b>Grün</b>: nichts Auffälliges. <b>Gelb</b>: teilweise fair oder wenig Daten. <b>Rot</b>: das "
+                  "Diagramm zeigt womöglich eher die Wirkung dieser Bedingungen als die des Verglichenen.",
+                  "Klick auf den Punkt zeigt die Details: jede Bedingung, wie unterschiedlich sie auf die Gruppen "
+                  "verteilt ist und wie stark sie Y beeinflusst. <i>Make it fairer</i> setzt einen Filter auf dieses "
+                  "Visual für den Teil, den alle Gruppen gemeinsam haben."],
+                 "Er warnt auch bei Gruppen mit sehr wenigen Versuchen, Gruppen aus einer einzigen Versuchsserie und "
+                 "Gruppen in verschiedenen X-Bereichen. Eine Warnlampe, kein Beweis: geprüft wird nur, was in "
+                 "TrippleT erfasst ist."),
                 ("h", "Dashboard"),
                 ("task", "Eine Seite mit mehreren Visuals bauen (wie Power BI)",
-                 [f"Oben von {B('Chart')} auf {B('Dashboard')} umschalten.",
+                 ["Smart Chart öffnet direkt das Dashboard (<i>Report</i> oben links).",
                   "Ein Visual auf der Seite anklicken, um es auszuwählen, oder in <i>Visualizations</i> auf einen Typ "
                   f"klicken, um ein neues hinzuzufügen ({B('+ New visual')} fügt ein leeres hinzu).",
                   "Felder aus <i>Fields</i> - alle Tabellen, gruppiert und einklappbar - in die Ablagen ziehen (X axis, "
@@ -368,6 +420,25 @@ TEXTS = {
                   "<i>higher is better</i> oder <i>lower is better</i>."],
                  "Cards werden grün oder rot, Diagramme bekommen eine gestrichelte Ziellinie, die Matrix wird auf "
                  "der guten Seite des Ziels grün und auf der schlechten rot eingefärbt."),
+                ("task", "Mittelwertlinie, ± Standardabweichungen oder Spezifikationsgrenzen einzeichnen (Analytics)",
+                 ["Ein Diagramm anklicken und in Visualizations <i>Analytics</i> wählen (neben Build und Format).",
+                  "<i>+ Add a line…</i> wählen: Average, Median, Mittelwert ± 1/2/3 SD, Percentile, Min, Max, eine "
+                  "<i>Constant line</i> oder ein <i>Band</i> von - bis (z.&nbsp;B. die Spezifikationsgrenzen).",
+                  "Wer will, gibt eine Beschriftung und eine Farbe; × entfernt die Linie."],
+                 "Mittelwert, Median usw. werden aus den einzelnen Versuchen im Diagramm berechnet, bei Small "
+                 "multiples pro Feld getrennt (bei Columns aus den Säulen). Geht bei Balken, Box, Violin, Linie, "
+                 "Punkten, Trend, Histogramm, Columns und Regelkarten. Copy format kopiert diese Linien nicht."),
+                ("task", "Auf eine Detailseite für eine Maschine, einen Jet … springen (Drill-through)",
+                 ["Detailseite einrichten: Seite öffnen, in <i>Filters</i> unter <i>Drill-through to this page</i> "
+                  "das Feld wählen, z.&nbsp;B. <i>Machine</i>.",
+                  "Auf einer anderen Seite mit der rechten Maustaste auf einen Balken, eine Box, eine Matrix-Zelle "
+                  "oder ein Kuchenstück eines Visuals mit Machine klicken und unter <i>Drill through</i> die Seite "
+                  "wählen.",
+                  "Die Detailseite zeigt nur diese Maschine. <i>← Back to …</i> führt zurück, <i>Clear</i> zeigt "
+                  "die Seite ohne den Drill-through-Filter."],
+                 "Mit <i>Keep all filters of the clicked visual</i> (Standard) kommen auch die Seiten-, Visual-, "
+                 "Klick- und Slicer-Filter des angeklickten Visuals mit. Der Drill-through wird nicht mit dem "
+                 "Dashboard gespeichert. Geht auch auf der Seite Dashboards."),
                 ("task", "Drill-down (z. B. Maschine → Jet)",
                  ["Bei einem Balken-, Box-, Violin- oder Linien-Visual ein oder mehrere Felder nach "
                   "<i>Drill down to</i> ziehen.",
@@ -427,6 +498,68 @@ TEXTS = {
                   "Ein gewähltes Visual an der Titelzeile ziehen - alle gewählten wandern mit. Die Pfeiltasten "
                   "verschieben die gewählten Visuals um einen Schritt."],
                  "Strg+Z macht es rückgängig."),
+                ("task", "Ein Visual formatieren: Reihenfolge, Top N, Dezimalstellen, Beschriftungen, Farben, Achsen, Legende",
+                 ["Visual anklicken, dann oben in Visualizations den Reiter <i>Format</i> (<i>Build</i> zeigt "
+                  "wieder die Felder). Klick auf die leere Seite oder Esc hebt die Auswahl auf.",
+                  "<i>Sort and Top N</i>: nach Wert (hoch nach tief, tief nach hoch) oder nach Name ordnen und nur "
+                  "die besten 5, 10 … zeigen - z.&nbsp;B. die 10 besten Jets. Unter dem Diagramm steht, wie viele "
+                  "weggelassen sind.",
+                  "<i>Numbers</i>: Dezimalstellen für Achse, Card, Matrix und die Werte im Diagramm. "
+                  "<i>Data labels</i>: Werte an Balken und Linien zeigen oder ausschalten. <i>Error bars</i> (Bars, Mean line): <i>Standard deviation</i> (wie stark die Versuche streuen), <i>95 % confidence</i> (wo der wahre Mittelwert liegt - überlappen sich zwei Balken kaum, ist der Unterschied wohl echt; bei wenigen Versuchen wird er breit, bei einem Versuch gibt es keinen), <i>Min – Max</i> (schlechtester und bester Versuch) oder <i>Off</i>.",
+                  "<i>Axes</i>: eigener Titel oder <i>hide</i> (ausblenden); festlegen, wo die Y-Achse anfängt und "
+                  "endet (eines oder beides). <i>Legend</i>: rechts, oben, unten oder aus.",
+                  "<i>Colours</i>: andere Palette, oder auf das Farbkästchen neben einem Wert klicken und eine "
+                  "eigene Farbe wählen (× setzt zurück). Matrix: die Farbskala. <i>Text and grid</i>: Schriftgrösse, "
+                  "Rasterlinien an oder aus.",
+                  "Card: Grösse der Zahl, Einheit und Zeile darunter zeigen oder ausblenden. Tabelle: auf eine "
+                  "Spaltenüberschrift klicken sortiert (nochmals = umgekehrt); <i>+ Add colour rule</i> färbt Zellen, "
+                  "z.&nbsp;B. FP/m grösser als 100 grün, Maschine ist SSM rot.",
+                  "Jede Änderung ist sofort sichtbar. Ein grüner Punkt zeigt, was vom Standard abweicht; "
+                  "<i>Reset</i> setzt einen Abschnitt zurück, <i>Reset all</i> das ganze Visual.",
+                  "<b>Dashboard-Thema</b>: auf die leere Seite klicken (nichts ausgewählt), dann <i>Format</i>. "
+                  "Palette, Schriftgrösse, Rasterlinien, Dezimalstellen, Werte an Balken und Legende gelten dort für "
+                  "alle Visuals auf allen Seiten; das eigene Format eines Visuals gewinnt. Im Visual zeigt "
+                  "<i>Dashboard: …</i>, was das Thema vorgibt.",
+                  "<b>Format übertragen</b>: das Visual mit dem richtigen Format anklicken, dann oben auf der Seite "
+                  "<i>Copy format</i> (neben + New visual), dann das Visual, das es bekommen soll. Ein Doppelklick auf "
+                  "<i>Copy format</i> lässt es für mehrere Visuals an - Esc beendet es. Achsentitel und -bereiche "
+                  "werden nicht übertragen - sie gehören zu den Feldern.",
+                  "<i>Points and lines</i>: eine eigene Form pro Farbe, die Punktgrösse. <i>Axes</i>: auch "
+                  "logarithmische X-/Y-Achsen."],
+                 "PDF und die Seite Dashboards zeigen das Visual genauso. Strg+Z macht eine Änderung rückgängig."),
+                ("task", "Ein Visual gross ansehen, mit seinen Versuchen (Focus)",
+                 ["Mit der Maus auf ein Visual zeigen und in seiner Titelzeile ⤢ klicken.",
+                  "Das Visual füllt die Seite; darunter stehen alle Versuche, aus denen es besteht, mit den "
+                  "verwendeten Feldern. Klick auf einen Punkt zeigt seine Zeile, Klick auf eine Zeile hebt ihren Punkt "
+                  "hervor, Doppelklick auf eine Zeile öffnet den Versuch in Show Experiment.",
+                  "<i>Back to the page</i> oder Esc geht zurück. Klick auf den farbigen Punkt in einer Titelzeile "
+                  "zeigt die Fairness-Details, mit <i>Make it fairer</i>."],
+                 "Geht auch auf der Seite Dashboards."),
+                ("task", "Kuchen, Donut, Regelkarte, Radar, Text",
+                 ["<i>Pie / donut</i>: ein Feld in Legend ziehen - es zählt Versuche (oder Serien, Experimente), "
+                  "oder eine Zahl in Value und Sum wählen. <i>Shape</i> in Build: Kuchen oder Donut (in der Mitte "
+                  "steht die Summe). Klick auf ein Stück filtert die Seite.",
+                  "<i>Control chart</i> (Regelkarte): eine Zahl in Y axis. Die Versuche laufen in der Reihenfolge "
+                  "von Serie und Versuchsnummer - oder nach dem Feld in X axis (z.&nbsp;B. Trial month). Linien: "
+                  "Mittelwert und Grenzen ±3σ; rot = ausserhalb der Grenzen, gelb = 7 oder mehr in Folge auf einer "
+                  "Seite des Mittelwerts.",
+                  "<i>Radar</i>: drei oder mehr Zahlenfelder in Values, ein Feld in Legend (Jet, Garn, Maschine …). "
+                  "Jede Achse läuft von der tiefsten Gruppe (innen) zur höchsten (aussen); die echten Werte stehen "
+                  "im Tooltip.",
+                  "<i>Text</i>: in Build schreiben. Eine Zeile mit # am Anfang ist eine Überschrift, **Text** ist fett."],
+                 "Alle erscheinen auch im PDF."),
+                ("task", "Sehen, wie die Tabellen zusammenhängen (Model)",
+                 ["Oben links im Dashboard auf <i>Model</i> klicken (<i>Report</i> zeigt wieder die Seiten).",
+                  "In der Mitte der Versuch; links, worauf er sich bezieht (Garn, Jet, Experiment, Zeit, Maschine), "
+                  "rechts die Labortabellen. 1 : n = mehrere Zeilen pro Versuch, gemittelt; n : 1 = viele Versuche "
+                  "teilen sich eine Zeile.",
+                  "Auf eine Tabelle klicken: was sie enthält, wie ein Wert pro Versuch entsteht und pro Feld, wie "
+                  "viele Versuche einen Wert haben."],
+                 "Nur zum Lesen - dort kann niemand die Verknüpfungen ändern."),
+                ("task", "Die Seitenleisten breiter oder schmaler machen",
+                 ["Den linken Rand von Filters, Visualizations oder Fields ziehen. Ein Doppelklick auf den Rand gibt "
+                  "die Standardbreite zurück; › klappt eine Leiste weg."],
+                 "TrippleT merkt sich die Breiten für Sie."),
                 ("task", "Rückgängig machen, Notizen sehen",
                  ["Strg+Z macht die letzte Änderung der Seite rückgängig (Layout, Felder, Filter …), Strg+Y stellt "
                   "sie wieder her. Entf löscht das ausgewählte Visual.",
@@ -437,7 +570,7 @@ TEXTS = {
                   "noch diesen Wert - ein blaues Kärtchen oben sagt, was angeklickt wurde.",
                   "Nochmals auf dieselbe Stelle oder auf das blaue Kärtchen klicken hebt es auf."]),
                 ("h", "Behalten und teilen"),
-                ("task", "Ein Diagramm speichern, um es später wieder zu öffnen",
+                ("task", "Ein Dashboard speichern, um es später wieder zu öffnen",
                  [f"Auf {B('Save view')} klicken, einen Namen eingeben, <i>Share with everybody</i> ankreuzen, "
                   "wenn andere es sehen sollen.",
                   f"Mit {B('Open view')} wieder öffnen.",
@@ -447,22 +580,22 @@ TEXTS = {
                  "Gespeichert werden die Filter, nicht die Versuchsliste - eine View zeigt immer die aktuellen Daten. "
                  "Teilen kann nur, wer sie erstellt hat; ändern: Ersteller, Personen mit <i>edit</i> und Superuser; "
                  "löschen: Ersteller oder Superuser."),
-                ("task", "Diagramm oder Liste exportieren",
-                 [f"{B('PDF')}: Titel, Filter, Diagramm und Versuchsliste.",
-                  f"{B('Excel')}: die Versuche im Diagramm, mit einem Blatt, das die Filter auflistet."]),
                 ("task", "Die neusten Daten holen",
-                 [f"Auf {B('Reload')} klicken oder F5 drücken. Filter und Diagramm-Einstellungen bleiben."]),
+                 [f"Auf {B('Reload')} klicken oder F5 drücken. Filter und Dashboard bleiben."]),
             ]},
             {"key": "screen", "title": "Bildschirm", "blocks": [
                 ("areas", [
-                    ("Oben", "New (neu beginnen), Open view, Save view, Excel, Reload (F5), PDF und diese Hilfe."),
-                    ("1 Find trials", "Filter-Kärtchen, + Add filter, Yarn filters apply to (Any ply / Core only / "
-                                      "Effect only) und eine Übersicht, wonach man filtern kann."),
-                    ("Grünes Feld", "Wie viele Versuche passen, aus wie vielen Serien, Maschinen und Jets - und wie "
-                                    "viele im Diagramm sind."),
-                    ("2 Build the chart", "X axis, Y axis, Colour by, Split by; Chart (Art), Colours (Palette, Colours…), "
-                                          "Options; darunter das Diagramm."),
-                    ("Trials in the chart", "Alle Versuche im Diagramm; Klick auf den Spaltenkopf sortiert, Doppelklick öffnet."),
+                    ("Oben", "New (leere Seite, Beispiel oder Vorlage), Open view, Save view, Share…, Excel, "
+                             "Reload (F5), PDF und diese Hilfe."),
+                    ("Grünes Feld", "Wie viele Versuche zu den Filtern auf allen Seiten passen, aus wie vielen Serien, "
+                                    "Maschinen und Jets."),
+                    ("Seite", "Report | Model, Seitenname, + New visual, Copy format; die Visuals; unten die "
+                              "Seiten-Reiter."),
+                    ("Filters", "On all pages (= Versuche finden, Yarn filters apply to), auf dieser Seite, auf diesem "
+                                "Visual, Klicks und Slicer."),
+                    ("Visualizations", "Die Visual-Typen; Build (Felder, Optionen) und Format (Reihenfolge, Zahlen, "
+                                       "Farben, Achsen …) des gewählten Visuals - oder das Dashboard-Thema."),
+                    ("Fields", "Alle Felder aller Tabellen in Ordnern, mit Suchfeld und + New calculated field."),
                 ]),
             ]},
         ],
@@ -475,8 +608,9 @@ TEXTS = {
         "tabs": [
             {"key": "tasks", "title": "¿Cómo hago…?", "blocks": [
                 ("p", "Smart Chart encuentra ensayos por sus propiedades - hilo, ajustes de máquina, resultados de "
-                      "laboratorio - en <b>todas</b> las series y representa cualquier campo frente a otro. Dos pasos: "
-                      "<b>1 Find trials</b> (izquierda) y <b>2 Build the chart</b> (derecha)."),
+                      "laboratorio - en <b>todas</b> las series y los muestra en un dashboard como Power BI: páginas "
+                      "con gráficos, tarjetas, tablas y slicers. Los <b>filtros en todas las páginas</b> (panel "
+                      "Filters, a la derecha) deciden qué ensayos participan."),
                 ("h", "1 Encontrar ensayos"),
                 ("task", "Encontrar p. ej. todos los ensayos de poliéster con 70–80 dtex y 30–40 filamentos",
                  [f"Haz clic en {B('+ Add filter')}, elige <i>Material</i>, marca <i>PES</i> y haz clic en {B('Add filter')}.",
@@ -486,7 +620,8 @@ TEXTS = {
                  "El recuadro verde de arriba muestra siempre cuántos ensayos coinciden y de cuántas series. "
                  "Las muestras de referencia nunca se incluyen."),
                 ("task", "Cambiar o quitar un filtro",
-                 ["Haz clic en la tarjeta del filtro para cambiarlo, o en su <b>×</b> para quitarlo."]),
+                 ["En el panel Filters, en <i>On all pages</i>, haz clic en un filtro para cambiarlo, o en su "
+                  "<b>×</b> para quitarlo."]),
                 ("task", "Ver solo el hilo core (o efecto)",
                  ["En <i>Yarn filters apply to</i> elige <i>Core only</i> o <i>Effect only</i>."],
                  "Con <i>Any ply</i>, todos los filtros de hilo deben cumplirse en el <b>mismo</b> ply del ensayo: "
@@ -499,7 +634,7 @@ TEXTS = {
                  [f"En {B('+ Add filter')} los campos están agrupados (Yarn, Jet, Machine, Lab, General); un clic en "
                   "un grupo lo abre o lo cierra.",
                   "O escribe parte del nombre en <i>Search a field…</i>: los grupos que coinciden se abren solos.",
-                  "X axis, Y axis, Colour by y Split by funcionan igual: un submenú por grupo."],
+                  "El panel <i>Fields</i> del dashboard está agrupado igual y tiene su propio buscador."],
                  "El grupo <i>Jet</i> contiene los datos del jet usado en el ensayo: agujero de aire, canal de hilo, "
                  "cámara de turbulencia, cono, rango de título, fabricante, material y más. Todas las tablas de "
                  "laboratorio (Statimat, Itemat, DTYoMat, encogimiento …) están en la carpeta <i>Lab</i>."),
@@ -509,44 +644,33 @@ TEXTS = {
                   "O elige <i>Pick values</i>: cada valor que aparece en el rango se lista con su número de ensayos; "
                   "marca los que quieras."],
                  "La tarjeta del filtro lo muestra, p. ej. <i>Overfeed 1 – 5 % · every 0.5</i>."),
-                ("h", "2 Construir el gráfico"),
-                ("task", "Elegir qué muestra el gráfico",
-                 ["Elige el <i>X axis</i> y el <i>Y axis</i>.",
-                  "Elige el tipo en <i>Chart</i>: <i>Points</i>, <i>Points + trend line</i> (recta por color con R²), "
-                  "<i>Mean line</i>, <i>Bars</i>, <i>Box plot</i>, <i>Violin</i>, <i>Histogram of Y</i> (cómo se "
-                  "reparte Y, X no se usa) o <i>Density map</i> (dónde están la mayoría de ensayos)."],
-                 "Solo se dibujan ensayos con valor para X e Y; el recuadro verde indica cuántos."),
-                ("task", "Jugar con los colores",
-                 ["<i>Colour by</i> con un campo de lista (Jet, máquina, material…) da a cada valor su propio color; "
-                  "un campo numérico (p. ej. Speed) colorea los puntos según una escala.",
-                  "Elige una paleta en <i>Colours</i>, p. ej. <i>Heberlein green</i>, <i>Colour-blind safe</i> o "
-                  "<i>Greyscale (print)</i>.",
-                  f"Con {B('Colours…')} eliges tu propio color para cada valor.",
-                  f"{B('Options')}: formas distintas por color, ejes logarítmicos, tamaño de punto, fondo oscuro."],
-                 "Clic en una entrada de la leyenda la oculta, doble clic muestra solo esa. Los colores y opciones "
-                 "se guardan con la vista."),
+                ("h", "2 Leer los gráficos"),
                 ("task", "Comparar máquinas (o materiales) lado a lado",
-                 ["Elige un campo en <i>Split by</i>, p. ej. Machine. Obtienes un gráfico pequeño por valor, todos "
-                  "con los mismos ejes."],
-                 "Se muestran como máximo 9 paneles (los valores más frecuentes)."),
+                 ["Arrastra un campo a <i>Small multiples</i>, p.&nbsp;ej. Machine. Obtienes un gráfico pequeño por "
+                  "valor, todos con los mismos ejes."],
+                 "Se muestran como máximo 9 paneles (los valores más frecuentes). Un clic en una entrada de la "
+                 "leyenda la oculta, un doble clic muestra solo esa."),
                 ("task", "Saber qué ensayo es un punto",
-                 ["Señálalo con el ratón: la descripción muestra ensayo, serie e hilo.",
-                  "Haz clic: el ensayo se marca en la lista bajo el gráfico.",
-                  "Doble clic en la línea de la lista abre la serie en Show Experiment."]),
+                 ["Señálalo con el ratón: la ayuda emergente muestra ensayo, serie e hilo.",
+                  "Haz clic en ⤢ en la barra de título del visual (Focus): debajo del gráfico está la lista de sus "
+                  "ensayos. Un clic en un punto muestra su fila, un doble clic en la fila abre la serie en Show "
+                  "Experiment."]),
                 ("task", "Saber si una comparación es justa",
-                 ["Mira la barra de color sobre el gráfico. Comprueba si los grupos que comparas (colores, paneles "
-                  "o categorías de X, o el rango de X) también se diferencian en otras condiciones que cambian el "
-                  "valor Y: material, título, filamentos, tipo de hilo, máquina, jet, presión de aire, overfeed, "
-                  "velocidad.",
-                  "<b>Verde</b>: nada llamativo. <b>Amarillo</b>: parcialmente justa o pocos datos. <b>Rojo</b>: el "
-                  "gráfico puede mostrar el efecto de esas condiciones en lugar de lo que comparas.",
-                  f"{B('Details')} muestra cada condición: lo desigual que está repartida entre los grupos y cuánto "
-                  f"influye en Y. {B('Make it fairer')} añade un filtro para la parte que comparten todos los grupos."],
-                 "También avisa de grupos con muy pocos ensayos, grupos de una sola serie y grupos en rangos de X "
-                 "distintos. Es una luz de aviso, no una prueba: solo se comprueban condiciones registradas en TrippleT."),
+                 ["Mira el punto de color en la barra de título de un gráfico. Comprueba si los grupos que comparas "
+                  "(colores, paneles o categorías X, o el rango X) también difieren en otras condiciones que cambian "
+                  "el valor Y: material, título, filamentos, tipo de hilo, máquina, jet, presión de aire, "
+                  "sobrealimentación, velocidad.",
+                  "<b>Verde</b>: nada llamativo. <b>Amarillo</b>: en parte justo o pocos datos. <b>Rojo</b>: el "
+                  "gráfico puede mostrar el efecto de esas condiciones más que el de lo que comparas.",
+                  "Haz clic en el punto para ver los detalles: cada condición, cuán distinta es su reparto entre los "
+                  "grupos y cuánto influye en Y. <i>Make it fairer</i> añade a este visual un filtro para la parte "
+                  "que comparten todos los grupos."],
+                 "También avisa de grupos con muy pocos ensayos, grupos que vienen de una sola serie y grupos en "
+                 "rangos X distintos. Es una luz de aviso, no una prueba: solo se comprueban las condiciones "
+                 "registradas en TrippleT."),
                 ("h", "Dashboard"),
                 ("task", "Construir una página con varios visuales (como Power BI)",
-                 [f"Arriba cambia de {B('Chart')} a {B('Dashboard')}.",
+                 ["Smart Chart abre directamente el dashboard (<i>Report</i> arriba a la izquierda).",
                   "Haz clic en un visual de la página para seleccionarlo, o en un tipo en <i>Visualizations</i> para "
                   f"añadir uno nuevo ({B('+ New visual')} añade uno vacío).",
                   "Arrastra campos desde <i>Fields</i> (todas las tablas, agrupadas y plegables) a los huecos (X axis, "
@@ -596,6 +720,24 @@ TEXTS = {
                   "<i>higher is better</i> o <i>lower is better</i>."],
                  "Las cards se ponen verdes o rojas, los gráficos reciben una línea de objetivo discontinua y la "
                  "matriz se colorea en verde en el lado bueno del objetivo y en rojo en el malo."),
+                ("task", "Añadir una línea de media, ± desviaciones estándar o límites de especificación (Analytics)",
+                 ["Selecciona un gráfico y haz clic en <i>Analytics</i> en Visualizations (junto a Build y Format).",
+                  "Elige <i>+ Add a line…</i>: Average, Median, media ± 1/2/3 SD, Percentile, Min, Max, una "
+                  "<i>Constant line</i> o una <i>Band</i> de - a (p.&nbsp;ej. los límites de especificación).",
+                  "Si quieres, ponle una etiqueta y un color; × la quita."],
+                 "La media, la mediana, etc. se calculan con los ensayos individuales del gráfico, en cada small "
+                 "multiple por separado (en Columns con las columnas). Funciona con barras, box, violín, línea, "
+                 "puntos, tendencia, histograma, columnas y gráficos de control. Copy format no copia estas líneas."),
+                ("task", "Saltar a una página de detalle de una máquina, un jet … (drill-through)",
+                 ["Prepara la página de detalle: ábrela y en <i>Filters</i>, bajo <i>Drill-through to this page</i>, "
+                  "elige el campo, p.&nbsp;ej. <i>Machine</i>.",
+                  "En otra página, haz clic derecho en una barra, una caja, una celda de matriz o un trozo de "
+                  "tarta de un visual con Machine y elige la página bajo <i>Drill through</i>.",
+                  "La página de detalle muestra solo esa máquina. <i>← Back to …</i> vuelve, <i>Clear</i> muestra "
+                  "la página sin el filtro de drill-through."],
+                 "Con <i>Keep all filters of the clicked visual</i> (estándar) también pasan los filtros de página, "
+                 "visual, clics y slicers del visual pulsado. El drill-through no se guarda con el dashboard. "
+                 "También funciona en la página Dashboards."),
                 ("task", "Profundizar (p. ej. máquina → jet)",
                  ["En un visual de barras, caja, violín o línea, arrastra uno o varios campos a <i>Drill down to</i>.",
                   "Doble clic en una barra: el visual muestra el siguiente nivel para ese valor. El camino aparece "
@@ -654,6 +796,67 @@ TEXTS = {
                   "Arrastra uno de los visuales seleccionados por su barra de título y se mueven todos juntos. Las "
                   "flechas mueven los visuales seleccionados un paso."],
                  "Ctrl+Z lo deshace."),
+                ("task", "Dar formato a un visual: orden, Top N, decimales, etiquetas, colores, ejes, leyenda",
+                 ["Haga clic en el visual y luego en la pestaña <i>Format</i> arriba en Visualizations (<i>Build</i> "
+                  "vuelve a los campos). Un clic en la página vacía o Esc quita la selección.",
+                  "<i>Sort and Top N</i>: ordenar por valor (de mayor a menor o al revés) o por nombre, y mostrar "
+                  "solo los 5, 10 … mejores, p.&nbsp;ej. los 10 mejores jets. La nota bajo el gráfico dice cuántos "
+                  "quedan fuera.",
+                  "<i>Numbers</i>: decimales para el eje, la tarjeta, la matriz y los valores del gráfico. "
+                  "<i>Data labels</i>: mostrar los valores en barras y líneas, o quitarlos. <i>Error bars</i> (Bars, Mean line): <i>Standard deviation</i> (cuánto se dispersan los ensayos), <i>95 % confidence</i> (dónde está la media real - si dos barras apenas se solapan, la diferencia probablemente es real; con pocos ensayos es ancho y con un solo ensayo no hay), <i>Min – Max</i> (peor y mejor ensayo) u <i>Off</i>.",
+                  "<i>Axes</i>: título propio u ocultarlo (<i>hide</i>); fijar dónde empieza y termina el eje Y (uno "
+                  "o los dos). <i>Legend</i>: derecha, arriba, abajo o sin leyenda.",
+                  "<i>Colours</i>: otra paleta, o haga clic en el cuadro de color junto a un valor para elegir el "
+                  "suyo (× lo restablece). Matriz: la escala de colores. <i>Text and grid</i>: tamaño del texto, "
+                  "líneas de cuadrícula sí o no.",
+                  "Tarjeta: tamaño del número, mostrar u ocultar la unidad y la línea de abajo. Tabla: un clic en el "
+                  "título de una columna ordena (otro clic = al revés); <i>+ Add colour rule</i> colorea celdas, "
+                  "p.&nbsp;ej. FP/m mayor que 100 en verde, Machine es SSM en rojo.",
+                  "Cada cambio se ve enseguida. Un punto verde marca lo que difiere del estándar; <i>Reset</i> "
+                  "restablece una sección, <i>Reset all</i> todo el visual.",
+                  "<b>Tema del dashboard</b>: haga clic en la página vacía (nada seleccionado) y luego en "
+                  "<i>Format</i>. Paleta, tamaño del texto, líneas de cuadrícula, decimales, valores en las barras y "
+                  "leyenda valen allí para todos los visuales de todas las páginas; el formato propio de un visual "
+                  "gana. En un visual, <i>Dashboard: …</i> muestra lo que da el tema.",
+                  "<b>Copiar un formato</b>: haga clic en el visual con el formato bueno, luego en <i>Copy format</i> "
+                  "arriba en la página (junto a + New visual) y después en el visual que debe recibirlo. Un doble clic "
+                  "en <i>Copy format</i> lo deja activo para varios visuales; Esc lo termina. Los títulos y rangos de "
+                  "los ejes no se copian: pertenecen a los campos.",
+                  "<i>Points and lines</i>: una forma distinta por color, el tamaño de los puntos. <i>Axes</i>: "
+                  "también ejes X / Y logarítmicos."],
+                 "El PDF y la página Dashboards muestran el visual igual. Ctrl+Z deshace un cambio."),
+                ("task", "Ver un visual en grande, con sus ensayos (Focus)",
+                 ["Señale un visual con el ratón y haga clic en ⤢ en su barra de título.",
+                  "El visual ocupa la página; debajo están todos los ensayos de los que se compone, con los campos "
+                  "usados. Un clic en un punto muestra su fila, un clic en una fila resalta su punto, un doble clic en "
+                  "una fila abre el ensayo en Show Experiment.",
+                  "<i>Back to the page</i> o Esc vuelve. Un clic en el punto de color de una barra de título muestra "
+                  "los detalles de equidad, con <i>Make it fairer</i>."],
+                 "Funciona también en la página Dashboards."),
+                ("task", "Tarta, dónut, gráfico de control, radar, texto",
+                 ["<i>Pie / donut</i>: arrastre un campo a Legend - cuenta ensayos (o series, experimentos), o "
+                  "arrastre un número a Value y elija Sum. <i>Shape</i> en Build: tarta o dónut (en el centro va "
+                  "el total). Un clic en una porción filtra la página.",
+                  "<i>Control chart</i>: un número en Y axis. Los ensayos van en el orden de serie y número de "
+                  "ensayo, o según el campo en X axis (p.&nbsp;ej. Trial month). Líneas: media y límites ±3σ; rojo "
+                  "= fuera de los límites, ámbar = 7 o más seguidos en un lado de la media.",
+                  "<i>Radar</i>: tres o más campos numéricos en Values y un campo en Legend (jet, hilo, máquina …). "
+                  "Cada eje va del grupo más bajo (dentro) al más alto (fuera); los valores reales están en la "
+                  "ayuda emergente.",
+                  "<i>Text</i>: escriba en Build. Una línea que empieza con # es un título, **texto** va en negrita."],
+                 "Todos salen también en el PDF."),
+                ("task", "Ver cómo se relacionan las tablas (Model)",
+                 ["Haga clic en <i>Model</i> arriba a la izquierda del dashboard (<i>Report</i> vuelve a las páginas).",
+                  "En el centro el ensayo; a la izquierda a qué se refiere (hilo, jet, experimento, tiempo, máquina), "
+                  "a la derecha las tablas de laboratorio. 1 : n = varias filas por ensayo, promediadas; n : 1 = "
+                  "muchos ensayos comparten una fila.",
+                  "Haga clic en una tabla: qué contiene, cómo se obtiene un valor por ensayo y, por campo, cuántos "
+                  "ensayos tienen un valor."],
+                 "Solo lectura: allí nadie puede cambiar las relaciones."),
+                ("task", "Hacer los paneles laterales más anchos o más estrechos",
+                 ["Arrastre el borde izquierdo de Filters, Visualizations o Fields. Un doble clic en el borde vuelve "
+                  "al ancho estándar; › pliega un panel."],
+                 "TrippleT recuerda los anchos."),
                 ("task", "Deshacer un cambio, ver notas",
                  ["Ctrl+Z deshace el último cambio de la página (diseño, campos, filtros …), Ctrl+Y lo rehace. "
                   "Supr borra el visual seleccionado.",
@@ -664,7 +867,7 @@ TEXTS = {
                   "valor; una etiqueta azul arriba indica lo que se pulsó.",
                   "Otro clic en el mismo sitio o en la etiqueta azul lo deshace."]),
                 ("h", "Guardar y compartir"),
-                ("task", "Guardar un gráfico para abrirlo más tarde",
+                ("task", "Guardar un dashboard para abrirlo más tarde",
                  [f"Haz clic en {B('Save view')}, escribe un nombre y marca <i>Share with everybody</i> si otros "
                   "deben verlo.",
                   f"Ábrelo de nuevo con {B('Open view')}.",
@@ -674,22 +877,22 @@ TEXTS = {
                  "Se guardan los filtros, no la lista de ensayos: una vista siempre muestra los datos actuales. "
                  "Solo el creador puede compartirla; cambiarla: el creador, quien tiene <i>edit</i> y los "
                  "superusuarios; borrarla: el creador o un superusuario."),
-                ("task", "Exportar el gráfico o la lista",
-                 [f"{B('PDF')}: título, filtros, gráfico y lista de ensayos.",
-                  f"{B('Excel')}: los ensayos del gráfico, con una hoja que lista los filtros."]),
                 ("task", "Obtener los datos más recientes",
-                 [f"Haz clic en {B('Reload')} o pulsa F5. Los filtros y ajustes del gráfico se mantienen."]),
+                 [f"Haz clic en {B('Reload')} o pulsa F5. Los filtros y el dashboard se mantienen."]),
             ]},
             {"key": "screen", "title": "Pantalla", "blocks": [
                 ("areas", [
-                    ("Arriba", "New (empezar de nuevo), Open view, Save view, Excel, Reload (F5), PDF y esta ayuda."),
-                    ("1 Find trials", "Tarjetas de filtro, + Add filter, Yarn filters apply to (Any ply / Core only / "
-                                      "Effect only) y un resumen de los campos por los que se puede filtrar."),
-                    ("Recuadro verde", "Cuántos ensayos coinciden, de cuántas series, máquinas y jets, y cuántos están "
-                                       "en el gráfico."),
-                    ("2 Build the chart", "X axis, Y axis, Colour by, Split by; Chart (tipo), Colours (paleta, Colours…), "
-                                          "Options; debajo, el gráfico."),
-                    ("Trials in the chart", "Todos los ensayos del gráfico; clic en la cabecera ordena, doble clic abre."),
+                    ("Arriba", "New (página vacía, ejemplo o plantilla), Open view, Save view, Share…, Excel, "
+                               "Reload (F5), PDF y esta ayuda."),
+                    ("Recuadro verde", "Cuántos ensayos coinciden con los filtros en todas las páginas, de cuántas "
+                                       "series, máquinas y jets."),
+                    ("Página", "Report | Model, nombre de la página, + New visual, Copy format; los visuales; abajo las "
+                               "pestañas de página."),
+                    ("Filters", "On all pages (= encontrar ensayos, Yarn filters apply to), en esta página, en este "
+                                "visual, clics y slicers."),
+                    ("Visualizations", "Los tipos de visual; Build (campos, opciones) y Format (orden, números, colores, "
+                                       "ejes …) del visual elegido, o el tema del dashboard."),
+                    ("Fields", "Todos los campos de todas las tablas en carpetas, con buscador y + New calculated field."),
                 ]),
             ]},
         ],

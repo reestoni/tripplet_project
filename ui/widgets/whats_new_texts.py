@@ -53,9 +53,10 @@ RELEASES = [
                  "<b>Add note…</b>, e.g. <i>Spool had knots, measured again</i>. A small purple triangle marks the "
                  "cell, pointing at it shows the note with name and date. Right-click a trial number for a note on "
                  "the whole trial. The <b>Notes</b> tab lists all notes of the series, double-click jumps to the "
-                 "value. Everybody can write notes. In the <b>Smart Chart</b>, the <b>Notes</b> button shows them as a "
-                 "purple outline with the note in the tooltip. They are not printed in the PDF unless you tick "
-                 "<i>Include notes on values</i> when exporting.",
+                 "value. Everybody can write notes. In the <b>Report</b> of a series, the <b>Notes</b> button shows them as a "
+                 "purple outline with the note in the tooltip; they are not printed in the PDF unless you tick "
+                 "<i>Include notes on values</i> when exporting. In the Smart Chart dashboard, tick <i>Show notes "
+                 "on values</i> on a Points visual.",
                  "Show Experiment → right-click a value → <b>Add note…</b>", "wn_cell_notes.svg"),
                 ("feature", "Reference samples",
                  "Add a customer's original spool as a benchmark. It appears as a highlighted <i>Ref</i> column "
@@ -101,30 +102,56 @@ RELEASES = [
                 ("feature", "Change history (superusers)",
                  "See who changed a value, when, and what it was before - for one value or the whole series.",
                  "Show Experiment → right-click a value → <b>Change history…</b>", "wn_history.svg"),
+                ("feature", 'Report: two levels on the X axis',
+                 'In the report of a series each chart can now show two levels on the X axis - e.g. <b>Yarn</b> (short name) and under it the <b>Jets</b>, only the combinations that were really tested. Choose the second level in the new list right of X. <b>Yarn</b> and <b>Jet</b> can also be chosen as X on their own.',
+                 'Show Experiment → <b>Report</b> → X … › …', None),
                 ("h", "Smart Chart"),
                 ("feature", "New Smart Chart: find trials by their properties",
                  "Pick trials across <b>all</b> series by yarn, jet geometry, machine settings and lab results - e.g. all polyester "
                  "trials with 70–80 dtex end titer and 30–40 filaments. <b>+ Add filter</b> shows how the values are "
                  "spread and how many trials each filter leaves; number filters can keep only whole numbers, every 0.5 or "
-                 "values you tick. Then chart any field against any other - as points, "
-                 "trend lines with R², mean lines, bars, box plots, violins, histograms or a density map - colour by "
-                 "jet, machine or a number (colour scale), pick a palette or your own colours, split into one small "
-                 "chart per machine. Click a point "
-                 "to find the trial in the list, double-click to open it. Save your chart as a view (also shared), "
-                 "export to PDF or Excel.",
+                 "values you tick. Then show them in a dashboard: any field against any other - as points, "
+                 "trend lines with R², mean lines, bars, box plots, violins, histograms or a density map - coloured "
+                 "by jet, machine or a number, one small chart per machine. ⤢ on a chart shows it big with its "
+                 "trials below: click a point to find the trial, double-click to open it. Save it as a view (also "
+                 "shared), export to PDF or Excel.",
                  "Sidebar → <b>Smart Chart</b>", "wn_smart_chart.svg"),
                 ("feature", 'Is this comparison fair?',
-                 'A coloured bar above the chart warns when the groups you compare also differ in other things that change the result - e.g. jet A was mostly tested on PES at 3.5 bar, jet B on PA at 2 bar. Green, yellow or red, with the reason in one sentence. <b>Details</b> shows every condition, <b>Make it fairer</b> keeps only what all groups have in common. It also warns about very small groups, groups from one single series and groups in different X ranges.',
-                 'Smart Chart → bar above the chart', "wn_fairness.svg"),
+                 'A coloured dot on every chart warns when the groups you compare also differ in other things that change the result - e.g. jet A was mostly tested on PES at 3.5 bar, jet B on PA at 2 bar. Green, yellow or red, with the reason in one sentence. A click on the dot shows every condition; <b>Make it fairer</b> keeps only what all groups have in common. It also warns about very small groups, groups from one single series and groups in different X ranges.',
+                 'Smart Chart → coloured dot in the title bar of a chart', "wn_fairness.svg"),
                 ("feature", 'Dashboard: build your own page, like Power BI',
-                 'Switch Smart Chart to <b>Dashboard</b>: a page with several visuals side by side. Drag fields from <b>Fields</b> - every table, from Statimat and Itemat to DTYoMat, jet and yarn - into the wells of a visual. New visuals: <b>Matrix</b> (e.g. FP/m per jet and air pressure, coloured - empty cells show where trials are missing), <b>Card</b> (one number) and <b>Table</b>. Click a bar, box or matrix cell and all other visuals filter to it. <b>Slicers</b> pick values for the whole page - as a list, dropdown, tiles or a range slider. Place visuals freely and resize them, work with several pages (tabs at the bottom) and add filters to one page or one visual. New: <b>calculated fields</b> from your own formula, <b>targets</b> (green/red, target lines), <b>drill-down</b> machine → jet and <b>selecting points</b> to filter the page. Plus: <b>templates</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> of one or all pages, <b>Excel</b> per visual or page, notes on values, undo with <b>Ctrl+Z</b>, and <b>lining up</b> several visuals at once (Ctrl+click, then align, same size or distribute).',
-                 'Smart Chart → <b>Dashboard</b>', "wn_dashboard.svg"),
+                 'Smart Chart is a dashboard now: a page with several visuals side by side. Drag fields from <b>Fields</b> - every table, from Statimat and Itemat to DTYoMat, jet and yarn - into the wells of a visual. New visuals: <b>Matrix</b> (e.g. FP/m per jet and air pressure, coloured - empty cells show where trials are missing), <b>Card</b> (one number) and <b>Table</b>. Click a bar, box or matrix cell and all other visuals filter to it. <b>Slicers</b> pick values for the whole page - as a list, dropdown, tiles or a range slider. Place visuals freely and resize them, work with several pages (tabs at the bottom) and add filters to one page or one visual. New: <b>calculated fields</b> from your own formula, <b>targets</b> (green/red, target lines), <b>drill-down</b> machine → jet and <b>selecting points</b> to filter the page. Plus: <b>templates</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> of one or all pages, <b>Excel</b> per visual or page, notes on values, undo with <b>Ctrl+Z</b>, and <b>lining up</b> several visuals at once (Ctrl+click, then align, same size or distribute).',
+                 'Sidebar → <b>Smart Chart</b>', "wn_dashboard.svg"),
                 ("feature", 'Lab statistics in the dashboard',
                  'Count <b>experiments, trial series or trials</b> - per month, product group, order type, project, owner or lab machine (<i>Tested on</i>). The new visual <b>Columns</b> shows them stacked, side by side or as 100 %; months and years run in order, empty months show as 0. Start with <b>New</b> → <b>Lab statistics</b>. Filters on a month or year can now be a period that moves with the calendar: <b>This year</b>, <b>Last 12 months</b>, <b>From – to</b> … And the slicer <b>Year › Month</b>: years that fold open with the months Jan–Dec below.',
-                 'Smart Chart → <b>Dashboard</b> → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
+                 'Smart Chart → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
                 ("feature", 'Stacked fields: how parts add up',
                  'The new dashboard visual <b>Stacked fields</b> puts several number fields into one column, each in its own colour - e.g. A, B and C knots of the DTYoMat per trial, as <b>100 %</b> (the share of each part) or as values. With the new field <b>Trial</b> on the X axis you get one column per trial. As a <b>combo chart</b>, lines on a second axis on the right show e.g. FP/m over it.',
-                 'Smart Chart → <b>Dashboard</b> → Visualizations → <b>Stacked fields</b>', "wn_stacked_fields.svg"),
+                 'Smart Chart → Visualizations → <b>Stacked fields</b>', "wn_stacked_fields.svg"),
+                ("feature", 'Format visuals: order, Top N, colours, axes, tables',
+                 'A visual in the dashboard now has a second tab <b>Format</b> next to <b>Build</b>. Order bars and boxes by value or name and show only the <b>top 10</b> (e.g. the best jets), set the <b>decimal places</b>, put the <b>values on the bars</b>, choose the <b>error bars</b> on bars and mean lines - standard deviation, <b>95 % confidence</b> (do two jets really differ? if the bars hardly overlap, probably yes), <b>min – max</b> or off -, write your own <b>axis titles</b> or hide them, fix where the <b>Y axis</b> starts and ends, move the <b>legend</b> to the top, the bottom or away, choose a <b>palette</b> or your own <b>colour per value</b>, make text and <b>cards</b> bigger or smaller and switch grid lines off. <b>Tables</b> sort with a click on a column heading and get <b>colour rules</b> (e.g. FP/m above 100 in green). A <b>dashboard theme</b> (Format with nothing selected) sets palette, text size, decimals … for all visuals at once, and <b>Copy format</b> at the top of the page gives another visual the same format (double-click: several, Esc ends). Every change shows at once; a green dot marks what differs from the standard, <b>Reset</b> sets it back. The PDF shows it the same way.',
+                 'Smart Chart → click a visual → Visualizations → <b>Format</b>', "wn_dashboard_format.svg"),
+                ("feature", 'Dashboard PDF that looks like the page',
+                 'The PDF of a dashboard now has the Heberlein logo, uses the whole page and no text runs over the edge of its box any more. <b>Slicers</b> are printed the way you see them: tick boxes, tiles, the range slider or years with their months. Charts also work <b>without an internet connection</b>.',
+                 'Smart Chart → <b>PDF</b>', None),
+                ("feature", 'New visuals: pie, donut, control chart, radar, text',
+                 'Five new visuals in the dashboard: <b>Pie</b> and <b>Donut</b> for shares (click a piece to filter the page), the <b>Control chart</b> with mean and ±3σ limits - points outside in red, long runs on one side in amber -, the <b>Radar</b> to compare jets, yarns or machines over several values at once, and <b>Text</b> for headings and comments. All visuals also got new, clearer icons.',
+                 'Smart Chart → Visualizations', "wn_dashboard_visuals.svg"),
+                ("feature", 'Dashboard: analytics lines and drill-through',
+                 'New tab <b>Analytics</b> next to Build and Format: average, median, ± 1/2/3 standard deviations, percentile, min/max, a constant line or a band from - to (e.g. your spec limits) right in the chart - calculated from the trials in it. And <b>drill-through</b> like in Power BI: make a page the detail page for e.g. <b>Machine</b> (Filters → <b>Drill-through to this page</b>), then right-click a bar of a machine on another page → <b>Drill through</b>. The detail page shows only that machine; <b>← Back</b> brings you back.',
+                 'Smart Chart → Visualizations → <b>Analytics</b> · right-click a bar', "wn_dashboard_analytics.svg"),
+                ("feature", 'Focus: one visual big, with its trials',
+                 'Click ⤢ in the title bar of a visual: it fills the page, and below it are all trials it is made of. Click a point to find its line, double-click a line to open the trial in Show Experiment. A click on the coloured fairness dot shows the details with <b>Make it fairer</b>. In <b>Format</b> there are now also logarithmic axes, a shape per colour and the point size.',
+                 'Smart Chart → ⤢ on a visual', None),
+                ("feature", 'Model: how the tables hang together',
+                 'Click <b>Model</b> at the top left of the dashboard: the trial in the middle, around it yarn, jet, experiment, time and all lab tables, with how they are linked (1 : n = several rows per trial, averaged). Click a table to see its fields and how many trials have a value. Read only - nothing can be changed there.',
+                 'Smart Chart → <b>Model</b>', "wn_model_view.svg"),
+                ("feature", 'Heberlein colours as the standard',
+                 'Charts and dashboards now start in the <b>Heberlein</b> palette: Heberlein green and the dark blue of the logo first, then colours that are easy to tell apart. The eight greens are still there as <b>Heberlein green</b>.',
+                 'Smart Chart → click a visual → <b>Format</b> → Colours (nothing selected: for all visuals)', None),
+                ("feature", 'Wider or narrower side panes',
+                 'In the dashboard, drag the left edge of <b>Filters</b>, <b>Visualizations</b> or <b>Fields</b> to make it wider or narrower - TrippleT remembers it. A double-click on the edge gives the standard width back.',
+                 'Sidebar → <b>Smart Chart</b>', None),
                 ("feature", 'Dashboards: look at them, share them',
                  'The new page <b>Dashboards</b> shows your own dashboards and the ones colleagues shared with you. Here you only look: slicers, clicking bars to filter, drill-down, page tabs and <b>PDF</b> work - nothing gets changed by accident. To share your dashboard, open it in Smart Chart and click <b>Share…</b>: with everybody, with single people or with groups (read, write, admin, superuser), each to <b>view</b> or to <b>edit</b>. Only you can share or delete it.',
                  'Sidebar → Tools → <b>Dashboards</b> · Smart Chart → <b>Share…</b>', "wn_dashboards.svg"),
@@ -145,7 +172,7 @@ RELEASES = [
                  "Sidebar → Account → <b>Settings</b> → Show Experiment tables", "wn_reading.svg"),
                 ("h", "Help"),
                 ("feature", "Help in three languages",
-                 "Show Experiment, Backlog, Report, All Experiments, Create Experiment, Manage Yarn and Manage Jets "
+                 "Show Experiment, Backlog, Report, Smart Chart, Dashboards, All Experiments, Create Experiment, Manage Yarn and Manage Jets "
                  "now have their own help in English, German and Spanish: step-by-step answers to \"How do I…?\", a "
                  "sketch of the screen and the rules. The flags switch the language.",
                  "Round <b>?</b> button on these screens", "wn_help.svg"),
@@ -264,8 +291,9 @@ RELEASES = [
                  "Dreieck markiert die Zelle, mit der Maus darauf zeigen zeigt die Notiz mit Name und Datum. "
                  "Rechtsklick auf eine Versuchsnummer für eine Notiz zum ganzen Versuch. Der Tab <b>Notes</b> "
                  "listet alle Notizen der Serie, Doppelklick springt zum Wert. Notizen schreiben darf jeder. Im "
-                 "<b>Smart Chart</b> zeigt der Knopf <b>Notes</b> sie als violetten Rand mit der Notiz im Tooltip. "
-                 "Ins PDF kommen sie nur, wenn man beim Export <i>Include notes on values</i> ankreuzt.",
+                 "<b>Report</b> einer Serie zeigt der Knopf <b>Notes</b> sie als violetten Rand mit der Notiz im Tooltip; "
+                 "ins PDF kommen sie nur, wenn man beim Export <i>Include notes on values</i> ankreuzt. Im Dashboard "
+                 "des Smart Chart bei einem Points-Visual <i>Show notes on values</i> ankreuzen.",
                  "Show Experiment → Rechtsklick auf einen Wert → <b>Add note…</b>", "wn_cell_notes.svg"),
                 ("feature", "Referenzmuster",
                  "Die Originalspule eines Kunden als Vergleich hinzufügen. Sie erscheint als hervorgehobene "
@@ -313,30 +341,57 @@ RELEASES = [
                  "Sehen, wer einen Wert wann geändert hat und was vorher drinstand - für einen Wert oder die ganze "
                  "Serie.",
                  "Show Experiment → Rechtsklick auf einen Wert → <b>Change history…</b>", "wn_history.svg"),
+                ("feature", 'Report: zwei Ebenen auf der X-Achse',
+                 'Im Report einer Serie kann jedes Diagramm jetzt zwei Ebenen auf der X-Achse zeigen - z.&nbsp;B. <b>Garn</b> (Kurzname) und darunter die <b>Jets</b>, nur die Kombinationen, die wirklich getestet wurden. Die zweite Ebene wählt man in der neuen Liste rechts von X. <b>Yarn</b> und <b>Jet</b> lassen sich auch allein als X wählen.',
+                 'Show Experiment → <b>Report</b> → X … › …', None),
                 ("h", "Smart Chart"),
                 ("feature", "Neuer Smart Chart: Versuche über ihre Eigenschaften finden",
                  "Versuche über <b>alle</b> Serien nach Garn, Jet-Geometrie, Maschineneinstellungen und Laborwerten auswählen - "
                  "z.&nbsp;B. alle Polyester-Versuche mit 70–80 dtex Endtiter und 30–40 Filamenten. <b>+ Add filter</b> "
                  "zeigt, wie sich die Werte verteilen und wie viele Versuche jeder Filter übrig lässt; Zahlenfilter können "
-                 "nur ganze Zahlen, alle 0.5 oder angekreuzte Werte behalten. Danach jedes "
-                 "Feld gegen jedes andere darstellen - als Punkte, Trendlinien mit R², Mittelwert-Linien, Balken, "
-                 "Boxplots, Violins, Histogramme oder Dichte-Karte -, nach Jet, Maschine oder einer Zahl (Farbskala) "
-                 "einfärben, Palette oder eigene Farben wählen, pro Maschine ein kleines Diagramm. Klick auf einen "
-                 "Punkt findet den Versuch in der "
-                 "Liste, Doppelklick öffnet ihn. Diagramm als View speichern (auch geteilt), als PDF oder Excel exportieren.",
+                 "nur ganze Zahlen, alle 0.5 oder angekreuzte Werte behalten. Danach in einem Dashboard zeigen: "
+                 "jedes Feld gegen jedes andere - als Punkte, Trendlinien mit R², Mittelwert-Linien, Balken, "
+                 "Boxplots, Violins, Histogramme oder Dichte-Karte -, eingefärbt nach Jet, Maschine oder einer Zahl, "
+                 "pro Maschine ein kleines Diagramm. ⤢ an einem Diagramm zeigt es gross mit seinen Versuchen "
+                 "darunter: Klick auf einen Punkt findet den Versuch, Doppelklick öffnet ihn. Als View speichern "
+                 "(auch geteilt), als PDF oder Excel exportieren.",
                  "Sidebar → <b>Smart Chart</b>", "wn_smart_chart.svg"),
                 ("feature", 'Ist dieser Vergleich fair?',
-                 'Eine farbige Leiste über dem Diagramm warnt, wenn sich die verglichenen Gruppen auch in anderen Dingen unterscheiden, die das Ergebnis verändern - z.&nbsp;B. Jet A wurde vor allem auf PES bei 3.5 bar getestet, Jet B auf PA bei 2 bar. Grün, gelb oder rot, mit dem Grund in einem Satz. <b>Details</b> zeigt jede Bedingung, <b>Make it fairer</b> behält nur, was alle Gruppen gemeinsam haben. Gewarnt wird auch bei sehr kleinen Gruppen, Gruppen aus einer einzigen Serie und Gruppen in verschiedenen X-Bereichen.',
-                 'Smart Chart → Leiste über dem Diagramm', "wn_fairness.svg"),
+                 'Ein farbiger Punkt an jedem Diagramm warnt, wenn sich die verglichenen Gruppen auch in anderen Dingen unterscheiden, die das Ergebnis verändern - z.&nbsp;B. Jet A wurde vor allem auf PES bei 3.5 bar getestet, Jet B auf PA bei 2 bar. Grün, gelb oder rot, mit dem Grund in einem Satz. Klick auf den Punkt zeigt jede Bedingung; <b>Make it fairer</b> behält nur, was alle Gruppen gemeinsam haben. Gewarnt wird auch bei sehr kleinen Gruppen, Gruppen aus einer einzigen Serie und Gruppen in verschiedenen X-Bereichen.',
+                 'Smart Chart → farbiger Punkt in der Titelzeile eines Diagramms', "wn_fairness.svg"),
                 ("feature", 'Dashboard: eigene Seite bauen, wie in Power BI',
-                 'Smart Chart auf <b>Dashboard</b> umschalten: eine Seite mit mehreren Visuals nebeneinander. Felder aus <b>Fields</b> - jede Tabelle, von Statimat und Itemat bis DTYoMat, Jet und Garn - in die Ablagen eines Visuals ziehen. Neue Visuals: <b>Matrix</b> (z.&nbsp;B. FP/m pro Jet und Luftdruck, eingefärbt - leere Zellen zeigen, wo Versuche fehlen), <b>Card</b> (eine Zahl) und <b>Table</b>. Klick auf einen Balken, eine Box oder eine Matrix-Zelle, und alle anderen Visuals filtern sich darauf. <b>Slicer</b> wählen Werte für die ganze Seite - als Liste, Dropdown, Knöpfe oder Bereichsregler. Visuals frei platzieren und in der Grösse ziehen, mehrere Seiten (Reiter unten) und Filter nur für eine Seite oder ein Visual. Neu: <b>berechnete Felder</b> per eigener Formel, <b>Zielwerte</b> (grün/rot, Ziellinien), <b>Drill-down</b> Maschine → Jet und <b>Punkte auswählen</b>, um die Seite zu filtern. Dazu: <b>Vorlagen</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> einer oder aller Seiten, <b>Excel</b> pro Visual oder Seite, Notizen an Werten, Rückgängig mit <b>Strg+Z</b> und mehrere Visuals auf einmal <b>ausrichten</b> (Strg+Klick, dann ausrichten, gleich gross machen oder verteilen).',
-                 'Smart Chart → <b>Dashboard</b>', "wn_dashboard.svg"),
+                 'Smart Chart ist jetzt ein Dashboard: eine Seite mit mehreren Visuals nebeneinander. Felder aus <b>Fields</b> - jede Tabelle, von Statimat und Itemat bis DTYoMat, Jet und Garn - in die Ablagen eines Visuals ziehen. Neue Visuals: <b>Matrix</b> (z.&nbsp;B. FP/m pro Jet und Luftdruck, eingefärbt - leere Zellen zeigen, wo Versuche fehlen), <b>Card</b> (eine Zahl) und <b>Table</b>. Klick auf einen Balken, eine Box oder eine Matrix-Zelle, und alle anderen Visuals filtern sich darauf. <b>Slicer</b> wählen Werte für die ganze Seite - als Liste, Dropdown, Knöpfe oder Bereichsregler. Visuals frei platzieren und in der Grösse ziehen, mehrere Seiten (Reiter unten) und Filter nur für eine Seite oder ein Visual. Neu: <b>berechnete Felder</b> per eigener Formel, <b>Zielwerte</b> (grün/rot, Ziellinien), <b>Drill-down</b> Maschine → Jet und <b>Punkte auswählen</b>, um die Seite zu filtern. Dazu: <b>Vorlagen</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> einer oder aller Seiten, <b>Excel</b> pro Visual oder Seite, Notizen an Werten, Rückgängig mit <b>Strg+Z</b> und mehrere Visuals auf einmal <b>ausrichten</b> (Strg+Klick, dann ausrichten, gleich gross machen oder verteilen).',
+                 'Sidebar → <b>Smart Chart</b>', "wn_dashboard.svg"),
                 ("feature", 'Laborstatistik im Dashboard',
                  '<b>Experimente, Versuchsserien oder Versuche</b> zählen - pro Monat, Produktgruppe, Auftragsart, Projekt, Owner oder Labormaschine (<i>Tested on</i>). Das neue Visual <b>Columns</b> zeigt sie gestapelt, nebeneinander oder als 100 %; Monate und Jahre laufen in der richtigen Reihenfolge, leere Monate erscheinen als 0. Am einfachsten mit <b>New</b> → <b>Lab statistics</b> beginnen. Filter auf Monat oder Jahr können jetzt ein Zeitraum sein, der mit dem Kalender mitwandert: <b>This year</b>, <b>Last 12 months</b>, <b>From – to</b> … Dazu der Slicer <b>Year › Month</b>: Jahre zum Aufklappen, darunter die Monate Jan–Dec.',
-                 'Smart Chart → <b>Dashboard</b> → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
+                 'Smart Chart → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
                 ("feature", 'Stacked fields: wie sich Teile zusammensetzen',
                  'Das neue Dashboard-Visual <b>Stacked fields</b> stellt mehrere Zahlenfelder in einer Säule dar, jedes in eigener Farbe - z.&nbsp;B. A-, B- und C-Knoten des DTYoMat pro Versuch, als <b>100 %</b> (Anteil jedes Teils) oder als Werte. Mit dem neuen Feld <b>Trial</b> auf der X-Achse gibt es eine Säule pro Versuch. Als <b>Kombi-Diagramm</b> zeigen Linien auf einer zweiten Achse rechts z.&nbsp;B. FP/m dazu.',
-                 'Smart Chart → <b>Dashboard</b> → Visualizations → <b>Stacked fields</b>', "wn_stacked_fields.svg"),
+                 'Smart Chart → Visualizations → <b>Stacked fields</b>', "wn_stacked_fields.svg"),
+                ("feature", 'Visuals formatieren: Reihenfolge, Top N, Farben, Achsen, Tabellen',
+                 'Ein Visual im Dashboard hat jetzt neben <b>Build</b> einen zweiten Reiter <b>Format</b>. Balken und Boxen nach Wert oder Name ordnen und nur die <b>Top 10</b> zeigen (z.&nbsp;B. die besten Jets), <b>Dezimalstellen</b> festlegen, die <b>Werte an die Balken</b> schreiben, die <b>Fehlerbalken</b> an Balken und Mittelwertlinien wählen - Standardabweichung, <b>95 % Vertrauensbereich</b> (sind zwei Jets wirklich verschieden? Überlappen sich die Balken kaum, wohl ja), <b>Min – Max</b> oder aus -, eigene <b>Achsentitel</b> setzen oder ausblenden, festlegen, wo die <b>Y-Achse</b> anfängt und endet, die <b>Legende</b> nach oben, unten oder weg schieben, eine <b>Palette</b> oder eine eigene <b>Farbe pro Wert</b> wählen, Schrift und <b>Cards</b> grösser oder kleiner machen und Rasterlinien ausschalten. <b>Tabellen</b> sortieren per Klick auf die Spaltenüberschrift und bekommen <b>Farbregeln</b> (z.&nbsp;B. FP/m über 100 grün). Ein <b>Dashboard-Thema</b> (Format, wenn nichts ausgewählt ist) setzt Palette, Schriftgrösse, Dezimalstellen … für alle Visuals auf einmal, und <b>Copy format</b> oben auf der Seite gibt einem anderen Visual dasselbe Format (Doppelklick: mehrere, Esc beendet). Jede Änderung ist sofort sichtbar; ein grüner Punkt zeigt, was vom Standard abweicht, <b>Reset</b> stellt es zurück. Das PDF zeigt es genauso.',
+                 'Smart Chart → Visual anklicken → Visualizations → <b>Format</b>', "wn_dashboard_format.svg"),
+                ("feature", 'Dashboard-PDF, das aussieht wie die Seite',
+                 'Das PDF eines Dashboards hat jetzt das Heberlein-Logo, nutzt die ganze Seite, und kein Text läuft mehr über den Rand seiner Box. <b>Slicer</b> werden gedruckt, wie man sie sieht: mit Häkchen, Kacheln, Schieberegler oder Jahren mit ihren Monaten. Diagramme funktionieren auch <b>ohne Internetverbindung</b>.',
+                 'Smart Chart → <b>PDF</b>', None),
+                ("feature", 'Neue Visuals: Kuchen, Donut, Regelkarte, Radar, Text',
+                 'Fünf neue Visuals im Dashboard: <b>Pie</b> und <b>Donut</b> für Anteile (Klick auf ein Stück filtert die Seite), die <b>Regelkarte</b> (Control chart) mit Mittelwert und ±3σ-Grenzen - Punkte ausserhalb rot, lange Folgen auf einer Seite gelb -, das <b>Radar</b>, um Jets, Garne oder Maschinen über mehrere Werte gleichzeitig zu vergleichen, und <b>Text</b> für Überschriften und Kommentare. Alle Visuals haben zudem neue, klarere Symbole.',
+                 'Smart Chart → Visualizations', "wn_dashboard_visuals.svg"),
+                ("feature", 'Dashboard: Analytics-Linien und Drill-through',
+                 'Neuer Reiter <b>Analytics</b> neben Build und Format: Mittelwert, Median, ± 1/2/3 Standardabweichungen, Perzentil, Min/Max, eine feste Linie oder ein Band von - bis (z.&nbsp;B. die Spezifikationsgrenzen) direkt im Diagramm - berechnet aus den Versuchen darin. Und <b>Drill-through</b> wie in Power BI: eine Seite zur Detailseite für z.&nbsp;B. <b>Machine</b> machen (Filters → <b>Drill-through to this page</b>), dann auf einer anderen Seite mit der rechten Maustaste auf den Balken einer Maschine → <b>Drill through</b>. Die Detailseite zeigt nur diese Maschine; <b>← Back</b> führt zurück.',
+                 'Smart Chart → Visualizations → <b>Analytics</b> · Rechtsklick auf einen Balken', "wn_dashboard_analytics.svg"),
+                ("feature", 'Focus: ein Visual gross, mit seinen Versuchen',
+                 'In der Titelzeile eines Visuals auf ⤢ klicken: es füllt die Seite, darunter stehen alle Versuche, aus denen es besteht. Klick auf einen Punkt zeigt seine Zeile, Doppelklick auf eine Zeile öffnet den Versuch in Show Experiment. Klick auf den farbigen Fairness-Punkt zeigt die Details mit <b>Make it fairer</b>. In <b>Format</b> gibt es jetzt auch logarithmische Achsen, eine Form pro Farbe und die Punktgrösse.',
+                 'Smart Chart → ⤢ an einem Visual', None),
+                ("feature", 'Model: wie die Tabellen zusammenhängen',
+                 'Oben links im Dashboard auf <b>Model</b> klicken: in der Mitte der Versuch, rundherum Garn, Jet, Experiment, Zeit und alle Labortabellen, mit ihrer Verknüpfung (1 : n = mehrere Zeilen pro Versuch, gemittelt). Klick auf eine Tabelle zeigt ihre Felder und wie viele Versuche einen Wert haben. Nur zum Lesen - dort lässt sich nichts ändern.',
+                 'Smart Chart → <b>Model</b>', "wn_model_view.svg"),
+                ("feature", 'Heberlein-Farben als Standard',
+                 'Diagramme und Dashboards starten jetzt mit der Palette <b>Heberlein</b>: zuerst Heberlein-Grün und das Dunkelblau aus dem Logo, dann gut unterscheidbare Farben. Die acht Grüntöne gibt es weiterhin als <b>Heberlein green</b>.',
+                 'Smart Chart → Visual anklicken → <b>Format</b> → Colours (nichts ausgewählt: für alle Visuals)', None),
+                ("feature", 'Seitenleisten breiter oder schmaler',
+                 'Im Dashboard den linken Rand von <b>Filters</b>, <b>Visualizations</b> oder <b>Fields</b> ziehen, um sie breiter oder schmaler zu machen - TrippleT merkt es sich. Ein Doppelklick auf den Rand gibt die Standardbreite zurück.',
+                 'Sidebar → <b>Smart Chart</b>', None),
                 ("feature", 'Dashboards: anschauen und teilen',
                  'Die neue Seite <b>Dashboards</b> zeigt deine eigenen Dashboards und die, die Kollegen für dich freigegeben haben. Hier wird nur geschaut: Slicer, Klick auf Balken zum Filtern, Drill-down, Seiten-Reiter und <b>PDF</b> gehen - versehentlich verändern kann man nichts. Zum Teilen das Dashboard in Smart Chart öffnen und auf <b>Share…</b> klicken: für alle, für einzelne Personen oder für Gruppen (read, write, admin, superuser), je zum <b>Anschauen</b> oder zum <b>Bearbeiten</b>. Teilen oder löschen kannst nur du.',
                  'Sidebar → Tools → <b>Dashboards</b> · Smart Chart → <b>Share…</b>', "wn_dashboards.svg"),
@@ -357,7 +412,7 @@ RELEASES = [
                  "Sidebar → Account → <b>Settings</b> → Show Experiment tables", "wn_reading.svg"),
                 ("h", "Hilfe"),
                 ("feature", "Hilfe in drei Sprachen",
-                 "Show Experiment, Backlog, Report, All Experiments, Create Experiment, Manage Yarn und Manage Jets "
+                 "Show Experiment, Backlog, Report, Smart Chart, Dashboards, All Experiments, Create Experiment, Manage Yarn und Manage Jets "
                  "haben jetzt eine eigene Hilfe auf Englisch, Deutsch und Spanisch: Schritt-für-Schritt-Antworten "
                  "auf \"Wie mache ich…?\", eine Skizze des Bildschirms und die Regeln. Die Flaggen wechseln die Sprache.",
                  "Runder <b>?</b>-Knopf in diesen Screens", "wn_help.svg"),
@@ -477,9 +532,10 @@ RELEASES = [
                  "p.&nbsp;ej. <i>La bobina tenía nudos, medido de nuevo</i>. Un pequeño triángulo violeta marca "
                  "la celda; al señalarla se ve la nota con nombre y fecha. Clic derecho en un número de ensayo "
                  "para una nota sobre todo el ensayo. La pestaña <b>Notes</b> lista todas las notas de la serie; "
-                 "doble clic salta al valor. Todos pueden escribir notas. En el <b>Smart Chart</b>, el botón "
-                 "<b>Notes</b> las muestra como borde violeta con la nota en la descripción emergente. En el PDF "
-                 "solo aparecen si al exportar marcas <i>Include notes on values</i>.",
+                 "doble clic salta al valor. Todos pueden escribir notas. En el <b>Report</b> de una serie, el botón "
+                 "<b>Notes</b> las muestra como borde violeta con la nota en la descripción emergente; en el PDF "
+                 "solo aparecen si al exportar marcas <i>Include notes on values</i>. En el dashboard del Smart "
+                 "Chart, marque <i>Show notes on values</i> en un visual Points.",
                  "Show Experiment → clic derecho en un valor → <b>Add note…</b>", "wn_cell_notes.svg"),
                 ("feature", "Muestras de referencia",
                  "Añade la bobina original de un cliente como comparación. Aparece como columna <i>Ref</i> "
@@ -526,30 +582,57 @@ RELEASES = [
                 ("feature", "Historial de cambios (superusuarios)",
                  "Ver quién cambió un valor, cuándo y qué había antes - para un valor o toda la serie.",
                  "Show Experiment → clic derecho en un valor → <b>Change history…</b>", "wn_history.svg"),
+                ("feature", 'Informe: dos niveles en el eje X',
+                 'En el informe de una serie cada gráfico puede mostrar ahora dos niveles en el eje X, p.&nbsp;ej. el <b>hilo</b> (nombre corto) y debajo los <b>jets</b>, solo las combinaciones realmente ensayadas. El segundo nivel se elige en la nueva lista a la derecha de X. <b>Yarn</b> y <b>Jet</b> también se pueden elegir solos como X.',
+                 'Show Experiment → <b>Report</b> → X … › …', None),
                 ("h", "Smart Chart"),
                 ("feature", "Nuevo Smart Chart: encontrar ensayos por sus propiedades",
                  "Elige ensayos de <b>todas</b> las series por hilo, geometría del jet, ajustes de máquina y resultados de laboratorio, "
                  "p.&nbsp;ej. todos los ensayos de poliéster con 70–80 dtex de título final y 30–40 filamentos. "
                  "<b>+ Add filter</b> muestra cómo se reparten los valores y cuántos ensayos deja cada filtro; los filtros "
-                 "numéricos pueden quedarse solo con enteros, cada 0.5 o los valores marcados. Después "
-                 "representa cualquier campo frente a otro (puntos, rectas de tendencia con R², líneas de media, "
-                 "barras, box plots, violines, histogramas o mapa de densidad), colorea por jet, máquina o un número "
-                 "(escala de color), elige paleta o tus propios colores, un gráfico pequeño por máquina. Clic en un "
-                 "punto encuentra el ensayo en la lista, doble clic lo abre. Guarda "
-                 "el gráfico como vista (también compartida), exporta a PDF o Excel.",
+                 "numéricos pueden quedarse solo con enteros, cada 0.5 o los valores marcados. Después muéstralos "
+                 "en un dashboard: cualquier campo frente a otro (puntos, rectas de tendencia con R², líneas de "
+                 "media, barras, box plots, violines, histogramas o mapa de densidad), coloreados por jet, máquina o "
+                 "un número, un gráfico pequeño por máquina. ⤢ en un gráfico lo muestra en grande con sus ensayos "
+                 "debajo: clic en un punto encuentra el ensayo, doble clic lo abre. Guárdalo como vista (también "
+                 "compartida), exporta a PDF o Excel.",
                  "Barra lateral → <b>Smart Chart</b>", "wn_smart_chart.svg"),
                 ("feature", '¿Es justa esta comparación?',
-                 'Una barra de color sobre el gráfico avisa cuando los grupos que comparas también se diferencian en otras cosas que cambian el resultado, p.&nbsp;ej. el jet A se probó sobre todo con PES a 3.5 bar y el jet B con PA a 2 bar. Verde, amarillo o rojo, con el motivo en una frase. <b>Details</b> muestra cada condición, <b>Make it fairer</b> deja solo lo que todos los grupos tienen en común. También avisa de grupos muy pequeños, grupos de una sola serie y grupos en rangos de X distintos.',
-                 'Smart Chart → barra sobre el gráfico', "wn_fairness.svg"),
+                 'Un punto de color en cada gráfico avisa cuando los grupos que comparas también se diferencian en otras cosas que cambian el resultado, p.&nbsp;ej. el jet A se probó sobre todo con PES a 3.5 bar y el jet B con PA a 2 bar. Verde, amarillo o rojo, con el motivo en una frase. Un clic en el punto muestra cada condición; <b>Make it fairer</b> deja solo lo que todos los grupos tienen en común. También avisa de grupos muy pequeños, grupos de una sola serie y grupos en rangos de X distintos.',
+                 'Smart Chart → punto de color en la barra de título de un gráfico', "wn_fairness.svg"),
                 ("feature", 'Dashboard: crea tu propia página, como en Power BI',
-                 'Cambia Smart Chart a <b>Dashboard</b>: una página con varios visuales. Arrastra campos desde <b>Fields</b> (todas las tablas, de Statimat e Itemat a DTYoMat, jet e hilo) a los huecos de un visual. Visuales nuevos: <b>Matrix</b> (p.&nbsp;ej. FP/m por jet y presión, coloreado; las celdas vacías muestran dónde faltan ensayos), <b>Card</b> (un número) y <b>Table</b>. Haz clic en una barra, caja o celda y todos los demás visuales se filtran. Los <b>slicers</b> eligen valores para toda la página: lista, desplegable, botones o rango. Coloca y redimensiona los visuales libremente, usa varias páginas (pestañas abajo) y filtros solo para una página o un visual. Nuevo: <b>campos calculados</b> con tu propia fórmula, <b>objetivos</b> (verde/rojo, líneas de objetivo), <b>profundizar</b> máquina → jet y <b>seleccionar puntos</b> para filtrar la página. Además: <b>plantillas</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> de una o todas las páginas, <b>Excel</b> por visual o página, notas en los valores, deshacer con <b>Ctrl+Z</b> y <b>alinear</b> varios visuales a la vez (Ctrl+clic, luego alinear, mismo tamaño o distribuir).',
-                 'Smart Chart → <b>Dashboard</b>', "wn_dashboard.svg"),
+                 'Smart Chart es ahora un dashboard: una página con varios visuales. Arrastra campos desde <b>Fields</b> (todas las tablas, de Statimat e Itemat a DTYoMat, jet e hilo) a los huecos de un visual. Visuales nuevos: <b>Matrix</b> (p.&nbsp;ej. FP/m por jet y presión, coloreado; las celdas vacías muestran dónde faltan ensayos), <b>Card</b> (un número) y <b>Table</b>. Haz clic en una barra, caja o celda y todos los demás visuales se filtran. Los <b>slicers</b> eligen valores para toda la página: lista, desplegable, botones o rango. Coloca y redimensiona los visuales libremente, usa varias páginas (pestañas abajo) y filtros solo para una página o un visual. Nuevo: <b>campos calculados</b> con tu propia fórmula, <b>objetivos</b> (verde/rojo, líneas de objetivo), <b>profundizar</b> máquina → jet y <b>seleccionar puntos</b> para filtrar la página. Además: <b>plantillas</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> de una o todas las páginas, <b>Excel</b> por visual o página, notas en los valores, deshacer con <b>Ctrl+Z</b> y <b>alinear</b> varios visuales a la vez (Ctrl+clic, luego alinear, mismo tamaño o distribuir).',
+                 'Sidebar → <b>Smart Chart</b>', "wn_dashboard.svg"),
                 ("feature", 'Estadísticas del laboratorio en el dashboard',
                  'Cuenta <b>experimentos, series o ensayos</b> por mes, grupo de producto, tipo de pedido, proyecto, responsable o máquina de laboratorio (<i>Tested on</i>). El nuevo visual <b>Columns</b> los muestra apilados, lado a lado o al 100 %; meses y años van en orden y los meses vacíos aparecen como 0. Empieza con <b>New</b> → <b>Lab statistics</b>. Los filtros por mes o año pueden ser ahora un periodo que avanza con el calendario: <b>This year</b>, <b>Last 12 months</b>, <b>From – to</b> … Y el slicer <b>Year › Month</b>: años desplegables con los meses Jan–Dec debajo.',
-                 'Smart Chart → <b>Dashboard</b> → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
+                 'Smart Chart → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
                 ("feature", 'Stacked fields: cómo se reparten las partes',
                  'El nuevo visual <b>Stacked fields</b> muestra varios campos numéricos en una columna, cada uno con su color, p.&nbsp;ej. nudos A, B y C del DTYoMat por ensayo, al <b>100 %</b> (la parte de cada uno) o como valores. Con el nuevo campo <b>Trial</b> en el eje X hay una columna por ensayo. Como <b>gráfico combinado</b>, unas líneas en un segundo eje a la derecha muestran p.&nbsp;ej. FP/m.',
-                 'Smart Chart → <b>Dashboard</b> → Visualizations → <b>Stacked fields</b>', "wn_stacked_fields.svg"),
+                 'Smart Chart → Visualizations → <b>Stacked fields</b>', "wn_stacked_fields.svg"),
+                ("feature", 'Formato de visuales: orden, Top N, colores, ejes, tablas',
+                 'Un visual del dashboard tiene ahora junto a <b>Build</b> una segunda pestaña <b>Format</b>. Ordene barras y cajas por valor o por nombre y muestre solo el <b>top 10</b> (p.&nbsp;ej. los mejores jets), fije los <b>decimales</b>, ponga los <b>valores en las barras</b>, elija las <b>barras de error</b> en barras y líneas de medias - desviación estándar, <b>confianza del 95 %</b> (¿dos jets son realmente distintos? si las barras apenas se solapan, probablemente sí), <b>mín – máx</b> o ninguna -, escriba sus propios <b>títulos de eje</b> u ocúltelos, fije dónde empieza y termina el <b>eje Y</b>, mueva la <b>leyenda</b> arriba, abajo o quítela, elija una <b>paleta</b> o su propio <b>color por valor</b>, haga el texto y las <b>tarjetas</b> más grandes o pequeños y quite las líneas de cuadrícula. Las <b>tablas</b> se ordenan con un clic en el título de una columna y tienen <b>reglas de color</b> (p.&nbsp;ej. FP/m por encima de 100 en verde). Un <b>tema del dashboard</b> (Format sin nada seleccionado) fija paleta, tamaño del texto, decimales … para todos los visuales a la vez, y <b>Copy format</b> arriba en la página da a otro visual el mismo formato (doble clic: varios, Esc termina). Cada cambio se ve enseguida; un punto verde marca lo que difiere del estándar, <b>Reset</b> lo restablece. El PDF lo muestra igual.',
+                 'Smart Chart → clic en un visual → Visualizations → <b>Format</b>', "wn_dashboard_format.svg"),
+                ("feature", 'PDF del dashboard igual que la página',
+                 'El PDF de un dashboard lleva ahora el logo de Heberlein, usa toda la página y ningún texto se sale de su recuadro. Los <b>slicers</b> se imprimen como se ven: con casillas, mosaicos, el control deslizante o los años con sus meses. Los gráficos funcionan también <b>sin conexión a internet</b>.',
+                 'Smart Chart → <b>PDF</b>', None),
+                ("feature", 'Nuevos visuales: tarta, dónut, gráfico de control, radar, texto',
+                 'Cinco visuales nuevos en el dashboard: <b>Pie</b> y <b>Donut</b> para proporciones (un clic en una porción filtra la página), el <b>gráfico de control</b> con media y límites ±3σ - puntos fuera en rojo, rachas largas en un lado en ámbar -, el <b>Radar</b> para comparar jets, hilos o máquinas en varios valores a la vez, y <b>Text</b> para títulos y comentarios. Todos los visuales tienen además iconos nuevos y más claros.',
+                 'Smart Chart → Visualizations', "wn_dashboard_visuals.svg"),
+                ("feature", 'Dashboard: líneas de análisis y drill-through',
+                 'Nueva pestaña <b>Analytics</b> junto a Build y Format: media, mediana, ± 1/2/3 desviaciones estándar, percentil, mín./máx., una línea fija o una banda de - a (p.&nbsp;ej. tus límites de especificación) directamente en el gráfico, calculadas con sus ensayos. Y <b>drill-through</b> como en Power BI: convierte una página en la página de detalle de p.&nbsp;ej. <b>Machine</b> (Filters → <b>Drill-through to this page</b>) y luego, en otra página, clic derecho en la barra de una máquina → <b>Drill through</b>. La página de detalle muestra solo esa máquina; <b>← Back</b> te devuelve.',
+                 'Smart Chart → Visualizations → <b>Analytics</b> · clic derecho en una barra', "wn_dashboard_analytics.svg"),
+                ("feature", 'Focus: un visual en grande, con sus ensayos',
+                 'Haga clic en ⤢ en la barra de título de un visual: ocupa la página y debajo aparecen todos los ensayos de los que se compone. Un clic en un punto muestra su fila, un doble clic en una fila abre el ensayo en Show Experiment. Un clic en el punto de color de equidad muestra los detalles con <b>Make it fairer</b>. En <b>Format</b> hay ahora también ejes logarítmicos, una forma por color y el tamaño de los puntos.',
+                 'Smart Chart → ⤢ en un visual', None),
+                ("feature", 'Model: cómo se relacionan las tablas',
+                 'Haga clic en <b>Model</b> arriba a la izquierda del dashboard: en el centro el ensayo, alrededor hilo, jet, experimento, tiempo y todas las tablas de laboratorio, con su relación (1 : n = varias filas por ensayo, promediadas). Un clic en una tabla muestra sus campos y cuántos ensayos tienen un valor. Solo lectura: allí no se puede cambiar nada.',
+                 'Smart Chart → <b>Model</b>', "wn_model_view.svg"),
+                ("feature", 'Colores Heberlein como estándar',
+                 'Los gráficos y dashboards empiezan ahora con la paleta <b>Heberlein</b>: primero el verde Heberlein y el azul oscuro del logo, luego colores fáciles de distinguir. Los ocho verdes siguen disponibles como <b>Heberlein green</b>.',
+                 'Smart Chart → clic en un visual → <b>Format</b> → Colours (nada seleccionado: para todos los visuales)', None),
+                ("feature", 'Paneles laterales más anchos o estrechos',
+                 'En el dashboard, arrastre el borde izquierdo de <b>Filters</b>, <b>Visualizations</b> o <b>Fields</b> para hacerlo más ancho o estrecho; TrippleT lo recuerda. Un doble clic en el borde vuelve al ancho estándar.',
+                 'Sidebar → <b>Smart Chart</b>', None),
                 ("feature", 'Dashboards: verlos y compartirlos',
                  'La nueva página <b>Dashboards</b> muestra tus dashboards y los que tus compañeros compartieron contigo. Aquí solo se mira: funcionan los slicers, el clic en barras para filtrar, el drill-down, las pestañas y el <b>PDF</b>; nada se cambia por error. Para compartir tu dashboard, ábrelo en Smart Chart y haz clic en <b>Share…</b>: con todos, con personas o con grupos (read, write, admin, superuser), cada uno para <b>ver</b> o para <b>editar</b>. Solo tú puedes compartirlo o borrarlo.',
                  'Sidebar → Tools → <b>Dashboards</b> · Smart Chart → <b>Share…</b>', "wn_dashboards.svg"),
@@ -570,7 +653,7 @@ RELEASES = [
                  "Barra lateral → Account → <b>Settings</b> → Show Experiment tables", "wn_reading.svg"),
                 ("h", "Ayuda"),
                 ("feature", "Ayuda en tres idiomas",
-                 "Show Experiment, Backlog, Report, All Experiments, Create Experiment, Manage Yarn y Manage Jets "
+                 "Show Experiment, Backlog, Report, Smart Chart, Dashboards, All Experiments, Create Experiment, Manage Yarn y Manage Jets "
                  "tienen ahora su propia ayuda en inglés, alemán y español: respuestas paso a paso a \"¿Cómo hago…?\", "
                  "un esquema de la pantalla y las reglas. Las banderas cambian el idioma.",
                  "Botón redondo <b>?</b> en estas pantallas", "wn_help.svg"),

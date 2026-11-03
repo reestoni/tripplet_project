@@ -1,7 +1,7 @@
 # ui/smart_dashboard.py
 """Smart Chart "Dashboard" mode (Nutzerwunsch 2026-10-30, "wie Power BI"):
 pages with freely placed visuals, a Visualizations pane and a Fields pane
-with all tables. Lives inside SmartChartScreen (toggle Chart | Dashboard)
+with all tables. It is Smart Chart (SmartChartScreen; the chart mode was removed 2026-11-02)
 and shares its "Find trials" filters (= filters on all pages) and dataset.
 
 Web page: ui/smart_dashboard_html.py (owns the layout = spec), computing:
@@ -17,7 +17,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import QObject, QUrl, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout, QWidget
 
 from db import trial_explorer as te
@@ -48,6 +48,13 @@ class _Bridge(QObject):
     selectSignal = Signal(str, str)
     excelSignal = Signal(str)
     imagesSignal = Signal(str)
+    pickSignal = Signal(str, str, str)
+    widthSignal = Signal(str, int)
+    modelSignal = Signal(str)
+    focusSignal = Signal(str)
+    fairSignal = Signal(str)
+    throughSignal = Signal(str, str, str)
+    backSignal = Signal(bool)
 
     @Slot()
     def ready(self):
@@ -72,6 +79,36 @@ class _Bridge(QObject):
     @Slot(str, bool)
     def paneState(self, pane: str, collapsed: bool):
         self.paneSignal.emit(pane, bool(collapsed))
+
+    @Slot(str)
+    def focusRows(self, vid: str):
+        """Focus mode: the trials of one visual for the list below it."""
+        self.focusSignal.emit(vid)
+
+    @Slot(str)
+    def fairDetails(self, vid: str):
+        """Click on the fairness dot of a visual: the details dialog (with "Make it fairer")."""
+        self.fairSignal.emit(vid)
+
+    @Slot(str, str, str)
+    def drillThrough(self, vid: str, click_json: str, page_id: str):
+        """Right-click on a bar/cell/slice → "Drill through" to a detail page."""
+        self.throughSignal.emit(vid, click_json, page_id)
+
+    @Slot(bool)
+    def drillBack(self, go_back: bool):
+        """Leave the drill-through of the active page: True = back to the page it came from."""
+        self.backSignal.emit(bool(go_back))
+
+    @Slot(str)
+    def modelFields(self, group: str):
+        """Model view: how many trials have a value, for the fields of one group."""
+        self.modelSignal.emit(group)
+
+    @Slot(str, int)
+    def paneWidth(self, pane: str, width: int):
+        """A side pane was dragged wider/narrower; 0 = back to the standard width."""
+        self.widthSignal.emit(pane, int(width))
 
     @Slot(str, str, int)
     def editFilter(self, scope: str, vid: str, index: int):
@@ -103,6 +140,11 @@ class _Bridge(QObject):
     def imagesReady(self, images_json: str):
         self.imagesSignal.emit(images_json)
 
+    @Slot(str, str, str)
+    def pickColour(self, vid: str, label: str, current: str):
+        """Format → Colours: label "" = the one colour of a visual without legend."""
+        self.pickSignal.emit(vid, label, current)
+
 
 class SmartDashboard(QWidget):
     def __init__(self, screen, parent=None, read_only: bool = False):
@@ -113,6 +155,8 @@ class SmartDashboard(QWidget):
         self.read_only = read_only
         self.spec: Dict[str, Any] = en.normalize_spec(None)
         self.cross: Dict[str, List[Dict[str, Any]]] = {}   # visual id -> filters from a click on it
+        # drill-through: detail page id -> {"from": page id, "filters": [...]} (never saved, like clicks)
+        self.through: Dict[str, Dict[str, Any]] = {}
         self._ready = False
         self._sent_catalog = None
         self._calc_fields: List[te.Field] = []
@@ -137,12 +181,20 @@ class SmartDashboard(QWidget):
         self.bridge.selectSignal.connect(self._on_select)
         self.bridge.excelSignal.connect(self._on_export_visual)
         self.bridge.imagesSignal.connect(self._on_images)
+        self.bridge.pickSignal.connect(self._on_pick_colour)
+        self.bridge.widthSignal.connect(self._on_pane_width)
+        self.bridge.modelSignal.connect(self._on_model_fields)
+        self.bridge.focusSignal.connect(self._on_focus_rows)
+        self.bridge.fairSignal.connect(self._on_fair_details)
+        self.bridge.throughSignal.connect(self._on_drill_through)
+        self.bridge.backSignal.connect(self._on_drill_back)
         self._pdf_job: Optional[Dict[str, Any]] = None
         self.channel = QWebChannel()
         self.channel.registerObject("bridge", self.bridge)
         self.web.page().setWebChannel(self.channel)
+        from ui.pathutil import web_base_url
         from ui.smart_dashboard_html import DASHBOARD_HTML
-        self.web.setHtml(DASHBOARD_HTML, QUrl("about:blank"))
+        self.web.setHtml(DASHBOARD_HTML, web_base_url())
         lay.addWidget(self.web)
 
     # ── page <-> python ─────────────────────────────────────────────────
@@ -168,8 +220,17 @@ class SmartDashboard(QWidget):
                               "nocount": bool(t.get("nocount"))}
                           for k, t in en.VISUAL_TYPES.items()},
                 "wells": {k: list(v) for k, v in en.WELLS.items()}, "aggs": en.AGGS,
-                "slicer_styles": en.SLICER_STYLES, "stacks": en.STACK_MODES, "month_of": en.MONTH_OF, "multi_wells": list(en.MULTI_WELLS), "grid": {"cols": en.GRID_COLS, "row": en.GRID_ROW},
-                "spec": self.spec, "panes": {} if self.read_only else self._panes(),
+                "slicer_styles": en.SLICER_STYLES, "stacks": en.STACK_MODES,
+                "formats": en.FORMAT_SECTIONS, "pie_shapes": en.PIE_SHAPES,
+                "point_sizes": {k: p[0] for k, p in en.POINT_SIZES.items()}, "sorts": en.SORTS, "legend_pos": en.LEGEND_POS,
+                "palettes": {k: p["label"] for k, p in en.PALETTES.items()}, "matrix_scales": en.MATRIX_SCALES,
+                "font_sizes": {k: f[0] for k, f in en.FONT_SIZES.items()},
+                "card_sizes": {k: c[0] for k, c in en.CARD_SIZES.items()},
+                "analytics": {"kinds": en.ANALYTICS_KINDS, "colours": en.ANALYTICS_COLOURS,
+                              "defaults": en.ANALYTICS_DEFAULT_COLOUR, "types": list(en.ANALYTICS_TYPES)},
+                "rule_ops": en.RULE_OPS, "rule_colours": en.RULE_COLOURS, "month_of": en.MONTH_OF, "multi_wells": list(en.MULTI_WELLS), "grid": {"cols": en.GRID_COLS, "row": en.GRID_ROW},
+                "spec": self.spec, "panes": {} if self.read_only else self._panes(), "pane_widths": self._pane_widths(),
+                "model": en.model_info(full), "trials": len(ds.trials),
                 "readonly": self.read_only}
         self._sent_catalog = (id(self.screen.catalog), json.dumps(self.spec.get("calc") or [], sort_keys=True))
         self._js(f"init({json.dumps(data)});")
@@ -188,6 +249,7 @@ class SmartDashboard(QWidget):
         """From a saved view (or None = default page)."""
         self.spec = en.normalize_spec(copy.deepcopy(spec) if spec else None)
         self.cross = {}
+        self.through = {}
         self.send_init()
 
     def _on_spec(self, spec_json: str) -> None:
@@ -200,7 +262,25 @@ class SmartDashboard(QWidget):
         self.spec = en.normalize_spec(spec)
         ids = {v.get("id") for pg in self.spec["pages"] for v in pg["visuals"]}
         self.cross = {k: v for k, v in self.cross.items() if k in ids}
+        pages = {pg["id"] for pg in self.spec["pages"]}
+        self.through = {k: v for k, v in self.through.items() if k in pages}
         self.refresh()
+
+    def _on_pick_colour(self, vid: str, label: str, current: str) -> None:
+        v = self._visual(vid)
+        if v is None or self.read_only:
+            return
+        from PySide6.QtGui import QColor
+        from PySide6.QtWidgets import QColorDialog
+        c = QColorDialog.getColor(QColor(current or "#2F6DB5"), self, f"Colour of {label}" if label else "Colour")
+        if not c.isValid():
+            return
+        fmt = v.setdefault("fmt", {})
+        if label:
+            fmt.setdefault("colours", {})[label] = c.name()
+        else:
+            fmt["colour"] = c.name()
+        self._push_spec()
 
     def _push_spec(self) -> None:
         """Python changed the spec (filters) -> tell the page, then recompute."""
@@ -217,18 +297,21 @@ class SmartDashboard(QWidget):
             return
         if any(f.key not in ds.fields for f in self._calc_fields):
             self._apply_calc()         # dataset was rebuilt (Reload)
-        base = list(self.screen.filters)
         page = en.active_page(self.spec)
+        base = self._base(page)
         en.reset_notes(ds)
         results = {}
         for v in page["visuals"]:
             flt = en.visual_filters(ds, page, v, base, self.cross)
             try:
-                r = en.compute_visual(ds, v, flt, self.screen.ply_scope)
+                r = en.compute_visual(ds, en.themed(self.spec, v), flt, self.screen.ply_scope)
             except Exception as e:
                 logger.warning("dashboard visual %s: %s", v.get("id"), e)
                 r = {"kind": "empty", "message": "This visual could not be calculated.", "title": v.get("title") or ""}
             r["vfilters"] = en.describe_filters(ds, v.get("filters") or [])
+            through = en.drill_through_pages(self.spec, ds, v, page["id"])
+            if through:
+                r["through"] = through
             results[v["id"]] = r
         cross = []
         for v in page["visuals"]:
@@ -245,8 +328,53 @@ class SmartDashboard(QWidget):
         payload = {"results": results, "cross": cross, "slicers": slicers, "page": page["id"],
                    "pageFilters": en.describe_filters(ds, page.get("filters") or []),
                    "allFilters": en.describe_filters(ds, list(self.screen.filters)),
-                   "plyScope": self.screen.ply_scope}
+                   "plyScope": self.screen.ply_scope, "through": self._through_info(page)}
         self._js(f"renderResults({json.dumps(payload, default=str)});")
+
+    def _base(self, page: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """"Find trials" + the drill-through filters of the page."""
+        return list(self.screen.filters) + list((self.through.get(page.get("id")) or {}).get("filters") or [])
+
+    def _through_info(self, page: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        dt = self.through.get(page.get("id"))
+        if not dt or self.screen.ds is None:
+            return None
+        src = next((p for p in self.spec["pages"] if p["id"] == dt.get("from")), None)
+        return {"from": dt.get("from") if src else "", "fromTitle": (src or {}).get("title") or "",
+                "text": en.describe_filters(self.screen.ds, dt.get("filters") or [])}
+
+    def _on_drill_through(self, vid: str, click_json: str, page_id: str) -> None:
+        ds = self.screen.ds
+        src = en.active_page(self.spec)
+        v = next((x for x in src["visuals"] if x.get("id") == vid), None)
+        target = next((p for p in self.spec["pages"] if p["id"] == page_id), None)
+        if ds is None or v is None or target is None or target is src:
+            return
+        try:
+            click = json.loads(click_json)
+        except ValueError:
+            return
+        # the clicked visual's own filters, page filters, clicks and slicers - without "Find trials",
+        # which applies on the detail page anyway
+        context = en.visual_filters(ds, src, v, self._base(src)[len(self.screen.filters):], self.cross)
+        flts = en.drill_through_filters(ds, v, click, target, context)
+        if not flts:
+            self._js("toast('Nothing to drill through here - the detail page needs one of the fields of this visual');")
+            return
+        self.through[page_id] = {"from": src["id"], "filters": flts}
+        _log("smart_dashboard_drillthrough", v.get("type", ""))
+        self.spec["active"] = page_id
+        self._js(f"goPage({json.dumps(page_id)});")
+
+    def _on_drill_back(self, go_back: bool) -> None:
+        page = en.active_page(self.spec)
+        dt = self.through.pop(page["id"], None)
+        back = (dt or {}).get("from")
+        if go_back and back and any(p["id"] == back for p in self.spec["pages"]):
+            self.spec["active"] = back
+            self._js(f"goPage({json.dumps(back)});")
+        else:
+            self.refresh()
 
     def _visual(self, vid: str) -> Optional[Dict[str, Any]]:
         return next((v for pg in self.spec["pages"] for v in pg["visuals"] if v.get("id") == vid), None)
@@ -289,7 +417,6 @@ class SmartDashboard(QWidget):
 
     def _after_filter_change(self, scope: str) -> None:
         if scope == "all":                 # "Find trials" = filters on all pages
-            self.screen._render_chips()
             self.screen.refresh()          # count + dashboard
         else:
             self._push_spec()
@@ -305,9 +432,7 @@ class SmartDashboard(QWidget):
     def _on_ply_scope(self, scope: str) -> None:
         if self.read_only:
             return
-        if scope in te.PLY_SCOPES and scope != self.screen.ply_scope:
-            self.screen.grp_scope.button(te.PLY_SCOPES.index(scope)).setChecked(True)
-            self.screen._on_scope(te.PLY_SCOPES.index(scope))
+        self.screen.set_ply_scope(scope)
 
     def _on_filter(self, scope: str, vid: str, index: int) -> None:
         if self.read_only:
@@ -358,7 +483,7 @@ class SmartDashboard(QWidget):
     # ── Excel ───────────────────────────────────────────────────────────
     def _filters_for(self, page: Dict[str, Any], v: Dict[str, Any]) -> List[Dict[str, Any]]:
         cross = self.cross if page is en.active_page(self.spec) else {}
-        return en.visual_filters(self.screen.ds, page, v, list(self.screen.filters), cross)
+        return en.visual_filters(self.screen.ds, page, v, self._base(page), cross)
 
     def write_excel(self, path: str, visuals: List[Dict[str, Any]]) -> None:
         from openpyxl import Workbook
@@ -368,7 +493,8 @@ class SmartDashboard(QWidget):
         wb.remove(wb.active)
         used = set()
         for v in visuals:
-            title, head, rows = en.visual_table(ds, v, self._filters_for(page, v), self.screen.ply_scope)
+            title, head, rows = en.visual_table(ds, en.themed(self.spec, v), self._filters_for(page, v),
+                                                self.screen.ply_scope)
             name = "".join(ch for ch in (title or v["id"]) if ch not in '[]:*?/\\')[:28] or v["id"]
             base, k = name, 2
             while name.lower() in used:
@@ -389,6 +515,8 @@ class SmartDashboard(QWidget):
             info.append(["On all pages", t])
         for t in en.describe_filters(ds, page.get("filters") or []):
             info.append(["On this page", t])
+        for t in (self._through_info(page) or {}).get("text") or []:
+            info.append(["Drill-through", t])
         wb.save(path)
 
     def _on_export_visual(self, vid: str) -> None:
@@ -419,7 +547,7 @@ class SmartDashboard(QWidget):
             vis = []
             for v in pg["visuals"]:
                 try:
-                    r = en.compute_visual(ds, v, self._filters_for(pg, v), self.screen.ply_scope)
+                    r = en.compute_visual(ds, en.themed(self.spec, v), self._filters_for(pg, v), self.screen.ply_scope)
                 except Exception as e:
                     logger.warning("pdf visual %s: %s", v.get("id"), e)
                     r = {"kind": "empty", "message": "could not be calculated", "title": v.get("title") or ""}
@@ -428,10 +556,11 @@ class SmartDashboard(QWidget):
                 vis.append({**v, "result": r})
                 if r.get("kind") == "plotly":
                     from ui.smart_dashboard_pdf import image_size
-                    w, h = image_size(v)
+                    w, h = image_size(v, max(int(o["y"]) + int(o["h"]) for o in pg["visuals"]))
                     jobs.append({"key": f"{pg['id']}:{v['id']}", "figure": r["figure"], "w": w, "h": h})
             pages_out.append({"id": pg["id"], "title": pg.get("title") or "", "visuals": vis,
-                              "filters": en.describe_filters(ds, pg.get("filters") or [])})
+                              "filters": en.describe_filters(ds, pg.get("filters") or [])
+                              + [f"Drill-through: {t}" for t in (self._through_info(pg) or {}).get("text") or []]})
         self._pdf_job = {"path": path, "pages": pages_out, "title": report_title,
                          "all": en.describe_filters(ds, list(self.screen.filters))}
         self._js(f"exportImages({json.dumps(jobs, default=str)});")
@@ -500,6 +629,69 @@ class SmartDashboard(QWidget):
     def _panes(self) -> Dict[str, bool]:
         s = self._settings()
         return {p: str(s.value(f"dashboard/pane_{p}", "0")) in ("1", "true", "True") for p in PANES}
+
+    def _page_filters_of(self, vid: str):
+        """(visual, filters) of a visual on the active page, as the dashboard computes it."""
+        ds = self.screen.ds
+        page = en.active_page(self.spec)
+        v = next((x for x in page["visuals"] if x.get("id") == vid), None)
+        if ds is None or v is None:
+            return None, []
+        return v, en.visual_filters(ds, page, v, self._base(page), self.cross)
+
+    def _on_focus_rows(self, vid: str) -> None:
+        v, flt = self._page_filters_of(vid)
+        if v is None:
+            return
+        try:
+            data = en.focus_rows(self.screen.ds, en.themed(self.spec, v), flt, self.screen.ply_scope)
+        except Exception as e:
+            logger.warning("focus rows %s: %s", vid, e)
+            data = {"head": [], "rows": [], "more": 0}
+        _log("smart_dashboard_focus", v.get("type", ""))
+        self._js(f"focusRows({json.dumps(vid)}, {json.dumps(data, default=str)});")
+
+    def _on_fair_details(self, vid: str) -> None:
+        v, flt = self._page_filters_of(vid)
+        if v is None:
+            return
+        a = en.fairness_of(self.screen.ds, en.themed(self.spec, v), flt, self.screen.ply_scope)
+        if a is None:
+            return
+        from PySide6.QtWidgets import QDialog
+        from ui.screen_smart_chart import _FairnessDialog
+        _log("smart_dashboard_fairness_details", a.level)
+        dlg = _FairnessDialog(a, self)
+        if dlg.exec() != QDialog.Accepted or not dlg.apply_fix or a.fix is None or self.read_only:
+            return
+        new = dict(a.fix)            # "Make it fairer" -> a filter on this visual (replaces one on the same field)
+        flts = [f for f in v.get("filters") or [] if f.get("key") != new.get("key")]
+        v["filters"] = flts + [new]
+        _log("smart_dashboard_fairer", str(new.get("key")))
+        self._push_spec()
+
+    def _on_model_fields(self, group: str) -> None:
+        ds = self.screen.ds
+        if ds is None:
+            return
+        keys = [f.key for f in self.catalog() if f.group == group]
+        counts = en.filled_counts(ds, keys)
+        self._js(f"modelFields({json.dumps(group)}, {json.dumps(counts)}, {len(ds.trials)});")
+
+    def _pane_widths(self) -> Dict[str, int]:
+        s, out = self._settings(), {}
+        for p in PANES:
+            try:
+                w = int(s.value(f"dashboard/pane_{p}_width", 0) or 0)
+            except (TypeError, ValueError):
+                w = 0
+            if w:
+                out[p] = w
+        return out
+
+    def _on_pane_width(self, pane: str, width: int) -> None:
+        if pane in PANES:
+            self._settings().setValue(f"dashboard/pane_{pane}_width", max(0, int(width)))
 
     def _on_pane(self, pane: str, collapsed: bool) -> None:
         if self.read_only:

@@ -31,9 +31,13 @@ CHART_TYPES: Dict[str, Tuple[str, str]] = {
 }
 MODE_TO_CHART = {"each": "points", "mean": "line"}
 
+# Standard (Nutzerwunsch 2026-11-02): "Heberlein" - Heberlein green and the dark blue of the logo first, then
+# colours that are easy to tell apart. The old standard "TrippleT" is gone; saved views with it get the standard.
+# "heberlein" (the eight greens) keeps its key, so views that chose it look as before.
+DEFAULT_PALETTE = "heberlein_contrast"
 PALETTES: Dict[str, Dict[str, Any]] = {
-    "trippleT": {"label": "TrippleT", "colours": ["#2F6DB5", "#D9822B", "#4B5058", "#39A650", "#B5446E",
-                                                 "#7FB8E6", "#C9A227", "#8C6BB1"], "scale": "Viridis"},
+    "heberlein_contrast": {"label": "Heberlein", "colours": ["#1F7A3A", "#232E3A", "#8CC63F", "#D9822B", "#2F6DB5",
+                                                             "#9AA5AE", "#B5446E", "#C9A227"], "scale": "Viridis"},
     "heberlein": {"label": "Heberlein green", "colours": ["#1F7A3A", "#8CC63F", "#0F4D25", "#5FAE6E", "#2E5E3E",
                                                           "#B5D99C", "#6E8B74", "#A3A9A4"], "scale": "Greens"},
     "colourblind": {"label": "Colour-blind safe", "colours": ["#0072B2", "#E69F00", "#009E73", "#D55E00",
@@ -46,7 +50,7 @@ PALETTES: Dict[str, Dict[str, Any]] = {
     "grey": {"label": "Greyscale (print)", "colours": ["#111111", "#6B6B6B", "#A0A0A0", "#3A3A3A", "#858585",
                                                        "#C4C4C4", "#252525", "#5A5A5A"], "scale": "Greys"},
 }
-PALETTE = PALETTES["trippleT"]["colours"]
+PALETTE = PALETTES[DEFAULT_PALETTE]["colours"]
 SYMBOLS = ["circle", "square", "diamond", "triangle-up", "x", "triangle-down", "star", "cross"]
 OTHER_COLOUR = "#B8BEB8"
 MAX_COLOURS = len(PALETTE)
@@ -160,14 +164,14 @@ def _stats(vals: List[float]) -> Tuple[float, float]:
 
 def build_figure(ds: TrialDataset, res: Result, x: str, y: str, colour: Optional[str] = None,
                  split: Optional[str] = None, mode: str = "each", chart: Optional[str] = None,
-                 palette: str = "trippleT", colour_map: Optional[Dict[str, str]] = None,
+                 palette: str = DEFAULT_PALETTE, colour_map: Optional[Dict[str, str]] = None,
                  shapes: bool = False, logx: bool = False, logy: bool = False, size: int = 8,
-                 dark: bool = False) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]:
+                 dark: bool = False, errbars: str = "sd") -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]:
     """(figure, plotted rows, info). info: plotted, hidden_panels, x_is_cat,
     colour_groups [(label, hex)] for the colour editor, chart."""
     chart = chart if chart in CHART_TYPES else MODE_TO_CHART.get(mode, "points")
     th = _DARK if dark else _LIGHT
-    pal = PALETTES.get(palette, PALETTES["trippleT"])
+    pal = PALETTES.get(palette, PALETTES[DEFAULT_PALETTE])
     fx, fy = ds.fields[x], ds.fields[y]
     fc = ds.fields.get(colour) if colour else None
     uses_x = chart != "hist"
@@ -287,9 +291,10 @@ def build_figure(ds: TrialDataset, res: Result, x: str, y: str, colour: Optional
                     if t:
                         traces.append(t)
             elif chart == "line":
-                traces.append(_mean_trace(sel, base, hexc, fx.kind == "cat", fx, fy, symbol_of.get(col, "square")))
+                traces.append(_mean_trace(sel, base, hexc, fx.kind == "cat", fx, fy, symbol_of.get(col, "square"),
+                                              errbars))
             elif chart == "bar":
-                traces.append(_bar_trace(sel, base, hexc, fx, fy))
+                traces.append(_bar_trace(sel, base, hexc, fx, fy, errbars))
             elif chart in ("box", "violin"):
                 traces.append(_dist_trace(chart, sel, base, hexc))
             elif chart == "hist":
@@ -366,33 +371,80 @@ def _groups(sel, key="xlab"):
     return groups
 
 
-def _mean_trace(sel, base, hexc, x_is_cat, fx, fy, symbol) -> Dict[str, Any]:
+# What the bars on a mean show (Format → Error bars, Nutzerwunsch 2026-11-03). "off" is removed later
+# in smart_dashboard_engine.format_figure (after the data labels, which look for error_y).
+ERROR_BARS = {"sd": "Standard deviation", "ci": "95 % confidence", "minmax": "Min – Max", "off": "Off"}
+_T95 = [12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145,
+        2.131, 2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048,
+        2.045, 2.042]                                      # two-sided 95 % t value for df = 1 … 30
+
+
+def t95(df: int) -> float:
+    """Two-sided 95 % t value (no scipy needed)."""
+    if df <= 0:
+        return 0.0
+    if df <= 30:
+        return _T95[df - 1]
+    return 2.021 if df <= 40 else 2.000 if df <= 60 else 1.980 if df <= 120 else 1.960
+
+
+def _err_bars(groups: Dict[Any, List[float]], xs, kind: str):
+    """(means, minus, plus, hover line) per X value for Format → Error bars."""
+    means, minus, plus, hov = [], [], [], []
+    for xv in xs:
+        vals = groups[xv]
+        m, sd = _stats(vals)
+        n = len(vals)
+        if kind == "minmax":
+            lo, hi = min(vals), max(vals)
+            line = f"Min {_fmt(lo)} · Max {_fmt(hi)} · n={n}"
+        elif kind == "ci":
+            half = t95(n - 1) * sd / math.sqrt(n) if n > 1 else 0.0
+            lo, hi = m - half, m + half
+            line = (f"95 % confidence {_fmt(lo)} – {_fmt(hi)} · SD {_fmt(sd)} · n={n}" if n > 1
+                    else f"n=1 - no confidence interval")
+        else:
+            lo, hi = m - sd, m + sd
+            line = f"SD {_fmt(sd)} · n={n}"
+        means.append(m)
+        minus.append(max(m - lo, 0.0))
+        plus.append(max(hi - m, 0.0))
+        hov.append(line)
+    return means, minus, plus, hov
+
+
+def _error_y(minus, plus, **style) -> Dict[str, Any]:
+    e = {"type": "data", "array": plus, "visible": True, "thickness": 1.5, **style}
+    if minus != plus:
+        e.update({"symmetric": False, "arrayminus": minus})
+    return e
+
+
+def _mean_trace(sel, base, hexc, x_is_cat, fx, fy, symbol, errbars="sd") -> Dict[str, Any]:
     groups = _groups(sel, "x")
     xs = sorted(groups, key=_sort_key if x_is_cat else (lambda v: v))
-    st = [_stats(groups[xv]) for xv in xs]
+    means, minus, plus, hov = _err_bars(groups, xs, errbars)
     return {
         **base, "type": "scatter", "mode": "markers" if x_is_cat else "lines+markers",
-        "x": xs, "y": [m for m, _ in st],
-        "error_y": {"type": "data", "array": [sd for _, sd in st], "visible": True, "color": hexc,
-                    "thickness": 1.5, "width": 6},
+        "x": xs, "y": means,
+        "error_y": _error_y(minus, plus, color=hexc, width=6),
         "marker": {"color": hexc, "size": 10, "symbol": symbol if symbol != "circle" else "square"},
         "line": {"color": hexc, "width": 2},
-        "hovertext": [f"{fx.title}: {_fmt(xv)}<br>Mean {fy.title}: {_fmt(m)}<br>SD {_fmt(sd)} · n={len(groups[xv])}"
-                      for xv, (m, sd) in zip(xs, st)],
+        "hovertext": [f"{fx.title}: {_fmt(xv)}<br>Mean {fy.title}: {_fmt(m)}<br>{h}"
+                      for xv, m, h in zip(xs, means, hov)],
         "hoverinfo": "text",
     }
 
 
-def _bar_trace(sel, base, hexc, fx, fy) -> Dict[str, Any]:
+def _bar_trace(sel, base, hexc, fx, fy, errbars="sd") -> Dict[str, Any]:
     groups = _groups(sel)
     xs = sorted(groups, key=_sort_key)
-    st = [_stats(groups[xv]) for xv in xs]
-    return {**base, "type": "bar", "x": xs, "y": [m for m, _ in st],
-            "error_y": {"type": "data", "array": [sd for _, sd in st], "visible": True, "thickness": 1.5,
-                        "width": 5, "color": "rgba(0,0,0,0.55)"},
+    means, minus, plus, hov = _err_bars(groups, xs, errbars)
+    return {**base, "type": "bar", "x": xs, "y": means,
+            "error_y": _error_y(minus, plus, width=5, color="rgba(0,0,0,0.55)"),
             "marker": {"color": hexc, "line": {"color": "rgba(0,0,0,0.15)", "width": 1}},
-            "hovertext": [f"{fx.title}: {xv}<br>Mean {fy.title}: {_fmt(m)}<br>SD {_fmt(sd)} · n={len(groups[xv])}"
-                          for xv, (m, sd) in zip(xs, st)],
+            "hovertext": [f"{fx.title}: {xv}<br>Mean {fy.title}: {_fmt(m)}<br>{h}"
+                          for xv, m, h in zip(xs, means, hov)],
             "hoverinfo": "text"}
 
 

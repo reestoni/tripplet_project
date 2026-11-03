@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- New dashboard visuals - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="10" width="84" height="110" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <circle cx="54" cy="52" r="28" fill="#8CC63F"/>
+  <path d="M54 52 L54 24 A28 28 0 0 1 78.2 66 Z" fill="#1F7A3A"/>
+  <path d="M54 52 L78.2 66 A28 28 0 0 1 43 77.8 Z" fill="#232E3A"/>
+  <circle cx="54" cy="52" r="13" fill="#ffffff"/>
+  <text x="54" y="104" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle" font-weight="bold">Pie / donut</text>
+  <rect x="104" y="10" width="92" height="110" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <line x1="110" y1="30" x2="190" y2="30" stroke="#C62828" stroke-width="1" stroke-dasharray="3 2"/>
+  <line x1="110" y1="70" x2="190" y2="70" stroke="#C62828" stroke-width="1" stroke-dasharray="3 2"/>
+  <line x1="110" y1="50" x2="190" y2="50" stroke="#232E3A" stroke-width="1"/>
+  <polyline points="114,52 124,44 134,57 144,47 154,54 164,42 174,49 184,24" fill="none" stroke="#1F7A3A" stroke-width="1.6"/>
+  <circle cx="114" cy="52" r="2.2" fill="#1F7A3A"/>
+  <circle cx="124" cy="44" r="2.2" fill="#1F7A3A"/>
+  <circle cx="134" cy="57" r="2.2" fill="#1F7A3A"/>
+  <circle cx="144" cy="47" r="2.2" fill="#1F7A3A"/>
+  <circle cx="154" cy="54" r="2.2" fill="#1F7A3A"/>
+  <circle cx="164" cy="42" r="2.2" fill="#1F7A3A"/>
+  <circle cx="174" cy="49" r="2.2" fill="#1F7A3A"/>
+  <circle cx="184" cy="24" r="2.2" fill="#C62828"/>
+  <text x="150" y="104" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle" font-weight="bold">Control chart</text>
+  <rect x="204" y="10" width="84" height="110" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <polygon points="246,22 272,42 262,76 230,76 220,42" fill="none" fill-opacity="1" stroke="#C9D1C8" stroke-width="1"/>
+  <polygon points="246,28 266,44 256,70 233,72 226,44" fill="#1F7A3A" fill-opacity="0.3" stroke="#1F7A3A" stroke-width="1.4"/>
+  <polygon points="246,36 262,45 260,72 238,68 230,46" fill="none" fill-opacity="1" stroke="#8CC63F" stroke-width="1.6"/>
+  <text x="246" y="104" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle" font-weight="bold">Radar</text>
+</svg>

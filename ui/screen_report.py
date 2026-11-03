@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import QUrl, Qt, QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget, QSizePolicy, QMessageBox, QFrame,
@@ -26,13 +26,13 @@ except ImportError:
         def dec(f): return f
         return dec
 
-from ui.pathutil import resource_path
+from ui.pathutil import resource_path, web_base_url
 from ui.report_html_template import _HTML_TEMPLATE
 from ui.report_queries import (
     Y_AXES, X_AXES, KNOWN_TABLES,
     _get_known_tables, _load_axes_from_db,
     _fetch_y_values, _fetch_table_columns, _fetch_series_data,
-    _fetch_infobox_data,
+    _fetch_infobox_data, with_category_axes,
 )
 from ui.report_pdf_layout import (
     _PDF_TEMPLATE_DEFAULTS,
@@ -1886,7 +1886,7 @@ class ReportScreen(QWidget):
                 _HTML_TEMPLATE
                 .replace("{data_json}",     json.dumps(data))
                 .replace("{y_axes_json}",   json.dumps(y_axes_js))
-                .replace("{x_axes_json}",   json.dumps(x_axes_js))
+                .replace("{x_axes_json}",   json.dumps(with_category_axes(x_axes_js)))
                 .replace("{g_axes_json}",   json.dumps(g_axes_js))
                 .replace("{tbl_cols_json}", json.dumps(tbl_cols))
                 .replace("{table_options}", tbl_opts)
@@ -1904,7 +1904,7 @@ class ReportScreen(QWidget):
                 logger.info("DEBUG HTML: %s", _p)
             except Exception as _e:
                 logger.error("DEBUG: %s", _e)
-            self._web.setHtml(html, QUrl("about:blank"))
+            self._web.setHtml(html, web_base_url())
 
 
     def _refresh_experiment_request_link(self) -> None:
@@ -1985,7 +1985,7 @@ class ReportScreen(QWidget):
                 _HTML_TEMPLATE
                 .replace("{data_json}",       json.dumps([]))
                 .replace("{y_axes_json}",     json.dumps(y_axes_js))
-                .replace("{x_axes_json}",     json.dumps(x_axes_js))
+                .replace("{x_axes_json}",     json.dumps(with_category_axes(x_axes_js)))
                 .replace("{tbl_cols_json}",   json.dumps(tbl_cols))
                 .replace("{table_options}",   tbl_opts)
                 .replace("{g_axes_json}",     json.dumps(g_axes_js))
@@ -2012,7 +2012,7 @@ class ReportScreen(QWidget):
                 logger.info("DEBUG HTML: %s", _p)
             except Exception as _e:
                 logger.error("DEBUG: %s", _e)
-            self._web.setHtml(html, QUrl("about:blank"))
+            self._web.setHtml(html, web_base_url())
 
     def _open_help(self) -> None:
         from ui.widgets.multilang_help import show_help
