@@ -255,7 +255,7 @@ def _table(c, r, box, style) -> None:
     rest = len(rows) - fits + (r.get("more") or 0)
     if rest > 0:
         c.setFillColor(grey)
-        c.drawString(bx + pad, by + 1, f"… {rest} more trials (see Excel)")
+        c.drawString(bx + pad, by + 1, f"… {rest} more {'values' if r.get('grouped') else 'trials'} (see Excel)")
 
 
 # ── slicer: drawn as on the dashboard, in its style ──────────────────────

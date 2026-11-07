@@ -105,11 +105,12 @@ def test_whats_new_dialog_lists_versions(monkeypatch):
     monkeypatch.setattr(wn, "RELEASES", W.RELEASES)
     display_prefs._prefs = dict(display_prefs.DEFAULTS, whats_new_seen="4.6.2")
     dlg = WhatsNewDialog(language="en")
-    assert dlg.lst.count() == 2
-    assert dlg.lst.item(0).text().endswith("NEW") and not dlg.lst.item(1).text().endswith("NEW")
-    dlg.lst.setCurrentRow(1)
+    last = len(W.RELEASES) - 1           # the appended 4.6.2
+    assert dlg.lst.count() == len(W.RELEASES)
+    assert dlg.lst.item(0).text().endswith("NEW") and not dlg.lst.item(last).text().endswith("NEW")
+    dlg.lst.setCurrentRow(last)
     dlg.set_language("de")
-    assert dlg.lst.item(1).text().startswith("Version 4.6.2\n13.10.2026")
+    assert dlg.lst.item(last).text().startswith("Version 4.6.2\n13.10.2026")
     display_prefs._prefs = dict(display_prefs.DEFAULTS)
 
 
@@ -133,7 +134,8 @@ def test_whats_new_search(monkeypatch):
     assert (old_idx, 1) in wn.search_features("spule scannen")  # synonyms also find related Yarn Stock cards
     assert wn.search_features("barcode reference") == []
     assert wn.search_features("") == []
-    assert any(ri == 0 for ri, _ in wn.search_features("Referenz"))
+    ref_idx = next(i for i, r in enumerate(W.RELEASES) if r["version"] == "4.6.3")   # "Reference samples"
+    assert any(ri == ref_idx for ri, _ in wn.search_features("Referenz"))
     display_prefs._prefs = dict(display_prefs.DEFAULTS, whats_new_seen="4.6.2")
     dlg = wn.WhatsNewDialog(language="de")
     dlg.search.setText("Strichcode")
@@ -185,6 +187,9 @@ def test_whats_new_tabs_per_section(monkeypatch):
     assert [(t, [b[0] for b in bl]) for t, bl in secs] == [("A & B", ["p", "feature", "feature"]), ("C", ["feature"])]
     assert wn.release_sections({"texts": {"en": [("feature", "x", "y", "z", None)]}}, "en") == \
         [("", [("feature", "x", "y", "z", None)])]
+    from ui.widgets import whats_new_texts as W
+    # a top release with two sections - independent of what the real current entry holds
+    monkeypatch.setattr(wn, "RELEASES", [rel] + [r for r in W.RELEASES if r["version"] != "current"])
     display_prefs._prefs = dict(display_prefs.DEFAULTS)
     dlg = wn.WhatsNewDialog(language="en")
     sections = wn.release_sections(wn.RELEASES[0], "en")

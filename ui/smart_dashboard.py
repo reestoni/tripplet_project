@@ -298,13 +298,11 @@ class SmartDashboard(QWidget):
         if any(f.key not in ds.fields for f in self._calc_fields):
             self._apply_calc()         # dataset was rebuilt (Reload)
         page = en.active_page(self.spec)
-        base = self._base(page)
         en.reset_notes(ds)
         results = {}
         for v in page["visuals"]:
-            flt = en.visual_filters(ds, page, v, base, self.cross)
             try:
-                r = en.compute_visual(ds, en.themed(self.spec, v), flt, self.screen.ply_scope)
+                r = self._result(page, v)
             except Exception as e:
                 logger.warning("dashboard visual %s: %s", v.get("id"), e)
                 r = {"kind": "empty", "message": "This visual could not be calculated.", "title": v.get("title") or ""}
@@ -482,8 +480,22 @@ class SmartDashboard(QWidget):
 
     # ── Excel ───────────────────────────────────────────────────────────
     def _filters_for(self, page: Dict[str, Any], v: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """The filters of visual v as shown: with clicks on the page, a highlighting visual keeps all its
+        trials (the clicks only grey out), the others are filtered by them."""
         cross = self.cross if page is en.active_page(self.spec) else {}
+        if en.highlights(self.spec, v, en.page_cross(page, cross)):
+            cross = {}
         return en.visual_filters(self.screen.ds, page, v, self._base(page), cross)
+
+    def _result(self, page: Dict[str, Any], v: Dict[str, Any]) -> Dict[str, Any]:
+        """Visual v computed as the dashboard shows it (highlighted or filtered by clicks)."""
+        ds = self.screen.ds
+        cross = self.cross if page is en.active_page(self.spec) else {}
+        clicks = en.page_cross(page, cross)
+        flt = self._filters_for(page, v)
+        if en.highlights(self.spec, v, clicks):     # grey out instead of filtering (Nutzerwunsch 2026-11-03)
+            return en.highlight_visual(ds, en.themed(self.spec, v), flt, flt + clicks, self.screen.ply_scope)
+        return en.compute_visual(ds, en.themed(self.spec, v), flt, self.screen.ply_scope)
 
     def write_excel(self, path: str, visuals: List[Dict[str, Any]]) -> None:
         from openpyxl import Workbook
@@ -547,7 +559,7 @@ class SmartDashboard(QWidget):
             vis = []
             for v in pg["visuals"]:
                 try:
-                    r = en.compute_visual(ds, en.themed(self.spec, v), self._filters_for(pg, v), self.screen.ply_scope)
+                    r = self._result(pg, v)
                 except Exception as e:
                     logger.warning("pdf visual %s: %s", v.get("id"), e)
                     r = {"kind": "empty", "message": "could not be calculated", "title": v.get("title") or ""}
@@ -637,7 +649,7 @@ class SmartDashboard(QWidget):
         v = next((x for x in page["visuals"] if x.get("id") == vid), None)
         if ds is None or v is None:
             return None, []
-        return v, en.visual_filters(ds, page, v, self._base(page), self.cross)
+        return v, self._filters_for(page, v)
 
     def _on_focus_rows(self, vid: str) -> None:
         v, flt = self._page_filters_of(vid)

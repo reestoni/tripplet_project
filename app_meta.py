@@ -19,7 +19,7 @@ Zugriffsebenen (tblAccessRight.AccessLevel):
 """
 
 APP_NAME = "TrippleT"
-APP_VERSION = "4.6.3"          # <— hier künftig nur diese Zahl ändern
+APP_VERSION = "4.6.4"          # <— hier künftig nur diese Zahl ändern
 APP_COPYRIGHT = "© 2026 Heberlein Technology AG"
 
 # Callback zum Aktualisieren des Bell-Badges (wird von main.py gesetzt)
@@ -101,6 +101,9 @@ open_help_search = None    # callable or None
 
 # Dashboards zum Anschauen (Sidebar "Dashboards", ui/screen_dashboards.py) - von MainWindow gesetzt.
 open_dashboards = None     # callable or None
+
+# Onboarding (Sidebar "Onboarding" unter Help, ui/screen_onboarding.py) - von MainWindow gesetzt.
+open_onboarding = None     # callable or None
 
 # Papierkorb-Vorschau (ui/recycle_preview.py) - von MainWindow gesetzt:
 # (exp_pk, series_pk, experiment_id, setup(screen)) -> None

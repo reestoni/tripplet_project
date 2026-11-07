@@ -59,6 +59,8 @@ from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.widgets.spool_picker import SpoolPickerDialog, spool_label
 from ui.widgets.yarn_colour import colour_icon, colour_tooltip, load_yarn_colours
+from ui.widgets.tree_search import TreeSearch
+import ui.widgets.yarn_locations as _yarn_locations
 from ui.pathutil import resource_path
 from ui.text_normalize import norm as _norm, resolve_field
 from db.trial_reference import exclude_references_sql, format_trial_number, next_trial_number
@@ -708,6 +710,14 @@ class CreateExperimentScreen(QWidget):
 
         self.treeMaterial = QTreeWidget()
         self.treeMaterial.setHeaderHidden(True)
+        # Spalte 1 = Spulen-Symbol (am Lager / nicht am Lager) wie in der
+        # Materialzeile von Show Experiment; Klick -> Lagerplaetze.
+        self.treeMaterial.setColumnCount(2)
+        self.treeMaterial.header().setStretchLastSection(False)
+        self.treeMaterial.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.treeMaterial.header().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.treeMaterial.setColumnWidth(1, 30)
+        self.treeMaterial.setIconSize(QSize(16, 16))
         self.treeMaterial.setIndentation(18)
         self.treeMaterial.setExpandsOnDoubleClick(True)
         self.treeMaterial.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -747,7 +757,14 @@ class CreateExperimentScreen(QWidget):
             "Use the output of an existing trial (e.g. from another machine) as this ply's input, "
             "instead of picking a catalog yarn."
         )
-        row_mat.addWidget(self.treeMaterial, 1)
+        self.searchMaterial = TreeSearch(self.treeMaterial, columns=(0,),
+                                         placeholder="Search material (all groups)…")
+        mat_col = QVBoxLayout()
+        mat_col.setContentsMargins(0, 0, 0, 0)
+        mat_col.setSpacing(4)
+        mat_col.addWidget(self.searchMaterial.edit)
+        mat_col.addWidget(self.treeMaterial, 1)
+        row_mat.addLayout(mat_col, 1)
         row_mat.addWidget(self.butAddMaterial, 0)
         row_mat.addWidget(self.butAddTrialPly, 0)
         form_m.addRow("Material", row_mat)
@@ -866,7 +883,15 @@ class CreateExperimentScreen(QWidget):
         self.butAddJet = QPushButton("+")
         self.butAddJet.setEnabled(False)
 
-        row_jet.addWidget(self.treeJet, 1)
+        # Suche ueber alle Gruppen: Jet-Name und Entwicklungsname
+        self.searchJet = TreeSearch(self.treeJet, columns=(0, 5),
+                                    placeholder="Search jet (all groups)…")
+        jet_col = QVBoxLayout()
+        jet_col.setContentsMargins(0, 0, 0, 0)
+        jet_col.setSpacing(4)
+        jet_col.addWidget(self.searchJet.edit)
+        jet_col.addWidget(self.treeJet, 1)
+        row_jet.addLayout(jet_col, 1)
         row_jet.addWidget(self.butAddJet, 0)
 
         jet_container = QWidget()
@@ -1783,6 +1808,15 @@ class CreateExperimentScreen(QWidget):
             )
 
         self._yarn_colours, _ = load_yarn_colours()
+        # Bestand pro Garn (eine Abfrage fuer alle) -> Spulen-Symbol
+        self._material_stock_summary = _yarn_locations.load_stock_summary(
+            r.get("YarnID") for r in yrows)
+        _sym_in = _sym_none = None
+        try:
+            _sym_in = QIcon(_yarn_locations.symbol_path(True))
+            _sym_none = QIcon(_yarn_locations.symbol_path(False))
+        except Exception:
+            pass
         yarns_by_gid: dict[Any, list[dict]] = {}
         for r in yrows:
             yarns_by_gid.setdefault(r.get("GID"), []).append(r)
@@ -1801,6 +1835,7 @@ class CreateExperimentScreen(QWidget):
                 pass
 
             self.treeMaterial.addTopLevelItem(top)
+            top.setFirstColumnSpanned(True)
 
             gid = g.get("GID")
             children = yarns_by_gid.get(gid, [])
@@ -1820,6 +1855,11 @@ class CreateExperimentScreen(QWidget):
                 child.setData(0, Qt.UserRole, {"kind": "yarn", "yarn_id": yid, "yarn_name": yname})
                 child.setIcon(0, colour_icon(self._yarn_colours.get(int(yid))))
                 child.setToolTip(0, colour_tooltip(self._yarn_colours.get(int(yid))))
+                _stock = self._material_stock_summary.get(int(yid))
+                _sym = _sym_in if _stock is not None else _sym_none
+                if _sym is not None:
+                    child.setIcon(1, _sym)
+                child.setToolTip(1, _yarn_locations.stock_symbol_tooltip(_stock))
                 top.addChild(child)
                 any_children = True
 
@@ -1855,6 +1895,8 @@ class CreateExperimentScreen(QWidget):
                 self.treeMaterial.topLevelItem(i).setExpanded(True)
 
         self.treeMaterial.clearSelection()
+        if hasattr(self, "searchMaterial"):
+            self.searchMaterial.reapply()
         self._update_add_material_enabled()
 
     def _load_jets(self):
@@ -2108,6 +2150,8 @@ class CreateExperimentScreen(QWidget):
 
         self.treeJet.clearSelection()
         self.butAddJet.setEnabled(False)
+        if hasattr(self, "searchJet"):
+            self.searchJet.reapply()
 
     def _on_jet_header_clicked(self, logical_col: int):
         """Sortiert Children innerhalb jeder Gruppe nach Spalte logical_col.
@@ -2392,6 +2436,7 @@ class CreateExperimentScreen(QWidget):
         # Material
         self.txtSeriesName.textChanged.connect(self._on_series_name_changed)
         self.treeMaterial.itemSelectionChanged.connect(self._update_add_material_enabled)
+        self.treeMaterial.itemClicked.connect(self._on_material_tree_clicked)
         self.butAddMaterial.clicked.connect(self._add_material)
         self.butAddTrialPly.clicked.connect(self._add_trial_ply)
 
@@ -3323,6 +3368,39 @@ class CreateExperimentScreen(QWidget):
         if colour:
             it.setToolTip(colour_tooltip(colour))
         return it
+
+    def _on_material_tree_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+        """Klick auf das gruene Spulen-Symbol (Spalte 1): wo liegen die Spulen
+        dieses Garns am Lager - derselbe Dialog wie in Show Experiment."""
+        if column != 1 or item is None:
+            return
+        data = item.data(0, Qt.UserRole)
+        if not (isinstance(data, dict) and data.get("kind") == "yarn"):
+            return
+        try:
+            yarn_id = int(data.get("yarn_id"))
+        except Exception:
+            return
+        if getattr(self, "_material_stock_summary", {}).get(yarn_id) is None:
+            return  # nicht am Lager - nichts zu zeigen (wie Show Experiment)
+        # Spulen, die hier schon gewaehlt sind, erscheinen fett
+        chosen = {int(m["SpoolID"]) for m in self._materials_data if m.get("SpoolID") is not None}
+        win = self.window()
+        goto = getattr(win, "_go_yarn_stock_from_notification", None)
+        try:
+            dlg = _yarn_locations.YarnLocationsDialog(
+                yarn_id, str(data.get("yarn_name") or f"Yarn {yarn_id}"),
+                getattr(self, "_yarn_colours", {}).get(yarn_id), chosen,
+                parent=self, on_open_yarn_stock=goto)
+        except Exception as e:
+            show_error(self, "Stock locations", "The stock locations could not be loaded.", e)
+            return
+        try:
+            from db.usage_log import log_usage_event
+            log_usage_event("feature", "yarn_stock_locations", "create_experiment")
+        except Exception:
+            pass
+        dlg.exec()
 
     def _get_selected_yarn_from_tree(self) -> Optional[tuple[Any, str]]:
         items = self.treeMaterial.selectedItems() if hasattr(self, "treeMaterial") else []
@@ -5388,6 +5466,7 @@ class CreateExperimentScreen(QWidget):
     def _set_material_readonly(self, ro: bool):
         self.txtSeriesName.setReadOnly(ro)
         self.treeMaterial.setEnabled(not ro)
+        self.searchMaterial.setEnabled(not ro)
         self.butAddMaterial.setVisible(not ro)
         self.butAddTrialPly.setVisible(not ro)
         self._strict_ro_tbl_yarns = ro

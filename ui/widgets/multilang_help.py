@@ -95,14 +95,16 @@ def flag_icon(file_name: str) -> QIcon:
     return QIcon(pm)
 
 
-def build_flag_row(on_select: Callable[[str], None], parent: QWidget) -> Tuple[QHBoxLayout, Dict[str, QToolButton]]:
-    """Flaggen-Leiste (rechtsbuendig). on_select(code) wird beim Klick gerufen."""
+def build_flag_row(on_select: Callable[[str], None], parent: QWidget,
+                   languages=None) -> Tuple[QHBoxLayout, Dict[str, QToolButton]]:
+    """Flaggen-Leiste (rechtsbuendig). on_select(code) wird beim Klick gerufen.
+    languages: andere Sprachliste als LANGUAGES (Onboarding hat zusaetzlich Chinesisch)."""
     row = QHBoxLayout()
     row.addStretch(1)
     group = QButtonGroup(parent)
     group.setExclusive(True)
     buttons: Dict[str, QToolButton] = {}
-    for code, name, file_name in LANGUAGES:
+    for code, name, file_name in (languages or LANGUAGES):
         btn = QToolButton()
         btn.setIcon(flag_icon(file_name))
         btn.setIconSize(QSize(_FLAG_W, _FLAG_H))

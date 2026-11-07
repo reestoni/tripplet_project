@@ -30,7 +30,7 @@ TEXTS = {
                  "The page opens the dashboard you looked at last."),
                 ("task", "Filter what you see",
                  ["Pick values in the <b>slicers</b> (lists, dropdowns, tiles, ranges).",
-                  "Click a bar, a box or a matrix cell: all other visuals filter to it. Click it again to undo.",
+                  "Click a bar, a slice or a point: the other visuals grey out everything else (cards, tables and the matrix show only that value). Click it again to undo.",
                   "Double-click a bar to go one level deeper (drill-down), if the dashboard offers it.",
                   "The tabs at the bottom switch between the pages."],
                  "Nothing of this is saved - the next time the dashboard opens as its creator saved it. Open the "
@@ -70,8 +70,8 @@ TEXTS = {
                  "Die Seite öffnet das Dashboard, das du zuletzt angeschaut hast."),
                 ("task", "Filtern, was du siehst",
                  ["In den <b>Slicern</b> Werte wählen (Listen, Dropdowns, Knöpfe, Bereiche).",
-                  "Auf einen Balken, eine Box oder eine Matrix-Zelle klicken: alle anderen Visuals filtern sich "
-                  "darauf. Nochmals klicken hebt es auf.",
+                  "Auf einen Balken, ein Kuchenstück oder einen Punkt klicken: die anderen Visuals grauen alles andere "
+                  "aus (Cards, Tabellen und die Matrix zeigen nur noch diesen Wert). Nochmals klicken hebt es auf.",
                   "Doppelklick auf einen Balken geht eine Ebene tiefer (Drill-down), wenn das Dashboard es anbietet.",
                   "Die Reiter unten wechseln zwischen den Seiten."],
                  "Nichts davon wird gespeichert - beim nächsten Mal öffnet sich das Dashboard so, wie es der "
@@ -112,8 +112,8 @@ TEXTS = {
                  "La página abre el último dashboard que miraste."),
                 ("task", "Filtrar lo que ves",
                  ["Elige valores en los <b>slicers</b> (listas, desplegables, botones, rangos).",
-                  "Haz clic en una barra, una caja o una celda de la matriz: todos los demás visuales se filtran. "
-                  "Otro clic lo deshace.",
+                  "Haz clic en una barra, un sector o un punto: los demás visuales ponen en gris todo lo demás "
+                  "(tarjetas, tablas y la matriz muestran solo ese valor). Otro clic lo deshace.",
                   "Doble clic en una barra baja un nivel (drill-down), si el dashboard lo ofrece.",
                   "Las pestañas de abajo cambian de página."],
                  "Nada de esto se guarda: la próxima vez el dashboard se abre como lo guardó su creador. Abre la "

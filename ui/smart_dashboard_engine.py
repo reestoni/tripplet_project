@@ -83,7 +83,8 @@ VISUAL_TYPES: Dict[str, Dict[str, Any]] = {
                "wells": ["rows", "cols", "value"], "agg": True, "target": True},
     "kpi": {"label": "Card", "tip": "One number: count, average, best …", "wells": ["value"], "agg": True,
             "target": True},
-    "table": {"label": "Table", "tip": "The trials with the fields you choose", "wells": ["columns"]},
+    "table": {"label": "Table", "tip": "The trials with the fields you choose - or one row per value, "
+                                      "e.g. a list of the jets", "wells": ["columns"]},
     "slicer": {"label": "Slicer", "tip": "Pick values to filter all other visuals: list, dropdown, tiles or a range",
                "wells": ["field"]},
     "text": {"label": "Text", "tip": "A heading or a comment on the page - also in the PDF", "wells": []},
@@ -93,9 +94,13 @@ MAX_CONTROL_POINTS = 2000
 RUN_LENGTH = 7            # control chart: this many points in a row on one side of the mean = amber
 AGGS = {"avg": "Average", "median": "Median", "min": "Min", "max": "Max", "sd": "Std. deviation",
         "sum": "Sum", "count": "Count of trials", "count_series": "Count of trial series",
-        "count_experiments": "Count of experiments"}
+        "count_experiments": "Count of experiments", "count_distinct": "Count (distinct)"}
 # counting aggregations need no Value; series/experiments include the empty rows
 COUNT_AGGS = ("count", "count_series", "count_experiments")
+# "Count (distinct)" (Nutzerwunsch 2026-11-05, e.g. how many different jets): number of
+# different values of the Value field - any field, "(none)" does not count
+DISTINCT = "count_distinct"
+COUNTING = COUNT_AGGS + (DISTINCT,)     # aggregations that are no average of numbers
 ENTITY = {"count": ("Trials", "trials"), "count_series": ("Trial series", "trial series"),
           "count_experiments": ("Experiments", "experiments")}
 STACK_MODES = {"stacked": "Stacked", "grouped": "Side by side", "percent": "100 % stacked"}
@@ -281,6 +286,8 @@ def normalize_spec(spec: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if isinstance(spec.get("theme"), dict) else {}
     if theme:
         out["theme"] = theme
+    if spec.get("clicks") == "filter":
+        out["clicks"] = "filter"
     return out
 
 
@@ -404,11 +411,39 @@ def _counted(ds: TrialDataset, ids: Sequence[int], agg: str) -> List[int]:
     return [t for t in ids if count_of(ds, [t], agg)]
 
 
+def distinct_values(ds: TrialDataset, key: str, tids: Sequence[int], matched: Dict[int, Any]) -> set:
+    """The different values of a field over these trials; empty / "(none)" left out."""
+    out: set = set()
+    num = ds.fields[key].kind == "num"
+    for t in tids:
+        val = ds.value(key, t, matched.get(t))
+        if num:
+            x = _num(val)
+            if x is not None:
+                out.add(x)
+        else:
+            out.update(lab for lab in cat_labels(val) if lab != NONE_LABEL)
+    return out
+
+
+def _has_value(ds: TrialDataset, vk: Optional[str], tid: int, m, agg: str) -> bool:
+    """Does this trial take part in agg over vk (counts always, numbers / distinct need a value)?"""
+    if agg in COUNT_AGGS:
+        return True
+    if not vk:
+        return False
+    if agg == DISTINCT:
+        return bool(distinct_values(ds, vk, [tid], {tid: m}))
+    return _num(ds.value(vk, tid, m)) is not None
+
+
 def _cell(ds: TrialDataset, tids: Sequence[int], res: Result, vk: Optional[str], agg: str) -> Optional[float]:
     if agg in COUNT_AGGS:
         return float(count_of(ds, tids, agg))
     if not vk:
         return None
+    if agg == DISTINCT:
+        return float(len(distinct_values(ds, vk, tids, res.matched)))
     return aggregate([_num(ds.value(vk, t, res.matched.get(t))) for t in tids], agg)
 
 
@@ -447,6 +482,15 @@ def _label(ds: TrialDataset, key: str, tid: int, m) -> str:
     return cat_label(v)
 
 
+def agg_what(agg: str, value_title: str) -> str:
+    """What a counted / aggregated value is called: "Trials", "Count of Jet (distinct)", "Average FPM"."""
+    if agg in COUNT_AGGS:
+        return ENTITY[agg][0]
+    if agg == DISTINCT:
+        return f"Count of {value_title} (distinct)" if value_title else AGGS[DISTINCT]
+    return f"{AGGS.get(agg, '')} {value_title}".strip()
+
+
 def auto_title(ds: TrialDataset, v: Dict[str, Any]) -> str:
     w, f, t = v.get("wells") or {}, ds.fields, v.get("type")
     title = lambda k: f[w[k]].title if w.get(k) in f else ""
@@ -454,7 +498,7 @@ def auto_title(ds: TrialDataset, v: Dict[str, Any]) -> str:
         agg = v.get("agg") or "avg"
         if agg in COUNT_AGGS or not title("value"):
             return ENTITY.get(agg, ENTITY["count"])[0]
-        return f"{AGGS[agg]} {title('value')}"
+        return agg_what(agg, title("value"))
     if t == "stack":
         keys = [f[k].title for k in (v.get("wells") or {}).get("values") or [] if k in f]
         what = ", ".join(keys[:4]) + (" …" if len(keys) > 4 else "") or "Stacked fields"
@@ -464,11 +508,11 @@ def auto_title(ds: TrialDataset, v: Dict[str, Any]) -> str:
                 + (f" with {', '.join(lines[:2])}" if lines else ""))
     if t == "column":
         agg = v.get("agg") or "count"
-        what = ENTITY[agg][0] if agg in COUNT_AGGS else f"{AGGS.get(agg, '')} {title('value')}".strip()
+        what = agg_what(agg, title("value"))
         return (f"{what} per {title('x')}" if title("x") else what) + (f" by {title('legend')}" if title("legend") else "")
     if t == "pie":
         agg = v.get("agg") or "count"
-        what = ENTITY[agg][0] if agg in COUNT_AGGS else f"{AGGS.get(agg, '')} {title('value')}".strip()
+        what = agg_what(agg, title("value"))
         return f"{what} by {title('legend')}" if title("legend") else what
     if t == "control":
         return f"Control chart: {title('y')}" if title("y") else "Control chart"
@@ -477,8 +521,14 @@ def auto_title(ds: TrialDataset, v: Dict[str, Any]) -> str:
     if t == "text":
         return ""
     if t == "matrix":
+        if v.get("agg") == DISTINCT:
+            return f"{agg_what(DISTINCT, title('value'))} · {title('rows')} × {title('cols')}".strip(" ·×")
         return f"{AGGS.get(v.get('agg') or 'avg', '')} {title('value')} · {title('rows')} × {title('cols')}".strip(" ·×")
     if t == "table":
+        if v.get("group"):
+            cats = [f[k].title for k in w.get("columns") or [] if k in f and f[k].kind != "num"]
+            if cats:
+                return " / ".join(cats[:3])
         return "Trials"
     if t == "slicer":
         return title("field") or "Slicer"
@@ -531,7 +581,12 @@ def _compute(ds: TrialDataset, v: Dict[str, Any], filters: List[Dict[str, Any]],
             r["sub"] = (r.get("sub") + " · " if r.get("sub") else "") + f"target {_kfmt(tg[0])}"
         return {**out, **r}
     if t == "table":
-        return {**out, **_table(ds, res, [k for k in (v.get("wells") or {}).get("columns") or [] if k in ds.fields], fmt)}
+        cols = [k for k in (v.get("wells") or {}).get("columns") or [] if k in ds.fields]
+        if v.get("group"):
+            r = _table_grouped(ds, res, cols, fmt)
+            r.pop("raw", None)
+            return {**out, **r}
+        return {**out, **_table(ds, res, cols, fmt)}
     if t == "slicer":
         if not w.get("field"):
             return {**out, "kind": "empty", "message": "Drag a field into Field"}
@@ -540,7 +595,7 @@ def _compute(ds: TrialDataset, v: Dict[str, Any], filters: List[Dict[str, Any]],
         agg = v.get("agg") or "count"
         if not w.get("x") or (not w.get("value") and agg not in COUNT_AGGS):
             return {**out, "kind": "empty", "message": "Drag a field into X axis" if not w.get("x") else
-                    "Drag a number into Value - or count trials, series or experiments"}
+                    _value_hint(agg)}
         r = _column(ds, res, w["x"], w.get("legend"), w.get("value"), agg, v.get("stack") or "stacked", palette, fmt)
         tg = _target(v)
         if r.get("kind") == "plotly" and tg and (v.get("stack") or "stacked") != "percent":
@@ -559,7 +614,7 @@ def _compute(ds: TrialDataset, v: Dict[str, Any], filters: List[Dict[str, Any]],
         keys = [k for k in (v.get("wells") or {}).get("values") or [] if k in ds.fields]
         if not keys:
             return {**out, "kind": "empty", "message": "Drag two or more number fields into Values"}
-        agg = v.get("agg") if v.get("agg") in AGGS and v.get("agg") not in COUNT_AGGS else "avg"
+        agg = v.get("agg") if v.get("agg") in AGGS and v.get("agg") not in COUNTING else "avg"
         lines = [k for k in (v.get("wells") or {}).get("lines") or [] if k in ds.fields]
         return {**out, **_stack(ds, res, w.get("x"), keys, agg, v.get("stack") or "percent", palette, lines, fmt)}
     if t == "matrix":
@@ -590,7 +645,7 @@ def _compute(ds: TrialDataset, v: Dict[str, Any], filters: List[Dict[str, Any]],
         agg = v.get("agg") or "count"
         if not w.get("legend") or (not w.get("value") and agg not in COUNT_AGGS):
             return {**out, "kind": "empty", "message": "Drag a field into Legend" if not w.get("legend") else
-                    "Drag a number into Value - or count trials, series or experiments"}
+                    _value_hint(agg)}
         return {**out, **_pie(ds, res, w["legend"], w.get("value"), agg, palette, fmt, v.get("shape") == "donut")}
     if t == "control":
         if not w.get("y"):
@@ -605,7 +660,7 @@ def _compute(ds: TrialDataset, v: Dict[str, Any], filters: List[Dict[str, Any]],
         if len(keys) < 3:
             return {**out, "kind": "empty", "message": "Drag three or more number fields into Values - "
                                                        "and a field into Legend to compare groups"}
-        agg = v.get("agg") if v.get("agg") in AGGS and v.get("agg") not in COUNT_AGGS else "avg"
+        agg = v.get("agg") if v.get("agg") in AGGS and v.get("agg") not in COUNTING else "avg"
         return {**out, **_radar(ds, res, w.get("legend"), keys, agg, palette, fmt)}
     if t not in CHART_TYPES:
         return {**out, "kind": "empty", "message": "Unknown visual type"}
@@ -1022,7 +1077,7 @@ def visual_table(ds: TrialDataset, v: Dict[str, Any], filters: List[Dict[str, An
     f = ds.fields
     if t == "stack":
         keys = [k for k in (v.get("wells") or {}).get("values") or [] if k in f]
-        r = _stack(ds, res, w.get("x"), keys, v.get("agg") if v.get("agg") not in COUNT_AGGS else "avg",
+        r = _stack(ds, res, w.get("x"), keys, v.get("agg") if v.get("agg") in AGGS and v.get("agg") not in COUNTING else "avg",
                    v.get("stack") or "percent",
                    lines=[k for k in (v.get("wells") or {}).get("lines") or [] if k in f], fmt=fmt_of(v)) if keys else {}
         if r.get("kind") != "plotly":
@@ -1059,6 +1114,9 @@ def visual_table(ds: TrialDataset, v: Dict[str, Any], filters: List[Dict[str, An
             [[row] + list(z) for row, z in zip(tr["y"], tr["z"])]
     if t == "table":
         cols = [k for k in (v.get("wells") or {}).get("columns") or [] if k in f]
+        if v.get("group") and any(f[k].kind != "num" for k in cols):
+            r = _table_grouped(ds, res, cols, fmt_of(v))
+            return title, r["head"], [list(x) for x in r["raw"]]
         rows = []
         for tid in table_order(ds, res, cols, fmt_of(v)):
             tt, m = ds.by_id[tid], res.matched.get(tid)
@@ -1154,7 +1212,21 @@ def template_spec(name: str) -> Optional[Dict[str, Any]]:
     return normalize_spec(_copy.deepcopy(t["spec"])) if t else None
 
 
+def _value_hint(agg: str) -> str:
+    if agg == DISTINCT:
+        return "Drag a field into Value - its different values are counted"
+    return "Drag a number into Value - or count trials, series or experiments"
+
+
 def _kpi(ds, res, key, agg, fmt: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if agg == DISTINCT and key in ds.fields:
+        n = len(distinct_values(ds, key, res.ids, res.matched))
+        trials = count_of(ds, res.ids, "count")
+        return _card_fmt({"kind": "kpi", "value": f"{n:,}".replace(",", "'"), "unit": "",
+                          "sub": f"different {ds.fields[key].label} in {trials:,} trials".replace(",", "'"),
+                          "raw": float(n)}, fmt)
+    if agg == DISTINCT:
+        return _card_fmt({"kind": "kpi", "value": "–", "unit": "", "sub": _value_hint(DISTINCT)}, fmt)
     if agg in COUNT_AGGS or not key:
         agg = agg if agg in COUNT_AGGS else "count"
         n = count_of(ds, res.ids, agg)
@@ -1264,6 +1336,82 @@ def _table(ds, res, cols, fmt: Optional[Dict[str, Any]] = None) -> Dict[str, Any
     return out
 
 
+# ── table "One row per value" (Nutzerwunsch 2026-11-05: which are the 28 jets?) ──
+GROUP_COLUMNS = {"__trials": "Trials", "__series": "Series"}
+
+
+def _avg_head(f) -> str:
+    unit = f", {f.unit}" if f.unit and f.unit != f.title else ""
+    return f"{f.title} (average{unit})"
+
+
+def _table_grouped(ds, res, cols, fmt: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """One row per value (combination) of the text fields in Columns; number fields as their
+    average, plus the number of trials and series. Trials without any value are left out."""
+    fmt = fmt or {}
+    cats = [k for k in cols if ds.fields[k].kind != "num"]
+    nums = [k for k in cols if ds.fields[k].kind == "num"]
+    if not cats:
+        out = _table(ds, res, cols, fmt)
+        out["note"] = "One row per value needs a text field like Jet, Yarn or Machine in Columns"
+        return out
+    nf = number_format(fmt) if fmt.get("decimals") is not None else _fmt
+    groups: Dict[Tuple[str, ...], List[int]] = {}
+    left_out = 0
+    for tid in res.ids:
+        if ds.by_id[tid].empty:
+            continue
+        m = res.matched.get(tid)
+        combos: List[Tuple[str, ...]] = [()]
+        for k in cats:
+            combos = [c + (lab,) for c in combos for lab in dict.fromkeys(cat_labels(ds.value(k, tid, m)))]
+        combos = [c for c in combos if any(lab != NONE_LABEL for lab in c)]
+        for c in combos:
+            groups.setdefault(c, []).append(tid)
+        left_out += not combos
+    keys = cats + nums + list(GROUP_COLUMNS)
+    raw: Dict[Tuple[str, ...], List[Any]] = {}
+    for g, tids in groups.items():
+        avgs = [aggregate([_num(ds.value(k, t, res.matched.get(t))) for t in tids], "avg") for k in nums]
+        raw[g] = list(g) + avgs + [count_of(ds, tids, "count"), count_of(ds, tids, "count_series")]
+    order = sorted(groups, key=lambda g: [(lab == NONE_LABEL, _sort_key(lab)) for lab in g])
+    ts = fmt.get("tsort") or {}
+    if ts.get("key") in keys:
+        i, desc = keys.index(ts["key"]), ts.get("dir") == "desc"
+        filled = [g for g in order if raw[g][i] is not None and raw[g][i] != NONE_LABEL]
+        if i < len(cats):
+            filled.sort(key=lambda g: _sort_key(raw[g][i]), reverse=desc)
+        else:
+            filled.sort(key=lambda g: raw[g][i], reverse=desc)
+        order = filled + [g for g in order if g not in set(filled)]
+    rules = [r for r in fmt.get("rules") or [] if isinstance(r, dict) and r.get("key") in cols
+             and r.get("colour") in RULE_COLOURS]
+    head = ([ds.fields[k].label for k in cats] + [_avg_head(ds.fields[k]) for k in nums]
+            + list(GROUP_COLUMNS.values()))
+    rows, cellbg = [], []
+    for g in order[:TABLE_LIMIT]:
+        vals = raw[g]
+        cells = [str(x) if i < len(cats) else ("" if x is None else nf(x) if i < len(cats) + len(nums) else str(x))
+                 for i, x in enumerate(vals)]
+        bg = [""]
+        for i, k in enumerate(keys):
+            hit = next((r for r in rules if r["key"] == k and rule_hit(r, vals[i])), None)
+            bg.append(RULE_COLOURS[hit["colour"]] if hit else "")
+        rows.append([""] + cells)
+        cellbg.append(bg[1:])
+    out: Dict[str, Any] = {"kind": "table", "grouped": True, "head": head, "rows": rows,
+                           "more": max(0, len(order) - TABLE_LIMIT), "keys": keys, "tsort": ts or None,
+                           "raw": [raw[g] for g in order]}
+    if left_out:
+        what = " / ".join(ds.fields[k].label for k in cats)
+        out["note"] = f"{left_out:,} trials without {what} not listed".replace(",", "'")
+    if rules:
+        out["cellbg"] = cellbg
+    if _font_px(fmt):
+        out["font"] = _font_px(fmt)
+    return out
+
+
 def _matrix(ds, res, rk, ck, vk, agg, fmt: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     fmt = fmt or {}
     nf = number_format(fmt)
@@ -1272,7 +1420,7 @@ def _matrix(ds, res, rk, ck, vk, agg, fmt: Optional[Dict[str, Any]] = None) -> D
     cc: Dict[str, int] = {}
     for tid in _counted(ds, res.ids, agg):
         m = res.matched.get(tid)
-        if agg not in COUNT_AGGS and (not vk or _num(ds.value(vk, tid, m)) is None):
+        if not _has_value(ds, vk, tid, m, agg):
             continue
         for r in _labels(ds, rk, tid, m):
             for c in _labels(ds, ck, tid, m):
@@ -1327,7 +1475,7 @@ def _column(ds, res, xk, lk, vk, agg, stack="stacked", palette=DEFAULT_PALETTE,
     lt: Dict[str, List[int]] = {}
     for tid in _counted(ds, res.ids, agg):
         m = res.matched.get(tid)
-        if agg not in COUNT_AGGS and (not vk or _num(ds.value(vk, tid, m)) is None):
+        if not _has_value(ds, vk, tid, m, agg):
             continue
         for x in _labels(ds, xk, tid, m):
             xt.setdefault(x, []).append(tid)
@@ -1371,7 +1519,7 @@ def _column(ds, res, xk, lk, vk, agg, stack="stacked", palette=DEFAULT_PALETTE,
             for x in xs for lab in legends if (x, lab) in cells}
     totals = {x: sum(vals.get((x, lab)) or 0 for lab in legends) for x in xs}
     colours = PALETTES.get(palette, PALETTES[DEFAULT_PALETTE])["colours"]
-    what = ENTITY[agg][0] if agg in COUNT_AGGS else f"{AGGS.get(agg, '')} {ds.fields[vk].label}".strip()
+    what = agg_what(agg, ds.fields[vk].label if vk in ds.fields else "")
     fx = ds.fields[xk]
     traces = []
     for i, lab in enumerate(legends):
@@ -1419,7 +1567,7 @@ def _pie(ds, res, lk, vk, agg, palette, fmt, donut=False) -> Dict[str, Any]:
     cells: Dict[str, List[int]] = {}
     for tid in _counted(ds, res.ids, agg):
         m = res.matched.get(tid)
-        if agg not in COUNT_AGGS and (not vk or _num(ds.value(vk, tid, m)) is None):
+        if not _has_value(ds, vk, tid, m, agg):
             continue
         for lab in _labels(ds, lk, tid, m):
             cells.setdefault(lab, []).append(tid)
@@ -1445,7 +1593,7 @@ def _pie(ds, res, lk, vk, agg, palette, fmt, donut=False) -> Dict[str, Any]:
     own = fmt.get("colours") or {}
     cols = [_hex(own.get(lab)) or ("#B9BEC4" if lab == "Other" else colours[i % len(colours)])
             for i, lab in enumerate(labs)]
-    what = ENTITY[agg][0] if agg in COUNT_AGGS else f"{AGGS.get(agg, '')} {ds.fields[vk].label}".strip()
+    what = agg_what(agg, ds.fields[vk].label if vk in ds.fields else "")
     d = fmt.get("decimals")
     pct = f"%{{percent:.{int(d)}%}}" if isinstance(d, int) and not isinstance(d, bool) else "%{percent:.0%}"
     trace = {"type": "pie", "labels": labs, "values": [vals[lab] for lab in labs], "sort": False,
@@ -1827,6 +1975,226 @@ def slicer_filter(ds: TrialDataset, v: Dict[str, Any]) -> Optional[Dict[str, Any
     if f.kind == "num" and (sel.get("min") is not None or sel.get("max") is not None):
         return {"key": key, "min": _num(sel.get("min")), "max": _num(sel.get("max"))}
     return None
+
+
+# ── cross-highlight (Nutzerwunsch 2026-11-03, like Power BI) ─────────────
+# A click on a bar, slice, point … no longer zooms the other visuals into the selection: they keep all
+# their data and grey out what is not selected - the clicked visual too. spec["clicks"] = "filter" keeps
+# the old behaviour. Visuals that cannot grey out (cards, matrix, table, radar, box, violin, histogram,
+# density) and slicers keep filtering.
+HIGHLIGHT_TYPES = ("points", "trend", "control", "bar", "line", "column", "stack", "pie")
+DIM_COLOUR = "#CDD3D9"
+DIM_ALPHA = 0.28
+
+
+def clicks_mode(spec: Optional[Dict[str, Any]]) -> str:
+    return "filter" if (spec or {}).get("clicks") == "filter" else "highlight"
+
+
+def page_cross(page: Dict[str, Any], cross: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """All click filters of the page, including the ones from the visual itself."""
+    out: List[Dict[str, Any]] = []
+    for v in page.get("visuals") or []:
+        out += cross.get(v.get("id"), [])
+    return out
+
+
+def highlights(spec: Optional[Dict[str, Any]], v: Dict[str, Any], cross: List[Dict[str, Any]]) -> bool:
+    """Does visual v highlight (instead of filter) for these clicks?"""
+    return bool(cross) and clicks_mode(spec) == "highlight" and v.get("type") in HIGHLIGHT_TYPES
+
+
+def _faded(colour: Any) -> Any:
+    if isinstance(colour, str) and colour.startswith("#"):
+        return _alpha(colour, DIM_ALPHA)
+    if isinstance(colour, str) and colour.startswith("rgb"):
+        parts = colour[colour.index("(") + 1:-1].split(",")
+        return f"rgba({parts[0]},{parts[1]},{parts[2]},{DIM_ALPHA})" if len(parts) >= 3 else colour
+    return colour
+
+
+def _arr(tr: Dict[str, Any], key: str, n: int) -> List[Any]:
+    val = tr.get(key)
+    return list(val) if isinstance(val, (list, tuple)) else [val] * n
+
+
+def highlight_visual(ds: TrialDataset, v: Dict[str, Any], full: List[Dict[str, Any]], chosen: List[Dict[str, Any]],
+                     ply_scope: str = "any") -> Dict[str, Any]:
+    """Visual v over all its trials (filters `full`), the trials of `chosen` (= full + clicks)
+    highlighted and the rest greyed out."""
+    r = compute_visual(ds, v, full, ply_scope)
+    if r.get("kind") != "plotly":
+        return r
+    t = v.get("type")
+    res_full = _apply(ds, v, full, ply_scope)
+    sel = set(_apply(ds, v, chosen, ply_scope).ids)
+    fig = r["figure"]
+    if t in ("points", "trend", "control"):
+        _hl_points(fig, sel)
+    elif t in ("bar", "line"):
+        sub = compute_visual(ds, v, chosen, ply_scope)
+        _hl_overlay(fig, sub.get("figure") if sub.get("kind") == "plotly" else None, t)
+    elif t == "column":
+        _hl_column(ds, v, fig, full, chosen, ply_scope)
+    elif t in ("stack", "pie"):
+        key = (v.get("wells") or {}).get("x" if t == "stack" else "legend")
+        hit = set()
+        for tid in res_full.ids:
+            if tid in sel:
+                hit.update(_labels(ds, key, tid, res_full.matched.get(tid)) if key in ds.fields else ["All trials"])
+        _hl_categories(fig, hit, t)
+    real = [tid for tid in res_full.ids if not ds.by_id[tid].empty]
+    n = sum(1 for tid in real if tid in sel)
+    r["highlight"] = n
+    r["note"] = "; ".join(x for x in (f"{n} of {len(real)} trials highlighted", r.get("note")) if x)
+    return r
+
+
+def _hl_points(fig: Dict[str, Any], sel: set) -> None:
+    """Points, trend, control chart: the points of other trials grey, trend lines faded."""
+    for tr in fig.get("data") or []:
+        if tr.get("type") != "scatter":
+            continue
+        ids = tr.get("customdata")
+        if not isinstance(ids, list):
+            tr["opacity"] = 0.35                       # trend line, …
+            continue
+        n = len(ids)
+        on = [tid in sel for tid in ids]
+        mk = dict(tr.get("marker") or {})
+        col = mk.get("color")
+        if isinstance(col, str) or (isinstance(col, list) and col and isinstance(col[0], str)):
+            mk["color"] = [c if o else DIM_COLOUR for c, o in zip(_arr(mk, "color", n), on)]
+        base = mk.get("opacity") if isinstance(mk.get("opacity"), (int, float)) else 1.0
+        mk["opacity"] = [base if o else 0.35 for o in on]
+        tr["marker"] = mk
+        if isinstance(tr.get("line"), dict) and str(tr.get("mode", "")).startswith("lines"):
+            tr["line"] = {**tr["line"], "color": _faded(tr["line"].get("color"))}   # control chart
+
+
+def _keep_x(tr: Dict[str, Any], allowed: set) -> None:
+    """Drop the points of a trace whose X is not in `allowed` (parallel arrays)."""
+    xs = tr.get("x") or []
+    keep = [i for i, x in enumerate(xs) if x in allowed]
+    if len(keep) == len(xs):
+        return
+    for key in ("x", "y", "hovertext", "text", "base"):
+        if isinstance(tr.get(key), list) and len(tr[key]) == len(xs):
+            tr[key] = [tr[key][i] for i in keep]
+    e = tr.get("error_y")
+    if isinstance(e, dict):
+        for key in ("array", "arrayminus"):
+            if isinstance(e.get(key), list) and len(e[key]) == len(xs):
+                e[key] = [e[key][i] for i in keep]
+
+
+def _is_mean_trace(tr: Dict[str, Any], t: str) -> bool:
+    return tr.get("type") == "bar" if t == "bar" else tr.get("type") == "scatter" and "x" in tr
+
+
+def _hl_overlay(fig: Dict[str, Any], sub: Optional[Dict[str, Any]], t: str) -> None:
+    """Bars / mean lines: all trials faded, the mean of the highlighted trials on top."""
+    full = [tr for tr in fig.get("data") or [] if _is_mean_trace(tr, t)]
+    allowed: Dict[str, set] = {}
+    groups: Dict[Tuple[Any, str], str] = {}
+    for i, tr in enumerate(full):
+        ax = tr.get("xaxis", "x")
+        allowed.setdefault(ax, set()).update(tr.get("x") or [])
+        tr["offsetgroup"] = f"h{i}"
+        groups[(tr.get("name"), ax)] = tr["offsetgroup"]
+        mk = dict(tr.get("marker") or {})
+        if t == "bar":
+            mk["color"] = _faded(mk.get("color"))
+        else:
+            mk["opacity"] = DIM_ALPHA
+            tr["line"] = {**(tr.get("line") or {}), "color": _faded((tr.get("line") or {}).get("color"))}
+        tr["marker"] = mk
+        tr.pop("error_y", None)
+        tr.pop("text", None)
+        if t == "line" and "+text" in str(tr.get("mode", "")):
+            tr["mode"] = tr["mode"].replace("+text", "")
+    for tr in (sub or {}).get("data") or []:
+        if not _is_mean_trace(tr, t):
+            continue
+        ax = tr.get("xaxis", "x")
+        group = groups.get((tr.get("name"), ax))
+        if group is None:
+            continue
+        _keep_x(tr, allowed.get(ax, set()))
+        owner = next((f for f in full if f.get("offsetgroup") == group), None)
+        legend = bool(owner and owner.get("showlegend", True))
+        if owner is not None:
+            owner["showlegend"] = False          # the legend shows the solid colour, not the faded one
+        tr.update({"offsetgroup": group, "showlegend": legend, "legendgroup": tr.get("legendgroup") or group})
+        if owner is not None:
+            owner["legendgroup"] = tr["legendgroup"]
+        if isinstance(tr.get("hovertext"), list):
+            tr["hovertext"] = ["<b>Highlighted</b><br>" + str(h) for h in tr["hovertext"]]
+        fig["data"].append(tr)
+
+
+def _hl_column(ds: TrialDataset, v: Dict[str, Any], fig: Dict[str, Any], full: List[Dict[str, Any]],
+               chosen: List[Dict[str, Any]], ply_scope: str) -> None:
+    """Columns: every part faded at its full height, the highlighted share of it solid inside."""
+    stack = v.get("stack") or "stacked"
+    raw_v = {**v, "stack": "grouped", "fmt": {k: x for k, x in fmt_of(v).items() if k not in ("sort", "top")}}
+
+    def values(flts):
+        r = compute_visual(ds, raw_v, flts, ply_scope)
+        return {(tr.get("name"), x): y for tr in ((r.get("figure") or {}).get("data") or [])
+                for x, y in zip(tr.get("x") or [], tr.get("y") or [])}
+    raw_full, raw_sub = values(full), values(chosen)
+    cum: Dict[Any, float] = {}
+    over = []
+    for i, tr in enumerate([tr for tr in fig.get("data") or [] if tr.get("type") == "bar"]):
+        xs, ys = list(tr.get("x") or []), list(tr.get("y") or [])
+        name = tr.get("name")
+        solid = (tr.get("marker") or {}).get("color")
+        hs, bases = [], []
+        for x, y in zip(xs, ys):
+            a, b = raw_full.get((name, x)), raw_sub.get((name, x))
+            if stack == "grouped":
+                hs.append(b or 0.0)
+            else:
+                hs.append((y or 0.0) * (b / a) if a and b else 0.0)
+            bases.append(cum.get(x, 0.0))
+        hover = [f"<b>Highlighted</b>: {_kfmt(raw_sub.get((name, x)) or 0)} of {_kfmt(raw_full.get((name, x)) or 0)}"
+                 f"<br>{h}" for x, h in zip(xs, _arr(tr, "hovertext", len(xs)))]
+        if stack != "grouped":
+            tr["base"] = bases
+            for x, y in zip(xs, ys):
+                cum[x] = cum.get(x, 0.0) + (y or 0.0)
+        tr["offsetgroup"] = f"c{i}"
+        tr["marker"] = {**(tr.get("marker") or {}), "color": _faded(solid)}
+        tr["hovertext"] = hover
+        tr.pop("text", None)
+        o = {"type": "bar", "x": xs, "y": hs, "name": name, "offsetgroup": f"c{i}", "marker": {"color": solid},
+             "showlegend": bool(tr.get("showlegend")), "legendgroup": f"c{i}", "hovertext": hover, "hoverinfo": "text"}
+        tr.update({"showlegend": False, "legendgroup": f"c{i}"})   # legend in the solid colour
+        if stack != "grouped":
+            o["base"] = bases
+        over.append(o)
+    if stack != "grouped":
+        fig["layout"]["barmode"] = "overlay"
+    fig["data"].extend(over)
+
+
+def _hl_categories(fig: Dict[str, Any], hit: set, t: str) -> None:
+    """Stacked fields / pie: columns or slices without highlighted trials greyed out."""
+    for tr in fig.get("data") or []:
+        if t == "pie" and tr.get("type") == "pie":
+            labs = tr.get("labels") or []
+            other_hit = bool(hit - set(labs))
+            cols = (tr.get("marker") or {}).get("colors") or []
+            tr["marker"] = {**(tr.get("marker") or {}), "colors": [
+                c if (lab in hit or (lab == "Other" and other_hit)) else _faded(c) for lab, c in zip(labs, cols)]}
+        elif t == "stack":
+            on = [x in hit for x in tr.get("x") or []]
+            if tr.get("type") == "bar":
+                c = (tr.get("marker") or {}).get("color")
+                tr["marker"] = {**(tr.get("marker") or {}), "color": [c if o else _faded(c) for o in on]}
+            elif tr.get("type") == "scatter":
+                tr["marker"] = {**(tr.get("marker") or {}), "opacity": [1.0 if o else 0.3 for o in on]}
 
 
 # ── cross-filtering ──────────────────────────────────────────────────────

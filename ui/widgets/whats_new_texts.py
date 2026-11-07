@@ -35,6 +35,135 @@ RELEASES = [
         "texts": {
             # ═══════════════════════════════ EN ═══════════════════════════════
             "en": [
+                ("h", "Smart Chart"),
+                ("feature", "How many different jets? - Count (distinct)",
+                 "A Card can now count how many <b>different</b> values a field has - e.g. how many different jets, "
+                 "yarns or machines were run, always within your filters, slicers and clicks. Choose the "
+                 "aggregation <b>Count (distinct)</b> and drag the field (e.g. <i>Jet</i>) into <b>Value</b>. "
+                 "Empty values do not count. It works in Columns, Matrix and Pie, too - e.g. different jets per year.",
+                 "Smart Chart → Card → Aggregation <b>Count (distinct)</b>", "wn_distinct_count.svg"),
+                ("feature", "Which jets are they? - one row per value",
+                 "A Table can now list each jet (or yarn, machine …) once instead of every trial: tick <b>One row "
+                 "per value</b>. Next to the name you see how many trials and series it was used in; a number field "
+                 "such as FP/m shows its average. With the same filters, the list has exactly as many lines as "
+                 "the Card with <b>Count (distinct)</b> counts. Click a heading to sort.",
+                 "Smart Chart → Table → Build → <b>One row per value</b>", "wn_value_table.svg"),
+                ("h", "Create Experiment"),
+                ("feature", "Find yarns and jets by typing",
+                 "The <b>Material</b> and <b>Jet</b> tabs now have a search field above the list. Type part of the "
+                 "name (e.g. <i>pa6 44</i>) - all groups are searched at once, only matching entries stay visible. "
+                 "For jets the development name is searched, too. <b>Enter</b> selects the first hit, <b>Esc</b> "
+                 "clears the search. Behind every yarn you also see the spool symbol from Show Experiment: green "
+                 "spool = in stock (click it to see where the spools are), crossed-out tube = nothing in stock.",
+                 "New Experiment → <b>Material</b> / <b>Jet</b> → search field", "wn_create_search.svg"),
+                ("h", "Onboarding"),
+                ("feature", "Onboarding - our work as short animations",
+                 "New entry <b>Onboarding</b> below <b>Help (F1)</b>: short animated introductions to our work, "
+                 "full screen. The first topic shows how a DTY yarn is intermingled - the path through the machine "
+                 "with the overfeed between feed roll 2 and 2.x (click any position to have it explained), what "
+                 "happens in the jet, and the nips. Each topic has tabs like the rest of TrippleT. Try the "
+                 "<b>Overfeed</b> and <b>Air pressure</b> sliders. Switch the language with the flags - now also "
+                 "in Chinese. Second topic: <b>ATY air texturing</b> - overfeed of core and effect, the texturing jet, "
+                 "loops and what the settings do. Under <b>Spinning</b>: <b>Filament yarn spinning</b> - from chips to POY "
+                 "and FDY, and where the Heberlein jets sit. Also under <b>Spinning</b>: <b>BCF carpet yarn</b> - spinning, "
+                 "drawing, hot-air texturing and interlacing in one step, incl. tricolour mixing, and <b>Air-jet spinning</b> (staple fibres) - from the bale to the yarn, vortex around the hollow spindle. Under <b>Splicing</b>: <b>Air splicing "
+                 "of filament yarns</b> - joining two ends knot-free; click a step to jump to it. Under <b>Threading</b>: "
+                 "<b>Lufan suction gun</b> - threading up with the machine running, injector principle, air consumption. Under <b>DTY</b> → <b>Specialist knowledge</b>: <b>Cotton-like DTY</b> (seven ways to a spun-yarn look, click any machine position) and <b>Hard nips, less elongation?</b> (a hypothesis with a live tensile-test model). In the DTY machine you can now enter the <b>FR 2</b> speed and the <b>draw ratio</b>: FR 1 and FR 2.x are shown in m/min. New scene <b>Evenness</b> in the DTY topic: the same number of nips is not enough, they have to be evenly spread (spread of the distances, longest open section). The DTY topic now ends with a <b>Quiz</b> tab: 13 questions, each with a link back to the matching scene - with 80 % correct the topic is passed and gets a tick in the list. New folder <b>Lab</b> with <b>Nip measurement with the ITEMAT</b>: set-up (click the stations), mechanical and optical sensor, what a wrong threshold does, stability test under load and evaluation, plus <b>Count, tenacity and elongation (STATIMAT DS)</b>: count by weighing, CRE tensile test comparing POY, FDY and DTY, statistics per package, and <b>Crimp and shrinkage (TEXTURMAT ME)</b>: from the hank via heat treatment to the five load steps (clickable) and the key figures crimp contraction, modulus, stability and shrinkage, and <b>Testing nips with the RAPID 600 V</b>: the needle method counts the nips in the running yarn and separates good from weak nips, with a slider for the trigger force. More topics will follow.",
+                 "Sidebar → <b>Onboarding</b>", "wn_onboarding.svg"),
+            ],
+            # ═══════════════════════════════ DE ═══════════════════════════════
+            "de": [
+                ("h", "Smart Chart"),
+                ("feature", "Wie viele verschiedene Jets? - Count (distinct)",
+                 "Eine Card zählt jetzt, wie viele <b>verschiedene</b> Werte ein Feld hat - z.&nbsp;B. wie viele "
+                 "verschiedene Jets, Garne oder Maschinen gefahren wurden, immer innerhalb der Filter, Slicer und "
+                 "Klicks. Als Aggregation <b>Count (distinct)</b> wählen und das Feld (z.&nbsp;B. <i>Jet</i>) in "
+                 "<b>Value</b> ziehen. Leere Werte zählen nicht. Geht auch in Columns, Matrix und Pie - z.&nbsp;B. "
+                 "verschiedene Jets pro Jahr.",
+                 "Smart Chart → Card → Aggregation <b>Count (distinct)</b>", "wn_distinct_count.svg"),
+                ("feature", "Welche Jets sind es? - eine Zeile pro Wert",
+                 "Eine Table listet jetzt jeden Jet (oder Garn, Maschine …) einmal statt jeden Versuch: "
+                 "<b>One row per value</b> ankreuzen. Neben dem Namen steht, in wie vielen Versuchen und Serien er "
+                 "vorkam; ein Zahlenfeld wie FP/m zeigt seinen Mittelwert. Bei gleichen Filtern hat die Liste genau "
+                 "so viele Zeilen, wie die Card mit <b>Count (distinct)</b> zählt. Klick auf eine Überschrift "
+                 "sortiert.",
+                 "Smart Chart → Table → Build → <b>One row per value</b>", "wn_value_table.svg"),
+                ("h", "Create Experiment"),
+                ("feature", "Garne und Jets durch Tippen finden",
+                 "Die Reiter <b>Material</b> und <b>Jet</b> haben jetzt ein Suchfeld über der Liste. Einen Teil des "
+                 "Namens tippen (z.&nbsp;B. <i>pa6 44</i>) - es wird in allen Gruppen gleichzeitig gesucht, nur "
+                 "Treffer bleiben sichtbar. Bei Jets wird auch der Entwicklungsname durchsucht. <b>Enter</b> wählt "
+                 "den ersten Treffer, <b>Esc</b> leert die Suche. Hinter jedem Garn steht zudem das Spulen-Symbol "
+                 "aus Show Experiment: grüne Spule = am Lager (anklicken zeigt, wo die Spulen liegen), "
+                 "durchgestrichene Hülse = nichts am Lager.",
+                 "New Experiment → <b>Material</b> / <b>Jet</b> → Suchfeld", "wn_create_search.svg"),
+                ("h", "Onboarding"),
+                ("feature", "Onboarding - unsere Arbeit als kurze Animationen",
+                 "Neuer Eintrag <b>Onboarding</b> unter <b>Help (F1)</b>: kurze animierte Einführungen in unsere "
+                 "Arbeit, im ganzen Fenster. Das erste Thema zeigt, wie ein DTY-Garn verwirbelt wird - der Weg "
+                 "durch die Maschine mit dem Overfeed zwischen Lieferwerk 2 und 2.x (jede Position anklicken, sie wird "
+                 "erklärt), was in der Düse passiert, und die Knoten. Jedes Thema hat Reiter wie der Rest von TrippleT. "
+                 "Probier die Regler <b>Overfeed</b> und <b>Luftdruck</b>. Die Sprache wechselst "
+                 "du über die Flaggen - jetzt auch Chinesisch. Zweites Thema: <b>ATY-Lufttexturierung</b> - Voreilung "
+                 "von Kern und Effekt, die Texturierdüse, Schlingen und was die Einstellungen bewirken. Unter <b>Spinnerei</b>: "
+                 "<b>Filamentgarnspinnerei</b> - vom Granulat zu POY und FDY, und wo die Heberlein-Düsen sitzen. Ebenfalls unter "
+                 "<b>Spinnerei</b>: <b>BCF-Teppichgarn</b> - Spinnen, Verstrecken, Heissluft-Texturieren und Verwirbeln in einem Schritt, "
+                 "inkl. Tricolor-Mischung, und <b>Luftdüsenspinnen</b> (Stapelfasern) - vom Ballen zum Garn, Luftwirbel um die Hohlspindel. Unter <b>Spleissen</b>: <b>Filamentgarn-Spleissen</b> - zwei Enden knotenfrei verbinden; "
+                 "einen Schritt anklicken springt direkt dorthin. "
+                 "Unter <b>Einfädeln</b>: <b>Lufan-Absaugpistole</b> - einfädeln bei "
+                 "laufender Maschine, Injektorprinzip, Luftverbrauch. Unter <b>DTY</b> → <b>Spezialwissen</b>: <b>Cotton-like DTY</b> (sieben Wege zur Spinngarn-Optik, jede Maschinenposition anklickbar) und <b>Harte Knoten, weniger Dehnung?</b> (eine These mit einem Modell-Zugversuch zum Zuschauen). In der DTY-Maschine gibst du jetzt die Geschwindigkeit von <b>LW 2</b> und die <b>Verstreckung</b> ein: LW 1 und LW 2.x stehen dann in m/min da. Neue Szene <b>Gleichmässigkeit</b> im DTY-Thema: Gleich viele Knoten reichen nicht, sie müssen gleichmässig verteilt sein (Streuung der Abstände, längste offene Stelle). Das DTY-Thema hat jetzt am Schluss einen Reiter <b>Quiz</b>: 13 Fragen, zu jeder ein Link zurück zur passenden Szene - ab 80 % richtig ist das Thema bestanden und bekommt in der Liste ein Häkchen. Neuer Ordner <b>Labor</b> mit <b>Knotenmessung mit dem ITEMAT</b>: Aufbau (Stationen anklicken), mechanischer und optischer Sensor, was eine falsche Schwelle bewirkt, Stabilitätstest unter Last und Auswertung, sowie <b>Titer, Festigkeit und Dehnung (STATIMAT DS)</b>: Titer durch Wägen, Zugversuch nach CRE mit POY, FDY und DTY im Vergleich, Statistik pro Spule, und <b>Kräuselung und Schrumpf (TEXTURMAT ME)</b>: vom Strang über die Wärmebehandlung zu den fünf Laststufen (anklickbar) und den Kennwerten KK, KM, KB und Schrumpf, und <b>Knotenprüfung mit dem RAPID 600 V</b>: Die Nadelmethode zählt die Knoten im laufenden Garn und trennt gute von schwachen Knoten, mit Regler für die Auslösekraft. Weitere Themen folgen.",
+                 "Sidebar → <b>Onboarding</b>", "wn_onboarding.svg"),
+            ],
+            # ═══════════════════════════════ ES ═══════════════════════════════
+            "es": [
+                ("h", "Smart Chart"),
+                ("feature", "¿Cuántos jets distintos? - Count (distinct)",
+                 "Una Card cuenta ahora cuántos valores <b>distintos</b> tiene un campo - p.&nbsp;ej. cuántos jets, "
+                 "hilos o máquinas distintos se usaron, siempre dentro de tus filtros, slicers y clics. Elige la "
+                 "agregación <b>Count (distinct)</b> y arrastra el campo (p.&nbsp;ej. <i>Jet</i>) a <b>Value</b>. "
+                 "Los valores vacíos no cuentan. También funciona en Columns, Matrix y Pie - p.&nbsp;ej. jets "
+                 "distintos por año.",
+                 "Smart Chart → Card → agregación <b>Count (distinct)</b>", "wn_distinct_count.svg"),
+                ("feature", "¿Qué jets son? - una fila por valor",
+                 "Una Table puede listar ahora cada jet (o hilo, máquina …) una sola vez en lugar de cada ensayo: "
+                 "marca <b>One row per value</b>. Junto al nombre ves en cuántos ensayos y series se usó; un campo "
+                 "numérico como FP/m muestra su media. Con los mismos filtros, la lista tiene exactamente tantas "
+                 "líneas como cuenta la Card con <b>Count (distinct)</b>. Clic en un encabezado para ordenar.",
+                 "Smart Chart → Table → Build → <b>One row per value</b>", "wn_value_table.svg"),
+                ("h", "Create Experiment"),
+                ("feature", "Encontrar hilos y jets escribiendo",
+                 "Las pestañas <b>Material</b> y <b>Jet</b> tienen ahora un campo de búsqueda sobre la lista. "
+                 "Escribe parte del nombre (p.&nbsp;ej. <i>pa6 44</i>) - se busca en todos los grupos a la vez y "
+                 "solo quedan visibles los resultados. En los jets también se busca el nombre de desarrollo. "
+                 "<b>Enter</b> elige el primer resultado, <b>Esc</b> borra la búsqueda. Detrás de cada hilo ves "
+                 "además el símbolo de bobina de Show Experiment: bobina verde = en stock (clic para ver dónde "
+                 "están las bobinas), tubo tachado = nada en stock.",
+                 "New Experiment → <b>Material</b> / <b>Jet</b> → campo de búsqueda", "wn_create_search.svg"),
+                ("h", "Onboarding"),
+                ("feature", "Onboarding - nuestro trabajo en animaciones cortas",
+                 "Nueva entrada <b>Onboarding</b> debajo de <b>Help (F1)</b>: introducciones animadas cortas a "
+                 "nuestro trabajo, a pantalla completa. El primer tema muestra cómo se entrelaza un hilo DTY: el "
+                 "recorrido por la máquina con la sobrealimentación entre el rodillo 2 y el 2.x (haz clic en una posición "
+                 "y se explica), lo que pasa en la "
+                 "tobera y los nudos. Prueba los reguladores de <b>sobrealimentación</b> y <b>presión de aire</b>. "
+                 "Cambia el idioma con las banderas - ahora también en chino. Segundo tema: <b>texturizado ATY por "
+                 "aire</b> - sobrealimentación de núcleo y efecto, la tobera, los bucles y qué hacen los ajustes. En <b>Hilatura</b>: "
+                 "<b>hilatura de filamento</b> - del granulado al POY y FDY, y dónde están las toberas Heberlein. También en "
+                 "<b>Hilatura</b>: <b>hilo BCF para alfombras</b> - hilatura, estirado, texturizado por aire caliente y entrelazado "
+                 "en un paso, incl. mezcla tricolor, y <b>hilatura por chorro de aire</b> (fibras cortas) - de la bala al hilo, remolino alrededor del huso hueco. En <b>Empalme</b>: <b>empalme neumático de filamento</b> - unir dos extremos "
+                 "sin nudo; haz clic en un paso para saltar a él. "
+                 "En <b>Enhebrado</b>: <b>pistola de aspiración Lufan</b> - "
+                 "enhebrar con la máquina en marcha, principio del inyector, consumo de aire. En <b>DTY</b> → <b>Conocimiento especializado</b>: <b>DTY tipo algodón</b> (siete caminos al aspecto de hilo hilado, cada posición de la máquina se puede pulsar) y <b>¿Nudos duros, menos alargamiento?</b> (una hipótesis con un ensayo de tracción simulado). En la máquina DTY ahora introduces la velocidad de <b>R 2</b> y el <b>estirado</b>: R 1 y R 2.x aparecen en m/min. Nueva escena <b>Regularidad</b> en el tema DTY: no basta con el mismo número de nudos, deben estar repartidos de forma regular (dispersión de las distancias, tramo abierto más largo). El tema DTY termina ahora con una pestaña <b>Quiz</b>: 13 preguntas, cada una con un enlace a la escena correspondiente; con un 80 % de aciertos el tema queda aprobado y recibe una marca en la lista. Nueva carpeta <b>Laboratorio</b> con <b>Medición de nudos con el ITEMAT</b>: montaje (haz clic en las estaciones), sensor mecánico y óptico, qué provoca un umbral incorrecto, ensayo de estabilidad bajo carga y evaluación, y <b>Título, tenacidad y alargamiento (STATIMAT DS)</b>: título por pesaje, tracción CRE comparando POY, FDY y DTY, estadística por bobina, y <b>Rizado y contracción (TEXTURMAT ME)</b>: de la madeja al tratamiento térmico, los cinco escalones de carga (se pueden pulsar) y los indicadores de rizado y contracción, y <b>Ensayo de nudos con el RAPID 600 V</b>: el método de aguja cuenta los nudos en el hilo en marcha y separa los buenos de los débiles, con regulador de la fuerza de disparo. Habrá más temas.",
+                 "Sidebar → <b>Onboarding</b>", "wn_onboarding.svg"),
+            ],
+        },
+    },
+    {
+        "version": "4.6.3",
+        "date": "2026-11-03",
+        "texts": {
+            # ═══════════════════════════════ EN ═══════════════════════════════
+            "en": [
                 ("h", "Show Experiment"),
                 ("feature", "Yarns of the series in one table",
                  "<b>Yarns…</b> shows every ply of the series with its yarn and every trial. Click a yarn to change "
@@ -120,7 +249,7 @@ RELEASES = [
                  'A coloured dot on every chart warns when the groups you compare also differ in other things that change the result - e.g. jet A was mostly tested on PES at 3.5 bar, jet B on PA at 2 bar. Green, yellow or red, with the reason in one sentence. A click on the dot shows every condition; <b>Make it fairer</b> keeps only what all groups have in common. It also warns about very small groups, groups from one single series and groups in different X ranges.',
                  'Smart Chart → coloured dot in the title bar of a chart', "wn_fairness.svg"),
                 ("feature", 'Dashboard: build your own page, like Power BI',
-                 'Smart Chart is a dashboard now: a page with several visuals side by side. Drag fields from <b>Fields</b> - every table, from Statimat and Itemat to DTYoMat, jet and yarn - into the wells of a visual. New visuals: <b>Matrix</b> (e.g. FP/m per jet and air pressure, coloured - empty cells show where trials are missing), <b>Card</b> (one number) and <b>Table</b>. Click a bar, box or matrix cell and all other visuals filter to it. <b>Slicers</b> pick values for the whole page - as a list, dropdown, tiles or a range slider. Place visuals freely and resize them, work with several pages (tabs at the bottom) and add filters to one page or one visual. New: <b>calculated fields</b> from your own formula, <b>targets</b> (green/red, target lines), <b>drill-down</b> machine → jet and <b>selecting points</b> to filter the page. Plus: <b>templates</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> of one or all pages, <b>Excel</b> per visual or page, notes on values, undo with <b>Ctrl+Z</b>, and <b>lining up</b> several visuals at once (Ctrl+click, then align, same size or distribute).',
+                 'Smart Chart is a dashboard now: a page with several visuals side by side. Drag fields from <b>Fields</b> - every table, from Statimat and Itemat to DTYoMat, jet and yarn - into the wells of a visual. New visuals: <b>Matrix</b> (e.g. FP/m per jet and air pressure, coloured - empty cells show where trials are missing), <b>Card</b> (one number) and <b>Table</b>. Click a bar, box or matrix cell and all other visuals highlight it. <b>Slicers</b> pick values for the whole page - as a list, dropdown, tiles or a range slider. Place visuals freely and resize them, work with several pages (tabs at the bottom) and add filters to one page or one visual. New: <b>calculated fields</b> from your own formula, <b>targets</b> (green/red, target lines), <b>drill-down</b> machine → jet and <b>selecting points</b> to filter the page. Plus: <b>templates</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> of one or all pages, <b>Excel</b> per visual or page, notes on values, undo with <b>Ctrl+Z</b>, and <b>lining up</b> several visuals at once (Ctrl+click, then align, same size or distribute).',
                  'Sidebar → <b>Smart Chart</b>', "wn_dashboard.svg"),
                 ("feature", 'Lab statistics in the dashboard',
                  'Count <b>experiments, trial series or trials</b> - per month, product group, order type, project, owner or lab machine (<i>Tested on</i>). The new visual <b>Columns</b> shows them stacked, side by side or as 100 %; months and years run in order, empty months show as 0. Start with <b>New</b> → <b>Lab statistics</b>. Filters on a month or year can now be a period that moves with the calendar: <b>This year</b>, <b>Last 12 months</b>, <b>From – to</b> … And the slicer <b>Year › Month</b>: years that fold open with the months Jan–Dec below.',
@@ -140,6 +269,9 @@ RELEASES = [
                 ("feature", 'Dashboard: analytics lines and drill-through',
                  'New tab <b>Analytics</b> next to Build and Format: average, median, ± 1/2/3 standard deviations, percentile, min/max, a constant line or a band from - to (e.g. your spec limits) right in the chart - calculated from the trials in it. And <b>drill-through</b> like in Power BI: make a page the detail page for e.g. <b>Machine</b> (Filters → <b>Drill-through to this page</b>), then right-click a bar of a machine on another page → <b>Drill through</b>. The detail page shows only that machine; <b>← Back</b> brings you back.',
                  'Smart Chart → Visualizations → <b>Analytics</b> · right-click a bar', "wn_dashboard_analytics.svg"),
+                ("feature", 'Click to highlight - the rest turns grey',
+                 'Click a bar, a column, a slice or a point in a dashboard: the other visuals no longer jump to only that part. They keep all their trials and grey out the rest, so you see the part within the whole - e.g. how much of every column comes from machine AFK. The clicked visual greys out its other bars, too. Points of other trials turn grey, bars of averages show the average of the highlighted trials on top of the faded one. Cards, matrix, table, radar, box, violin and histogram still filter, slicers too. Click again to undo. Prefer the old way? Format with nothing selected → <b>Clicks</b> → <i>Filters the other visuals</i>.',
+                 'Smart Chart, Dashboards → click a bar, slice or point', "wn_click_highlight.svg"),
                 ("feature", 'Focus: one visual big, with its trials',
                  'Click ⤢ in the title bar of a visual: it fills the page, and below it are all trials it is made of. Click a point to find its line, double-click a line to open the trial in Show Experiment. A click on the coloured fairness dot shows the details with <b>Make it fairer</b>. In <b>Format</b> there are now also logarithmic axes, a shape per colour and the point size.',
                  'Smart Chart → ⤢ on a visual', None),
@@ -360,7 +492,7 @@ RELEASES = [
                  'Ein farbiger Punkt an jedem Diagramm warnt, wenn sich die verglichenen Gruppen auch in anderen Dingen unterscheiden, die das Ergebnis verändern - z.&nbsp;B. Jet A wurde vor allem auf PES bei 3.5 bar getestet, Jet B auf PA bei 2 bar. Grün, gelb oder rot, mit dem Grund in einem Satz. Klick auf den Punkt zeigt jede Bedingung; <b>Make it fairer</b> behält nur, was alle Gruppen gemeinsam haben. Gewarnt wird auch bei sehr kleinen Gruppen, Gruppen aus einer einzigen Serie und Gruppen in verschiedenen X-Bereichen.',
                  'Smart Chart → farbiger Punkt in der Titelzeile eines Diagramms', "wn_fairness.svg"),
                 ("feature", 'Dashboard: eigene Seite bauen, wie in Power BI',
-                 'Smart Chart ist jetzt ein Dashboard: eine Seite mit mehreren Visuals nebeneinander. Felder aus <b>Fields</b> - jede Tabelle, von Statimat und Itemat bis DTYoMat, Jet und Garn - in die Ablagen eines Visuals ziehen. Neue Visuals: <b>Matrix</b> (z.&nbsp;B. FP/m pro Jet und Luftdruck, eingefärbt - leere Zellen zeigen, wo Versuche fehlen), <b>Card</b> (eine Zahl) und <b>Table</b>. Klick auf einen Balken, eine Box oder eine Matrix-Zelle, und alle anderen Visuals filtern sich darauf. <b>Slicer</b> wählen Werte für die ganze Seite - als Liste, Dropdown, Knöpfe oder Bereichsregler. Visuals frei platzieren und in der Grösse ziehen, mehrere Seiten (Reiter unten) und Filter nur für eine Seite oder ein Visual. Neu: <b>berechnete Felder</b> per eigener Formel, <b>Zielwerte</b> (grün/rot, Ziellinien), <b>Drill-down</b> Maschine → Jet und <b>Punkte auswählen</b>, um die Seite zu filtern. Dazu: <b>Vorlagen</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> einer oder aller Seiten, <b>Excel</b> pro Visual oder Seite, Notizen an Werten, Rückgängig mit <b>Strg+Z</b> und mehrere Visuals auf einmal <b>ausrichten</b> (Strg+Klick, dann ausrichten, gleich gross machen oder verteilen).',
+                 'Smart Chart ist jetzt ein Dashboard: eine Seite mit mehreren Visuals nebeneinander. Felder aus <b>Fields</b> - jede Tabelle, von Statimat und Itemat bis DTYoMat, Jet und Garn - in die Ablagen eines Visuals ziehen. Neue Visuals: <b>Matrix</b> (z.&nbsp;B. FP/m pro Jet und Luftdruck, eingefärbt - leere Zellen zeigen, wo Versuche fehlen), <b>Card</b> (eine Zahl) und <b>Table</b>. Klick auf einen Balken, eine Box oder eine Matrix-Zelle, und alle anderen Visuals heben ihn hervor. <b>Slicer</b> wählen Werte für die ganze Seite - als Liste, Dropdown, Knöpfe oder Bereichsregler. Visuals frei platzieren und in der Grösse ziehen, mehrere Seiten (Reiter unten) und Filter nur für eine Seite oder ein Visual. Neu: <b>berechnete Felder</b> per eigener Formel, <b>Zielwerte</b> (grün/rot, Ziellinien), <b>Drill-down</b> Maschine → Jet und <b>Punkte auswählen</b>, um die Seite zu filtern. Dazu: <b>Vorlagen</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> einer oder aller Seiten, <b>Excel</b> pro Visual oder Seite, Notizen an Werten, Rückgängig mit <b>Strg+Z</b> und mehrere Visuals auf einmal <b>ausrichten</b> (Strg+Klick, dann ausrichten, gleich gross machen oder verteilen).',
                  'Sidebar → <b>Smart Chart</b>', "wn_dashboard.svg"),
                 ("feature", 'Laborstatistik im Dashboard',
                  '<b>Experimente, Versuchsserien oder Versuche</b> zählen - pro Monat, Produktgruppe, Auftragsart, Projekt, Owner oder Labormaschine (<i>Tested on</i>). Das neue Visual <b>Columns</b> zeigt sie gestapelt, nebeneinander oder als 100 %; Monate und Jahre laufen in der richtigen Reihenfolge, leere Monate erscheinen als 0. Am einfachsten mit <b>New</b> → <b>Lab statistics</b> beginnen. Filter auf Monat oder Jahr können jetzt ein Zeitraum sein, der mit dem Kalender mitwandert: <b>This year</b>, <b>Last 12 months</b>, <b>From – to</b> … Dazu der Slicer <b>Year › Month</b>: Jahre zum Aufklappen, darunter die Monate Jan–Dec.',
@@ -380,6 +512,9 @@ RELEASES = [
                 ("feature", 'Dashboard: Analytics-Linien und Drill-through',
                  'Neuer Reiter <b>Analytics</b> neben Build und Format: Mittelwert, Median, ± 1/2/3 Standardabweichungen, Perzentil, Min/Max, eine feste Linie oder ein Band von - bis (z.&nbsp;B. die Spezifikationsgrenzen) direkt im Diagramm - berechnet aus den Versuchen darin. Und <b>Drill-through</b> wie in Power BI: eine Seite zur Detailseite für z.&nbsp;B. <b>Machine</b> machen (Filters → <b>Drill-through to this page</b>), dann auf einer anderen Seite mit der rechten Maustaste auf den Balken einer Maschine → <b>Drill through</b>. Die Detailseite zeigt nur diese Maschine; <b>← Back</b> führt zurück.',
                  'Smart Chart → Visualizations → <b>Analytics</b> · Rechtsklick auf einen Balken', "wn_dashboard_analytics.svg"),
+                ("feature", 'Klicken hebt hervor - der Rest wird grau',
+                 'Ein Klick auf einen Balken, eine Säule, ein Kuchenstück oder einen Punkt im Dashboard lässt die anderen Visuals nicht mehr auf diesen Teil springen. Sie behalten alle Versuche und grauen den Rest aus - so sieht man den Teil im Ganzen, z.&nbsp;B. wie viel jeder Säule von Maschine AFK stammt. Auch das angeklickte Visual graut seine anderen Balken aus. Punkte anderer Versuche werden grau, Balken mit Mittelwerten zeigen den Mittelwert der hervorgehobenen Versuche über dem blassen. Cards, Matrix, Tabelle, Radar, Box, Violin und Histogramm filtern weiterhin, Slicer auch. Nochmals klicken hebt es auf. Lieber wie früher? Format ohne Auswahl → <b>Clicks</b> → <i>Filters the other visuals</i>.',
+                 'Smart Chart, Dashboards → Balken, Stück oder Punkt anklicken', "wn_click_highlight.svg"),
                 ("feature", 'Focus: ein Visual gross, mit seinen Versuchen',
                  'In der Titelzeile eines Visuals auf ⤢ klicken: es füllt die Seite, darunter stehen alle Versuche, aus denen es besteht. Klick auf einen Punkt zeigt seine Zeile, Doppelklick auf eine Zeile öffnet den Versuch in Show Experiment. Klick auf den farbigen Fairness-Punkt zeigt die Details mit <b>Make it fairer</b>. In <b>Format</b> gibt es jetzt auch logarithmische Achsen, eine Form pro Farbe und die Punktgrösse.',
                  'Smart Chart → ⤢ an einem Visual', None),
@@ -601,7 +736,7 @@ RELEASES = [
                  'Un punto de color en cada gráfico avisa cuando los grupos que comparas también se diferencian en otras cosas que cambian el resultado, p.&nbsp;ej. el jet A se probó sobre todo con PES a 3.5 bar y el jet B con PA a 2 bar. Verde, amarillo o rojo, con el motivo en una frase. Un clic en el punto muestra cada condición; <b>Make it fairer</b> deja solo lo que todos los grupos tienen en común. También avisa de grupos muy pequeños, grupos de una sola serie y grupos en rangos de X distintos.',
                  'Smart Chart → punto de color en la barra de título de un gráfico', "wn_fairness.svg"),
                 ("feature", 'Dashboard: crea tu propia página, como en Power BI',
-                 'Smart Chart es ahora un dashboard: una página con varios visuales. Arrastra campos desde <b>Fields</b> (todas las tablas, de Statimat e Itemat a DTYoMat, jet e hilo) a los huecos de un visual. Visuales nuevos: <b>Matrix</b> (p.&nbsp;ej. FP/m por jet y presión, coloreado; las celdas vacías muestran dónde faltan ensayos), <b>Card</b> (un número) y <b>Table</b>. Haz clic en una barra, caja o celda y todos los demás visuales se filtran. Los <b>slicers</b> eligen valores para toda la página: lista, desplegable, botones o rango. Coloca y redimensiona los visuales libremente, usa varias páginas (pestañas abajo) y filtros solo para una página o un visual. Nuevo: <b>campos calculados</b> con tu propia fórmula, <b>objetivos</b> (verde/rojo, líneas de objetivo), <b>profundizar</b> máquina → jet y <b>seleccionar puntos</b> para filtrar la página. Además: <b>plantillas</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> de una o todas las páginas, <b>Excel</b> por visual o página, notas en los valores, deshacer con <b>Ctrl+Z</b> y <b>alinear</b> varios visuales a la vez (Ctrl+clic, luego alinear, mismo tamaño o distribuir).',
+                 'Smart Chart es ahora un dashboard: una página con varios visuales. Arrastra campos desde <b>Fields</b> (todas las tablas, de Statimat e Itemat a DTYoMat, jet e hilo) a los huecos de un visual. Visuales nuevos: <b>Matrix</b> (p.&nbsp;ej. FP/m por jet y presión, coloreado; las celdas vacías muestran dónde faltan ensayos), <b>Card</b> (un número) y <b>Table</b>. Haz clic en una barra, caja o celda y todos los demás visuales la resaltan. Los <b>slicers</b> eligen valores para toda la página: lista, desplegable, botones o rango. Coloca y redimensiona los visuales libremente, usa varias páginas (pestañas abajo) y filtros solo para una página o un visual. Nuevo: <b>campos calculados</b> con tu propia fórmula, <b>objetivos</b> (verde/rojo, líneas de objetivo), <b>profundizar</b> máquina → jet y <b>seleccionar puntos</b> para filtrar la página. Además: <b>plantillas</b> (Jet comparison, Yarn overview, Machine check, Lab overview), <b>PDF</b> de una o todas las páginas, <b>Excel</b> por visual o página, notas en los valores, deshacer con <b>Ctrl+Z</b> y <b>alinear</b> varios visuales a la vez (Ctrl+clic, luego alinear, mismo tamaño o distribuir).',
                  'Sidebar → <b>Smart Chart</b>', "wn_dashboard.svg"),
                 ("feature", 'Estadísticas del laboratorio en el dashboard',
                  'Cuenta <b>experimentos, series o ensayos</b> por mes, grupo de producto, tipo de pedido, proyecto, responsable o máquina de laboratorio (<i>Tested on</i>). El nuevo visual <b>Columns</b> los muestra apilados, lado a lado o al 100 %; meses y años van en orden y los meses vacíos aparecen como 0. Empieza con <b>New</b> → <b>Lab statistics</b>. Los filtros por mes o año pueden ser ahora un periodo que avanza con el calendario: <b>This year</b>, <b>Last 12 months</b>, <b>From – to</b> … Y el slicer <b>Year › Month</b>: años desplegables con los meses Jan–Dec debajo.',
@@ -621,6 +756,9 @@ RELEASES = [
                 ("feature", 'Dashboard: líneas de análisis y drill-through',
                  'Nueva pestaña <b>Analytics</b> junto a Build y Format: media, mediana, ± 1/2/3 desviaciones estándar, percentil, mín./máx., una línea fija o una banda de - a (p.&nbsp;ej. tus límites de especificación) directamente en el gráfico, calculadas con sus ensayos. Y <b>drill-through</b> como en Power BI: convierte una página en la página de detalle de p.&nbsp;ej. <b>Machine</b> (Filters → <b>Drill-through to this page</b>) y luego, en otra página, clic derecho en la barra de una máquina → <b>Drill through</b>. La página de detalle muestra solo esa máquina; <b>← Back</b> te devuelve.',
                  'Smart Chart → Visualizations → <b>Analytics</b> · clic derecho en una barra', "wn_dashboard_analytics.svg"),
+                ("feature", 'Un clic resalta - el resto se vuelve gris',
+                 'Un clic en una barra, una columna, un sector o un punto del dashboard ya no hace que los demás visuales muestren solo esa parte. Mantienen todos sus ensayos y ponen el resto en gris, así se ve la parte dentro del todo - p.&nbsp;ej. cuánto de cada columna viene de la máquina AFK. El visual pulsado también pone en gris sus otras barras. Los puntos de otros ensayos se vuelven grises, las barras de medias muestran la media de los ensayos resaltados sobre la pálida. Tarjetas, matriz, tabla, radar, caja, violín e histograma siguen filtrando, los slicers también. Otro clic lo deshace. ¿Prefiere lo de antes? Format sin nada seleccionado → <b>Clicks</b> → <i>Filters the other visuals</i>.',
+                 'Smart Chart, Dashboards → clic en una barra, sector o punto', "wn_click_highlight.svg"),
                 ("feature", 'Focus: un visual en grande, con sus ensayos',
                  'Haga clic en ⤢ en la barra de título de un visual: ocupa la página y debajo aparecen todos los ensayos de los que se compone. Un clic en un punto muestra su fila, un doble clic en una fila abre el ensayo en Show Experiment. Un clic en el punto de color de equidad muestra los detalles con <b>Make it fairer</b>. En <b>Format</b> hay ahora también ejes logarítmicos, una forma por color y el tamaño de los puntos.',
                  'Smart Chart → ⤢ en un visual', None),

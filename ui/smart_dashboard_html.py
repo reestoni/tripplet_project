@@ -484,11 +484,11 @@ document.getElementById('fsearch').addEventListener('input',renderFields);
 function accepts(well,key,v){
   var f=FIELDS[key];if(!f)return false;
   var kind=WELLS[well][1];
-  if(well==='value'&&v&&v.agg==='count')return true;
+  if(well==='value'&&v&&(v.agg==='count'||v.agg==='count_distinct'))return true;
   return kind==='any'||kind===f.kind;
 }
 function setWell(v,well,key){
-  if(!accepts(well,key,v)){toast(WELLS[well][0]+' needs a number field'+(well==='y'||well==='value'?' - to count experiments, series or trials use the visual Columns':''));return false;}
+  if(!accepts(well,key,v)){toast(WELLS[well][0]+' needs a number field'+(well==='value'?' - to count different jets, yarns … choose the aggregation Count (distinct) first':well==='y'?' - to count experiments, series or trials use the visual Columns':''));return false;}
   v.wells=v.wells||{};
   if(MULTIW.indexOf(well)>=0){v.wells[well]=(v.wells[well]||[]);if(v.wells[well].indexOf(key)<0)v.wells[well].push(key);}
   else v.wells[well]=key;
@@ -585,7 +585,7 @@ function formatHtml(v,secs){
         +'<label class="chk"><input type="checkbox" id="fsub"'+(f.sub===false?'':' checked')+'> Show the line below (n, SD, trial …)</label>';
     } else if(sec==='table'){
       var cols=((v.wells||{}).columns||[]).filter(function(k){return FIELDS[k];}), ts=f.tsort;
-      var name=function(k){return k==='trial'?'Trial':k==='series'?'Series':(FIELDS[k]?FIELDS[k].label:k);};
+      var name=function(k){return k==='trial'?'Trial':k==='series'||k==='__series'?'Series':k==='__trials'?'Trials':(FIELDS[k]?FIELDS[k].label:k);};
       h+='<div class="row"><div class="lab">Order</div>'+(ts?'<div class="crow"><span>'+esc(name(ts.key))+(ts.dir==='desc'?' (high to low)':' (low to high)')+'</span><b id="ftsclr" title="Back to the normal order">×</b></div>'
           :'<div class="hint">Click a column heading in the table to sort; click again to turn it round.</div>')+'</div>';
       h+='<div class="row"><div class="lab">Colour rules</div>';
@@ -770,7 +770,11 @@ function themeHtml(){
       +opts({auto:'Automatic',0:'0',1:'1',2:'2',3:'3',4:'4'},t.decimals==null?'auto':t.decimals)+'</select></div>'
       +'<div class="row"><div class="lab">Values on bars and lines</div><select id="thlab">'
       +opts({auto:'Automatic',on:'On',off:'Off'},t.labels===true?'on':t.labels===false?'off':'auto')+'</select></div>')
-    +sec('Legend','<div class="row"><div class="lab">Position</div><select id="thleg">'+opts(LEGENDPOS,t.legend||'auto')+'</select></div>');
+    +sec('Legend','<div class="row"><div class="lab">Position</div><select id="thleg">'+opts(LEGENDPOS,t.legend||'auto')+'</select></div>')
+    +sec('Clicks','<div class="row"><div class="lab">A click on a bar, slice or point</div><select id="thclicks">'
+      +opts({highlight:'Highlights it in the other visuals',filter:'Filters the other visuals'},SPEC.clicks==='filter'?'filter':'highlight')+'</select></div>'
+      +'<div class="hint" style="margin-top:4px">Highlight: the other visuals keep all trials and grey out the rest. '
+      +'Cards, matrix, table, radar, box, violin and histogram always filter.</div>');
 }
 function bindTheme(el){
   var on=function(id,fn){var x=document.getElementById(id);if(x)x.addEventListener('change',function(){fn(x);});};
@@ -780,6 +784,7 @@ function bindTheme(el){
   on('thdec',function(x){themeSet('decimals',x.value==='auto'?null:parseInt(x.value));});
   on('thlab',function(x){themeSet('labels',x.value==='on'?true:x.value==='off'?false:null);});
   on('thleg',function(x){themeSet('legend',x.value);});
+  on('thclicks',function(x){if(x.value==='filter')SPEC.clicks='filter';else delete SPEC.clicks;changed();});
   var r=document.getElementById('thrst');if(r)r.addEventListener('click',function(){delete SPEC.theme;changed();});
 }
 // format painter: the keys of the sections both visuals have (not the axes - titles and ranges belong to the fields)
@@ -990,7 +995,7 @@ function renderWells_(){
   t.wells.forEach(function(wl){
     var multi=MULTIW.indexOf(wl)>=0;
     var keys=multi?((v.wells||{})[wl]||[]):((v.wells||{})[wl]?[(v.wells||{})[wl]]:[]);
-    h+='<div class="well"><div class="lab">'+esc(WELLS[wl][0])+(WELLS[wl][1]==='num'?' · number':'')+'</div><div class="drop" data-w="'+wl+'">';
+    h+='<div class="well"><div class="lab">'+esc(WELLS[wl][0])+(WELLS[wl][1]==='num'?(wl==='value'&&v.agg==='count_distinct'?' · any field':' · number'):'')+'</div><div class="drop" data-w="'+wl+'">';
     if(!keys.length)h+='drop a field here';
     keys.forEach(function(k){if(FIELDS[k])h+='<div class="chip"><span title="'+esc(FIELDS[k].label)+'">'+esc(FIELDS[k].label)+'</span><b data-w="'+wl+'" data-k="'+esc(k)+'">×</b></div>';});
     h+='</div></div>';
@@ -1005,6 +1010,9 @@ function renderWells_(){
     h+='<div class="well"><div class="lab">Bars</div><select id="vstack">';
     Object.keys(STACKS).forEach(function(k){h+='<option value="'+k+'"'+((v.stack||defst)===k?' selected':'')+'>'+esc(STACKS[k])+'</option>';});
     h+='</select></div>';
+  }
+  if(v.type==='table'){
+    h+='<div class="well"><label style="display:flex;gap:6px;align-items:center;cursor:pointer" title="One line per jet, yarn, machine … instead of one per trial - with the number of trials and series, number fields as average"><input type="checkbox" id="vgroup"'+(v.group?' checked':'')+'> One row per value (e.g. a list of the jets)</label></div>';
   }
   if(v.type==='pie'){
     h+='<div class="well"><div class="lab">Shape</div><select id="vshape">'+opts(PIESHAPES,v.shape||'pie')+'</select></div>';
@@ -1049,8 +1057,9 @@ function renderWells_(){
     else delete v.wells[b.dataset.w];
     if(b.dataset.w==='drill'||b.dataset.w==='x')v.drillpath=[];
     changed();});});
-  var ag=document.getElementById('agg');if(ag)ag.addEventListener('change',function(){v.agg=ag.value;changed();});
+  var ag=document.getElementById('agg');if(ag)ag.addEventListener('change',function(){v.agg=ag.value;var vk=(v.wells||{}).value;if(vk&&!accepts('value',vk,v)){delete v.wells.value;toast('Value removed - '+(FIELDS[vk]?FIELDS[vk].label:vk)+' is no number');}changed();});
   var vs=document.getElementById('vstack');if(vs)vs.addEventListener('change',function(){v.stack=vs.value;changed();});
+  var vgr=document.getElementById('vgroup');if(vgr)vgr.addEventListener('change',function(){if(vgr.checked)v.group=true;else delete v.group;if(v.fmt&&v.fmt.tsort){delete v.fmt.tsort;}changed();});
   var vsh=document.getElementById('vshape');if(vsh)vsh.addEventListener('change',function(){v.shape=vsh.value==='pie'?undefined:vsh.value;changed();});
   var vtx=document.getElementById('vtext');if(vtx)vtx.addEventListener('input',function(){v.text=vtx.value;
     clearTimeout(vtx._t);vtx._t=setTimeout(function(){var c=document.querySelector('[data-id="'+v.id+'"]');if(c)fillTextCard(c,v);push();},250);});
@@ -1376,9 +1385,11 @@ function fillCard(c,v){
     var h='<div class="tbl"'+(r.font?' style="font-size:'+r.font+'px"':'')+'><table'+(r.font?' style="font-size:inherit"':'')+'><tr>'+r.head.map(function(x,i){
       var k=ks[i], arrow=k&&ts.key===k?(ts.dir==='desc'?' ▼':' ▲'):'';
       return '<th'+(k?' class="srt" data-k="'+esc(k)+'" title="Click to sort"':'')+'>'+esc(x)+arrow+'</th>';}).join('')+'</tr>';
-    r.rows.forEach(function(row,j){var b=bg[j]||[];h+='<tr data-t="'+row[0]+'">'+row.slice(1).map(function(x,i){
+    r.rows.forEach(function(row,j){var b=bg[j]||[];h+='<tr'+(r.grouped?'':' data-t="'+row[0]+'"')+'>'+row.slice(1).map(function(x,i){
       return '<td'+(b[i]?' style="background:'+b[i]+'"':'')+'>'+esc(x)+'</td>';}).join('')+'</tr>';});
-    h+='</table></div>'+(r.more?'<div class="note">'+r.more+' more trials not listed</div>':'')+'<div class="note">double-click a line to open it in Show Experiment</div>';
+    h+='</table></div>'+(r.more?'<div class="note">'+r.more+(r.grouped?' more values':' more trials')+' not listed</div>':'')
+      +(r.note?'<div class="note">'+esc(r.note)+'</div>':'')
+      +(r.grouped?'':'<div class="note">double-click a line to open it in Show Experiment</div>');
     body.innerHTML=h;
     body.querySelectorAll('tr[data-t]').forEach(function(tr){tr.addEventListener('dblclick',function(){bridge.openTrial(parseInt(tr.dataset.t));});});
     body.querySelectorAll('th.srt').forEach(function(th){th.addEventListener('mousedown',function(e){e.stopPropagation();});

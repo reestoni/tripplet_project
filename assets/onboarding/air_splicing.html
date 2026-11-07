@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Air Splicing</title>
+<!-- Onboarding-Modul (ui/screen_onboarding.py), gleiches Muster wie dty_intermingling.html.
+     Texte in air_splicing_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (ohne eigenen Kopf/Szenen-Knoepfe, meldet die Szene per document.title "scene:n"),
+     ?scene=n&paused=1 fuer Screenshots. Keine externen Ressourcen. Szenen wechseln nie automatisch.
+     Keine Anlage mit Stationen: in Szene 2 (Ablauf) sind die Schritte 1-5 anklickbar. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --yarn:#6E6556;--yarn-rgb:110,101,86;--air:#2386C8;--air-rgb:35,134,200;--heat:#E07B39;--hl:#39A650;
+  --melt:#E08A2E;--poy:#C08A1E;--fdy:#2E9C7A;--fdy-rgb:46,156,122;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.langs{display:flex;gap:4px;flex-shrink:0}
+.langs[hidden]{display:none}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+canvas{display:block;width:100%;aspect-ratio:16/9}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.scenes{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.scenes button span{font-family:var(--font-mono);font-size:12px;opacity:.7}
+.right{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.slider{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.slider[hidden]{display:none}
+.slider input{accent-color:var(--hl);width:160px}
+.slider output{min-width:2em;color:var(--fg)}
+.play{min-width:120px;justify-content:center}
+.caption{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;border-top:1px solid var(--line);padding-top:16px}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 8px}
+.caption p{margin:0 0 10px;max-width:70ch}
+.now{font-family:var(--font-mono);font-size:13px;color:var(--hl);min-height:1.5em}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.facts li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.facts b{font-family:var(--font-mono);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+.note{font-size:12px;color:var(--muted);margin:0}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.caption{grid-template-columns:1fr;gap:14px}.facts li{grid-template-columns:96px minmax(0,1fr)}header{flex-direction:column}}
+</style>
+<script src="air_splicing_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="stage"><canvas id="cv" width="1600" height="900"></canvas></div>
+  <div class="controls">
+    <div class="scenes" id="scenes" role="group"></div>
+    <div class="right">
+      <label class="slider" id="nwrap"><span id="nlab"></span>
+        <input id="npts" type="range" min="1" max="3" step="1" value="1"><output id="nout"></output></label>
+      <button class="play" id="play" type="button"></button>
+    </div>
+  </div>
+  <section class="caption" aria-live="polite">
+    <div><h2 id="ctitle"></h2><p class="now" id="cnow"></p><p id="ctext"></p></div>
+    <ul class="facts" id="cfacts"></ul>
+  </section>
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');const W=1600,H=900;
+if(!CanvasRenderingContext2D.prototype.roundRect){CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(r||0,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this}}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C={bg:css('--panel'),line:css('--line'),fg:css('--fg'),muted:css('--muted'),yarn:css('--yarn'),air:css('--air'),heat:css('--heat'),hl:css('--hl'),
+  melt:css('--melt'),poy:css('--poy'),fdy:css('--fdy')};
+const YRGB=css('--yarn-rgb'),ARGB=css('--air-rgb'),FRGB=css('--fdy-rgb');
+const MONO=css('--font-mono'),DISP=css('--font-display'),SANS=css('--font-body');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const params=new URLSearchParams(location.search);
+let lang=(params.get('lang')||'de');if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+let fitW=0;function fit(){const w=cv.getBoundingClientRect().width||W;if(w===fitW&&cv.width>0)return;fitW=w;const d=Math.min(devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(w*d));cv.height=Math.max(1,Math.round(w*9/16*d))}
+addEventListener('resize',fit);if(window.ResizeObserver)new ResizeObserver(fit).observe(cv);fit();
+const smooth=(a,b,x)=>{const q=Math.max(0,Math.min(1,(x-a)/(b-a)));return q*q*(3-2*q)},lerp=(a,b,q)=>a+(b-a)*q;
+const hx=c=>[1,3,5].map(i=>parseInt(c.slice(i,i+2),16));
+const mix=(c1,c2,q)=>{const a=hx(c1),b=hx(c2);return`rgb(${a.map((v,i)=>Math.round(lerp(v,b[i],q))).join(',')})`};
+const hsh=(a,b,c)=>{const v=Math.sin(a*127.1+b*311.7+c*74.7)*43758.5453;return v-Math.floor(v)};
+
+const NSC=5;
+C.A=C.yarn;C.B=C.fdy;C.red='#D6453D';C.steel='#8f9a9d';
+const ARGBs=ARGB;
+
+/* ---------- UI ---------- */
+const sceneEl=$('scenes'),play=$('play'),nin=$('npts');
+/* auto = Bewegung laeuft (Pause friert sie ein). Szenen wechseln nie von selbst. */
+let scene=0,sceneT=0,auto=!reduce,t=0,NP=1,hoverStep=-1;
+function setPlay(){play.setAttribute('aria-pressed',auto);play.textContent=auto?T().ui.pause:T().ui.play}
+play.onclick=()=>{auto=!auto;setPlay()};
+nin.oninput=()=>{NP=+nin.value;$('nout').textContent=NP};
+function go(i){const n=(i+NSC)%NSC;scene=n;sceneT=0;hoverStep=-1;if(EMBED)document.title='scene:'+scene;
+  [...sceneEl.children].forEach((b,j)=>b.setAttribute('aria-pressed',j===scene));
+  const s=T().scenes[scene];$('ctitle').textContent=`${scene+1}  ·  ${s.title}`;$('ctext').textContent=s.text;
+  $('cfacts').innerHTML='';s.facts.forEach(f=>{const li=document.createElement('li');const b=document.createElement('b');b.textContent=f[0];const sp=document.createElement('span');sp.textContent=f[1];li.append(b,sp);$('cfacts').appendChild(li)});
+  $('cnow').textContent='';$('nwrap').hidden=scene!==2}
+function applyLang(){const u=T().ui;document.documentElement.lang=lang;
+  ['eyebrow','h1','lead','note'].forEach(k=>$(k).textContent=u[k]);$('nlab').textContent=u.points;
+  sceneEl.setAttribute('aria-label',u.scenes);sceneEl.innerHTML='';
+  T().scenes.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<span>${i+1}</span>`;b.append(s.k);b.onclick=()=>go(i);sceneEl.appendChild(b)});
+  [...$('langs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  nin.oninput();setPlay();const keep=sceneT;go(scene);sceneT=keep}
+/* Szene 2 (Ablauf): Schritte 1-5 anklicken = an den Anfang dieses Schritts springen */
+const STEP_X=i=>260+i*270,STEP_START=[0,2.5,4,5.5,9.5];
+function hitStep(ev){const r=cv.getBoundingClientRect(),x=(ev.clientX-r.left)*W/r.width,y=(ev.clientY-r.top)*H/r.height;
+  for(let i=0;i<5;i++)if(Math.abs(x-STEP_X(i))<70&&y>610&&y<700)return i;return -1}
+cv.addEventListener('mousemove',ev=>{if(scene!==1){cv.style.cursor='';hoverStep=-1;return}hoverStep=hitStep(ev);cv.style.cursor=hoverStep>=0?'pointer':''});
+cv.addEventListener('mouseleave',()=>{hoverStep=-1;cv.style.cursor=''});
+cv.addEventListener('click',ev=>{if(scene!==1)return;const i=hitStep(ev);if(i>=0)sceneT=STEP_START[i]+.01});
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')go(scene+1);if(e.key==='ArrowLeft')go(scene-1);if(e.key===' '){e.preventDefault();auto=!auto;setPlay()}});
+
+/* ---------- Helfer ---------- */
+function label(s,x,y,o={}){ctx.font=`${o.w||500} ${o.s||20}px ${o.f||MONO}`;ctx.fillStyle=o.c||C.muted;ctx.textAlign=o.a||'center';ctx.textBaseline='middle';ctx.globalAlpha=o.al??1;ctx.fillText(s,x,y);ctx.globalAlpha=1}
+function leader(x1,y1,x2,y2,c){ctx.strokeStyle=c||C.line;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+/* Garnbuendel als Filamentlinien; y(x,i) */
+function bundle(x0,x1,n,col,fy,lw=1.7,al=.9){if(x1<=x0)return;for(let i=0;i<n;i++){ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.globalAlpha=al;ctx.beginPath();for(let x=x0;x<=x1;x+=3){const y=fy(x,i);x===x0?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke()}ctx.globalAlpha=1}
+/* Spleisszone: Filamente beider Garne verwirbelt, mit np Verbindungsstellen zwischen xa und xb */
+function spliceY(x,i,cy,xa,xb,k,np,seed){const L=(xb-xa)/np,u=(x-xa),m=((u%L)+L)%L,dk=Math.min(Math.abs(m-L/2),L/2),tight=Math.exp(-(dk*dk)/(2*14*14));
+  const inside=smooth(xa-10,xa+20,x)*(1-smooth(xb-20,xb+10,x));const open=k*inside;
+  return cy+open*((1-tight)*(10+6*hsh(i,seed,1))*Math.sin(x*.07+i*1.9+seed)+tight*3*Math.sin(x*.4+i))}
+
+/* ---------- Szene 1: Gatter ---------- */
+function spool(x,y,r,col,fill){ctx.fillStyle='#EEF1ED';ctx.strokeStyle=C.muted;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(x-16,y-70,32,140,4);ctx.fill();ctx.stroke();
+  ctx.fillStyle=col;ctx.globalAlpha=.85;const w=16+r*fill;ctx.beginPath();ctx.roundRect(x-w,y-60,2*w,120,10);ctx.fill();ctx.globalAlpha=1;
+  ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=2;for(let k=0;k<5;k++){ctx.beginPath();ctx.moveTo(x-w+4,y-48+k*24);ctx.lineTo(x+w-4,y-48+k*24);ctx.stroke()}}
+function scene1(){const cvT=T().cv;
+  const cyc=(t%20)/20,fillA=1-smooth(0,.55,cyc),onB=cyc>.55;
+  label(cvT.creel,130,110,{a:'left',s:24,f:DISP,w:600,c:C.fg});
+  spool(260,300,70,C.A,Math.max(.05,fillA));spool(260,560,70,C.B,1);
+  label(cvT.running+' (A)',360,220,{a:'left',s:16,f:SANS});label(cvT.reserve+' (B)',360,640,{a:'left',s:16,f:SANS});
+  ctx.strokeStyle=C.A;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(260,370);ctx.bezierCurveTo(200,420,200,470,250,480);ctx.stroke();
+  ctx.strokeStyle=C.B;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(250,480);ctx.lineTo(260,490);ctx.stroke();
+  ctx.fillStyle=C.air;ctx.beginPath();ctx.arc(252,482,7,0,7);ctx.fill();label(cvT.splice,180,482,{a:'right',s:16,c:C.air,w:600});
+  const sy=onB?520:250;ctx.strokeStyle=onB?C.B:C.A;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(300,sy);ctx.lineTo(560,400);ctx.lineTo(1500,400);ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=2;ctx.setLineDash([10,16]);ctx.lineDashOffset=-t*120;ctx.beginPath();ctx.moveTo(560,400);ctx.lineTo(1500,400);ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.strokeRect(620,300,820,200);label(cvT.machine,1030,280,{s:18,c:C.fg});
+  ctx.strokeStyle='rgba(224,123,57,.6)';ctx.lineWidth=14;ctx.beginPath();ctx.moveTo(700,400);ctx.lineTo(950,400);ctx.stroke();label(cvT.heater,825,370,{s:14,c:C.heat});
+  [1050,1200,1350].forEach(x=>{ctx.fillStyle=C.bg;ctx.strokeStyle=C.muted;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,400,20,0,7);ctx.fill();ctx.stroke()});
+  if(onB){const px=lerp(560,1500,smooth(.55,.95,cyc));ctx.fillStyle=C.air;ctx.beginPath();ctx.arc(px,400,9,0,7);ctx.fill();label(cvT.through,Math.min(px,1300),438,{s:15,c:C.air})}
+  label(onB?cvT.stateB:cvT.stateA,800,600,{s:22,f:SANS,w:600,c:C.fg});
+  $('cnow').textContent='▸ '+(onB?cvT.nowB:cvT.nowA);
+  label(cvT.without,800,660,{s:16,f:SANS});
+}
+
+/* ---------- Szene 2: Ablauf ---------- */
+function splicerHead(cx,cy,clampOn,cutOn,airOn){const cvT=T().cv;
+  ctx.fillStyle='#D5DBDA';ctx.strokeStyle='#8f9a9d';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(cx-480,cy-70,960,140,12);ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.bg;ctx.beginPath();ctx.roundRect(cx-160,cy-40,320,80,10);ctx.fill();ctx.strokeStyle=airOn?C.air:'#8f9a9d';ctx.lineWidth=2;ctx.stroke();
+  label(cvT.chamber,cx,cy-94,{s:16,c:airOn?C.air:C.fg,w:600});
+  ctx.strokeStyle=C.air;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(cx,cy+140);ctx.lineTo(cx,cy+40);ctx.stroke();
+  if(airOn)for(let k=0;k<6;k++){const yy=cy+140-((t*200+k*18)%100);ctx.fillStyle=C.air;ctx.beginPath();ctx.arc(cx,yy,3,0,7);ctx.fill()}
+  label(cvT.air,cx+16,cy+150,{a:'left',s:15,c:C.air});
+  [cx-330,cx+330].forEach(x=>{const o=clampOn?0:18;ctx.fillStyle=clampOn?C.fg:'#9AA3A0';ctx.fillRect(x-14,cy-34-o,28,26);ctx.fillRect(x-14,cy+8+o,28,26)});
+  label(cvT.clamp,cx-330,cy+86,{s:15});label(cvT.clamp,cx+330,cy+86,{s:15});
+  [cx-220,cx+220].forEach(x=>{const o=cutOn?0:22;ctx.fillStyle='#6d777b';ctx.beginPath();ctx.moveTo(x-6,cy-30-o);ctx.lineTo(x+6,cy-30-o);ctx.lineTo(x,cy-6-o+(cutOn?14:0));ctx.closePath();ctx.fill()});
+  label(cvT.knife,cx-220,cy+86,{s:15});label(cvT.knife,cx+220,cy+86,{s:15});
+}
+function scene2(){const cvT=T().cv;
+  const cx=800,cy=330,TT=sceneT%14;
+  const ph=TT<2.5?0:TT<4?1:TT<5.5?2:TT<9.5?3:4;
+  cvT.steps.forEach((s,i)=>{const x=STEP_X(i),on=i===ph,hv=i===hoverStep&&!on;ctx.fillStyle=on?C.hl:hv?'#BFE3C6':C.line;ctx.beginPath();ctx.arc(x,640,18,0,7);ctx.fill();
+    label(String(i+1),x,641,{s:16,c:on?'#fff':C.muted,w:600});label(s,x,680,{s:18,c:on||hv?C.hl:C.muted,w:on?700:500,f:SANS});if(i<4)leader(x+24,640,x+246,640)});
+  label(cvT.stepHint,800,730,{s:15,f:SANS});
+  $('cnow').textContent='▸ '+fmt(cvT.stepNow,{n:ph+1,s:cvT.steps[ph]});
+  splicerHead(cx,cy,ph>=1&&ph<4,ph===2,ph===3);
+  const ins=smooth(0,2,TT),cutDone=TT>=4.8,airK=ph===3?smooth(5.5,6.5,TT):ph===4?1:0,rel=ph===4?smooth(10,13.5,TT):0,shift=rel*700;
+  const aEnd=cutDone?cx+220:lerp(cx-480,cx+420,ins),bEnd=cutDone?cx-220:lerp(cx+480,cx-420,ins);
+  const yA=i=>cy-8+(i-2.5)*2,yB=i=>cy+8+(i-2.5)*2;
+  const fA=(x,i)=>{const base=airK>0?spliceY(x-shift,i,cy,cx-220,cx+220,airK,NP,1):yA(i);return airK>0?lerp(yA(i),base,smooth(cx-260,cx-200,x-shift)*(1-smooth(cx+200,cx+260,x-shift))):yA(i)};
+  const fB=(x,i)=>{const base=airK>0?spliceY(x-shift,i+6,cy,cx-220,cx+220,airK,NP,4):yB(i);return airK>0?lerp(yB(i),base,smooth(cx-260,cx-200,x-shift)*(1-smooth(cx+200,cx+260,x-shift))):yB(i)};
+  bundle(40,aEnd+shift,6,C.A,fA);bundle(bEnd+shift,1560,6,C.B,fB);
+  if(TT>=4.8&&TT<6.2){const d=TT-4.8,al=Math.max(0,1-d/1.4);bundle(cx+220,cx+420,6,C.A,(x,i)=>yA(i)+d*d*120,1.5,al);bundle(cx-420,cx-220,6,C.B,(x,i)=>yB(i)+d*d*120,1.5,al)}
+  label(cvT.yarnA,100,cy-40,{a:'left',s:16,c:C.A,w:600});label(cvT.yarnB,1500,cy+44,{a:'right',s:16,c:C.B,w:600});
+  if(ph===4)label(cvT.joined,Math.min(cx+shift*.3,1350),cy-120,{s:20,c:C.air,w:600,al:smooth(10,11,TT)});
+}
+
+/* ---------- Szene 3: Blaskammer ---------- */
+const PT=[...Array(28)].map((_,i)=>({a:hsh(i,1,1)*6.28,r:.2+.6*hsh(i,1,2),B:i>=14,w:.8+.8*hsh(i,1,3)}));
+function scene3(){const cvT=T().cv;
+  const qx=330,qy=380,R=170;
+  label(cvT.xsec,qx,118,{s:18,c:C.fg});
+  ctx.fillStyle='#D5DBDA';ctx.beginPath();ctx.roundRect(qx-230,qy-220,460,440,16);ctx.fill();
+  ctx.fillStyle=C.bg;ctx.beginPath();ctx.arc(qx,qy,R,0,7);ctx.fill();ctx.fillRect(qx-14,qy-R-50,28,60);
+  ctx.beginPath();ctx.moveTo(qx+R*.3,qy+R+60);ctx.lineTo(qx+R*.6,qy+R+60);ctx.lineTo(qx+R*.6,qy+R*.7);ctx.lineTo(qx+R*.3,qy+R*.9);ctx.fill();
+  label(cvT.slot,qx+26,qy-R-34,{a:'left',s:14});label(cvT.airShort,qx+R*.45,qy+R+80,{s:15,c:C.air});
+  ctx.strokeStyle=`rgba(${ARGBs},.5)`;ctx.lineWidth=2;ctx.setLineDash([12,10]);ctx.lineDashOffset=-t*60;[.45,.75].forEach(rr=>{ctx.beginPath();ctx.arc(qx,qy,R*rr,0,7);ctx.stroke()});ctx.setLineDash([]);
+  for(let k=0;k<6;k++){const u=((t*1.2+k/6)%1);ctx.fillStyle=C.air;ctx.beginPath();ctx.arc(qx+R*.45,lerp(qy+R+60,qy+R*.8,u),3,0,7);ctx.fill()}
+  const mixk=smooth(0,4,t%9);
+  PT.forEach((p,i)=>{if(auto)p.a+=.016*p.w*(.5+mixk);const startX=qx+(p.B?40:-40)+(hsh(i,2,1)-.5)*40,startY=qy+(hsh(i,2,2)-.5)*40;
+    const ex=qx+Math.cos(p.a)*R*p.r,ey=qy+Math.sin(p.a)*R*p.r;const x=lerp(startX,ex,mixk),y=lerp(startY,ey,mixk);
+    ctx.fillStyle=p.B?C.B:C.A;ctx.beginPath();ctx.arc(x,y,7,0,7);ctx.fill()});
+  label(mixk<.5?cvT.twoB:cvT.mixed,qx,qy+R+130,{s:17,c:C.fg,w:600,f:SANS});
+  const x0=720,x1=1540,cy=380,xa=880,xb=1380;
+  label(cvT.result,x0,150,{a:'left',s:18,c:C.fg});
+  const k=smooth(0,3,t%9);
+  bundle(x0,xb,6,C.A,(x,i)=>spliceY(x,i,cy-4+(i-2.5)*1.6*(1-smooth(xa-30,xa,x)),xa,xb,k,NP,1));
+  bundle(xa,x1,6,C.B,(x,i)=>spliceY(x,i+6,cy+4,xa,xb,k,NP,4));
+  ctx.fillStyle=C.A;ctx.beginPath();ctx.arc(xb,cy,3,0,7);ctx.fill();ctx.fillStyle=C.B;ctx.beginPath();ctx.arc(xa,cy,3,0,7);ctx.fill();
+  ctx.strokeStyle=C.line;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(xa,cy+70);ctx.lineTo(xa,cy+80);ctx.lineTo(xb,cy+80);ctx.lineTo(xb,cy+70);ctx.stroke();label(cvT.spliceLen,(xa+xb)/2,cy+104,{s:15});
+  const L=(xb-xa)/NP;for(let j=0;j<NP;j++){const x=xa+L*(j+.5);ctx.fillStyle=C.air;ctx.beginPath();ctx.moveTo(x,cy-60);ctx.lineTo(x-8,cy-74);ctx.lineTo(x+8,cy-74);ctx.fill()}
+  label(fmt(NP>1?cvT.pointN:cvT.point1,{n:NP}),(xa+xb)/2,cy-100,{s:17,c:C.air,w:600});
+  label(cvT.yarnA,x0,cy-50,{a:'left',s:15,c:C.A});label(cvT.yarnB,x1,cy+50,{a:'right',s:15,c:C.B});
+  label(cvT.more,1130,620,{s:16,f:SANS});
+}
+
+/* ---------- Szene 4: Knoten vs Spleiss ---------- */
+function scene4(){const cvT=T().cv;
+  const rows=[[260,cvT.knot,C.red],[560,cvT.airSplice,C.air]];
+  rows.forEach(([cy,name,col],r)=>{label(name,110,cy-100,{a:'left',s:28,f:DISP,w:700,c:col});
+    const sh=((t*120)%1700)-200,kx=sh+200;
+    ctx.strokeStyle=C.steel;ctx.lineWidth=4;ctx.beginPath();ctx.arc(1100,cy,18,0,7);ctx.stroke();label(cvT.guide,1100,cy-40,{s:14});
+    if(r===0){bundle(80,1520,6,C.A,(x,i)=>{const d=x-kx,b=Math.exp(-(d*d)/(2*16*16));return cy+(i-2.5)*2+b*(i-2.5)*9+b*14*Math.sin(i*1.7+d*.3)},1.7);
+      ctx.fillStyle=C.A;ctx.beginPath();ctx.ellipse(kx,cy,22,18,0,0,7);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=2;for(let k=-1;k<=1;k++){ctx.beginPath();ctx.moveTo(kx-16,cy+k*8-6);ctx.lineTo(kx+16,cy+k*8+6);ctx.stroke()}
+      ctx.strokeStyle=C.A;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(kx+8,cy-14);ctx.lineTo(kx+30,cy-44);ctx.moveTo(kx-8,cy+14);ctx.lineTo(kx-34,cy+40);ctx.stroke();
+      if(Math.abs(kx-1100)<30){ctx.strokeStyle=C.red;ctx.lineWidth=3;ctx.beginPath();ctx.arc(1100,cy,34,0,7);ctx.stroke();label(cvT.catches,1100,cy+56,{s:16,c:C.red,w:600})}}
+    else{bundle(80,1520,6,C.A,(x,i)=>{const d=x-kx,b=Math.exp(-(d*d)/(2*60*60));return cy+(i-2.5)*2+b*3*Math.sin(i*1.9+x*.12)},1.7);
+      ctx.strokeStyle=C.air;ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.beginPath();ctx.ellipse(kx,cy,70,14,0,0,7);ctx.stroke();ctx.setLineDash([])}
+    const py=cy+90;ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(110,py);ctx.lineTo(900,py);ctx.stroke();
+    ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.beginPath();for(let x=110;x<=900;x+=3){const d=x-505,v=r===0?36*Math.exp(-(d*d)/(2*14*14)):5*Math.exp(-(d*d)/(2*70*70));const y=py-10-v;x===110?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke();
+    label(cvT.profile,110,py+20,{a:'left',s:13})});
+  label(cvT.schem,1520,820,{a:'right',s:14});
+}
+
+/* ---------- Szene 5: Geraete ---------- */
+function device(x,y,name,lines,col){ctx.save();ctx.translate(x,y);
+  ctx.fillStyle='#D5DBDA';ctx.strokeStyle='#8f9a9d';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(-120,-40,240,70,12);ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.bg;ctx.beginPath();ctx.roundRect(-50,-34,100,22,6);ctx.fill();ctx.strokeStyle=col;ctx.stroke();
+  ctx.fillStyle='#6d777b';[-80,80].forEach(dx=>ctx.fillRect(dx-8,-38,16,14));
+  ctx.fillStyle='#BCC4C3';ctx.strokeStyle='#8f9a9d';ctx.beginPath();ctx.moveTo(-30,30);ctx.lineTo(30,30);ctx.lineTo(20,170);ctx.lineTo(-20,170);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(-36,60,12,40,4);ctx.fill();
+  ctx.strokeStyle=C.air;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,170);ctx.bezierCurveTo(0,210,40,220,60,250);ctx.stroke();
+  const sh=Math.sin(t*2)*4;ctx.strokeStyle=C.A;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-160,-24);ctx.lineTo(60,-24+sh*.2);ctx.stroke();ctx.strokeStyle=C.B;ctx.beginPath();ctx.moveTo(160,-22);ctx.lineTo(-60,-22-sh*.2);ctx.stroke();
+  ctx.restore();label(name,x,y+290,{s:24,f:DISP,w:700,c:col});lines.forEach((l,i)=>label(l,x,y+322+i*24,{s:15,f:SANS,c:i?C.muted:C.fg}))}
+function scene5(){const cvT=T().cv;
+  device(300,250,'AirSplicer-POY',cvT.dev[0],C.A);
+  device(800,250,'AirSplicer-3 Flex',cvT.dev[1],C.B);
+  device(1300,250,'AirSplicer-Basix',cvT.dev[2],C.air);
+  label(cvT.clampsKnives,800,170,{s:14});leader(720,212,700,184);
+}
+
+/* ---------- Loop ---------- */
+applyLang();
+if(params.get('scene'))go((+params.get('scene')||1)-1);
+if(params.get('paused')==='1'){auto=false;setPlay()}
+const DRAWFN=[scene1,scene2,scene3,scene4,scene5];let last=performance.now();
+function frame(now){const real=Math.min(.05,(now-last)/1000)*(reduce?.5:1),dt=auto?real:0;last=now;t+=dt;sceneT+=dt;fit();
+  try{const s=cv.width/W;ctx.setTransform(s,0,0,s,0,0);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(90,100,96,.06)';ctx.lineWidth=1;for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+    ctx.lineCap='round';ctx.setLineDash([]);DRAWFN[scene]();
+    label(`${scene+1}/${NSC}`,1540,50,{a:'right',s:22});label(T().scenes[scene].k.toUpperCase(),60,50,{a:'left',s:30,c:C.fg,f:DISP,w:600});
+  }catch(e){console.error(e)}
+  requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

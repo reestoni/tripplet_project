@@ -809,6 +809,24 @@ def build_pinned_recent(sidebar: SidebarPanel) -> QPushButton:
     return btn
 
 
+def build_pinned_onboarding(sidebar: SidebarPanel) -> QPushButton:
+    """Fester Eintrag "Onboarding" (2026-11-06) unter Help: animierte Einfuehrungen
+    (ui/screen_onboarding.py), fuer alle, nicht schaltbar - wie die Hilfe."""
+    btn = icon_btn("Onboarding", "onboarding.png", "SidebarItem", trigger_onboarding)
+    btn.setToolTip("Short animated introductions to our work (DTY intermingling, …)")
+    sidebar.add_item(btn)
+    return btn
+
+
+def trigger_onboarding():
+    try:
+        import app_meta
+        if callable(app_meta.open_onboarding):
+            app_meta.open_onboarding()
+    except Exception:
+        pass
+
+
 def build_pinned_help(sidebar: SidebarPanel) -> QPushButton:
     """Fester Eintrag "Help" (2026-10-13; seit 2026-10-16 unten über Account): Hilfe-Suche
     ueber alle Kontext-Hilfen ("wo finde ich…?"), auch per F1."""
@@ -1029,6 +1047,7 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
     # 2026-10-16) - pinned (always visible), not part of a section.
     sidebar.end_section()
     build_pinned_help(sidebar)
+    build_pinned_onboarding(sidebar)
     build_pinned_recent(sidebar)
     sidebar.add_separator()
 

@@ -45,17 +45,20 @@ TEXTS = {
                  "fills in matching fields."),
                 ("h", "Filling in the tabs"),
                 ("task", "Add a yarn as ply (Material)",
-                 ["Select the yarn in the catalogue tree on the left (3).",
+                 ["Select the yarn in the catalogue tree on the left (3) - or type part of its name into the search field above "
+                  "the tree (searches all groups, Enter selects the first hit). Green spool behind a yarn = in stock "
+                  "(click it to see where), crossed-out tube = nothing in stock.",
                   "Set <i>Ends</i> (how many times the yarn is used) and optionally <i>Yarn Use</i>.",
                   f"Click {B('+')}. Pick the spool from the yarn store if you like (optional).",
                   "The ply appears in the table (4) with its number."],
                  f"{B('+ Trial')} uses the output of an existing trial as input instead (e.g. a semi-finished yarn "
                  "from another machine)."),
                 ("task", "Add jets (Jet)",
-                 ["Choose housing and jet, enter the number of plates and the plate numbers, and the air pressure.",
+                 ["Choose housing and jet (the search field above the jet list searches name and development name in all "
+                  "groups), enter the number of plates and the plate numbers, and the air pressure.",
                   f"Click {B('+')}. Repeat for further jets."],
                  "<b>Each plate becomes one trial.</b> Rows can be reordered with Up/Down or by dragging, and "
-                 f"duplicated with {B('Markierte kopieren')}."),
+                 f"duplicated with {B('Copy selected')}."),
                 ("task", "Set the machine settings (Machine)",
                  ["Choose the machine. Its fields appear; fill them in."]),
                 ("task", "Plan lab tests (Lab Machines)",
@@ -128,17 +131,20 @@ TEXTS = {
                  "Request gewählt, füllt TrippleT passende Felder vor."),
                 ("h", "Die Tabs ausfüllen"),
                 ("task", "Ein Garn als Ply hinzufügen (Material)",
-                 ["Das Garn links im Katalogbaum (3) auswählen.",
+                 ["Das Garn links im Katalogbaum (3) auswählen - oder einen Teil des Namens ins Suchfeld über dem Baum tippen "
+                  "(sucht in allen Gruppen, Enter wählt den ersten Treffer). Grüne Spule hinter dem Garn = am Lager "
+                  "(anklicken zeigt, wo), durchgestrichene Hülse = nichts am Lager.",
                   "<i>Ends</i> (wie oft das Garn verwendet wird) und optional <i>Yarn Use</i> einstellen.",
                   f"Auf {B('+')} klicken. Auf Wunsch die Spule aus dem Garnlager wählen (optional).",
                   "Das Ply erscheint mit seiner Nummer in der Tabelle (4)."],
                  f"{B('+ Trial')} verwendet stattdessen das Ergebnis eines bestehenden Versuchs als Input (z.&nbsp;B. ein "
                  "Halbfabrikat von einer anderen Maschine)."),
                 ("task", "Düsen hinzufügen (Jet)",
-                 ["Gehäuse (Housing) und Düse (Jet) wählen, Anzahl Plättchen und die Plättchennummern sowie den Luftdruck eingeben.",
+                 ["Gehäuse (Housing) und Düse (Jet) wählen (das Suchfeld über der Düsenliste sucht Name und Entwicklungsname "
+                  "in allen Gruppen), Anzahl Plättchen und die Plättchennummern sowie den Luftdruck eingeben.",
                   f"Auf {B('+')} klicken. Für weitere Düsen wiederholen."],
                  "<b>Jedes Plättchen ergibt einen Versuch.</b> Zeilen lassen sich mit Up/Down oder per Ziehen umordnen "
-                 f"und mit {B('Markierte kopieren')} duplizieren."),
+                 f"und mit {B('Copy selected')} duplizieren."),
                 ("task", "Die Maschineneinstellungen setzen (Machine)",
                  ["Die Maschine wählen. Ihre Felder erscheinen; ausfüllen."]),
                 ("task", "Labortests planen (Lab Machines)",
@@ -212,17 +218,20 @@ TEXTS = {
                  "solicitud de experimento se rellenan los campos correspondientes."),
                 ("h", "Rellenar las pestañas"),
                 ("task", "Añadir un hilo como ply (Material)",
-                 ["Selecciona el hilo en el árbol del catálogo a la izquierda (3).",
+                 ["Selecciona el hilo en el árbol del catálogo a la izquierda (3) - o escribe parte de su nombre en el campo de "
+                  "búsqueda sobre el árbol (busca en todos los grupos, Enter elige el primer resultado). Bobina verde "
+                  "detrás del hilo = en stock (clic para ver dónde), tubo tachado = nada en stock.",
                   "Ajusta <i>Ends</i> (cuántas veces se usa el hilo) y opcionalmente <i>Yarn Use</i>.",
                   f"Haz clic en {B('+')}. Si quieres, elige la bobina del almacén de hilo (opcional).",
                   "El ply aparece con su número en la tabla (4)."],
                  f"{B('+ Trial')} usa en su lugar el resultado de un ensayo existente como entrada (p.&nbsp;ej. un "
                  "semielaborado de otra máquina)."),
                 ("task", "Añadir toberas (Jet)",
-                 ["Elige carcasa (Housing) y tobera (Jet), introduce el número de plaquitas y sus números, y la presión de aire.",
+                 ["Elige carcasa (Housing) y tobera (Jet) (el campo de búsqueda sobre la lista busca nombre y nombre de "
+                  "desarrollo en todos los grupos), introduce el número de plaquitas y sus números, y la presión de aire.",
                   f"Haz clic en {B('+')}. Repite para más toberas."],
                  "<b>Cada plaquita da un ensayo.</b> Las filas se reordenan con Up/Down o arrastrando, y se duplican "
-                 f"con {B('Markierte kopieren')}."),
+                 f"con {B('Copy selected')}."),
                 ("task", "Definir los ajustes de máquina (Machine)",
                  ["Elige la máquina. Aparecen sus campos; rellénalos."]),
                 ("task", "Planificar ensayos de laboratorio (Lab Machines)",

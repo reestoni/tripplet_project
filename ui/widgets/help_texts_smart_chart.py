@@ -178,6 +178,23 @@ TEXTS = {
                   "Months and years run in order, months without anything show as 0."],
                  "Series without trials and experiments without series are counted too. A trial measured on two "
                  "lab machines counts once for each."),
+                ("task", "Count how many different jets, yarns … were run",
+                 ["Add a <i>Card</i> and choose the aggregation <i>Count (distinct)</i>.",
+                  "Drag the field into Value, e.g. <i>Jet</i>, <i>Yarn</i> or <i>Machine</i> - any field works "
+                  "here, not only numbers.",
+                  "The card counts the different values of the trials that are left after all filters, slicers "
+                  "and clicks. With <i>Columns</i> or <i>Matrix</i> you get the number per category, e.g. "
+                  "different jets per year."],
+                 "Empty values (no jet recorded) do not count."),
+                ("task", "List which jets, yarns … they are - one line each",
+                 ["Add a <i>Table</i> and drag the field into Columns, e.g. <i>Jet</i>.",
+                  "In Build, tick <i>One row per value (e.g. a list of the jets)</i>. The table now shows each jet "
+                  "once, with the number of <i>Trials</i> and <i>Series</i>.",
+                  "Add more fields if you like: a second text field (e.g. <i>Machine</i>) gives one line per "
+                  "combination, a number field (e.g. FP/m) shows its average per line. Click a column heading "
+                  "to sort."],
+                 "Within the same filters, the table has as many lines as a Card with <i>Count (distinct)</i> "
+                 "counts. Trials without a value are left out (a note below the table says how many)."),
                 ("task", "Show how parts add up, e.g. A, B and C knots per trial",
                  ["Add the visual <i>Stacked fields</i> (columns with three colours in Visualizations).",
                   "Drag the number fields into <i>Values</i> - e.g. DTYoMat <i>AKnots</i>, <i>BKnots</i>, "
@@ -267,10 +284,15 @@ TEXTS = {
                   "Delete removes the selected visual.",
                   "In a points chart tick <i>Show notes on values</i>: values with a note get a purple ring, the "
                   "note is in the tooltip."]),
-                ("task", "Filter all visuals by clicking one",
-                 ["Click a bar, a box or a matrix cell. All OTHER visuals of the page show only that value - a blue "
-                  "chip at the top says what was clicked.",
-                  "Click the same place again, or the blue chip, to undo it."]),
+                ("task", "Highlight in all visuals by clicking one",
+                 ["Click a bar, a column, a slice, a box or a matrix cell - a blue chip at the top says what was clicked.",
+                  "Bars, columns, pies, points, mean lines and control charts keep all their trials and grey out the "
+                  "rest (the clicked visual too). Columns show the highlighted part inside each column, bars of averages "
+                  "the average of the highlighted trials on top of the faded bar.",
+                  "Cards, matrix, table, radar, box, violin, histogram and slicers show only the clicked value.",
+                  "Click the same place again, or the blue chip, to undo it.",
+                  "To filter all visuals instead: Format with nothing selected → <i>Clicks</i> → "
+                  "<i>Filters the other visuals</i>."]),
                 ("h", "Keeping and sharing"),
                 ("task", "Save a dashboard to open it again later",
                  [f"Click {B('Save view')}, enter a name, tick <i>Share with everybody</i> if others should see it.",
@@ -471,6 +493,23 @@ TEXTS = {
                   "Monate und Jahre laufen in der richtigen Reihenfolge, Monate ohne Einträge erscheinen als 0."],
                  "Serien ohne Versuche und Experimente ohne Serien zählen mit. Ein Versuch, der auf zwei "
                  "Labormaschinen gemessen wurde, zählt bei beiden."),
+                ("task", "Zählen, wie viele verschiedene Jets, Garne … gefahren wurden",
+                 ["Eine <i>Card</i> hinzufügen und als Aggregation <i>Count (distinct)</i> wählen.",
+                  "Das Feld in Value ziehen, z.&nbsp;B. <i>Jet</i>, <i>Yarn</i> oder <i>Machine</i> - hier geht "
+                  "jedes Feld, nicht nur Zahlen.",
+                  "Die Card zählt die verschiedenen Werte der Versuche, die nach allen Filtern, Slicern und "
+                  "Klicks übrig sind. Mit <i>Columns</i> oder <i>Matrix</i> gibt es die Anzahl pro Kategorie, "
+                  "z.&nbsp;B. verschiedene Jets pro Jahr."],
+                 "Leere Werte (kein Jet erfasst) zählen nicht."),
+                ("task", "Auflisten, welche Jets, Garne … es sind - je eine Zeile",
+                 ["Eine <i>Table</i> hinzufügen und das Feld in Columns ziehen, z.&nbsp;B. <i>Jet</i>.",
+                  "In Build <i>One row per value (e.g. a list of the jets)</i> ankreuzen. Die Tabelle zeigt jetzt "
+                  "jeden Jet einmal, mit der Anzahl <i>Trials</i> und <i>Series</i>.",
+                  "Nach Wunsch weitere Felder dazulegen: ein zweites Textfeld (z.&nbsp;B. <i>Machine</i>) ergibt "
+                  "eine Zeile pro Kombination, ein Zahlenfeld (z.&nbsp;B. FP/m) zeigt seinen Mittelwert pro "
+                  "Zeile. Klick auf eine Spaltenüberschrift sortiert."],
+                 "Bei gleichen Filtern hat die Tabelle so viele Zeilen, wie eine Card mit <i>Count (distinct)</i> "
+                 "zählt. Versuche ohne Wert fehlen (ein Hinweis unter der Tabelle nennt die Anzahl)."),
                 ("task", "Zeigen, wie sich Teile zusammensetzen, z.&nbsp;B. A-, B- und C-Knoten pro Versuch",
                  ["Das Visual <i>Stacked fields</i> hinzufügen (Säulen mit drei Farben in Visualizations).",
                   "Die Zahlenfelder in <i>Values</i> ziehen - z.&nbsp;B. DTYoMat <i>AKnots</i>, <i>BKnots</i>, "
@@ -565,10 +604,15 @@ TEXTS = {
                   "sie wieder her. Entf löscht das ausgewählte Visual.",
                   "In einer Punktwolke <i>Show notes on values</i> ankreuzen: Werte mit Notiz bekommen einen "
                   "violetten Ring, die Notiz steht im Tooltip."]),
-                ("task", "Alle Visuals durch Klick in eines filtern",
-                 ["Auf einen Balken, eine Box oder eine Matrix-Zelle klicken. Alle ANDEREN Visuals der Seite zeigen nur "
-                  "noch diesen Wert - ein blaues Kärtchen oben sagt, was angeklickt wurde.",
-                  "Nochmals auf dieselbe Stelle oder auf das blaue Kärtchen klicken hebt es auf."]),
+                ("task", "Durch Klick in einem Visual alle anderen hervorheben",
+                 ["Auf einen Balken, eine Säule, ein Kuchenstück, eine Box oder eine Matrix-Zelle klicken - ein blaues "
+                  "Kärtchen oben sagt, was angeklickt wurde.",
+                  "Balken, Säulen, Kuchen, Punkte, Mittelwertlinien und Regelkarten behalten alle Versuche und grauen den "
+                  "Rest aus (auch das angeklickte Visual). Säulen zeigen den hervorgehobenen Teil in jeder Säule, Balken "
+                  "mit Mittelwerten den Mittelwert der hervorgehobenen Versuche über dem blassen Balken.",
+                  "Cards, Matrix, Tabelle, Radar, Box, Violin, Histogramm und Slicer zeigen nur noch den angeklickten Wert.",
+                  "Nochmals auf dieselbe Stelle oder auf das blaue Kärtchen klicken hebt es auf.",
+                  "Lieber alle Visuals filtern: Format ohne Auswahl → <i>Clicks</i> → <i>Filters the other visuals</i>."]),
                 ("h", "Behalten und teilen"),
                 ("task", "Ein Dashboard speichern, um es später wieder zu öffnen",
                  [f"Auf {B('Save view')} klicken, einen Namen eingeben, <i>Share with everybody</i> ankreuzen, "
@@ -769,6 +813,23 @@ TEXTS = {
                   "Meses y años van en orden; los meses sin nada aparecen como 0."],
                  "También cuentan las series sin ensayos y los experimentos sin series. Un ensayo medido en dos "
                  "máquinas cuenta en ambas."),
+                ("task", "Contar cuántos jets, hilos … distintos se usaron",
+                 ["Añade una <i>Card</i> y elige la agregación <i>Count (distinct)</i>.",
+                  "Arrastra el campo a Value, p.&nbsp;ej. <i>Jet</i>, <i>Yarn</i> o <i>Machine</i>; aquí sirve "
+                  "cualquier campo, no solo números.",
+                  "La card cuenta los valores distintos de los ensayos que quedan tras todos los filtros, slicers "
+                  "y clics. Con <i>Columns</i> o <i>Matrix</i> obtienes el número por categoría, p.&nbsp;ej. jets "
+                  "distintos por año."],
+                 "Los valores vacíos (sin jet registrado) no cuentan."),
+                ("task", "Listar qué jets, hilos … son - una línea cada uno",
+                 ["Añade una <i>Table</i> y arrastra el campo a Columns, p.&nbsp;ej. <i>Jet</i>.",
+                  "En Build marca <i>One row per value (e.g. a list of the jets)</i>. La tabla muestra cada jet "
+                  "una vez, con el número de <i>Trials</i> y <i>Series</i>.",
+                  "Si quieres, añade más campos: un segundo campo de texto (p.&nbsp;ej. <i>Machine</i>) da una "
+                  "línea por combinación, un campo numérico (p.&nbsp;ej. FP/m) muestra su media por línea. Clic "
+                  "en un encabezado para ordenar."],
+                 "Con los mismos filtros, la tabla tiene tantas líneas como cuenta una Card con <i>Count "
+                 "(distinct)</i>. Los ensayos sin valor no aparecen (una nota debajo de la tabla dice cuántos)."),
                 ("task", "Mostrar cómo se reparten las partes, p.&nbsp;ej. nudos A, B y C por ensayo",
                  ["Añade el visual <i>Stacked fields</i> (columnas de tres colores en Visualizations).",
                   "Arrastra los campos numéricos a <i>Values</i>, p.&nbsp;ej. DTYoMat <i>AKnots</i>, <i>BKnots</i>, "
@@ -862,10 +923,16 @@ TEXTS = {
                   "Supr borra el visual seleccionado.",
                   "En un gráfico de puntos marca <i>Show notes on values</i>: los valores con nota reciben un anillo "
                   "violeta y la nota aparece en la descripción."]),
-                ("task", "Filtrar todos los visuales haciendo clic en uno",
-                 ["Haz clic en una barra, una caja o una celda de la matriz. Todos los DEMÁS visuales muestran solo ese "
-                  "valor; una etiqueta azul arriba indica lo que se pulsó.",
-                  "Otro clic en el mismo sitio o en la etiqueta azul lo deshace."]),
+                ("task", "Resaltar en todos los visuales haciendo clic en uno",
+                 ["Haz clic en una barra, una columna, un sector, una caja o una celda de la matriz; una etiqueta azul "
+                  "arriba indica lo que se pulsó.",
+                  "Barras, columnas, tartas, puntos, líneas de medias y gráficos de control mantienen todos sus ensayos y "
+                  "ponen el resto en gris (también el visual pulsado). Las columnas muestran la parte resaltada dentro de "
+                  "cada columna, las barras de medias la media de los ensayos resaltados sobre la barra pálida.",
+                  "Tarjetas, matriz, tabla, radar, caja, violín, histograma y slicers muestran solo el valor pulsado.",
+                  "Otro clic en el mismo sitio o en la etiqueta azul lo deshace.",
+                  "Para filtrar todos los visuales: Format sin nada seleccionado → <i>Clicks</i> → "
+                  "<i>Filters the other visuals</i>."]),
                 ("h", "Guardar y compartir"),
                 ("task", "Guardar un dashboard para abrirlo más tarde",
                  [f"Haz clic en {B('Save view')}, escribe un nombre y marca <i>Share with everybody</i> si otros "

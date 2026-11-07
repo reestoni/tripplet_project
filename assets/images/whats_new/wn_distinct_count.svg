@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Count different values - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="14" width="104" height="102" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="20" y="30" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="start" font-weight="bold">Aggregation</text>
+  <text x="22" y="50" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">Average</text>
+  <text x="22" y="68" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">Count of trials</text>
+  <rect x="16" y="74" width="96" height="16" rx="2" fill="#E3F1E6" stroke="#39a650" stroke-width="1"/>
+  <text x="22" y="86" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start" font-weight="bold">Count (distinct)</text>
+  <text x="22" y="104" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">Sum</text>
+  <line x1="122" y1="66" x2="141" y2="66" stroke="#565656" stroke-width="1.5"/>
+  <polygon points="148,66 140,62 140,70" fill="#565656"/>
+  <rect x="154" y="22" width="134" height="86" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="221" y="40" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="middle" font-weight="bold">Count of Jet (distinct)</text>
+  <text x="221" y="80" font-family="Segoe UI, Arial, sans-serif" font-size="30" fill="#1F7A3A" text-anchor="middle" font-weight="bold">12</text>
+  <text x="221" y="98" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#565656" text-anchor="middle">different Jet in 340 trials</text>
+</svg>

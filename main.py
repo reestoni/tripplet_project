@@ -612,6 +612,9 @@ class MainWindow(QMainWindow):
         # Dashboards zum Anschauen (ui/screen_dashboards.py, Etappe 6) - erst beim ersten Oeffnen gebaut
         self.dashboards_screen = None
         app_meta.open_dashboards = self._go_dashboards
+        # Onboarding (ui/screen_onboarding.py) - erst beim ersten Oeffnen gebaut
+        self.onboarding_screen = None
+        app_meta.open_onboarding = self._go_onboarding
 
         # Prepare Manage Jets
         preview = self._load_jets_data(limit=1)
@@ -2499,6 +2502,20 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(self.dashboards_screen)
         self.setWindowTitle("TrippleT – Dashboards")
         self.stack.setCurrentWidget(self.dashboards_screen)
+
+    def _go_onboarding(self) -> None:
+        """Onboarding (ui/screen_onboarding.py): animierte Einfuehrungen, Vollbild."""
+        if self.onboarding_screen is None:
+            try:
+                from ui.screen_onboarding import OnboardingScreen
+            except Exception as e:
+                from ui.widgets.friendly_error import show_error
+                show_error(self, "Onboarding", "Onboarding could not be opened.", e)
+                return
+            self.onboarding_screen = OnboardingScreen(sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.onboarding_screen)
+        self.setWindowTitle("TrippleT – Onboarding")
+        self.stack.setCurrentWidget(self.onboarding_screen)
 
     def _edit_dashboard_in_smartchart(self, view_id: int) -> None:
         """Dashboards -> "Edit in Smart Chart"."""

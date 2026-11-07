@@ -320,6 +320,93 @@ for i, hgt in enumerate((20, 30, 14)):
     s.rect(216 + i * 22, 110 - hgt, 14, hgt, "#B7D9BF", GREEN, 1)
 save(s, "wn_dashboard_analytics.svg")
 
+s = new("Click to highlight")
+FADE, DARK, LIGHT = "#C8DCCB", "#1F7A3A", "#8CC63F"
+s.rect(10, 10, 132, 110, "#ffffff", LINE, 4)
+s.text(18, 24, "FP/m by machine", 8, INK, True)
+for i, h in enumerate((44, 70, 36, 56)):
+    s.rect(24 + i * 28, 108 - h, 20, h, DARK if i == 1 else FADE, None, 2)
+s.path("M60 46 L60 60 L64 56 L67 63 L70 62 L67 55 L72 55 Z", INK)
+s.rect(150, 10, 138, 52, "#ffffff", LINE, 4)
+for i, (full, part) in enumerate(((30, 6), (40, 22), (24, 0), (34, 12))):
+    x = 162 + i * 30
+    s.rect(x, 56 - full, 18, full, FADE, None, 1)
+    if part:
+        s.rect(x, 56 - part, 18, part, DARK, None, 1)
+s.rect(150, 68, 138, 52, "#ffffff", LINE, 4)
+for i, (x, y) in enumerate(((168, 104), (180, 92), (196, 100), (206, 84), (222, 90), (236, 78), (248, 96), (262, 82),
+                             (274, 88), (190, 86), (230, 102), (256, 76))):
+    s.circle(x, y, 3, DARK if i in (1, 3, 9) else "#D3D8DD")
+save(s, "wn_click_highlight.svg")
+
+s = new("Count different values")
+s.rect(12, 14, 104, 102, "#ffffff", LINE, 4)
+s.text(20, 30, "Aggregation", 8, MUTED, True)
+for i, (lab, on) in enumerate((("Average", False), ("Count of trials", False), ("Count (distinct)", True),
+                               ("Sum", False))):
+    if on:
+        s.rect(16, 38 + i * 18, 96, 16, "#E3F1E6", GREEN, 2)
+    s.text(22, 50 + i * 18, lab, 8, INK, on)
+s.arrow_right(122, 66, 148)
+s.rect(154, 22, 134, 86, "#ffffff", LINE, 6)
+s.text(221, 40, "Count of Jet (distinct)", 9, INK, True, "middle")
+s.text(221, 80, "12", 30, "#1F7A3A", True, "middle")
+s.text(221, 98, "different Jet in 340 trials", 8, MUTED, False, "middle")
+save(s, "wn_distinct_count.svg")
+
+s = new("One row per value")
+s.rect(12, 12, 276, 106, "#ffffff", LINE, 4)
+s.rect(12, 12, 276, 18, "#F4F6F3", None, 4)
+for x, lab in ((20, "Jet"), (170, "Trials"), (230, "Series")):
+    s.text(x, 25, lab, 9, INK, True)
+for i, (jet, n, ser) in enumerate((("APe142", "50", "5"), ("APe143", "29", "4"), ("S315", "18", "3"),
+                                   ("P212", "12", "2"))):
+    y = 46 + i * 19
+    s.line(16, y - 13, 284, y - 13, LINE, 0.6)
+    s.text(20, y, jet, 9, INK)
+    s.text(170, y, n, 9, INK)
+    s.text(230, y, ser, 9, INK)
+save(s, "wn_value_table.svg")
+
+# ── Create Experiment ───────────────────────────────────────────────────
+s = new("Search material and jets")
+s.rect(12, 10, 276, 22, "#ffffff", GREEN, 4)
+s.text(20, 25, "pa6 44", 10, INK)
+s.line(56, 14, 56, 28, INK, 1)
+s.text(278, 25, "x", 9, MUTED, False, "end")
+s.rect(12, 36, 276, 84, "#ffffff", LINE, 4)
+s.text(20, 52, "v  2 | Non Standard Yarn", 9, GREEN, True)
+for i, (yarn, stock) in enumerate((("PA6 POY 52/44f36", True), ("PA6 FDY 44f34", False),
+                                   ("PA6 HOY 44f12", True))):
+    y = 70 + i * 18
+    if i == 0:
+        s.rect(14, y - 13, 272, 18, "#b7d6ff", None, 0)
+    s.rect(34, y - 9, 10, 10, "#ffffff", MUTED, 1)
+    s.text(50, y, yarn, 9, INK)
+    spool(s, 262, y - 12, stock)
+save(s, "wn_create_search.svg")
+
+# ── Onboarding ──────────────────────────────────────────────────────────
+s = new("Onboarding")
+s.rect(12, 10, 70, 110, "#ffffff", LINE, 4)
+s.text(18, 26, "Topics", 9, INK, True)
+s.rect(14, 32, 66, 16, "#E3F1E6", None, 2)
+s.text(18, 44, "DTY", 9, INK)
+s.rect(88, 10, 200, 110, "#ffffff", LINE, 4)
+s.rect(88, 10, 200, 14, "#ffffff", None, 0)
+for i, (lab, sel) in enumerate((("Machine", True), ("Yarn", False), ("Jet", False))):
+    s.rect(92 + i * 40, 12, 38, 12, "#000000" if sel else "#ffffff", "#cfcfcf", 0)
+    s.text(111 + i * 40, 21, lab, 6, GREEN, False, "middle")
+for i, f in enumerate(("#3d7fd6", "#000000", "#AA151B", "#DE2910")):
+    s.rect(212 + i * 18, 13, 14, 9, f, "#999999", 1)
+s.polyline([(100, 100), (130, 70), (170, 70), (190, 88), (216, 88), (240, 88), (262, 104)], "#6E6556", 1.5)
+s.circle(190, 88, 6, "#93a3a2")
+s.rect(210, 81, 14, 14, "#2386C8", None, 2)
+s.circle(250, 88, 6, "#93a3a2")
+s.line(184, 112, 252, 112, "#2386C8", 2)
+s.text(218, 109, "OF", 8, "#2386C8", True, "middle")
+save(s, "wn_onboarding.svg")
+
 s = new("Who may use which tool")
 s.rect(12, 10, 276, 110, "#ffffff", LINE, 4)
 cols = ("read", "write", "Anna", "Ben")

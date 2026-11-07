@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lufan Suction Gun</title>
+<!-- Onboarding-Modul (ui/screen_onboarding.py), gleiches Muster wie dty_intermingling.html.
+     Texte in lufan_suction_gun_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (ohne eigenen Kopf/Szenen-Knoepfe, meldet die Szene per document.title "scene:n"),
+     ?scene=n&paused=1 fuer Screenshots. Keine externen Ressourcen. Szenen wechseln nie automatisch.
+     Szene 1: Schritte Auffangen/Fuehren/Uebergeben unten anklickbar (springt dorthin). -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --yarn:#6E6556;--yarn-rgb:110,101,86;--air:#2386C8;--air-rgb:35,134,200;--heat:#E07B39;--hl:#39A650;
+  --melt:#E08A2E;--poy:#C08A1E;--fdy:#2E9C7A;--fdy-rgb:46,156,122;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.langs{display:flex;gap:4px;flex-shrink:0}
+.langs[hidden]{display:none}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+canvas{display:block;width:100%;aspect-ratio:16/9}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.scenes{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.scenes button span{font-family:var(--font-mono);font-size:12px;opacity:.7}
+.right{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.slider{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.slider[hidden]{display:none}
+.slider input{accent-color:var(--hl);width:160px}
+.slider output{min-width:6.5em;color:var(--fg)}
+.play{min-width:120px;justify-content:center}
+.caption{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;border-top:1px solid var(--line);padding-top:16px}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 8px}
+.caption p{margin:0 0 10px;max-width:70ch}
+.now{font-family:var(--font-mono);font-size:13px;color:var(--hl);min-height:1.5em}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.facts li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.facts b{font-family:var(--font-mono);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+.note{font-size:12px;color:var(--muted);margin:0}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.caption{grid-template-columns:1fr;gap:14px}.facts li{grid-template-columns:96px minmax(0,1fr)}header{flex-direction:column}}
+</style>
+<script src="lufan_suction_gun_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="stage"><canvas id="cv" width="1600" height="900"></canvas></div>
+  <div class="controls">
+    <div class="scenes" id="scenes" role="group"></div>
+    <div class="right">
+      <label class="slider" id="pwrap"><span id="plab"></span>
+        <input id="pr" type="range" min="4" max="14" step="0.5" value="6"><output id="pout"></output></label>
+      <button class="play" id="play" type="button"></button>
+    </div>
+  </div>
+  <section class="caption" aria-live="polite">
+    <div><h2 id="ctitle"></h2><p class="now" id="cnow"></p><p id="ctext"></p></div>
+    <ul class="facts" id="cfacts"></ul>
+  </section>
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');const W=1600,H=900;
+if(!CanvasRenderingContext2D.prototype.roundRect){CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(r||0,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this}}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C={bg:css('--panel'),line:css('--line'),fg:css('--fg'),muted:css('--muted'),yarn:css('--yarn'),air:css('--air'),heat:css('--heat'),hl:css('--hl'),
+  melt:css('--melt'),poy:css('--poy'),fdy:css('--fdy')};
+const YRGB=css('--yarn-rgb'),ARGB=css('--air-rgb'),FRGB=css('--fdy-rgb');
+const MONO=css('--font-mono'),DISP=css('--font-display'),SANS=css('--font-body');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const params=new URLSearchParams(location.search);
+let lang=(params.get('lang')||'de');if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+let fitW=0;function fit(){const w=cv.getBoundingClientRect().width||W;if(w===fitW&&cv.width>0)return;fitW=w;const d=Math.min(devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(w*d));cv.height=Math.max(1,Math.round(w*9/16*d))}
+addEventListener('resize',fit);if(window.ResizeObserver)new ResizeObserver(fit).observe(cv);fit();
+const smooth=(a,b,x)=>{const q=Math.max(0,Math.min(1,(x-a)/(b-a)));return q*q*(3-2*q)},lerp=(a,b,q)=>a+(b-a)*q;
+const hx=c=>[1,3,5].map(i=>parseInt(c.slice(i,i+2),16));
+const mix=(c1,c2,q)=>{const a=hx(c1),b=hx(c2);return`rgb(${a.map((v,i)=>Math.round(lerp(v,b[i],q))).join(',')})`};
+const hsh=(a,b,c)=>{const v=Math.sin(a*127.1+b*311.7+c*74.7)*43758.5453;return v-Math.floor(v)};
+
+const NSC=3;
+C.steel='#8f9a9d';C.lc=C.fdy;C.red='#D6453D';
+let rs=5;const rnd=()=>{rs=(rs*16807)%2147483647;return rs/2147483647};
+
+/* ---------- UI ---------- */
+const sceneEl=$('scenes'),play=$('play'),pin=$('pr');
+/* auto = Bewegung laeuft (Pause friert sie ein, auch den Ablauf in Szene 1). Szenen wechseln nie von selbst. */
+let scene=0,sceneT=0,auto=!reduce,t=0,P=6,hoverStep=-1;
+function setPlay(){play.setAttribute('aria-pressed',auto);play.textContent=auto?T().ui.pause:T().ui.play}
+play.onclick=()=>{auto=!auto;setPlay()};
+const dec=s=>String(s).replace('.',T().ui.dec);
+pin.oninput=()=>{P=+pin.value;$('pout').textContent=dec(P)+' bar'};
+function go(i){const n=(i+NSC)%NSC;scene=n;sceneT=0;hoverStep=-1;if(EMBED)document.title='scene:'+scene;
+  [...sceneEl.children].forEach((b,j)=>b.setAttribute('aria-pressed',j===scene));
+  const s=T().scenes[scene];$('ctitle').textContent=`${scene+1}  ·  ${s.title}`;$('ctext').textContent=s.text;
+  $('cfacts').innerHTML='';s.facts.forEach(f=>{const li=document.createElement('li');const b=document.createElement('b');b.textContent=f[0];const sp=document.createElement('span');sp.textContent=f[1];li.append(b,sp);$('cfacts').appendChild(li)});
+  $('cnow').textContent='';$('pwrap').hidden=scene!==2}
+function applyLang(){const u=T().ui;document.documentElement.lang=lang;
+  ['eyebrow','h1','lead','note'].forEach(k=>$(k).textContent=u[k]);$('plab').textContent=u.pressure;
+  sceneEl.setAttribute('aria-label',u.scenes);sceneEl.innerHTML='';
+  T().scenes.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<span>${i+1}</span>`;b.append(s.k);b.onclick=()=>go(i);sceneEl.appendChild(b)});
+  [...$('langs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  pin.oninput();setPlay();const keep=sceneT;go(scene);sceneT=keep}
+/* Szene 1: Schritte Auffangen / Fuehren / Uebergeben anklicken = dorthin springen */
+const STEP_X=i=>500+i*300,STEP_START=[0,2.5,9.5];
+function hitStep(ev){const r=cv.getBoundingClientRect(),x=(ev.clientX-r.left)*W/r.width,y=(ev.clientY-r.top)*H/r.height;
+  for(let i=0;i<3;i++)if(Math.abs(x-STEP_X(i))<80&&y>815&&y<890)return i;return -1}
+cv.addEventListener('mousemove',ev=>{if(scene!==0){cv.style.cursor='';hoverStep=-1;return}hoverStep=hitStep(ev);cv.style.cursor=hoverStep>=0?'pointer':''});
+cv.addEventListener('mouseleave',()=>{hoverStep=-1;cv.style.cursor=''});
+cv.addEventListener('click',ev=>{if(scene!==0)return;const i=hitStep(ev);if(i>=0)sceneT=STEP_START[i]+.01});
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')go(scene+1);if(e.key==='ArrowLeft')go(scene-1);if(e.key===' '){e.preventDefault();auto=!auto;setPlay()}});
+
+/* ---------- Helfer ---------- */
+function label(s,x,y,o={}){ctx.font=`${o.w||500} ${o.s||20}px ${o.f||MONO}`;ctx.fillStyle=o.c||C.muted;ctx.textAlign=o.a||'center';ctx.textBaseline='middle';ctx.globalAlpha=o.al??1;ctx.fillText(s,x,y);ctx.globalAlpha=1}
+function godet(x,y,r,spd){ctx.lineWidth=3;ctx.strokeStyle=C.muted;ctx.fillStyle=C.bg;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.stroke();for(let k=0;k<3;k++){const a=t*spd+k*2.094;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(a)*r*.8,y+Math.sin(a)*r*.8);ctx.stroke()}}
+/* Pistole: Muendung bei (x,y), Ausrichtung ang (Richtung der Muendung) */
+function gun(x,y,ang,s=1){ctx.save();ctx.translate(x,y);ctx.rotate(ang);ctx.scale(s,s);
+  ctx.fillStyle='#B9C2C1';ctx.strokeStyle='#7b878a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-12);ctx.lineTo(-150,-16);ctx.lineTo(-150,16);ctx.lineTo(0,12);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#8f9a9d';ctx.beginPath();ctx.moveTo(-60,14);ctx.lineTo(-40,14);ctx.lineTo(-30,80);ctx.lineTo(-56,80);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.heat;ctx.fillRect(-36,22,8,22);ctx.fillStyle='#3a3f3f';ctx.beginPath();ctx.ellipse(0,0,4,10,0,0,7);ctx.fill();
+  ctx.restore()}
+function hose(x,y,ang,tx,ty,sc=.6){const bx=x-Math.cos(ang)*150*sc,by=y-Math.sin(ang)*150*sc;ctx.strokeStyle='#9AA3A0';ctx.lineWidth=12;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(bx,by);ctx.bezierCurveTo(bx-Math.cos(ang)*60,by-Math.sin(ang)*60+60,tx,ty-120,tx,ty);ctx.stroke();ctx.lineCap='butt'}
+function bin(x,y){ctx.fillStyle='#EEF1ED';ctx.strokeStyle=C.muted;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-50,y);ctx.lineTo(x+50,y);ctx.lineTo(x+40,y+90);ctx.lineTo(x-40,y+90);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.strokeStyle=C.yarn;ctx.globalAlpha=.55;ctx.lineWidth=1.2;for(let k=0;k<12;k++){ctx.beginPath();ctx.arc(x-20+(k*13)%40,y+50+(k*7)%30,6+k%4,0,6);ctx.stroke()}ctx.globalAlpha=1;label(T().cv.waste,x,y+112,{s:15})}
+
+/* ---------- Szene 1: Einsatz ---------- */
+const PTS=[[300,140],[300,560],[560,520],[760,430],[920,520],[1180,680]];
+function scene1(){const cvT=T().cv;
+  const TT=sceneT%16;
+  ctx.fillStyle='#F8E3D2';ctx.fillRect(250,90,100,30);ctx.fillStyle=`rgba(${ARGB},.07)`;ctx.fillRect(240,120,120,300);label(cvT.shaft,380,150,{a:'left',s:15});
+  godet(560,520,34,6);godet(760,430,34,7);label(cvT.godets,660,370,{s:15});
+  ctx.fillStyle='#DCE8F0';ctx.strokeStyle=C.air;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(900,505,40,30,5);ctx.fill();ctx.stroke();label(cvT.inter,920,480,{s:14,c:C.air});
+  ctx.fillStyle='#EEF1ED';ctx.strokeStyle=C.muted;ctx.beginPath();ctx.roundRect(1080,700,220,80,8);ctx.fill();ctx.stroke();label(cvT.winding,1190,796,{s:15});
+  const spool=TT>9.5;ctx.fillStyle=C.yarn;ctx.globalAlpha=spool?.9:.25;const g=spool?10+((TT-9.5)*4)%14:0;ctx.beginPath();ctx.roundRect(1160,680-g-20,60,g+20,6);ctx.fill();ctx.globalAlpha=1;
+  bin(140,640);
+  const k=smooth(2.5,9,TT);const segs=PTS.length-1,pos=k*segs,i=Math.min(segs-1,Math.floor(pos)),f=pos-i;
+  let gx=lerp(PTS[i][0],PTS[i+1][0],f),gy=lerp(PTS[i][1],PTS[i+1][1],f)+(k===0?60:0);
+  if(TT<2.5){gx=300;gy=620}
+  const handed=TT>9.5;
+  const path=[[300,120]];for(let j=1;j<=i;j++)path.push(PTS[j]);if(!handed)path.push([gx,gy]);else path.push([1190,670]);
+  if(TT<2.5){path.length=1;path.push([300,620])}
+  ctx.strokeStyle=C.yarn;ctx.lineWidth=2;ctx.beginPath();path.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.75)';ctx.setLineDash([10,14]);ctx.lineDashOffset=-t*300;ctx.stroke();ctx.setLineDash([]);
+  if(!handed){const prev=path[path.length-2]||[300,120],ang=Math.atan2(prev[1]-gy,prev[0]-gx);hose(gx,gy,ang,140,640);gun(gx,gy,ang,.6)}
+  else{const a=smooth(9.5,10.5,TT);ctx.globalAlpha=1-a;const ang=Math.atan2(520-690,920-1190);hose(1190,690,ang,140,640);gun(1190,690,ang,.6);ctx.globalAlpha=1;label(cvT.cutTake,1190,630,{s:15,c:C.air,al:1-smooth(12,13,TT)})}
+  const ph=TT<2.5?0:TT<9.5?1:2;
+  $('cnow').textContent='▸ '+cvT.msgs[ph];
+  // Schritte (anklickbar)
+  cvT.steps.forEach((s,j)=>{const x=STEP_X(j),on=j===ph,hv=j===hoverStep&&!on;ctx.fillStyle=on?C.hl:hv?'#BFE3C6':C.line;ctx.beginPath();ctx.arc(x,836,16,0,7);ctx.fill();
+    label(String(j+1),x,837,{s:15,c:on?'#fff':C.muted,w:600});label(s,x,870,{s:17,c:on||hv?C.hl:C.muted,w:on?700:500,f:SANS});if(j<2){ctx.strokeStyle=C.line;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x+22,836);ctx.lineTo(x+278,836);ctx.stroke()}});
+  label(cvT.msgs[ph],800,100,{s:20,f:SANS,w:600,c:C.hl});
+}
+/* ---------- Szene 2: Prinzip ---------- */
+const AP=[];for(let i=0;i<220;i++)AP.push({k:i%3,u:rnd(),r:rnd()});
+function scene2(){const cvT=T().cv;
+  const cy=360,x0=280,x1=1180,xs=620;
+  ctx.fillStyle='#B9C2C1';ctx.strokeStyle='#7b878a';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(x0,cy-90,x1-x0,180,16);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#8f9a9d';ctx.beginPath();ctx.moveTo(560,cy+90);ctx.lineTo(640,cy+90);ctx.lineTo(670,cy+300);ctx.lineTo(590,cy+300);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.heat;ctx.fillRect(650,cy+120,14,60);label(cvT.trigger,690,cy+150,{a:'left',s:15,c:C.heat});
+  const bore=x=>x<xs?26:lerp(26,34,smooth(xs,x1,x));
+  ctx.fillStyle=C.bg;ctx.beginPath();ctx.moveTo(x0-2,cy-40);ctx.lineTo(xs-80,cy-26);for(let x=xs-80;x<=x1+2;x+=6)ctx.lineTo(x,cy-bore(x));for(let x=x1+2;x>=xs-80;x-=6)ctx.lineTo(x,cy+bore(x));ctx.lineTo(x0-2,cy+40);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#DCE8F0';ctx.fillRect(xs-110,cy-70,90,24);ctx.fillRect(xs-110,cy+46,90,24);
+  ctx.strokeStyle=C.air;ctx.lineWidth=2;[-1,1].forEach(d=>{ctx.beginPath();ctx.moveTo(xs-20,cy+d*58);ctx.lineTo(xs+10,cy+d*28);ctx.stroke()});
+  ctx.fillStyle='#DCE8F0';ctx.fillRect(xs-80,cy+70,24,200);ctx.strokeStyle=C.air;ctx.strokeRect(xs-80,cy+70,24,200);
+  label(cvT.air,xs-90,cy+300,{a:'right',s:16,c:C.air,w:600});
+  AP.forEach(p=>{if(auto)p.u+=(p.k===0?.012:p.k===1?.006:.004)*(reduce?.3:1);if(p.u>1){p.u=0;p.r=rnd()}let x,y,col,rad=2.6;
+    if(p.k===0){if(p.u<.35){x=xs-68;y=lerp(cy+270,cy+60,p.u/.35)}else if(p.u<.45){x=lerp(xs-68,xs+10,(p.u-.35)/.1);y=cy+(p.r>.5?1:-1)*lerp(60,28,(p.u-.35)/.1)}else{x=lerp(xs+10,x1+120,(p.u-.45)/.55);y=cy+(p.r>.5?1:-1)*lerp(26,6+p.r*20,(p.u-.45)/.55)}col=`rgba(${ARGB},.85)`}
+    else{x=lerp(x0-140,x1+120,p.u);y=cy+(p.r-.5)*lerp(120,40,smooth(x0-140,x0+20,x));col='rgba(90,100,96,.35)';rad=2}
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,rad,0,7);ctx.fill()});
+  ctx.strokeStyle=C.yarn;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(60,cy-120);ctx.quadraticCurveTo(200,cy-10,x0,cy);ctx.lineTo(x1+180,cy+2*Math.sin(t*20));ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.75)';ctx.setLineDash([10,12]);ctx.lineDashOffset=-t*260;ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle='#9AA3A0';ctx.lineWidth=40;ctx.beginPath();ctx.moveTo(x1,cy);ctx.lineTo(x1+130,cy);ctx.stroke();label(cvT.hoseL,x1+20,cy-50,{a:'left',s:15});
+  label(cvT.inlet,x0,cy-120,{s:16,c:C.fg});label(cvT.suction,x0+20,cy+130,{s:15,c:C.fg,f:SANS});
+  label(cvT.gap,xs-10,cy-110,{s:15,c:C.air});label(cvT.jet,900,cy-110,{s:15,c:C.air,f:SANS});
+  const gx0=x0,gx1=x1,gy=760;ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(gx0,gy);ctx.lineTo(gx1,gy);ctx.stroke();label(cvT.ambient,gx0-12,gy,{a:'right',s:13});
+  ctx.strokeStyle=C.air;ctx.lineWidth=3;ctx.beginPath();for(let x=gx0;x<=gx1;x+=4){const y=gy+40*smooth(gx0,xs,x)*(1-smooth(xs+80,gx1,x));x===gx0?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.stroke();
+  label(cvT.vacuum,xs,gy+60,{s:14,c:C.air});
+}
+/* ---------- Szene 3: Varianten ---------- */
+const M=[['Lufan-3 HS7-3',58,5,14,0],['Lufan-3 HS7-3TP',67,5,14,0],['Lufan-3 LC7-3',38,5,10,1],['Lufan-3 TF15-3',28,5,10,0],['Lufan-3 Nano TF5-3',9.5,0,6,2],['Lufan-3 Nano TF6-3',20,0,10,2]];
+function scene3(){const cvT=T().cv;
+  label(fmt(cvT.consTitle,{p:dec(P)}),80,110,{a:'left',s:22,c:C.fg,f:SANS,w:600});
+  const max=67*15,x0=420,w=760,COL=[C.fg,C.lc,C.air];
+  M.forEach(([n,k,lo,hi,ci],i)=>{const y=180+i*96,v=k*(P+1),ok=P>=lo&&P<=hi,col=COL[ci];
+    label(n,80,y,{a:'left',s:22,f:DISP,w:700,c:ok?col:C.muted});label(cvT.models[i],80,y+28,{a:'left',s:14,f:SANS});
+    ctx.fillStyle=C.line;ctx.fillRect(x0,y-14,w,26);ctx.fillStyle=ok?col:'rgba(149,163,161,.35)';ctx.globalAlpha=ok?.85:1;ctx.fillRect(x0,y-14,w*v/max,26);ctx.globalAlpha=1;
+    label(ok?`${Math.round(v)} m³/h`:cvT.outside,x0+w*v/max+12,y,{a:'left',s:16,c:ok?C.fg:C.muted,f:ok?MONO:SANS});
+    label(lo?fmt(cvT.range,{lo,hi}):fmt(cvT.upTo,{hi}),x0+w+190,y,{a:'left',s:14})});
+  label(cvT.formula,80,790,{a:'left',s:15,f:SANS});
+  label(cvT.stationary,80,826,{a:'left',s:15,f:SANS,c:C.fg});
+}
+
+/* ---------- Loop ---------- */
+applyLang();
+if(params.get('scene'))go((+params.get('scene')||1)-1);
+if(params.get('paused')==='1'){auto=false;setPlay()}
+const DRAWFN=[scene1,scene2,scene3];let last=performance.now();
+function frame(now){const real=Math.min(.05,(now-last)/1000)*(reduce?.5:1),dt=auto?real:0;last=now;t+=dt;sceneT+=dt;fit();
+  try{const s=cv.width/W;ctx.setTransform(s,0,0,s,0,0);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(90,100,96,.06)';ctx.lineWidth=1;for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+    ctx.setLineDash([]);DRAWFN[scene]();
+    label(`${scene+1}/${NSC}`,1540,50,{a:'right',s:22});label(T().scenes[scene].k.toUpperCase(),60,50,{a:'left',s:30,c:C.fg,f:DISP,w:600});
+  }catch(e){console.error(e)}
+  requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
