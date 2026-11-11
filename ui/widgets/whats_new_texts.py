@@ -81,6 +81,16 @@ RELEASES = [
                  "A superuser can bring deleted trials back from the <b>Recycle Bin</b> for 90 days. Allowed for whoever may "
                  "move the series in the Backlog.",
                  "Show Experiment → Machine Data → right-click a trial number → <b>Delete…</b>", "wn_trial_delete.svg"),
+                ("feature", "Which trials beat the reference?",
+                 "Click <b>vs Ref</b> above Machine Data (or right-click the Ref column → <b>Compare trials with this "
+                 "reference…</b>). One table shows every trial against the reference sample, with the values of all lab "
+                 "tabs side by side. Click a column header and say what <b>better</b> means there: <b>higher</b>, "
+                 "<b>lower</b> or <b>close to Ref</b>, with a tolerance if you like - e.g. intermingling points higher, "
+                 "CV lower, stability lower. Green = meets it, red = not. The column <b>Result</b> counts the criteria "
+                 "per trial, the best trials are on top, and <b>Only trials better in all</b> leaves just the winners. "
+                 "Save your criteria under a name (e.g. customer and article) - they are there for everyone and in every "
+                 "series. Double-click a trial to jump to it in Machine Data.",
+                 "Show Experiment → Machine Data → <b>vs Ref</b>", "wn_ref_compare.svg"),
                 ("feature", "Learn more without leaving your series",
                  "Not sure what a row means? <b>Right-click</b> a row title or a value in Machine Data or R&D Machine "
                  "Data (DTY machines), or in a lab tab (Statimat, EKB, shrinkage, Itemat, DTYoMat, ATYoMat, Rapid 600), "
@@ -255,6 +265,17 @@ RELEASES = [
                  "höchsten verbliebenen Nummer - nie in eine Lücke. Ein Superuser kann gelöschte Versuche 90 Tage "
                  "lang aus dem <b>Recycle Bin</b> zurückholen. Erlaubt für alle, die die Serie im Backlog verschieben dürfen.",
                  "Show Experiment → Machine Data → Rechtsklick auf eine Versuchsnummer → <b>Delete…</b>", "wn_trial_delete.svg"),
+                ("feature", "Welche Versuche schlagen die Referenz?",
+                 "Klick auf <b>vs Ref</b> über Machine Data (oder Rechtsklick auf die Ref-Spalte → <b>Compare trials "
+                 "with this reference…</b>). Eine Tabelle zeigt alle Versuche gegen das Referenzmuster, mit den Werten "
+                 "aller Labor-Reiter nebeneinander. Klick auf einen Spaltenkopf und lege fest, was dort <b>besser</b> "
+                 "heisst: <b>höher</b>, <b>tiefer</b> oder <b>nah an Ref</b>, auf Wunsch mit Toleranz - z.&nbsp;B. "
+                 "Knotenzahl höher, CV tiefer, Stabilität tiefer. Grün = erfüllt, rot = nicht. Die Spalte <b>Result</b> "
+                 "zählt die erfüllten Kriterien pro Versuch, die besten stehen oben, und <b>Only trials better in all</b> "
+                 "lässt nur die Gewinner stehen. Kriterien speicherst du unter einem Namen (z.&nbsp;B. Kunde und "
+                 "Artikel) - sie stehen allen und in jeder Serie zur Verfügung. Doppelklick auf einen Versuch springt "
+                 "zu ihm in Machine Data.",
+                 "Show Experiment → Machine Data → <b>vs Ref</b>", "wn_ref_compare.svg"),
                 ("feature", "Nachschlagen, ohne die Serie zu verlassen",
                  "Unsicher, was eine Zeile bedeutet? <b>Rechtsklick</b> auf einen Zeilentitel oder einen Wert in Machine Data "
                  "oder R&D Machine Data (DTY-Maschinen) oder in einem Labor-Reiter (Statimat, EKB, Schrumpf, Itemat, "
@@ -439,6 +460,17 @@ RELEASES = [
                  "número más alto que queda - nunca en un hueco. Un superusuario puede recuperar ensayos borrados desde la <b>Recycle Bin</b> "
                  "durante 90 días. Permitido a quien puede mover la serie en el Backlog.",
                  "Show Experiment → Machine Data → clic derecho en un número de ensayo → <b>Delete…</b>", "wn_trial_delete.svg"),
+                ("feature", "¿Qué ensayos superan la referencia?",
+                 "Haz clic en <b>vs Ref</b> encima de Machine Data (o clic derecho en la columna Ref → <b>Compare trials "
+                 "with this reference…</b>). Una tabla muestra todos los ensayos frente a la muestra de referencia, con "
+                 "los valores de todas las pestañas de laboratorio uno al lado del otro. Haz clic en el encabezado de una "
+                 "columna y decide qué significa <b>mejor</b> allí: <b>mayor</b>, <b>menor</b> o <b>cerca de Ref</b>, "
+                 "con tolerancia si quieres - p.&nbsp;ej. puntos de entrelazado mayor, CV menor, estabilidad menor. "
+                 "Verde = cumple, rojo = no. La columna <b>Result</b> cuenta los criterios cumplidos por ensayo, los "
+                 "mejores aparecen arriba y <b>Only trials better in all</b> deja solo a los ganadores. Guarda tus "
+                 "criterios con un nombre (p.&nbsp;ej. cliente y artículo) - están disponibles para todos y en cada "
+                 "serie. Doble clic en un ensayo lo muestra en Machine Data.",
+                 "Show Experiment → Machine Data → <b>vs Ref</b>", "wn_ref_compare.svg"),
                 ("feature", "Consulta sin salir de tu serie",
                  "¿No sabes qué significa una fila? Haz <b>clic derecho</b> en el título de una fila o en un valor de Machine Data "
                  "o R&D Machine Data (máquinas DTY), o en una pestaña de laboratorio (Statimat, EKB, encogimiento, Itemat, "

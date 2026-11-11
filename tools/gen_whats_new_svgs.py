@@ -893,6 +893,42 @@ s.text(48 + 5 * 34 + 4, 100, "next: V26", 8, GREEN, True)
 s.text(12, 121, "Numbers stay - nothing moves up, no gaps filled · Recycle Bin", 8, MUTED)
 save(s, "wn_trial_delete.svg")
 
+# ── Show Experiment: compare with the reference sample ──────────────────
+s = new("Compare with Ref")
+PASS_BG, FAIL_BG, REF_BG = "#C8E6C9", "#FFCDD2", "#FFF4D6"
+heads = (("Result", ""), ("FP/m", "higher"), ("FP CV", "lower"), ("Stab.", "lower"))
+xs = (46, 104, 162, 220)
+s.rect(12, 10, 276, 26, "#4a4a4a", None, 2)
+s.text(18, 27, "Trial", 8, "#ffffff", True)
+for x, (h, d) in zip(xs, heads):
+    s.text(x + 27, 21, h, 8, "#ffffff", True, "middle")
+    if d:
+        s.text(x + 27, 31, d, 7, "#FFE082", False, "middle")
+rows = (("Ref", "Golden Lady", ("46", "103", "71.9"), None),
+        ("V3", "3 / 3", ("101", "58", "49"), "ppp"),
+        ("V13", "3 / 3", ("109", "60", "59"), "ppp"),
+        ("V1", "2 / 3", ("137", "22", "95"), "ppf"))
+for r, (t, res, vals, st) in enumerate(rows):
+    y = 36 + r * 18
+    s.rect(12, y, 276, 18, REF_BG if st is None else "#ffffff", "#e0e0e0", 0)
+    s.text(18, y + 13, t, 8, INK, True)
+    if st == "ppp":
+        s.rect(xs[0] + 2, y + 2, 54, 14, GREEN, None, 2)
+        s.text(xs[0] + 29, y + 13, res, 8, "#ffffff", True, "middle")
+    else:
+        s.text(xs[0] + 29, y + 13, res, 7 if st is None else 8, INK, st is None, "middle")
+    for c, v in enumerate(vals):
+        x = xs[c + 1]
+        if st:
+            s.rect(x + 2, y + 2, 54, 14, PASS_BG if st[c] == "p" else FAIL_BG, None, 2)
+        s.text(x + 29, y + 13, v, 8, INK, anchor="middle")
+s.rect(12, 112, 10, 10, "#ffffff", MUTED, 2)
+s.line(14, 117, 16.5, 120, GREEN, 1.6)
+s.line(16.5, 120, 21, 114, GREEN, 1.6)
+s.text(28, 121, "Only trials better in all", 8, INK)
+s.text(288, 121, "8 of 22 better in all", 8, GREEN, True, "end")
+save(s, "wn_ref_compare.svg")
+
 # ── Tools: Yarn Count Converter ─────────────────────────────────────────
 s = new("Yarn Count Converter")
 s.rect(12, 14, 132, 102, "#ffffff", LINE, 6)

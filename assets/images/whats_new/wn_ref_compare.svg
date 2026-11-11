@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Compare with Ref - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="10" width="276" height="26" rx="2" fill="#4a4a4a"/>
+  <text x="18" y="27" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="start" font-weight="bold">Trial</text>
+  <text x="73" y="21" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="middle" font-weight="bold">Result</text>
+  <text x="131" y="21" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="middle" font-weight="bold">FP/m</text>
+  <text x="131" y="31" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#FFE082" text-anchor="middle">higher</text>
+  <text x="189" y="21" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="middle" font-weight="bold">FP CV</text>
+  <text x="189" y="31" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#FFE082" text-anchor="middle">lower</text>
+  <text x="247" y="21" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="middle" font-weight="bold">Stab.</text>
+  <text x="247" y="31" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#FFE082" text-anchor="middle">lower</text>
+  <rect x="12" y="36" width="276" height="18" rx="0" fill="#FFF4D6" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="18" y="49" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start" font-weight="bold">Ref</text>
+  <text x="75" y="49" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="middle" font-weight="bold">Golden Lady</text>
+  <text x="133" y="49" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">46</text>
+  <text x="191" y="49" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">103</text>
+  <text x="249" y="49" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">71.9</text>
+  <rect x="12" y="54" width="276" height="18" rx="0" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="18" y="67" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start" font-weight="bold">V3</text>
+  <rect x="48" y="56" width="54" height="14" rx="2" fill="#39a650"/>
+  <text x="75" y="67" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="middle" font-weight="bold">3 / 3</text>
+  <rect x="106" y="56" width="54" height="14" rx="2" fill="#C8E6C9"/>
+  <text x="133" y="67" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">101</text>
+  <rect x="164" y="56" width="54" height="14" rx="2" fill="#C8E6C9"/>
+  <text x="191" y="67" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">58</text>
+  <rect x="222" y="56" width="54" height="14" rx="2" fill="#C8E6C9"/>
+  <text x="249" y="67" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">49</text>
+  <rect x="12" y="72" width="276" height="18" rx="0" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="18" y="85" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start" font-weight="bold">V13</text>
+  <rect x="48" y="74" width="54" height="14" rx="2" fill="#39a650"/>
+  <text x="75" y="85" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#ffffff" text-anchor="middle" font-weight="bold">3 / 3</text>
+  <rect x="106" y="74" width="54" height="14" rx="2" fill="#C8E6C9"/>
+  <text x="133" y="85" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">109</text>
+  <rect x="164" y="74" width="54" height="14" rx="2" fill="#C8E6C9"/>
+  <text x="191" y="85" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">60</text>
+  <rect x="222" y="74" width="54" height="14" rx="2" fill="#C8E6C9"/>
+  <text x="249" y="85" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">59</text>
+  <rect x="12" y="90" width="276" height="18" rx="0" fill="#ffffff" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="18" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start" font-weight="bold">V1</text>
+  <text x="75" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">2 / 3</text>
+  <rect x="106" y="92" width="54" height="14" rx="2" fill="#C8E6C9"/>
+  <text x="133" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">137</text>
+  <rect x="164" y="92" width="54" height="14" rx="2" fill="#C8E6C9"/>
+  <text x="191" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">22</text>
+  <rect x="222" y="92" width="54" height="14" rx="2" fill="#FFCDD2"/>
+  <text x="249" y="103" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">95</text>
+  <rect x="12" y="112" width="10" height="10" rx="2" fill="#ffffff" stroke="#565656" stroke-width="1"/>
+  <line x1="14" y1="117" x2="16.5" y2="120" stroke="#39a650" stroke-width="1.6"/>
+  <line x1="16.5" y1="120" x2="21" y2="114" stroke="#39a650" stroke-width="1.6"/>
+  <text x="28" y="121" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">Only trials better in all</text>
+  <text x="288" y="121" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#39a650" text-anchor="end" font-weight="bold">8 of 22 better in all</text>
+</svg>

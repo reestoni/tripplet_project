@@ -1480,6 +1480,8 @@ class PivotEditModel(QAbstractTableModel):
         self._validators = new_validators + self._validators
         # Shift existing readonly row indices up
         self._readonly = {r + n_new for r in self._readonly} | set(range(n_new))
+        # info rows (jet, air pressure ...) - not measurements (ui/ref_compare_dialog.py)
+        self._n_info_rows = int(getattr(self, "_n_info_rows", 0) or 0) + n_new
         # Shift dirty indices
         self._dirty = [(r + n_new, c, v) for r, c, v in self._dirty]
         if getattr(self, "_undo_mgr", None) is not None:
@@ -3934,6 +3936,20 @@ class ShowExperimentScreen(QWidget):
         self.btn_add_reference.clicked.connect(self._add_reference_sample)
         _mfb_lay.addWidget(self.btn_add_reference)
 
+        # ── "vs Ref": all trials against a reference sample (ui/ref_compare_dialog.py)
+        self.btn_ref_compare = QPushButton("vs Ref")
+        self.btn_ref_compare.setToolTip(
+            "Compare with Ref - which trials are better than the reference sample\n"
+            "in all the lab values you choose (higher / lower / close to Ref)")
+        self.btn_ref_compare.setFixedHeight(30)
+        self.btn_ref_compare.setStyleSheet(
+            "QPushButton{border:1px solid #E8C15A;background:#ffffff;color:#5a4500;"
+            "padding:2px 8px;border-radius:4px;font-weight:bold;}"
+            "QPushButton:hover{background:#FFF4D6;}")
+        self.btn_ref_compare.clicked.connect(lambda: self._open_ref_compare())
+        self.btn_ref_compare.setVisible(False)
+        _mfb_lay.addWidget(self.btn_ref_compare)
+
         # ── "Copy trials" Button (selected columns are preselected) ─────────
         self.btn_copy_trials = QPushButton("Copy trials")
         self.btn_copy_trials.setToolTip(
@@ -4773,6 +4789,8 @@ class ShowExperimentScreen(QWidget):
             else f"V{r['Versuchsnummer']}"
             for r in rows
         ]
+        if getattr(self, "btn_ref_compare", None) is not None:
+            self.btn_ref_compare.setVisible(bool(self._reference_names))
         # Invalidate the per-load cache in _get_jet_info_rows() - new trial
         # list means its cached result (if any) is stale.
         self._jet_info_rows_cache = None
@@ -6039,7 +6057,9 @@ class ShowExperimentScreen(QWidget):
         menu.addSeparator()
         act_add = menu.addAction("Add reference sample…")
         act_mark = act_rename = act_unmark = None
+        act_compare = None
         if is_ref:
+            act_compare = menu.addAction("Compare trials with this reference…")
             act_rename = menu.addAction("Rename reference sample…")
             act_unmark = menu.addAction("Turn into a normal trial")
         else:
@@ -6076,6 +6096,30 @@ class ShowExperimentScreen(QWidget):
             self._set_reference_flag(trial_id, vno, False)
         elif chosen is act_delete:
             self._delete_trials(del_ids)
+        elif act_compare is not None and chosen is act_compare:
+            self._open_ref_compare(trial_id)
+
+    def _open_ref_compare(self, ref_id: Optional[int] = None) -> None:
+        from ui.ref_compare_dialog import open_ref_compare
+        open_ref_compare(self, ref_id)
+
+    def _show_trial_in_machine_data(self, trial_id: int) -> None:
+        """Selects the first column of a trial in Machine Data (double-click
+        in Compare with Ref)."""
+        specs = getattr(self, "_machine_col_specs", None) or []
+        col = next((i for i, cs in enumerate(specs) if int(cs["trial_id"]) == int(trial_id)), None)
+        if col is None or self.tab_machine is None:
+            return
+        self.tabs.setCurrentWidget(self.tab_machine)
+        view = self.tbl_machine.right
+        model = view.model()
+        if model is None:
+            return
+        idx = model.index(int(getattr(model, "_n_hdr", 0) or 0), col + 1)
+        view.setCurrentIndex(idx)
+        view.scrollTo(idx)
+        self.window().raise_()
+        self.window().activateWindow()
 
     # ── Delete trials (recycle bin, numbers stay used - db/recycle_bin.py) ──
 
