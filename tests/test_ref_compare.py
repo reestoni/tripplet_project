@@ -66,3 +66,35 @@ def test_parse_drops_ignored_entries():
     from db import ref_criteria
     assert ref_criteria.parse('{"a": {"dir": "lower"}, "b": {"dir": null}, "c": 3}') == {"a": {"dir": "lower"}}
     assert ref_criteria.parse("not json") == {}
+
+
+# ── own target values (Nutzerwunsch 2026-11-11) ──────────────────────────
+def test_own_targets_without_reference_collects_every_numeric_row():
+    ms = rc.collect_metrics(SOURCES, TRIALS, None)
+    assert [m["title"] for m in ms] == ["FP/m", "FP CV (%)", "Stability@0.3", "Titer"]
+    assert all(m["ref"] is None for m in ms)
+
+
+def test_target_replaces_the_reference_value():
+    ms = _metrics()
+    # Ref FP/m = 46, own target 100: V1 (136.7) passes, V2 (40) not
+    crit = {"model_itemat|FP/m": {"dir": "higher", "target": 100}}
+    by = {r["trial_id"]: r for r in rc.evaluate(ms, TRIALS, crit, skip_ids=[100])}
+    assert by[1]["all_pass"] and not by[2]["all_pass"]
+    assert round(by[1]["cells"]["model_itemat|FP/m"]["diff"], 1) == 36.7
+
+
+def test_criterion_without_target_and_reference_does_not_count():
+    ms = rc.collect_metrics(SOURCES, TRIALS, None)
+    crit = {"model_itemat|FP/m": {"dir": "higher"},                    # nothing to compare with
+            "model_titer|Titer": {"dir": "close", "tol": 1, "target": 80}}
+    rows = rc.evaluate(ms, TRIALS, crit)
+    by = {r["trial_id"]: r for r in rows}
+    assert by[1]["total"] == 1                                          # only Titer counts
+    assert by[1]["cells"]["model_itemat|FP/m"]["status"] == rc.NO_BASE
+    assert by[1]["all_pass"] and by[2]["passed"] == 0                   # 80.5 ok, 78.0 not (±0.8)
+
+
+def test_parse_keeps_targets_without_direction():
+    from db import ref_criteria
+    assert ref_criteria.parse('{"a": {"target": 4.2}}') == {"a": {"target": 4.2}}

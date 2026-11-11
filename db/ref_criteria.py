@@ -4,8 +4,9 @@ Nutzerwunsch 2026-11-11): per metric "higher / lower / close to the
 reference" plus a tolerance, under a name, shared by all users and usable in
 every series.
 
-Criteria = JSON {metric key: {"dir": "higher"|"lower"|"close", "tol": float}}
-with metric keys from ui/ref_compare.metric_key().
+Criteria = JSON {metric key: {"dir": "higher"|"lower"|"close", "tol": float,
+"target": float}} with metric keys from ui/ref_compare.metric_key(); target =
+own target value (used instead of the reference value), all keys optional.
 
 Everyone may save a new set or change a set; deleting: creator or superuser.
 Without the table (offline / not set up) the dialog still works, only the
@@ -68,7 +69,13 @@ def parse(text: Any) -> Dict[str, Dict[str, Any]]:
         data = json.loads(text or "{}")
     except (TypeError, ValueError):
         return {}
-    return {k: v for k, v in data.items() if isinstance(v, dict) and v.get("dir")} if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if _useful(v)}
+
+
+def _useful(v: Any) -> bool:
+    return isinstance(v, dict) and (bool(v.get("dir")) or v.get("target") is not None)
 
 
 def save(name: str, criteria: Dict[str, Dict[str, Any]], set_id: Optional[int] = None) -> int:
@@ -81,7 +88,7 @@ def save(name: str, criteria: Dict[str, Dict[str, Any]], set_id: Optional[int] =
     clash = fetch_all(f"SELECT ID FROM {TABLE} WHERE Name = ?", [name])
     if clash and (set_id is None or int(clash[0]["ID"]) != int(set_id)):
         raise ValueError(f'A criteria set "{name}" already exists.')
-    text = json.dumps({k: v for k, v in criteria.items() if v.get("dir")}, ensure_ascii=False)
+    text = json.dumps({k: v for k, v in criteria.items() if _useful(v)}, ensure_ascii=False)
     now = datetime.datetime.now().replace(microsecond=0)
     if set_id is None:
         return int(execute_insert(

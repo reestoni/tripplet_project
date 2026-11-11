@@ -925,8 +925,8 @@ for r, (t, res, vals, st) in enumerate(rows):
 s.rect(12, 112, 10, 10, "#ffffff", MUTED, 2)
 s.line(14, 117, 16.5, 120, GREEN, 1.6)
 s.line(16.5, 120, 21, 114, GREEN, 1.6)
-s.text(28, 121, "Only trials better in all", 8, INK)
-s.text(288, 121, "8 of 22 better in all", 8, GREEN, True, "end")
+s.text(28, 121, "Only trials that meet all criteria", 8, INK)
+s.text(288, 121, "8 of 22", 8, GREEN, True, "end")
 save(s, "wn_ref_compare.svg")
 
 # ── Tools: Yarn Count Converter ─────────────────────────────────────────

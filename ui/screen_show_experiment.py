@@ -3936,11 +3936,12 @@ class ShowExperimentScreen(QWidget):
         self.btn_add_reference.clicked.connect(self._add_reference_sample)
         _mfb_lay.addWidget(self.btn_add_reference)
 
-        # ── "vs Ref": all trials against a reference sample (ui/ref_compare_dialog.py)
-        self.btn_ref_compare = QPushButton("vs Ref")
+        # ── "vs Ref / Target": all trials against a reference sample or own
+        # target values (ui/ref_compare_dialog.py)
+        self.btn_ref_compare = QPushButton("vs Ref / Target")
         self.btn_ref_compare.setToolTip(
-            "Compare with Ref - which trials are better than the reference sample\n"
-            "in all the lab values you choose (higher / lower / close to Ref)")
+            "Which trials meet all your criteria? Compare the lab values of all trials\n"
+            "with a reference sample or with your own target values (higher / lower / close)")
         self.btn_ref_compare.setFixedHeight(30)
         self.btn_ref_compare.setStyleSheet(
             "QPushButton{border:1px solid #E8C15A;background:#ffffff;color:#5a4500;"
@@ -4790,7 +4791,7 @@ class ShowExperimentScreen(QWidget):
             for r in rows
         ]
         if getattr(self, "btn_ref_compare", None) is not None:
-            self.btn_ref_compare.setVisible(bool(self._reference_names))
+            self.btn_ref_compare.setVisible(bool(self._trial_ids))
         # Invalidate the per-load cache in _get_jet_info_rows() - new trial
         # list means its cached result (if any) is stale.
         self._jet_info_rows_cache = None

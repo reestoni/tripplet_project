@@ -1,8 +1,9 @@
-"""ref_compare_dialog.py - "Compare with Ref" window of Show Experiment
-(Nutzerwunsch 2026-11-11). All trials of the series against one reference
-sample over the metrics of ALL lab tabs; the user decides per metric what
-"better" means (higher / lower / close to Ref, with tolerance) and sees which
-trials pass every criterion. Logic: ui/ref_compare.py, saved criteria sets:
+"""ref_compare_dialog.py - "Compare with Ref / Target" window of Show
+Experiment (Nutzerwunsch 2026-11-11). All trials of the series against a
+reference sample and/or own target values (typed into the first row) over
+the metrics of ALL lab tabs; the user decides per metric what "better"
+means (higher / lower / close, with tolerance) and sees which trials pass
+every criterion. Logic: ui/ref_compare.py, saved criteria sets:
 db/ref_criteria.py. Only reads - nothing in the series is changed.
 """
 from __future__ import annotations
@@ -20,10 +21,12 @@ from ui import ref_compare as rc
 
 C_PASS, C_FAIL, C_MISSING = QColor("#C8E6C9"), QColor("#FFCDD2"), QColor("#ECECEC")
 C_REF = QColor("#FFF4D6")
+C_TARGET = QColor("#DCEBFA")   # own target typed in
 C_ALL = QColor("#2E7D32")
 FIXED_COLS = 2   # Trial, Result
 
 UNSAVED = "(not saved)"
+TARGETS = -1   # reference combo: own targets, no reference sample
 
 
 def _fmt(v: Optional[float]) -> str:
@@ -71,7 +74,7 @@ class RefCompareDialog(QDialog):
     def __init__(self, screen, ref_id: Optional[int] = None):
         super().__init__(screen)
         self._screen = screen
-        self.setWindowTitle("Compare with Ref")
+        self.setWindowTitle("Compare with Ref / Target")
         self.resize(1250, 680)
         self._trial_ids = [int(t) for t in screen._trial_ids]
         self._vno = {int(t): v for t, v in zip(screen._trial_ids, screen._trial_vnos)}
@@ -84,10 +87,11 @@ class RefCompareDialog(QDialog):
 
         lay = QVBoxLayout(self)
         top = QHBoxLayout()
-        top.addWidget(QLabel("Reference:"))
+        top.addWidget(QLabel("Compare with:"))
         self.cmb_ref = QComboBox()
         for tid, name in self._refs.items():
-            self.cmb_ref.addItem(name or "Ref", tid)
+            self.cmb_ref.addItem(f"Ref: {name or 'reference sample'}", tid)
+        self.cmb_ref.addItem("Own targets (no reference)", TARGETS)
         if ref_id is not None and int(ref_id) in self._refs:
             self.cmb_ref.setCurrentIndex(list(self._refs).index(int(ref_id)))
         self.cmb_ref.currentIndexChanged.connect(self._rebuild)
@@ -111,7 +115,7 @@ class RefCompareDialog(QDialog):
         lay.addLayout(top)
 
         opts = QHBoxLayout()
-        self.chk_only = QCheckBox("Only trials better in all")
+        self.chk_only = QCheckBox("Only trials that meet all criteria")
         self.chk_only.toggled.connect(self._fill)
         self.chk_hide = QCheckBox("Hide metrics without a criterion")
         self.chk_hide.toggled.connect(self._rebuild)
@@ -125,15 +129,19 @@ class RefCompareDialog(QDialog):
         opts.addWidget(self.lbl_sum)
         lay.addLayout(opts)
 
-        hint = QLabel("Click a column header to set what <b>better</b> means for that metric: higher, lower or "
-                      "close to the reference (with a tolerance). A trial counts as better when it meets every "
-                      "criterion - a missing value does not. Double-click a trial to show it in Machine Data.")
+        hint = QLabel("Click a column header to set what <b>better</b> means for that value: higher, lower or "
+                      "close (with a tolerance). <b>Double-click the first row</b> to type your own target - it is "
+                      "used instead of the reference value. A trial counts as better when it meets every criterion - "
+                      "a missing value does not. Double-click a trial to show it in Machine Data.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#555;")
         lay.addWidget(hint)
 
         self.tbl = QTableWidget()
-        self.tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # only the target cells of the first row are editable (item flags)
+        self.tbl.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
+        self.tbl.itemChanged.connect(self._on_item_changed)
+        self._filling = False
         self.tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tbl.verticalHeader().setVisible(False)
         hh = self.tbl.horizontalHeader()
@@ -211,7 +219,7 @@ class RefCompareDialog(QDialog):
         self._rebuild()
 
     def _confirm_discard(self) -> bool:
-        return QMessageBox.question(self, "Compare with Ref", "Discard the changed criteria?",
+        return QMessageBox.question(self, "Compare with Ref / Target", "Discard the changed criteria?",
                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
 
     def _save(self, as_new: bool = False) -> None:
@@ -255,11 +263,11 @@ class RefCompareDialog(QDialog):
 
     # ── table ──────────────────────────────────────────────────────────────
     def _ref_id(self) -> Optional[int]:
-        return self.cmb_ref.currentData()
+        d = self.cmb_ref.currentData()
+        return None if d in (None, TARGETS) else int(d)
 
     def _rebuild(self) -> None:
-        ref = self._ref_id()
-        self._metrics = rc.collect_metrics(self._sources, self._trial_ids, ref) if ref is not None else []
+        self._metrics = rc.collect_metrics(self._sources, self._trial_ids, self._ref_id())
         if self.chk_hide.isChecked():
             self._shown = [m for m in self._metrics if (self._criteria.get(m["key"]) or {}).get("dir")]
         else:
@@ -273,6 +281,8 @@ class RefCompareDialog(QDialog):
         if d:
             tol = c.get("tol", rc.DEFAULT_TOL[d])
             crit = rc.DIR_LABEL[d] + (f" ±{_fmt(tol)} %" if d == rc.CLOSE or tol else "")
+            if rc.base_of(m, c) is None:
+                crit += " (no target)"
         else:
             crit = "(ignored)"
         # long Itemat titles: break before "@0.3 cN/dtex"
@@ -280,12 +290,19 @@ class RefCompareDialog(QDialog):
         return f"{m['tab']}\n{title}\n{crit}"
 
     def _fill(self, *_a) -> None:
+        self._filling = True
+        try:
+            self._fill_table()
+        finally:
+            self._filling = False
+
+    def _fill_table(self) -> None:
         rows = rc.evaluate(self._metrics, self._trial_ids, self._criteria, skip_ids=self._refs.keys())
         n_all = sum(1 for r in rows if r["all_pass"])
         total = rows[0]["total"] if rows else 0
         self.lbl_sum.setText(
             "Set at least one criterion (click a column header)" if not total
-            else f"{n_all} of {len(rows)} trials better in all {total} criteria")
+            else f"{n_all} of {len(rows)} trials meet all {total} criteria")
         if self.chk_only.isChecked():
             rows = [r for r in rows if r["all_pass"]]
         self._rows = rows
@@ -298,24 +315,38 @@ class RefCompareDialog(QDialog):
             hi = t.horizontalHeaderItem(FIXED_COLS + j)
             d = (self._criteria.get(m["key"]) or {}).get("dir")
             if hi is not None:
-                hi.setToolTip(f"{m['tab']} - {m['title']}\nReference: {_fmt(m['ref'])}\nClick to set the criterion")
+                hi.setToolTip(f"{m['tab']} - {m['title']}"
+                              + (f"\nReference: {_fmt(m['ref'])}" if m["ref"] is not None else "")
+                              + "\nClick to set the criterion")
                 if d:
                     fh = hi.font()
                     fh.setBold(True)
                     hi.setFont(fh)
         bold = QFont(t.font())
         bold.setBold(True)
-        # reference row
-        name = self.cmb_ref.currentText()
-        for c, txt in enumerate(["Ref", name]):
+        # first row: reference value or own target (editable)
+        ref_mode = self._ref_id() is not None
+        label = ("Ref", self._refs.get(self._ref_id()) or "Ref") if ref_mode else ("Target", "your values")
+        for c, txt in enumerate(label):
             it = QTableWidgetItem(txt)
             it.setBackground(C_REF)
             it.setFont(bold)
+            it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+            it.setToolTip("Double-click a value in this row to type your own target")
             t.setItem(0, c, it)
         for j, m in enumerate(self._shown):
-            it = QTableWidgetItem(_fmt(m["ref"]))
-            it.setBackground(C_REF)
+            target = rc.to_float((self._criteria.get(m["key"]) or {}).get("target"))
+            it = QTableWidgetItem(_fmt(target) if target is not None else
+                                  (_fmt(m["ref"]) if m["ref"] is not None else ""))
+            it.setBackground(C_TARGET if target is not None else C_REF)
             it.setTextAlignment(Qt.AlignCenter)
+            if target is not None:
+                it.setFont(bold)
+                it.setToolTip("Your target" + (f" (reference: {_fmt(m['ref'])})" if m["ref"] is not None else "")
+                              + "\nDouble-click to change, delete the value to go back")
+            else:
+                it.setToolTip("Double-click to type your own target")
+            it.setData(Qt.UserRole, m["key"])
             t.setItem(0, FIXED_COLS + j, it)
         # trials
         for i, r in enumerate(rows, start=1):
@@ -323,6 +354,7 @@ class RefCompareDialog(QDialog):
             it = QTableWidgetItem(f"V{self._vno.get(tid)}")
             it.setData(Qt.UserRole, tid)
             it.setFont(bold)
+            it.setFlags(it.flags() & ~Qt.ItemIsEditable)
             t.setItem(i, 0, it)
             res = QTableWidgetItem(f"{r['passed']} / {r['total']}" if r["total"] else "–")
             res.setTextAlignment(Qt.AlignCenter)
@@ -330,10 +362,11 @@ class RefCompareDialog(QDialog):
                 res.setBackground(C_ALL)
                 res.setForeground(QColor("#ffffff"))
                 res.setFont(bold)
-                res.setToolTip("Better than the reference in all criteria")
+                res.setToolTip("Meets all criteria")
             elif r["total"]:
                 miss = rc.failing(r, self._metrics)
                 res.setToolTip("Misses: " + ", ".join(miss))
+            res.setFlags(res.flags() & ~Qt.ItemIsEditable)
             t.setItem(i, 1, res)
             for j, m in enumerate(self._shown):
                 cell = r["cells"][m["key"]]
@@ -341,6 +374,7 @@ class RefCompareDialog(QDialog):
                 diff = cell["diff"]
                 txt = _fmt(v) + (f"  ({diff:+.1f} %)" if diff is not None and v is not None else "")
                 it = QTableWidgetItem(txt)
+                it.setFlags(it.flags() & ~Qt.ItemIsEditable)
                 it.setTextAlignment(Qt.AlignCenter)
                 st = cell["status"]
                 if st == rc.PASS:
@@ -350,6 +384,9 @@ class RefCompareDialog(QDialog):
                 elif st == rc.MISSING:
                     it.setBackground(C_MISSING)
                     it.setToolTip("No value - counts as not better")
+                elif st == rc.NO_BASE:
+                    it.setForeground(QColor("#777777"))
+                    it.setToolTip("No target - type one in the first row")
                 else:
                     it.setForeground(QColor("#777777"))
                 t.setItem(i, FIXED_COLS + j, it)
@@ -382,14 +419,29 @@ class RefCompareDialog(QDialog):
         tol_now = cur.get("tol", rc.DEFAULT_TOL.get(cur.get("dir"), 0.0))
         a_tol = menu.addAction(f"Tolerance… ({_fmt(tol_now)} %)")
         a_tol.setEnabled(bool(cur.get("dir")))
+        target = rc.to_float(cur.get("target"))
+        a_target = menu.addAction("Target value…" if target is None else f"Target value… ({_fmt(target)})")
+        a_clear = menu.addAction("Clear target" + (" (use the reference)" if m["ref"] is not None else ""))
+        a_clear.setEnabled(target is not None)
         hh = self.tbl.horizontalHeader()
         pos = hh.mapToGlobal(hh.rect().bottomLeft())
         pos.setX(hh.mapToGlobal(hh.rect().topLeft()).x() + hh.sectionViewportPosition(col))
         chosen = menu.exec(pos)
         if chosen is None:
             return
+        if chosen is a_target:
+            self._ask_target(m)
+            return
+        if chosen is a_clear:
+            cur.pop("target", None)
+            self._set_crit(m["key"], cur)
+            return
         if chosen is a_none:
-            self._criteria.pop(m["key"], None)
+            if cur.get("target") is not None:
+                cur.pop("dir", None)
+                self._criteria[m["key"]] = cur   # keep the typed target
+            else:
+                self._criteria.pop(m["key"], None)
         elif chosen is a_tol:
             v, ok = QInputDialog.getDouble(
                 self, "Tolerance",
@@ -405,9 +457,61 @@ class RefCompareDialog(QDialog):
             new = {"dir": d}
             if cur.get("dir") == d and "tol" in cur:
                 new["tol"] = cur["tol"]
+            if cur.get("target") is not None:
+                new["target"] = cur["target"]
             self._criteria[m["key"]] = new
         self._changed = True
         self._rebuild()
+
+    def _set_crit(self, key: str, crit: Dict[str, Any]) -> None:
+        if crit.get("dir") or crit.get("target") is not None:
+            self._criteria[key] = crit
+        else:
+            self._criteria.pop(key, None)
+        self._changed = True
+        self._rebuild()
+
+    def _ask_target(self, m: Dict[str, Any]) -> None:
+        cur = dict(self._criteria.get(m["key"]) or {})
+        start = rc.to_float(cur.get("target"))
+        if start is None:
+            start = m["ref"] if m["ref"] is not None else 0.0
+        v, ok = QInputDialog.getDouble(self, "Target value", f"{m['tab']} - {m['title']}\nYour target:",
+                                       float(start), -1e9, 1e9, 3)
+        if ok:
+            self._apply_target(m, v)
+
+    def _apply_target(self, m: Dict[str, Any], value: Optional[float]) -> None:
+        cur = dict(self._criteria.get(m["key"]) or {})
+        if value is None:
+            cur.pop("target", None)
+        else:
+            cur["target"] = value
+        self._set_crit(m["key"], cur)
+        if value is not None and not cur.get("dir"):
+            # a target alone says nothing - ask what "better" means
+            j = next((i for i, x in enumerate(self._shown) if x["key"] == m["key"]), None)
+            if j is not None:
+                self._on_header(FIXED_COLS + j)
+
+    def _on_item_changed(self, item) -> None:
+        if self._filling or item is None or item.row() != 0:
+            return
+        key = item.data(Qt.UserRole)
+        m = next((x for x in self._metrics if x["key"] == key), None)
+        if m is None:
+            return
+        text = (item.text() or "").strip()
+        value = rc.to_float(text)
+        if text and value is None:
+            QMessageBox.information(self, "Target value", f'"{text}" is not a number.')
+            self._fill()
+            return
+        if value is not None and m["ref"] is not None and value == m["ref"] \
+                and (self._criteria.get(key) or {}).get("target") is None:
+            return   # unchanged reference value
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, lambda: self._apply_target(m, value))   # not while the editor closes
 
     def _on_double(self, row: int, _col: int) -> None:
         it = self.tbl.item(row, 0)
@@ -421,7 +525,7 @@ class RefCompareDialog(QDialog):
     def closeEvent(self, ev):  # noqa: N802
         if self._changed and self._db and self._criteria:
             res = QMessageBox.question(
-                self, "Compare with Ref", "Save the changed criteria?",
+                self, "Compare with Ref / Target", "Save the changed criteria?",
                 QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Save)
             if res == QMessageBox.Cancel:
                 ev.ignore()
@@ -435,9 +539,8 @@ class RefCompareDialog(QDialog):
 
 
 def open_ref_compare(screen, ref_id: Optional[int] = None) -> None:
-    if not getattr(screen, "_reference_names", None):
-        QMessageBox.information(screen, "Compare with Ref",
-                                "This series has no reference sample. Add one with + Ref first.")
+    """Without a reference sample in the series it opens with own targets."""
+    if not getattr(screen, "_trial_ids", None):
         return
     dlg = RefCompareDialog(screen, ref_id)
     dlg.setAttribute(Qt.WA_DeleteOnClose)

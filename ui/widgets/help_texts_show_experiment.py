@@ -153,19 +153,23 @@ TEXTS = {
                  "the report charts and left out of statistics, Smart Chart, Quick Scan, Athena and the jet data "
                  "export. Right-click the trial number of an existing trial to turn it into a reference sample "
                  "(it keeps its number) or back, or to rename it."),
-                ("task", "Find the trials that are better than the reference sample",
-                 [f"Click {B('vs Ref')} on the right of (2) (only there when the series has a reference sample), or "
-                  "right-click the Ref column (4) → " + M("Compare trials with this reference…") + ".",
+                ("task", "Find the trials that meet your targets (or beat the reference sample)",
+                 [f"Click {B('vs Ref / Target')} on the right of (2), or right-click the Ref column (4) → "
+                  + M("Compare trials with this reference…") + ".",
+                  "Under <i>Compare with</i> choose a reference sample of the series or <i>Own targets</i>. To use "
+                  "your own target value, double-click the first row of a column and type it in (it is used instead "
+                  "of the reference value; delete it to go back).",
                   "Click the header of a value you care about and choose " + M("Higher is better") + ", "
                   + M("Lower is better") + " or " + M("Close to Ref is better") + " (" + M("Tolerance…")
                   + " allows a margin). Repeat for every value that matters.",
                   "Green = meets the criterion, red = not. <b>Result</b> counts them per trial, the best trials "
-                  "are on top. Tick <i>Only trials better in all</i> to see only the winners.",
-                  f"To use the criteria again: {B('Save as…')} with a name (e.g. customer and article). Later "
-                  "choose it under <i>Criteria</i> - in any series."],
-                 "All lab tabs are compared at once, only values the reference has. A missing value counts as "
-                 "not better. Criteria sets are shared by all users; deleting: whoever made it or a superuser. "
-                 "Double-click a trial to see it in Machine Data. Nothing in the series is changed."),
+                  "are on top. Tick <i>Only trials that meet all criteria</i> to see only the winners.",
+                  f"To use criteria and targets again: {B('Save as…')} with a name (e.g. customer and article). "
+                  "Later choose it under <i>Criteria</i> - in any series."],
+                 "All lab tabs are compared at once. A missing value counts as not met; a criterion without a "
+                 "target (and without a reference value) does not count. Criteria sets are shared by all users; "
+                 "deleting: whoever made it or a superuser. Double-click a trial to see it in Machine Data. Nothing "
+                 "in the series is changed."),
                 ("task", "Delete trials",
                  ["One trial: right-click its trial number (4) → " + M("Delete V23…") + ".",
                   "Several trials: first select cells in their columns (drag, Ctrl+click or Shift+click), then "
@@ -387,20 +391,23 @@ TEXTS = {
                  "und dem Jet-Datenexport herausgehalten. Per Rechtsklick auf die Versuchsnummer lässt sich ein "
                  "bestehender Versuch zum Referenzmuster machen (er behält seine Nummer) und zurück, oder das "
                  "Referenzmuster umbenennen."),
-                ("task", "Die Versuche finden, die besser sind als das Referenzmuster",
-                 [f"{B('vs Ref')} rechts von (2) klicken (nur da, wenn die Serie ein Referenzmuster hat), oder "
-                  "Rechtsklick auf die Ref-Spalte (4) → " + M("Compare trials with this reference…") + ".",
+                ("task", "Die Versuche finden, die deine Ziele erreichen (oder das Referenzmuster schlagen)",
+                 [f"{B('vs Ref / Target')} rechts von (2) klicken, oder Rechtsklick auf die Ref-Spalte (4) → "
+                  + M("Compare trials with this reference…") + ".",
+                  "Unter <i>Compare with</i> ein Referenzmuster der Serie oder <i>Own targets</i> wählen. Für einen "
+                  "eigenen Zielwert in die erste Zeile einer Spalte doppelklicken und ihn eintippen (er gilt statt "
+                  "des Referenzwerts; Wert löschen = wieder Referenz).",
                   "Auf den Kopf eines wichtigen Werts klicken und " + M("Higher is better") + ", "
                   + M("Lower is better") + " oder " + M("Close to Ref is better") + " wählen (" + M("Tolerance…")
                   + " erlaubt einen Spielraum). Für jeden wichtigen Wert wiederholen.",
                   "Grün = erfüllt, rot = nicht. <b>Result</b> zählt pro Versuch, die besten stehen oben. "
-                  "<i>Only trials better in all</i> zeigt nur noch die Gewinner.",
-                  f"Kriterien wiederverwenden: {B('Save as…')} mit einem Namen (z.&nbsp;B. Kunde und Artikel). "
-                  "Später unter <i>Criteria</i> auswählen - in jeder Serie."],
-                 "Alle Labor-Reiter werden zusammen verglichen, nur Werte, die die Referenz hat. Ein fehlender Wert "
-                 "zählt als nicht besser. Kriterien-Sets gelten für alle Benutzer; löschen darf, wer es angelegt hat, "
-                 "oder ein Superuser. Doppelklick auf einen Versuch zeigt ihn in Machine Data. An der Serie wird "
-                 "nichts geändert."),
+                  "<i>Only trials that meet all criteria</i> zeigt nur noch die Gewinner.",
+                  f"Kriterien und Zielwerte wiederverwenden: {B('Save as…')} mit einem Namen (z.&nbsp;B. Kunde und "
+                  "Artikel). Später unter <i>Criteria</i> auswählen - in jeder Serie."],
+                 "Alle Labor-Reiter werden zusammen verglichen. Ein fehlender Wert zählt als nicht erfüllt; ein "
+                 "Kriterium ohne Zielwert (und ohne Referenzwert) zählt nicht. Kriterien-Sets gelten für alle "
+                 "Benutzer; löschen darf, wer es angelegt hat, oder ein Superuser. Doppelklick auf einen Versuch zeigt "
+                 "ihn in Machine Data. An der Serie wird nichts geändert."),
                 ("task", "Versuche löschen",
                  ["Ein Versuch: Rechtsklick auf seine Versuchsnummer (4) → " + M("Delete V23…") + ".",
                   "Mehrere Versuche: zuerst Zellen in ihren Spalten markieren (ziehen, Strg+Klick oder "
@@ -622,20 +629,23 @@ TEXTS = {
                  "horizontal en los gráficos del informe y queda fuera de las estadísticas, Smart Chart, Quick Scan, "
                  "Athena y la exportación de datos de jets. Con clic derecho en el número de un ensayo existente se "
                  "puede convertir en muestra de referencia (conserva su número) y al revés, o cambiarle el nombre."),
-                ("task", "Encontrar los ensayos mejores que la muestra de referencia",
-                 [f"Haz clic en {B('vs Ref')} a la derecha de (2) (solo aparece si la serie tiene una muestra de "
-                  "referencia), o clic derecho en la columna Ref (4) → " + M("Compare trials with this reference…") + ".",
+                ("task", "Encontrar los ensayos que alcanzan tus objetivos (o superan la muestra de referencia)",
+                 [f"Haz clic en {B('vs Ref / Target')} a la derecha de (2), o clic derecho en la columna Ref (4) → "
+                  + M("Compare trials with this reference…") + ".",
+                  "En <i>Compare with</i> elige una muestra de referencia de la serie u <i>Own targets</i>. Para un "
+                  "objetivo propio, haz doble clic en la primera fila de una columna y escríbelo (se usa en lugar del "
+                  "valor de referencia; bórralo para volver).",
                   "Haz clic en el encabezado de un valor importante y elige " + M("Higher is better") + ", "
                   + M("Lower is better") + " o " + M("Close to Ref is better") + " (" + M("Tolerance…")
                   + " permite un margen). Repite para cada valor importante.",
                   "Verde = cumple, rojo = no. <b>Result</b> los cuenta por ensayo, los mejores aparecen arriba. "
-                  "<i>Only trials better in all</i> muestra solo a los ganadores.",
-                  f"Para reutilizar los criterios: {B('Save as…')} con un nombre (p.&nbsp;ej. cliente y artículo). "
-                  "Después elígelo en <i>Criteria</i> - en cualquier serie."],
-                 "Se comparan todas las pestañas de laboratorio a la vez, solo los valores que tiene la referencia. "
-                 "Un valor que falta cuenta como no mejor. Los conjuntos de criterios son para todos los usuarios; "
-                 "borrar: quien lo creó o un superusuario. Doble clic en un ensayo lo muestra en Machine Data. No se "
-                 "cambia nada en la serie."),
+                  "<i>Only trials that meet all criteria</i> muestra solo a los ganadores.",
+                  f"Para reutilizar criterios y objetivos: {B('Save as…')} con un nombre (p.&nbsp;ej. cliente y "
+                  "artículo). Después elígelo en <i>Criteria</i> - en cualquier serie."],
+                 "Se comparan todas las pestañas de laboratorio a la vez. Un valor que falta cuenta como no cumplido; "
+                 "un criterio sin objetivo (y sin valor de referencia) no cuenta. Los conjuntos de criterios son para "
+                 "todos los usuarios; borrar: quien lo creó o un superusuario. Doble clic en un ensayo lo muestra en "
+                 "Machine Data. No se cambia nada en la serie."),
                 ("task", "Borrar ensayos",
                  ["Un ensayo: clic derecho en su número de ensayo (4) → " + M("Delete V23…") + ".",
                   "Varios ensayos: primero selecciona celdas en sus columnas (arrastrando, Ctrl+clic o Mayús+clic), "
