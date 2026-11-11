@@ -76,11 +76,41 @@ def is_reference_value(value: Any) -> bool:
 
 def next_trial_number(max_vno: Any) -> int:
     """Next trial number from MAX(Versuchsnummer) of a series. Clamped at 0,
-    so a series holding only (negative) reference samples starts at V1."""
+    so a series holding only (negative) reference samples starts at V1.
+    Gaps left by deleted trials are never filled; numbers of deleted trials
+    at the end are given out again (Nutzerentscheid 2026-11-11)."""
     try:
         return max(int(max_vno), 0) + 1
     except (TypeError, ValueError):
         return 1
+
+
+def format_number_list(vnos) -> str:
+    """'V3, V7, V23-V42, Ref' - consecutive trial numbers as ranges."""
+    nums, refs = [], 0
+    for v in vnos:
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            continue
+        if n < 1:
+            refs += 1
+        else:
+            nums.append(n)
+    nums = sorted(set(nums))
+    parts, i = [], 0
+    while i < len(nums):
+        j = i
+        while j + 1 < len(nums) and nums[j + 1] == nums[j] + 1:
+            j += 1
+        if j - i >= 2:
+            parts.append(f"V{nums[i]}–V{nums[j]}")
+        else:
+            parts.extend(f"V{n}" for n in nums[i:j + 1])
+        i = j + 1
+    if refs:
+        parts.append(REFERENCE_LABEL if refs == 1 else f"{refs} x {REFERENCE_LABEL}")
+    return ", ".join(parts)
 
 
 def next_reference_number(min_vno: Any) -> int:

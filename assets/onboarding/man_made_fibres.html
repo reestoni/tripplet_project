@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Man-made Fibres</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category fibres.
+     Content from the user's research page "Chemiefasern: synthetisch und cellulosisch".
+     Texts in man_made_fibres_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1&fibre=<id> for screenshots. No external resources (sources as plain text only).
+     Scene 4 links other modules (LINK_KEYS): embedded via document.title "open:<key>", otherwise <key>.html.
+     SVG/DOM: market bar, waffle and application ranges (scene 0), animated molecule + property
+     radar per fibre (scene 1), sortable property bars (scene 2), application matrix (scene 3),
+     recycled shares + module links (scene 4). Scenes never change automatically. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--soft:#EEF3EC;
+  --acc:#E07B39;--acc2:#2386C8;--ok:#2F8F45;--bad:#C92A2A;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"],.mtabs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+svg.bg{background:var(--bg);border-radius:6px}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{margin:0 0 6px;font-size:16px}
+.seg,.mtabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.seg button,.mtabs button{font-size:13.5px;padding:6px 11px}
+.mtabs .fg{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center;margin-right:10px}
+.mtabs .grp{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 2px 0 12px}
+.mtabs .grp{margin-left:0}
+.lbl{display:block;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font-family:var(--font-display);font-size:26px;line-height:1.1;color:var(--hl);font-variant-numeric:tabular-nums}
+.kpi span{color:var(--muted);font-size:13px}
+.grid2{display:grid;grid-template-columns:1.25fr 1fr;gap:14px}
+.grid2e{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mhead h3{margin:0;font-size:21px;font-family:var(--font-display)}
+.mhead .de{color:var(--muted);font-size:13.5px}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0 4px}
+.figs div{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.figs b{display:block;font-size:17px;color:#1F7A36}
+.figs span{font-size:12px;color:var(--muted)}
+.pcc{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg)}
+.pcc ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
+.pcc li{margin:3px 0}
+.pcc.pro{border-left:5px solid var(--ok)}
+.pcc.con{border-left:5px solid var(--bad)}
+.pcc.tex{border-left:5px solid var(--acc2)}
+.pcc.tech{border-left:5px solid var(--acc)}
+.tblwrap{overflow-x:auto}
+table.mx{border-collapse:collapse;width:100%;font-size:13px}
+table.mx th,table.mx td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:center}
+table.mx th{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.03em;vertical-align:bottom;line-height:1.25}
+table.mx td:first-child,table.mx th:first-child{text-align:left;white-space:nowrap}
+table.mx th.hl,table.mx td.hl{background:#FBF3EB}
+table.mx tr:hover td{background:var(--soft)}
+table.mx tr.grp td{background:none;border-bottom:1px solid var(--line);padding-top:12px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px}
+.dot.m{background:var(--ok)}
+.dot.s{border:2px solid #868E96;background:#fff}
+.mxleg{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px;align-items:center}
+.mxleg span{display:inline-flex;gap:6px;align-items:center}
+.mxleg i{display:inline-block;width:14px;height:12px;background:#FBF3EB;border:1px solid var(--line)}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.lk{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:860px){.grid2,.grid2e{grid-template-columns:1fr}}
+@media (max-width:760px){header{flex-direction:column}details ol{columns:1}}
+</style>
+<script src="man_made_fibres_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 market shares -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <svg id="msvg" viewBox="0 0 1000 210" role="img"></svg>
+      <p class="note" id="mtxt"></p>
+      <p class="note" id="mnote"></p>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3 id="wtitle"></h3><svg id="wsvg" viewBox="0 0 480 340" role="img"></svg><p class="note" id="wnote"></p></div>
+      <div class="card"><h3 id="atitle"></h3><svg id="asvg" viewBox="0 0 480 312" role="img"></svg><p class="note" id="anote"></p></div>
+    </div>
+  </div>
+  <!-- 1 fibre portraits -->
+  <div class="sc" id="sc1">
+    <div class="mtabs" id="ftabs"></div>
+    <div class="card">
+      <div class="mhead"><h3 id="fname"></h3><div class="de" id="fde"></div></div>
+      <div class="grid2" style="margin-top:10px">
+        <div><svg class="bg" id="molsvg" viewBox="0 0 440 240" role="img"></svg><p class="note" id="molcap"></p></div>
+        <div><svg id="radsvg" viewBox="0 0 440 280" role="img"></svg></div>
+      </div>
+      <div class="figs" id="ffigs"></div>
+      <div class="grid2e" style="margin-top:8px">
+        <div class="pcc pro"><span class="lbl" id="lpro"></span><ul id="fpro"></ul></div>
+        <div class="pcc con"><span class="lbl" id="lcon"></span><ul id="fcon"></ul></div>
+        <div class="pcc tex"><span class="lbl" id="ltex"></span><ul id="ftex"></ul></div>
+        <div class="pcc tech"><span class="lbl" id="ltech"></span><ul id="ftech"></ul></div>
+      </div>
+    </div>
+  </div>
+  <!-- 2 properties compared -->
+  <div class="sc" id="sc2">
+    <div class="card">
+      <div class="seg" id="kseg"></div>
+      <svg id="ksvg" viewBox="0 0 1000 464" role="img" style="margin-top:10px"></svg>
+      <p class="note" id="knote"></p>
+    </div>
+  </div>
+  <!-- 3 application matrix -->
+  <div class="sc" id="sc3">
+    <div class="card tblwrap"><table class="mx" id="emx"></table><div class="mxleg" id="mxleg"></div></div>
+  </div>
+  <!-- 4 recycled shares + module links -->
+  <div class="sc" id="sc4">
+    <div class="card"><svg id="rsvg" viewBox="0 0 1000 262" role="img"></svg><p class="note" id="rnote"></p></div>
+    <span class="lbl" id="lkL" style="margin-top:6px"></span>
+    <div class="links" id="links"></div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const PAUSED=params.get('paused')==='1'||matchMedia('(prefers-reduced-motion: reduce)').matches&&params.get('paused')!=='0';
+const T=()=>TEXTS[lang];
+const NSC=5;
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink SVG labels that would overflow their slot
+const isCJK=ch=>/[⺀-鿿＀-￯　-〿]/.test(ch);
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=isCJK(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+const Tm=(x,y,t,a='middle',max=0)=>TX(x,y,t,'var(--muted)',a,400,11,max);
+// number in the page language (decimal sign / digit grouping from TEXTS.ui)
+const num=(v,d=0)=>{const u=T().ui;const [i,f]=Math.abs(v).toFixed(d).split('.');
+  const g=i.length>4||(i.length===4&&u.grp4)?i.replace(/\B(?=(\d{3})+(?!\d))/g,u.grp):i;
+  return (v<0?'-':'')+g+(f?u.dec+f:'')};
+const ease=u=>1-Math.pow(1-Math.max(0,Math.min(1,u)),3);
+const C={syn:'#1864AB',cel:'#2F8F45',hp:'#E07B39',nat:'#8A939B'};
+const HB='#E07B39';
+const CL='#2F9E44';   // chlorine atoms in the PVC sketch
+
+// ── language-neutral data (texts in man_made_fibres_texts.js, same order)
+const MK=[[77.7,'syn'],[24.5,'nat'],[8.4,'cel'],[7.0,'syn'],[3.2,'syn'],[2.1,'nat'],[1.6,'syn'],[1.5,'syn'],[6.0,'nat']];
+const MK_TOTAL=132;
+const WF=[[77700,C.syn],[7000,'#4DABF7'],[8400,C.cel],[3200,'#74C0FC'],[1600,'#A5D8FF'],[1500,'#C5E2FA'],[156,C.hp],[98,'#FFA94D']];
+const AR=[[30,60,C.syn],[20,35,'#4DABF7'],[10,50,C.syn],[50,80,C.cel],[60,70,C.nat],[20,30,C.nat]];
+const FIDS=['pes','pa','pp','pan','ela','pe','pla','pvc','cv','cly','ca','meta','para','uhmw','cf','pps'];
+const FG=['syn','syn','syn','syn','syn','syn','syn','syn','cel','cel','cel','hp','hp','hp','hp','hp'];
+const FSC=[[3,2,3,4,1,2,5],[3,3,3,2,3,3,4],[3,2,1,1,1,5,5],[2,3,2,5,2,3,4],[1,5,2,2,1,3,2],
+  [2,2,1,2,1,5,5],[3,2,1,3,1,3,3],[2,2,1,3,1,2,3],[2,3,3,3,5,1,4],[3,2,3,3,5,1,3],
+  [1,3,2,3,4,2,3],[2,3,5,3,3,2,1],[5,1,4,1,3,2,1],[5,1,1,4,1,5,1],[5,1,5,5,1,3,1],[2,2,4,3,1,2,1]];
+const GROUPS=['syn','cel','hp'];
+// name index -> [density, moisture, tenacity cN/tex, elongation %, temp [value, kind 0 melt / 1 decomposition]]
+const KV=[[1.38,0.4,50,15,[256,0]],[1.14,4.5,50,25,[260,0]],[0.91,0.05,40,17,[165,0]],[1.18,1.5,26,25,null],[1.22,0.8,9,600,[230,0]],
+  [0.95,0,30,null,[130,0]],[1.25,0.5,35,35,[170,0]],[1.39,0,25,16,null],
+  [1.51,15,25,20,null],[1.32,6,13,25,null],[1.38,4.5,44,30,[425,1]],[1.44,7,203,3.6,[425,1]],[0.97,0.05,290,3.3,[148,0]],[1.8,0,200,1.5,null],[null,null,null,null,[285,0]]];
+const KG=['syn','syn','syn','syn','syn','syn','syn','syn','cel','cel','hp','hp','hp','hp','hp'];
+const KK=['d','m','t','e','h'];
+const KU=['g/cm³','%','cN/tex','%','°C'];
+const KD=[2,1,0,1,0];
+const EM=[[2,2,2,2,1,1,2,2,1],[2,1,2,1,0,1,2,2,0],[1,2,1,2,2,0,2,1,0],[2,2,1,1,0,1,1,2,0],[2,1,0,0,1,0,0,2,0],
+  [0,1,1,2,2,0,2,2,0],[1,1,1,1,2,0,1,0,0],[1,1,0,0,0,2,2,0,0],
+  [2,2,1,0,2,1,1,0,1],[2,2,0,0,2,0,0,0,0],[1,0,0,0,0,0,2,0,0],
+  [0,0,1,0,0,2,2,0,1],[0,0,2,0,0,2,1,1,2],[0,0,0,0,1,2,2,2,1],[0,0,2,1,0,0,1,2,2],[0,0,0,0,0,0,2,0,0]];
+const EG=['syn','syn','syn','syn','syn','syn','syn','syn','cel','cel','cel','hp','hp','hp','hp','hp'];
+const RV=[[12,'syn'],[3.2,'syn'],[2,'syn'],[1.1,'cel'],[0.8,'syn'],[0.4,'syn']];
+const LINK_KEYS=['filament_spinning','bcf_spinning','staple_spinning','poy_spinning_plants','nonwovens','textile_dyeing','natural_fibres'];
+const SOURCES=['Textile Exchange – Materials Market Report 2025 (PDF, textileexchange.org)','EU Textiles Ecosystem – summary of the Materials Market Report 2025 (transition-pathways.europa.eu)',
+ 'texdata – polyamide, cellulosics, recycling 2024 (texdata.com)','Apparel Resources – synthetics at 69 % (apparelresources.com)','Textile Exchange – 139 million t in 2025 (textileexchange.org)',
+ 'Summary of the Materials Market Report 2026 – polyester 82.5 million t (dectextile.com)','Excerpt Materials Market Report 2026 – PA, PP, acrylic 2025 (testextextile.com)',
+ 'Fabric of Value – rPET share 11.8 % (fabricofvalue.substack.com)','Excerpt Materials Market Report 2025 – viscose 80 % of MMCF, acetate (sgpjbg.com)',
+ 'CompositesWorld – ATA carbon fibre report 2025 (compositesworld.com)','Composites United – market report 2024 (composites-united.com)','GIR – para-aramid production 2025 (marketpublishers.com)',
+ 'Mordor Intelligence – technical textiles by material (mordorintelligence.com)','Textile Learner – properties of PA, PET, Kevlar, Nomex (textilelearner.net)',
+ 'Springer – properties of textile fibres (link.springer.com)','Fibre Properties – density, moisture regain (textilestand.blogspot.com)','Textile School – melting points (textileschool.com)',
+ 'Nylon vs. polyester – values after Morton & Hearle (fashion-us.pages.dev)','PA6 vs. PA66 – abrasion resistance (kamlatec.blogspot.com)',
+ 'Oerlikon Barmag – airbag, belt, tyre cord (tekstilteknik.com.tr)','Hyosung – industrial yarns PET/PA66 (techtextil.messefrankfurt.com)','Kordsa – PA66 for airbags (medium.com)',
+ 'Swicofil – polypropylene (swicofil.com)','Textile Learner – olefin fibres, nonwovens (textilelearner.net)','Britannica – polyacrylonitrile (britannica.com)',
+ 'Spot Material – acrylic (spotmaterial.com)','CAMEO – spandex fibre (cameo.mfa.org)','Elastic fibres in textiles – elastane (mytextilenotes.blogspot.com)',
+ 'Fiber Source – rayon (fibersource.com)','Ohio State University – rayon, HWM, high-tenacity types (ohioline.osu.edu)','BioResources – lyocell vs. viscose (bioresources.cnr.ncsu.edu)',
+ 'Andritz – lyocell technology (andritz.com)','Wikipedia – Lyocell','Regenerated cellulose fibres – overview (mytextilenotes.blogspot.com)',
+ 'Glanzstoff – high-tenacity viscose for tyres (luxinnovation.lu)','Fiber-Line – data sheet meta-aramid (avient.com)','University of Alberta – decomposition and service temperature (era.library.ualberta.ca)',
+ 'Textile School – aramids (textileschool.com)','Emergen Research – aramid applications (emergenresearch.com)','Fiber-Line – data sheet UHMWPE (polyone.com)',
+ 'FibrXL – Dyneema properties (fibrxl.com)','Wikipedia – UHMWPE','Avient – carbon fibre (avient.com)','Spot Material – carbon fibre T300 (spotmaterial.com)',
+ 'Parker – PPS in filter bags (parker.com)','Xiechang – filter fibres and temperatures (xiechang.co)',
+ 'Fibre2Fashion – PLA fibre properties compared with PET, PA, PP (fibre2fashion.com)','Sales Plastics – PLA fibre vs. polyester (salesplastics.com)',
+ 'Infinita Lab – PLA compostability, EN 13432 / ASTM D6400 (infinitalab.com)','Fibres & Textiles in Eastern Europe – composting of PLA spunbond nonwovens',
+ 'Textile Learner – chlorofibre properties and uses (textilelearner.net)','CAMEO – polyvinyl chloride fibre, vinyon (cameo.mfa.org)','Swicofil – Rhovyl chlorofibres (swicofil.com)',
+ 'Bally Ribbon Mills – polyethylene fibre properties (ballyribbon.com)','CCGrass – polyethylene in artificial turf (ccgrass.com)','Patent EP1833907B1 – polyethylene for artificial turf',
+ 'CAMEO – triacetate fibre (cameo.mfa.org)','Chemcess – cellulose acetate fibres, triacetate heat setting (chemcess.com)','Textile Learner – acetate vs. triacetate (textilelearner.net)'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+const t0=performance.now();
+let start=t0;                     // start of the build-up animation of the current scene
+const prog=(delay,dur)=>PAUSED?1:ease((performance.now()-start-delay)/dur);
+const busy=(ms)=>!PAUSED&&performance.now()-start<ms;
+
+function segBtns(el,keys,labels,cur,cb){
+  el.innerHTML=keys.map((k,i)=>`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${esc(labels[i])}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.k));
+}
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+const mt=()=>T().ui.mt;
+
+// ── 0 market
+let mSel=-1;
+function drawM(){
+  const t=T().mk,u=prog(0,1600),W=960;let x=20,s='';
+  s+=TX(20,24,t.total.replace('{n}',num(MK_TOTAL)+' '+mt()),'var(--fg)','start',700,13,940);
+  MK.forEach(([v,g],i)=>{const w=W*v/MK_TOTAL*u,sel=i===mSel;
+    s+=`<rect data-i="${i}" x="${x}" y="40" width="${Math.max(0,w-2)}" height="70" rx="4" fill="${C[g]}" opacity="${sel?1:.86}" stroke="${sel?'#000':'none'}" stroke-width="2" style="cursor:pointer"/>`;
+    if(w>58){const nm=textW(t.names[i],12,700)<w-10?t.names[i]:t.short[i];
+      s+=`<g style="pointer-events:none">`+TX(x+w/2,72,nm,'#fff','middle',700,12,w-8)+TX(x+w/2,92,num(v,1)+' '+mt(),'#fff','middle',500,11,w-8)+`</g>`}
+    x+=w});
+  let lx=20;t.legend.forEach((l,i)=>{const c=[C.syn,C.cel,C.nat][i];s+=`<rect x="${lx}" y="135" width="14" height="14" rx="3" fill="${c}"/>`+TX(lx+20,147,l,'var(--fg)','start',500,12);lx+=20+textW(l,12,500)+34});
+  s+=Tm(980,147,t.right,'end',Math.max(200,960-lx));
+  const syn=MK.filter(m=>m[1]==='syn').reduce((a,m)=>a+m[0],0);
+  const a=t.synTot.replace('{n}',num(syn*u,1)+' '+mt()),b=t.celTot.replace('{n}',num(8.4*u,1)+' '+mt());
+  s+=TX(20,195,a,C.syn,'start',700,14)+TX(20+textW(a,14,700)+40,195,b,C.cel,'start',700,14);
+  $('msvg').innerHTML=s;
+  $('msvg').querySelectorAll('rect[data-i]').forEach(r=>r.onclick=()=>{mSel=+r.dataset.i;drawM();mText()});
+}
+function mText(){
+  const t=T().mk;if(mSel<0){$('mtxt').textContent=t.click;return}
+  const v=MK[mSel][0];
+  $('mtxt').innerHTML=`<b>${esc(t.names[mSel])} – ${num(v,1)} ${esc(mt())} (${num(v/MK_TOTAL*100,1)} %).</b> ${esc(t.det[mSel])}`;
+}
+function drawW(){
+  const t=T().mk,u=prog(400,2200);let s='';const cols=30,sz=13,gap=2;let k=0;
+  const total=WF.reduce((a,w)=>a+w[0],0)/200,shown=Math.floor(total*u);
+  WF.forEach(([v,c])=>{const cells=v/200;for(let i=0;i<Math.ceil(cells);i++){if(k>shown){k++;continue}const fr=Math.min(1,cells-i);
+    const x=10+(k%cols)*(sz+gap),y=10+Math.floor(k/cols)*(sz+gap);s+=`<rect x="${x}" y="${y}" width="${(sz*fr).toFixed(1)}" height="${sz}" rx="2" fill="${c}"/>`;k++}});
+  const y0=10+Math.ceil(total/cols)*(sz+gap)+14;
+  WF.forEach(([v,c],i)=>{const y=y0+Math.floor(i/2)*18,x=10+(i%2)*235;
+    const lab=t.wf[i]+': '+(v>=1000?num(v/1000,1)+' '+mt():num(v)+' '+T().ui.kt);
+    s+=`<rect x="${x}" y="${y-10}" width="12" height="12" rx="2" fill="${c}"/>`+TX(x+18,y,lab,'var(--fg)','start',500,11.5,212)});
+  $('wsvg').innerHTML=s;
+}
+function drawA(){
+  const t=T().mk,u=prog(800,1500);let s='';
+  const X=p=>160+p*2.9,yb=30+AR.length*42;
+  s+=`<line x1="${X(0)}" y1="24" x2="${X(0)}" y2="${yb}" stroke="var(--line)"/>`;
+  [0,25,50,75,100].forEach(p=>s+=Tm(X(p),18,num(p)+' %')+`<line x1="${X(p)}" y1="24" x2="${X(p)}" y2="${yb}" stroke="var(--line)" stroke-dasharray="3 3"/>`);
+  AR.forEach(([lo,hi,c],i)=>{const y=44+i*42,[fa,ap]=t.arows[i];
+    s+=TX(150,y+2,fa,'var(--fg)','end',700,12,145)+Tm(150,y+17,ap,'end',145);
+    s+=`<rect x="${X(lo)}" y="${y-8}" width="${((X(hi)-X(lo))*u).toFixed(1)}" height="18" rx="9" fill="${c}" opacity=".85"/>`+TX(X(hi)+6,y+5,`${num(lo)}–${num(hi)} %`,'var(--fg)','start',600,11)});
+  s+=Tm(240,yb+22,t.afoot,'middle',460);
+  $('asvg').innerHTML=s;
+}
+function tick(){$('tick').textContent=num((performance.now()-t0)/1000*139e6/31536000,1)+' t'}
+
+// ── 1 fibre portraits
+let cur=FIDS.includes(params.get('fibre'))?params.get('fibre'):'pes',radCur=FSC[FIDS.indexOf(cur)].slice();
+const FI=()=>FIDS.indexOf(cur);
+function showF(id){
+  cur=id;const i=FI(),f=T().fib.list[i],u=T().fib;
+  $('ftabs').innerHTML=GROUPS.map((g,gi)=>`<span class="fg"><span class="grp">${esc(u.groups[gi])}</span>`+
+    FIDS.map((k,j)=>FG[j]===g?`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${esc(T().fib.list[j].tab)}</button>`:'').join('')+'</span>').join('');
+  $('ftabs').querySelectorAll('button').forEach(b=>b.onclick=()=>showF(b.dataset.k));
+  $('fname').textContent=f.n;$('fde').textContent=f.de;$('molcap').textContent=f.cap;
+  $('ffigs').innerHTML=f.figs.map(x=>`<div><b>${esc(x[0])}</b><span>${esc(x[1])}</span></div>`).join('');
+  const li=a=>a.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('fpro').innerHTML=li(f.pro);$('fcon').innerHTML=li(f.con);$('ftex').innerHTML=li(f.tex);$('ftech').innerHTML=li(f.tech);
+  $('lpro').textContent=u.pro;$('lcon').textContent=u.con;$('ltex').textContent=u.tex;$('ltech').textContent=u.tech;
+  $('molsvg').setAttribute('aria-label',u.molAria+' – '+f.n);$('radsvg').setAttribute('aria-label',u.radAria+' – '+f.n);
+  if(PAUSED)radCur=FSC[i].slice();
+  drawMol();drawRad();
+}
+const hex=(cx,cy,r,c,w=1.6,rot=Math.PI/6)=>{let p=[];for(let i=0;i<6;i++){const a=rot+i*Math.PI/3;p.push(`${(cx+r*Math.cos(a)).toFixed(1)},${(cy+r*Math.sin(a)).toFixed(1)}`)}return `<polygon points="${p.join(' ')}" fill="none" stroke="${c}" stroke-width="${w}"/>`};
+const hexV=(cx,cy,r,c,w=1.6)=>hex(cx,cy,r,c,w,0);
+function mol(id,t){
+  let s='';const ph=t*Math.PI*2;const g=FG[FIDS.indexOf(id)];const col=g==='cel'?C.cel:g==='hp'?'#C2410C':C.syn;const u=T().fib;
+  const wav=(y0,amp,k,off,x1=20,x2=420)=>{let d='';for(let x=x1;x<=x2;x+=6){const y=y0+Math.sin(x/k+off)*amp;d+=(x===x1?'M':'L')+x+' '+y.toFixed(1)+' '}return d};
+  if(id==='pes'||id==='pa'){for(let r=0;r<4;r++){const y=50+r*45;s+=`<path d="${wav(y,4,30,ph+r)}" fill="none" stroke="${col}" stroke-width="2"/>`;
+      for(let k=0;k<5;k++){const x=50+k*80+(r%2)*40;s+=hex(x,y+Math.sin(x/30+ph+r)*4,9,col)}
+      if(id==='pa'&&r<3)for(let k=0;k<6;k++){const x=30+k*70+(r%2)*20;const op=0.5+0.5*Math.sin(ph*2+k+r);s+=`<line x1="${x}" y1="${y+6}" x2="${x}" y2="${y+39}" stroke="${HB}" stroke-width="1.6" stroke-dasharray="3 3" opacity="${op.toFixed(2)}"/>`}}}
+  if(id==='pp'||id==='pan'||id==='pe'||id==='pvc'){for(let r=0;r<4;r++){const y=50+r*48;let d='';const pts=[];for(let k=0;k<=24;k++){const x=20+k*16.5,yy=y+(k%2?8:-8)+Math.sin(ph+r+k/4)*2;pts.push([x,yy]);d+=(k?'L':'M')+x+' '+yy.toFixed(1)+' '}
+      s+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2"/>`;
+      pts.forEach(([x,yy],k)=>{if(id==='pe')return;if(id==='pvc'){if(k%2===0)s+=`<line x1="${x}" y1="${yy.toFixed(1)}" x2="${x}" y2="${(yy-9).toFixed(1)}" stroke="${CL}" stroke-width="1.5"/><circle cx="${x}" cy="${(yy-14).toFixed(1)}" r="6" fill="${CL}"/><text x="${x}" y="${(yy-11.5).toFixed(1)}" font-size="7" font-weight="700" text-anchor="middle" fill="#fff">Cl</text>`;return}if(k%2===0){if(id==='pp')s+=`<circle cx="${x}" cy="${(yy-10).toFixed(1)}" r="3.5" fill="${HB}"/>`;else s+=`<line x1="${x}" y1="${yy.toFixed(1)}" x2="${x}" y2="${(yy-14).toFixed(1)}" stroke="${HB}" stroke-width="1.5"/><line x1="${x-2}" y1="${(yy-6).toFixed(1)}" x2="${x-2}" y2="${(yy-14).toFixed(1)}" stroke="${HB}" stroke-width="1"/><line x1="${x+2}" y1="${(yy-6).toFixed(1)}" x2="${x+2}" y2="${(yy-14).toFixed(1)}" stroke="${HB}" stroke-width="1"/>`}})}}
+  if(id==='pla'){for(let r=0;r<4;r++){const y=48+r*48;let d='';const pts=[];for(let k=0;k<=24;k++){const x=20+k*16.5,yy=y+(k%2?7:-7)+Math.sin(ph+r+k/4)*2;pts.push([x,yy]);d+=(k?'L':'M')+x+' '+yy.toFixed(1)+' '}
+      s+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2"/>`;
+      pts.forEach(([x,yy],k)=>{const o=(k+r)%3,dir=k%2?1:-1;
+        if(o===0)s+=`<circle cx="${x}" cy="${yy.toFixed(1)}" r="4" fill="#E03131"/>`;
+        else if(o===1)s+=`<line x1="${x}" y1="${yy.toFixed(1)}" x2="${x}" y2="${(yy+dir*9).toFixed(1)}" stroke="${col}" stroke-width="1.5"/><circle cx="${x}" cy="${(yy+dir*11).toFixed(1)}" r="3.5" fill="${HB}"/>`;
+        else s+=`<line x1="${x-2}" y1="${yy.toFixed(1)}" x2="${x-2}" y2="${(yy+dir*10).toFixed(1)}" stroke="${col}" stroke-width="1.4"/><line x1="${x+2}" y1="${yy.toFixed(1)}" x2="${x+2}" y2="${(yy+dir*10).toFixed(1)}" stroke="${col}" stroke-width="1.4"/><circle cx="${x}" cy="${(yy+dir*13).toFixed(1)}" r="3.5" fill="#E03131"/>`})}}
+  if(id==='ela'){const st=1+0.9*(0.5-0.5*Math.cos(ph));for(let r=0;r<4;r++){const y=40+r*46;let x=20;
+      for(let k=0;k<4;k++){s+=`<rect x="${x}" y="${y-5}" width="28" height="10" rx="2" fill="${HB}"/>`;x+=28;const L=40*st;let d=`M${x} ${y}`;const n=6;for(let j=1;j<=n*4;j++){const xx=x+L*j/(n*4);const amp=12/st;d+=` L${xx.toFixed(1)} ${(y+Math.sin(j*Math.PI/2)*amp).toFixed(1)}`}s+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="1.8"/>`;x+=L;if(x>420)break}}
+    s+=Tm(220,228,u.molEla,'middle',400)}
+  if(id==='cv'||id==='cly'||id==='ca'){const order=id==='cly'?1:id==='cv'?0.4:0.7;for(let r=0;r<4;r++){const y=48+r*48;const amp=(1-order)*10;
+      for(let k=0;k<7;k++){const x=40+k*56+(r%2)*20,yy=y+Math.sin(k*1.3+r+ph)*amp;s+=hexV(x,yy,11,col);s+=`<circle cx="${x+11}" cy="${yy.toFixed(1)}" r="2.5" fill="#D9480F" opacity=".7"/>`;
+        if(k<6)s+=`<line x1="${x+11}" y1="${yy.toFixed(1)}" x2="${x+45}" y2="${(y+Math.sin((k+1)*1.3+r+ph)*amp).toFixed(1)}" stroke="${col}" stroke-width="1.5"/>`;
+        if(id==='ca')s+=`<circle cx="${x}" cy="${(yy-16).toFixed(1)}" r="4" fill="${HB}"/>`;
+        else if(r<3&&k%2===0)s+=`<line x1="${x}" y1="${(yy+11).toFixed(1)}" x2="${x}" y2="${(yy+37).toFixed(1)}" stroke="${HB}" stroke-width="1.3" stroke-dasharray="3 3" opacity="${(0.5+0.5*Math.sin(ph*2+k)).toFixed(2)}"/>`}}}
+  if(id==='meta'){for(let r=0;r<3;r++){const y=55+r*65;for(let k=0;k<8;k++){const x=30+k*52,yy=y+(k%2?14:-14)+Math.sin(ph+r)*2;s+=hex(x,yy,10,col);if(k<7)s+=`<line x1="${x+8}" y1="${(yy+(k%2?-5:5)).toFixed(1)}" x2="${x+44}" y2="${(y+((k+1)%2?14:-14)+(k%2?5:-5)+Math.sin(ph+r)*2).toFixed(1)}" stroke="${col}" stroke-width="1.8"/>`}}}
+  if(id==='para'){for(let r=0;r<4;r++){const y=45+r*48;s+=`<line x1="20" y1="${y}" x2="420" y2="${y}" stroke="${col}" stroke-width="2"/>`;for(let k=0;k<7;k++)s+=hex(45+k*58,y,11,col);
+      if(r<3)for(let k=0;k<7;k++){const x=74+k*58;s+=`<line x1="${x}" y1="${y+4}" x2="${x}" y2="${y+44}" stroke="${HB}" stroke-width="1.6" stroke-dasharray="3 3" opacity="${(0.5+0.5*Math.sin(ph*2+k+r)).toFixed(2)}"/>`}}}
+  if(id==='uhmw'){for(let r=0;r<9;r++){const y=26+r*21;s+=`<path d="${wav(y,0.8,20,ph*2+r)}" fill="none" stroke="${col}" stroke-width="2"/>`}
+    s+=`<path d="M150 68 q 20 -18 40 0 t 40 0" fill="none" stroke="${HB}" stroke-width="2"/>`+Tm(220,228,u.molUhmw,'middle',400)}
+  if(id==='cf'){for(let r=0;r<4;r++){const y=40+r*52,dx=Math.sin(ph+r)*3;for(let k=0;k<13;k++){s+=hexV(30+k*30+dx+(r%2)*15,y,10,col,1.3);s+=hexV(30+k*30+dx+15+(r%2)*15,y+17,10,col,1.3)}}}
+  if(id==='pps'){for(let r=0;r<4;r++){const y=50+r*46;s+=`<path d="${wav(y,3,30,ph+r)}" fill="none" stroke="${col}" stroke-width="2"/>`;for(let k=0;k<6;k++){const x=40+k*68+(r%2)*30,yy=y+Math.sin(x/30+ph+r)*3;s+=hex(x,yy,10,col);s+=`<circle cx="${x+34}" cy="${(y+Math.sin((x+34)/30+ph+r)*3).toFixed(1)}" r="5" fill="#FAB005"/>`}}}
+  return s;
+}
+const molT=()=>PAUSED?0.15:((performance.now()-t0)/4000)%1;
+function drawMol(){$('molsvg').innerHTML=`<svg x="0" y="0" width="440" height="240" overflow="hidden">`+mol(cur,molT())+`</svg>`}
+function radar(sc){
+  const cx=220,cy=140,R=86,ax=T().fib.ax,n=ax.length;let s='';
+  const P=(i,v)=>{const a=-Math.PI/2+i*2*Math.PI/n;return [cx+Math.cos(a)*R*v/5,cy+Math.sin(a)*R*v/5]};
+  for(let l=1;l<=5;l++)s+=`<polygon points="${ax.map((_,i)=>P(i,l).map(v=>v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--line)" stroke-width="1"/>`;
+  ax.forEach((a,i)=>{const [x,y]=P(i,5),[lx,ly]=P(i,6.0);const mid=Math.abs(lx-cx)<10,anc=mid?'middle':(lx>cx?'start':'end');
+    const max=mid?200:(lx>cx?434-lx:lx-6);
+    s+=`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)"/>`+TX(lx.toFixed(1),(ly+4+(mid&&ly<cy?-4:0)).toFixed(1),a,'var(--fg)',anc,500,11.5,max)});
+  const g=FG[FI()],col=C[g];
+  s+=`<polygon points="${sc.map((v,i)=>P(i,v).map(q=>q.toFixed(1)).join(',')).join(' ')}" fill="${col}" fill-opacity=".25" stroke="${col}" stroke-width="2.5"/>`;
+  sc.forEach((v,i)=>{const [x,y]=P(i,v);s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${col}"/>`});
+  s+=Tm(220,272,T().fib.radNote,'middle',430);
+  return s;
+}
+function drawRad(){$('radsvg').innerHTML=radar(radCur)}
+
+// ── 2 properties compared
+let kk='d',kAnim=0,kFrom={};
+function kRows(k){const ix=KK.indexOf(k);
+  return KV.map((r,i)=>({i,v:ix===4?(r[4]?r[4][0]:null):r[ix],x:ix===4&&r[4]?r[4][1]:-1})).filter(r=>r.v!==null&&r.v!==undefined).sort((a,b)=>b.v-a.v)}
+function kSeg(){segBtns($('kseg'),KK,T().kenn.seg,kk,k=>{const old=kRows(kk);kFrom={};old.forEach((r,j)=>kFrom[r.i]=40+j*36);kk=k;kAnim=performance.now();kSeg();drawK()})}
+function drawK(){
+  const t=T().kenn,ix=KK.indexOf(kk),unit=KU[ix],dec=KD[ix],rows=kRows(kk),log=kk==='e';
+  const mx=Math.max(...rows.map(r=>r.v)),sc=v=>log?Math.log10(1+v)/Math.log10(1+mx):v/mx;
+  const u=PAUSED?1:ease((performance.now()-kAnim)/700);
+  let s=TX(20,22,t.lab[ix]+' ('+unit+')'+(log?' – '+t.log:''),'var(--fg)','start',700,13,960);
+  const xw=210+580/mx*u;  // water line (density 1.0)
+  if(kk==='d'){s+=`<line x1="${xw.toFixed(1)}" y1="34" x2="${xw.toFixed(1)}" y2="${44+rows.length*36}" stroke="${C.syn}" stroke-dasharray="4 4"/>`+TX((xw+4).toFixed(1),58+rows.length*36,t.water.replace('{n}',num(1,1)),C.syn,'start',600,11)}
+  let vals='';
+  rows.forEach((r,j)=>{const yT=40+j*36,yF=kFrom[r.i]!==undefined?kFrom[r.i]:yT,y=yF+(yT-yF)*u,g=KG[r.i],w=580*sc(r.v)*u;
+    const val=num(r.v,kk==='e'&&r.v>=10?0:(kk==='m'&&r.v<0.1&&r.v>0?2:dec))+' '+unit+(r.x>=0?' · '+t.kind[r.x]:'');
+    s+=TX(200,(y+19).toFixed(1),t.names[r.i],'var(--fg)','end',600,12.5,190)+`<rect x="210" y="${(y+3).toFixed(1)}" width="${Math.max(2,w).toFixed(1)}" height="22" rx="5" fill="${C[g]}" opacity=".86"/>`;
+    // density: a value next to a bar ending at the water line would sit on the dashed line - put it right of the line
+    const xv=kk==='d'&&218+w<xw+8&&218+w>xw-80?xw+8:218+w;
+    vals+=TX(xv.toFixed(1),(y+19).toFixed(1),val,'var(--fg)','start',500,11.5,Math.max(120,990-xv)).replace('<text ','<text stroke="#fff" stroke-width="3" paint-order="stroke" ')});
+  s+=vals;
+  const nr=u<1?Math.max(rows.length,Object.keys(kFrom).length):rows.length;$('ksvg').setAttribute('viewBox',`0 0 1000 ${44+nr*36+(kk==='d'?24:4)}`);
+  $('ksvg').innerHTML=s;$('ksvg').setAttribute('aria-label',t.lab[ix]);$('knote').textContent=t.notes[ix];
+}
+
+// ── 3 application matrix
+function drawMx(){
+  const t=T().mx,G=T().fib.groups;
+  const dot=x=>x===2?`<span class="dot m" title="${esc(t.main)}"></span>`:x===1?`<span class="dot s" title="${esc(t.side)}"></span>`:'';
+  let h=`<tr><th>${esc(t.head)}</th>${t.cols.map((c,i)=>`<th class="${i<2?'':'hl'}">${esc(c)}</th>`).join('')}</tr>`;
+  EM.forEach((v,j)=>{if(j===0||EG[j]!==EG[j-1])h+=`<tr class="grp"><td colspan="${v.length+1}">${esc(G[GROUPS.indexOf(EG[j])])}</td></tr>`;
+    h+=`<tr><td><b>${esc(t.rows[j])}</b></td>${v.map((x,i)=>`<td class="${i<2?'':'hl'}">${dot(x)}</td>`).join('')}</tr>`});
+  $('emx').innerHTML=h;
+  $('mxleg').innerHTML=`<span><span class="dot m"></span>${esc(t.main)}</span><span><span class="dot s"></span>${esc(t.side)}</span><span><i></i>${esc(t.techCols)}</span>`;
+}
+
+// ── 4 recycling + links
+function drawR(){
+  const t=T().recy,u=prog(150,1200);let s='';
+  RV.forEach(([v,g],i)=>{const y=14+i*36,w=480*v/15*u;const lab=num(v*u,1)+' %',c=t.comments[i];
+    s+=TX(200,y+19,t.names[i],'var(--fg)','end',600,12.5,190)+`<rect x="210" y="${y+3}" width="${w.toFixed(1)}" height="22" rx="5" fill="${C[g]}" opacity=".86"/>`+
+      TX((218+w).toFixed(1),y+19,lab,'var(--fg)','start',700,12)+(c?Tm((218+w+textW(lab,12,700)+12).toFixed(1),y+19,c,'start',Math.max(120,990-(230+w+textW(lab,12,700)))):'')});
+  s+=`<line x1="210" y1="${14+RV.length*36+6}" x2="690" y2="${14+RV.length*36+6}" stroke="var(--line)"/>`;
+  [0,5,10,15].forEach(p=>{const x=210+480*p/15;s+=`<line x1="${x}" y1="${14+RV.length*36+3}" x2="${x}" y2="${14+RV.length*36+9}" stroke="var(--muted)"/>`+Tm(x,14+RV.length*36+24,num(p)+' %')});
+  $('rsvg').innerHTML=s;$('rsvg').setAttribute('aria-label',T().scenes[4].k);
+}
+function drawLinks(){
+  const t=T();
+  $('lkL').textContent=t.ui.lkL;
+  $('links').innerHTML=t.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${esc(l[0])} →</b><span>${esc(l[1])}</span><em>${esc(t.ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── loop: only the visible scene is redrawn, and only while something moves
+function drawScene(){
+  if(scene===0){drawM();drawW();drawA();tick()}
+  if(scene===1){drawMol();drawRad()}
+  if(scene===2)drawK();
+  if(scene===4)drawR();
+}
+function loop(now){
+  if(scene===0){if(busy(2700)){drawM();drawW();drawA()}tick()}
+  if(scene===1){if(!PAUSED)drawMol();const tgt=FSC[FI()];if(radCur.some((v,i)=>Math.abs(v-tgt[i])>0.003)){radCur=radCur.map((v,i)=>v+(tgt[i]-v)*0.12);drawRad()}}
+  if(scene===2&&!PAUSED&&performance.now()-kAnim<760)drawK();
+  if(scene===4&&busy(1400))drawR();
+  requestAnimationFrame(loop);
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;start=performance.now();
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  drawScene();
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k[0])}</b><span>${esc(k[1])}</span></div>`).join('')+`<div class="kpi"><b id="tick">0 t</b><span>${esc(u.tick)}</span></div>`;
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  const m=t.mk;$('mnote').textContent=m.note;$('wtitle').textContent=m.wtitle;$('wnote').textContent=m.wnote;$('atitle').textContent=m.atitle;$('anote').textContent=m.anote;
+  $('msvg').setAttribute('aria-label',m.total.replace('{n}',num(MK_TOTAL)+' '+mt()));$('wsvg').setAttribute('aria-label',m.wtitle);$('asvg').setAttribute('aria-label',m.atitle);
+  mText();showF(cur);kSeg();drawMx();drawLinks();$('rnote').textContent=t.recy.note;
+  drawM();drawW();drawA();drawK();drawR();
+  const keep=start;go(scene);start=keep;
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

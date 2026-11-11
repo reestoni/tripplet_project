@@ -1,6 +1,6 @@
 window.TEXTS = {
 "de": {
- "ui": {"eyebrow": "Onboarding · BCF-Spinnerei", "h1": "Wie Teppichgarn in einem Schritt entsteht",
+ "ui": {"eyebrow": "Knowledge Base · BCF-Spinnerei", "h1": "Wie Teppichgarn in einem Schritt entsteht",
   "lead": "BCF steht für Bulked Continuous Filament: ein voluminöses, gekräuseltes Endlosgarn für Teppiche. Spinnen, Verstrecken, Texturieren und Verwirbeln laufen auf einer Anlage hintereinander. Sechs kurze Szenen zeigen den Weg und die Rolle der Heberlein-Düsen.",
   "mix": "Verwirbelungsintensität", "low": "niedrig", "mid": "mittel", "high": "hoch",
   "pause": "⏸ Pause", "play": "▶ Abspielen", "scenes": "Szenen",
@@ -50,7 +50,7 @@ window.TEXTS = {
   "table": [["Prozess", "zweistufig: POY, dann DTY", "einstufig auf einer Anlage"], ["Texturierung", "Falschdraht (Friktion)", "Heissluft + Stauchkammer"], ["Fixieren", "Heizer unter Drall", "Kühltrommel"], ["Titer", "fein", "grob"], ["Heberlein", "Verwirbelungsdüsen", "Migrations- und Verwirbelungsdüsen"], ["Verwendung", "Bekleidung, Heimtextil", "Teppich"]]}
 },
 "en": {
- "ui": {"eyebrow": "Onboarding · BCF spinning", "h1": "How carpet yarn is made in one step",
+ "ui": {"eyebrow": "Knowledge Base · BCF spinning", "h1": "How carpet yarn is made in one step",
   "lead": "BCF stands for Bulked Continuous Filament: a bulky, crimped continuous yarn for carpets. Spinning, drawing, texturing and interlacing run one after the other on one line. Six short scenes show the path and the role of the Heberlein jets.",
   "mix": "Interlacing intensity", "low": "low", "mid": "medium", "high": "high",
   "pause": "⏸ Pause", "play": "▶ Play", "scenes": "Scenes",
@@ -100,7 +100,7 @@ window.TEXTS = {
   "table": [["Process", "two steps: POY, then DTY", "one step on one line"], ["Texturing", "false twist (friction)", "hot air + stuffer chamber"], ["Setting", "heater under twist", "cooling drum"], ["Count", "fine", "coarse"], ["Heberlein", "interlacing jets", "migration and interlacing jets"], ["Use", "apparel, home textiles", "carpet"]]}
 },
 "es": {
- "ui": {"eyebrow": "Onboarding · Hilatura BCF", "h1": "Cómo se fabrica el hilo de alfombra en un solo paso",
+ "ui": {"eyebrow": "Knowledge Base · Hilatura BCF", "h1": "Cómo se fabrica el hilo de alfombra en un solo paso",
   "lead": "BCF significa Bulked Continuous Filament: un hilo continuo voluminoso y rizado para alfombras. Hilatura, estirado, texturizado y entrelazado se suceden en una sola instalación. Seis escenas cortas muestran el recorrido y el papel de las toberas Heberlein.",
   "mix": "Intensidad de entrelazado", "low": "baja", "mid": "media", "high": "alta",
   "pause": "⏸ Pausa", "play": "▶ Reproducir", "scenes": "Escenas",
@@ -150,7 +150,7 @@ window.TEXTS = {
   "table": [["Proceso", "dos pasos: POY, luego DTY", "un paso en una instalación"], ["Texturizado", "falsa torsión (fricción)", "aire caliente + cámara"], ["Fijado", "calentador bajo torsión", "tambor de enfriamiento"], ["Título", "fino", "grueso"], ["Heberlein", "toberas de entrelazado", "toberas de migración y entrelazado"], ["Uso", "ropa, textil hogar", "alfombra"]]}
 },
 "zh": {
- "ui": {"eyebrow": "入门 · BCF 纺丝", "h1": "地毯丝是如何一步生产出来的",
+ "ui": {"eyebrow": "知识库 · BCF 纺丝", "h1": "地毯丝是如何一步生产出来的",
   "lead": "BCF 是 Bulked Continuous Filament（膨体连续长丝）的缩写：一种用于地毯的蓬松、卷曲的连续长丝。纺丝、拉伸、变形和网络在一条生产线上依次完成。六个短场景介绍工艺路线以及 Heberlein 喷嘴的作用。",
   "mix": "网络强度", "low": "低", "mid": "中", "high": "高",
   "pause": "⏸ 暂停", "play": "▶ 播放", "scenes": "场景",

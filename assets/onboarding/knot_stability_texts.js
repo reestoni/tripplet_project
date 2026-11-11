@@ -1,7 +1,7 @@
 window.TEXTS = {
  "de": {
   "ui": {
-   "eyebrow": "Onboarding · DTY · Spezialwissen · Hypothese",
+   "eyebrow": "Knowledge Base · DTY · Spezialwissen · Hypothese",
    "h1": "Harte Knoten, weniger Dehnung?",
    "lead": "Eine Messstrecke mit mehreren Knoten wird gezogen. Zwischen den Knoten sind die Filamente nicht alle gleich lang. Das Modell zeigt, was passiert, wenn die Knoten halten, und was, wenn sie unter Zug öffnen.",
    "note": "Vereinfachtes Modell zur Veranschaulichung der These: 12 Filamente, linear-elastisch bis zum Bruch, 5 Segmente mit ungleichen Filamentlängen, Knoten mit Haltekraft, die beim Öffnen gebundene Länge freigeben. Kräuselung und Knotengeometrie sind nicht abgebildet. Alle Werte sind relativ und keine Messwerte.",
@@ -171,7 +171,7 @@ window.TEXTS = {
  },
  "en": {
   "ui": {
-   "eyebrow": "Onboarding · DTY · Specialist knowledge · Hypothesis",
+   "eyebrow": "Knowledge Base · DTY · Specialist knowledge · Hypothesis",
    "h1": "Hard nips, less elongation?",
    "lead": "A gauge length with several nips is pulled. Between the nips the filaments are not all equally long. The model shows what happens when the nips hold, and what happens when they open under tension.",
    "note": "Simplified model to illustrate the hypothesis: 12 filaments, linear-elastic up to break, 5 segments with unequal filament lengths, nips with a holding force that release bound length when they open. Crimp and nip geometry are not modelled. All values are relative, not measurements.",
@@ -341,7 +341,7 @@ window.TEXTS = {
  },
  "es": {
   "ui": {
-   "eyebrow": "Onboarding · DTY · Conocimiento especializado · Hipótesis",
+   "eyebrow": "Knowledge Base · DTY · Conocimiento especializado · Hipótesis",
    "h1": "¿Nudos duros, menos alargamiento?",
    "lead": "Se estira una longitud de ensayo con varios nudos. Entre los nudos los filamentos no tienen todos la misma longitud. El modelo muestra qué pasa cuando los nudos aguantan y qué pasa cuando se abren bajo tracción.",
    "note": "Modelo simplificado para ilustrar la hipótesis: 12 filamentos, elástico-lineales hasta la rotura, 5 segmentos con longitudes de filamento desiguales, nudos con fuerza de retención que liberan longitud al abrirse. No se representan el rizado ni la geometría del nudo. Todos los valores son relativos, no son mediciones.",
@@ -511,7 +511,7 @@ window.TEXTS = {
  },
  "zh": {
   "ui": {
-   "eyebrow": "入门 · DTY · 专业知识 · 假设",
+   "eyebrow": "知识库 · DTY · 专业知识 · 假设",
    "h1": "网络点越牢，伸长越低？",
    "lead": "拉伸一段含有多个网络点的试样。网络点之间的单丝长度并不完全相同。模型展示网络点保持不动时会发生什么，以及网络点在拉力下打开时会发生什么。",
    "note": "用于说明假设的简化模型：12 根单丝，断裂前线弹性，5 个单丝长度不等的段落，网络点有保持力，打开时释放束缚的长度。未模拟卷曲和网络点几何形状。所有数值均为相对值，不是测量值。",

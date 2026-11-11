@@ -612,6 +612,9 @@ class MainWindow(QMainWindow):
         # Dashboards zum Anschauen (ui/screen_dashboards.py, Etappe 6) - erst beim ersten Oeffnen gebaut
         self.dashboards_screen = None
         app_meta.open_dashboards = self._go_dashboards
+        # Yarn Count Converter (ui/screen_yarn_count.py) - erst beim ersten Oeffnen gebaut
+        self.yarn_count_screen = None
+        app_meta.open_yarn_count = self._go_yarn_count
         # Onboarding (ui/screen_onboarding.py) - erst beim ersten Oeffnen gebaut
         self.onboarding_screen = None
         app_meta.open_onboarding = self._go_onboarding
@@ -2503,6 +2506,19 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("TrippleT – Dashboards")
         self.stack.setCurrentWidget(self.dashboards_screen)
 
+    def _go_yarn_count(self) -> None:
+        """Yarn Count Converter (ui/screen_yarn_count.py): dtex, den, tex, Nm, Ne ..."""
+        if self.yarn_count_screen is None:
+            try:
+                from ui.screen_yarn_count import YarnCountScreen
+            except Exception as e:
+                show_error(self, "Yarn Count Converter", "The Yarn Count Converter could not be opened.", e)
+                return
+            self.yarn_count_screen = YarnCountScreen(sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.yarn_count_screen)
+        self.setWindowTitle("TrippleT – Yarn Count Converter")
+        self.stack.setCurrentWidget(self.yarn_count_screen)
+
     def _go_onboarding(self) -> None:
         """Onboarding (ui/screen_onboarding.py): animierte Einfuehrungen, Vollbild."""
         if self.onboarding_screen is None:
@@ -2510,11 +2526,11 @@ class MainWindow(QMainWindow):
                 from ui.screen_onboarding import OnboardingScreen
             except Exception as e:
                 from ui.widgets.friendly_error import show_error
-                show_error(self, "Onboarding", "Onboarding could not be opened.", e)
+                show_error(self, "Knowledge Base", "The Knowledge Base could not be opened.", e)
                 return
             self.onboarding_screen = OnboardingScreen(sidebar_callbacks=self._sidebar_nav_kwargs())
             self.stack.addWidget(self.onboarding_screen)
-        self.setWindowTitle("TrippleT – Onboarding")
+        self.setWindowTitle("TrippleT – Knowledge Base")
         self.stack.setCurrentWidget(self.onboarding_screen)
 
     def _edit_dashboard_in_smartchart(self, view_id: int) -> None:

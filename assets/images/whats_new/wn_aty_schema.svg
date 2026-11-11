@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- ATY machine path - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <text x="12" y="20" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">V1</text>
+  <text x="12" y="30" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#39a650" text-anchor="start">Air texturing</text>
+  <text x="70" y="44" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="middle">Feed roll</text>
+  <text x="130" y="44" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="middle">Wetting</text>
+  <text x="170" y="44" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="middle">Jet</text>
+  <text x="210" y="44" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="middle">LW 2</text>
+  <text x="262" y="44" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="middle">Winder</text>
+  <line x1="16" y1="56" x2="270" y2="56" stroke="#39a650" stroke-width="2"/>
+  <line x1="16" y1="76" x2="104" y2="76" stroke="#C08A1E" stroke-width="2"/>
+  <polyline points="104,76 112,72 116,62 122,56" fill="none" stroke="#C08A1E" stroke-width="2"/>
+  <circle cx="14" cy="56" r="4" fill="#39a650"/>
+  <circle cx="14" cy="76" r="4" fill="#C08A1E"/>
+  <text x="22" y="53" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#39a650" text-anchor="start" font-weight="bold">Core</text>
+  <text x="22" y="73" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#C08A1E" text-anchor="start" font-weight="bold">Effect</text>
+  <circle cx="67" cy="53" r="3" fill="#E8F5E9"/>
+  <circle cx="73" cy="59" r="3" fill="#E8F5E9"/>
+  <circle cx="67" cy="73" r="3" fill="#E8F5E9"/>
+  <circle cx="73" cy="79" r="3" fill="#E8F5E9"/>
+  <circle cx="207" cy="53" r="3" fill="#E8F5E9"/>
+  <circle cx="213" cy="59" r="3" fill="#E8F5E9"/>
+  <text x="70" y="66" font-family="Segoe UI, Arial, sans-serif" font-size="6" fill="#565656" text-anchor="middle">OF 12 %</text>
+  <text x="70" y="86" font-family="Segoe UI, Arial, sans-serif" font-size="6" fill="#565656" text-anchor="middle">OF 24 %</text>
+  <rect x="162" y="47" width="18" height="18" rx="3" fill="#FFF0C2" stroke="#E08A00" stroke-width="1.5"/>
+  <rect x="122" y="50" width="16" height="12" rx="2" fill="#9ED0F0"/>
+  <rect x="165" y="50" width="12" height="12" rx="2" fill="#43A047"/>
+  <circle cx="262" cy="56" r="7" fill="#ffffff"/>
+  <circle cx="262" cy="56" r="2.5" fill="#565656"/>
+  <rect x="12" y="98" width="276" height="14" rx="0" fill="#FFF0C2" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="16" y="108" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">Jet</text>
+  <rect x="150" y="98" width="60" height="14" rx="0" fill="#FFF0C2" stroke="#E08A00" stroke-width="1.5"/>
+  <text x="180" y="108" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">D13 K3</text>
+  <text x="240" y="108" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">D13 K3</text>
+  <rect x="12" y="112" width="276" height="14" rx="0" fill="#FFF0C2" stroke="#c9dfcb" stroke-width="1"/>
+  <text x="16" y="122" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="start">Air pressure</text>
+  <rect x="150" y="112" width="60" height="14" rx="0" fill="#FFF0C2" stroke="#E08A00" stroke-width="1.5"/>
+  <text x="180" y="122" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">8.0</text>
+  <text x="240" y="122" font-family="Segoe UI, Arial, sans-serif" font-size="8" fill="#2b2b2b" text-anchor="middle">7.5</text>
+</svg>

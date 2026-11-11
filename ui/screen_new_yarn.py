@@ -239,6 +239,9 @@ class NewYarnScreen(QWidget):
                     combo.setItemIcon(i, colour_icon(combo.itemText(i)))
             if key == "colourid" and self._on_quick_add_colour:
                 self._wire_quick_add_colour(combo, fk)
+            if key in ("material", "garntyp"):
+                from ui import kb_links
+                kb_links.install_combo_menu(combo, self, key, "new_yarn")
             return combo
 
         edit = QLineEdit()

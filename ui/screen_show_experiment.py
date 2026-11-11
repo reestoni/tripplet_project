@@ -79,6 +79,7 @@ from db.trial_reference import (
     is_reference_value,
     next_reference_number,
     next_trial_number,
+    format_number_list,
     format_trial_number,
     reference_label,
     reference_tooltip,
@@ -2378,6 +2379,13 @@ def _show_experiment_cell_menu(table, index, menu) -> None:
         return
     _cell_notes_ui.add_cell_note_actions(w, table.model(), index, menu)
     _add_cell_history_action(w, table.model(), index, menu)
+    from ui import kb_links
+    if table is getattr(w, "tbl_machine", None) or table is getattr(w, "tbl_rd_machine", None):
+        is_rd = table is getattr(w, "tbl_rd_machine", None)
+        target = kb_links.machine_cell_target(w, table.model(), index, is_rd)
+        kb_links.add_action(menu, w, target, "rd_machine_data" if is_rd else "machine_data")
+    else:
+        kb_links.add_action(menu, w, kb_links.table_target(w, table), "lab")
 
 
 def _view_row_hidden(table, row: int) -> bool:
@@ -2455,6 +2463,11 @@ class _MachineContextMenuFilter(QObject):
             act_cg = menu.addAction(
                 "Hide Custom Group" if cg_visible else "Show Custom Group"
             )
+            if row >= n_hdr:
+                from ui import kb_links
+                kb_links.add_action(menu, self._screen,
+                                    kb_links.machine_row_target(self._screen, row, self._is_rd),
+                                    "rd_machine_data" if self._is_rd else "machine_data")
             chosen = menu.exec(event.globalPos())
             if act_fill and chosen == act_fill:
                 self._screen._fill_machine_row_from_title(row, is_rd=self._is_rd)
@@ -3940,6 +3953,9 @@ class ShowExperimentScreen(QWidget):
         _mfb_lay.addWidget(self.btn_series_yarns)
 
         vm.addWidget(self._mat_filter_bar)
+        # DTY process schema (toggle "Schema" + panel, only on DTY machines)
+        from ui import dty_schema_panel as _dsp
+        _dsp.install(self, vm, _mfb_lay)
 
         self.tbl_machine = FrozenFirstColumnTable()
         self._enable_copy_for_table(self.tbl_machine)
@@ -4849,10 +4865,13 @@ class ShowExperimentScreen(QWidget):
                          "HousingName", "Jet", "JetName", "MaterialName",
                          "YarnName", "Description", "Label"],
                         lk_cmap)
+                    # DTY process (db/dty_process.py): own order, not alphabetical
+                    lk_order = (resolve_field(["SortOrder"], lk_cmap) or lk_name) \
+                        if lt.lower() == "tbldtyprocess" else lk_name
                     if lk_name:
                         for lk in fetch_all(
                                 f"SELECT `{lk_id}` AS LID, `{lk_name}` AS LName "
-                                f"FROM `{lt}` ORDER BY `{lk_name}` ASC"
+                                f"FROM `{lt}` ORDER BY `{lk_order}` ASC"
                         ):
                             lid = lk.get("LID")
                             lname = str(lk.get("LName") or "")
@@ -6029,6 +6048,16 @@ class ShowExperimentScreen(QWidget):
         if not has_reference_columns() or self._get_access_level() <= 1:
             for a in ref_actions:
                 a.setEnabled(False)
+        menu.addSeparator()
+        del_ids = self._trials_to_delete(trial_id, is_rd)
+        act_delete = menu.addAction(
+            f"Delete {format_number_list(self._vnos_of(del_ids)) or 'trial'}…" if len(del_ids) == 1
+            else f"Delete {len(del_ids)} selected trials ({format_number_list(self._vnos_of(del_ids))})…")
+        why = self._trial_delete_blocker()
+        if why:
+            act_delete.setEnabled(False)
+            act_delete.setToolTip(why)
+            menu.setToolTipsVisible(True)
 
         chosen = menu.exec(global_pos)
         if chosen is None:
@@ -6045,6 +6074,125 @@ class ShowExperimentScreen(QWidget):
             self._rename_reference_sample(trial_id, vno)
         elif chosen is act_unmark:
             self._set_reference_flag(trial_id, vno, False)
+        elif chosen is act_delete:
+            self._delete_trials(del_ids)
+
+    # ── Delete trials (recycle bin, numbers stay used - db/recycle_bin.py) ──
+
+    def _trials_to_delete(self, clicked_trial_id: int, is_rd: bool = False) -> List[int]:
+        """The clicked trial - or, if it is part of a selection over several
+        trials in the same table, all selected trials (in column order)."""
+        specs = getattr(self, "_rd_machine_col_specs" if is_rd else "_machine_col_specs", None) or []
+        tbl = getattr(self, "tbl_rd_machine" if is_rd else "tbl_machine", None)
+        selected: List[int] = []
+        try:
+            sel = tbl.right.selectionModel() if tbl is not None else None
+            for c in sorted({ix.column() for ix in sel.selectedIndexes()}) if sel else []:
+                if 1 <= c <= len(specs):
+                    tid = int(specs[c - 1]["trial_id"])
+                    if tid not in selected:
+                        selected.append(tid)
+        except Exception:
+            selected = []
+        if int(clicked_trial_id) in selected and len(selected) > 1:
+            return selected
+        return [int(clicked_trial_id)]
+
+    def _vnos_of(self, trial_ids) -> List[Any]:
+        by_id = {int(t): v for t, v in zip(self._trial_ids, self._trial_vnos)}
+        return [by_id.get(int(t)) for t in trial_ids]
+
+    def _trial_delete_blocker(self) -> str:
+        """'' if the current user may delete trials here, else the reason."""
+        from db import recycle_bin
+        if self._series_pk is None or self._get_access_level() <= 1:
+            return "Read only"
+        if not recycle_bin.available():
+            return "Deleting trials needs the recycle bin (not available offline)."
+        if not recycle_bin.can_delete_trials_now(self._series_pk):
+            return ("Only who may move this series in the Backlog can delete its trials "
+                    "(in To Be Cleaned: superusers only).")
+        return ""
+
+    _TABLE_NAMES = {"tbltrial": "trials", "tbltrialsettings": "ply settings", "tblnote": "notes",
+                    "tbltrialretestflag": "retest flags", "tbllabortiter": "Titer",
+                    "tbllaboratyomat": "ATYoMat", "tbllaboratyshrinkage": "ATY shrinkage",
+                    "tbllabordtyomat": "DTYoMat", "tbllaborekb": "EKB",
+                    "tbllaborheissluftschrumpf": "Hot air shrinkage", "tbllaboritematlab": "Itemat",
+                    "tbllaboritematplus": "Itemat Plus", "tbllaborkochschrumpf": "Hot water shrinkage",
+                    "tbllaborrapid600": "Rapid 600", "tbllaborstatimatds": "Statimat DS",
+                    "tbllaborstatimatm": "Statimat", "tbllaborwaterbath": "Water bath"}
+
+    def _delete_trials(self, trial_ids: List[int]) -> None:
+        """Deletes trials with everything attached into the recycle bin. The
+        other trials keep their numbers - nothing moves up, gaps are never
+        filled (Nutzerwunsch 2026-11-11)."""
+        from db import recycle_bin
+        why = self._trial_delete_blocker()
+        if why or not trial_ids:
+            if why:
+                QMessageBox.information(self, "Delete trials", why)
+            return
+        if not self._confirm_proceed_despite_unsaved():
+            return
+        names = format_number_list(self._vnos_of(trial_ids))
+        try:
+            counts = recycle_bin.preview_trials(int(self._series_pk), trial_ids)
+        except recycle_bin.RecycleBinError as e:
+            QMessageBox.warning(self, "Delete trials", str(e))
+            return
+        except Exception as e:
+            show_error(self, "Delete trials", "The trials could not be checked.", e, warning=True)
+            return
+        n = len(trial_ids)
+        parts = []
+        for table, cnt in counts:
+            key = table.lower()
+            if key == "tbltrial":
+                continue
+            label = self._TABLE_NAMES.get(key) or (table[8:] if key.startswith("tbllabor") else table)
+            parts.append(f"{label}: {cnt}")
+        left = [v for t, v in zip(self._trial_ids, self._trial_vnos) if int(t) not in set(trial_ids)]
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Delete trials")
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText(
+            f"<b>Delete {names} ({n} trial{'s' if n != 1 else ''})?</b><br><br>"
+            "Also deleted: " + (", ".join(parts) if parts else "nothing else") + "<br><br>"
+            "The other trials keep their numbers - nothing moves up. "
+            "New trials are always added after the highest remaining number.<br>"
+            + ("<b>This removes all trials of the series.</b><br>" if not left else "")
+            + f"A superuser can restore them from the <b>Recycle Bin</b> for {recycle_bin.RETENTION_DAYS} days.")
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        msg.setDefaultButton(QMessageBox.Cancel)
+        msg.button(QMessageBox.Yes).setText("Delete")
+        if msg.exec() != QMessageBox.Yes:
+            return
+        label = f"{self._series_display_label()} {names}".strip()
+        try:
+            recycle_bin.delete_trials(int(self._series_pk), trial_ids, label)
+        except recycle_bin.RecycleBinError as e:
+            QMessageBox.warning(self, "Delete trials", str(e))
+            return
+        except Exception as e:
+            show_error(self, "Delete trials", "The trials could not be deleted - nothing was changed.", e)
+            return
+        self._reload_after_trial_copy()
+
+    def _series_display_label(self) -> str:
+        """'2026-73-052.01' style label of the open series for the recycle bin."""
+        try:
+            rows = fetch_all(
+                "SELECT e.ExperimentID AS exp, s.SeriesName AS sn FROM tblTrialSeries s "
+                "LEFT JOIN tblExperimente e ON e.ID = s.ExperimentID WHERE s.ID = ?", [self._series_pk])
+        except Exception:
+            rows = []
+        if not rows:
+            return ""
+        exp = str(rows[0].get("exp") or "").strip()
+        sn = str(rows[0].get("sn") or "").strip()
+        no = sn.split(" ", 1)[0] if sn[:2].isdigit() else ""
+        return f"{exp}.{no}" if exp and no else (exp or sn)
 
     def _ask_reference_name(self, title: str, current: str = "") -> Optional[str]:
         """Returns the entered name ("" allowed) or None on cancel."""
@@ -8240,6 +8388,8 @@ class ShowExperimentScreen(QWidget):
         act_flag.setEnabled(is_super)
         if not is_super:
             act_flag.setToolTip("Only superusers may flag a retest.")
+        from ui import kb_links
+        kb_links.add_action(menu, self, kb_links.table_target(self, table_widget), "lab_header")
         chosen = menu.exec(header.mapToGlobal(pos))
         if chosen == act_flag:
             self._mark_trial_for_retest(trial, trial_label, lab_source)

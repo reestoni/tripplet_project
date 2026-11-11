@@ -20,9 +20,12 @@ class RecycleBinDialog(QDialog):
         self.resize(900, 480)
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel(
-            f"Deleted trial series can be restored here for {recycle_bin.RETENTION_DAYS} days, "
-            "with all trials, plies, lab values, images/PDF entries and notes. "
-            "Double-click a series to look at it in Show Experiment first."))
+            f"Deleted trial series and trials can be restored here for {recycle_bin.RETENTION_DAYS} days, "
+            "with plies, lab values, images/PDF entries and notes. "
+            "Double-click a series to look at it in Show Experiment first.
+"
+            "Deleted trials go back into their series with their old numbers."))
+        self.layout().itemAt(0).widget().setWordWrap(True)
         self.tbl = QTableWidget(0, 5)
         self.tbl.setHorizontalHeaderLabels(["Deleted", "By", "What", "Name", "Contents"])
         self.tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -107,7 +110,7 @@ class RecycleBinDialog(QDialog):
         try:
             label = recycle_bin.restore(int(e["ID"]))
         except Exception as ex:
-            show_error(self, "Restore", "The series could not be restored.", ex, warning=True)
+            show_error(self, "Restore", "This entry could not be restored.", ex, warning=True)
             return
         refresh_series_lists()
         QMessageBox.information(self, "Restore", f"\"{label}\" is back.")

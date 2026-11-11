@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weaving Preparation</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category Weaving.
+     Content from the user's research page "Webereivorbereitung: vom Garn zur webbereiten Kette".
+     Texts in weaving_preparation_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1 for screenshots. No external resources (sources as plain text only).
+     The links area at the bottom opens other modules: embedded via document.title "open:<key>", otherwise <key>.html.
+     SVG/DOM: process routes (scene 0), seven animated process diagrams with step control (scene 1),
+     comparison (scene 2), warper's beam calculator (scene 3). Scenes never change automatically. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--twist:#6A4FC8;--soft:#EEF3EC;
+  --acc:#E07B39;--acc2:#2386C8;--ok:#2F8F45;--bad:#C92A2A;--cool:#1C7ED6;--wind:#495057;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"],.mtabs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+svg.bg{background:var(--bg);border-radius:6px}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{font-family:var(--font-display);font-size:19px;margin:0 0 6px}
+.seg,.mtabs{display:flex;gap:6px;flex-wrap:wrap}
+.seg button,.mtabs button{font-size:13.5px;padding:6px 11px}
+.lbl{display:block;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font-family:var(--font-display);font-size:26px;line-height:1.1;color:var(--hl)}
+.kpi span{color:var(--muted);font-size:13px}
+.stepbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.pbtn{font-size:13px;padding:5px 11px}
+.ins{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.cmp .c{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;border-top:4px solid var(--acc)}
+.cmp .c h4{margin:0 0 4px;font-size:15px}
+.cmp .c p{margin:4px 0;font-size:13.5px}
+.mhead h3{margin:0;font-size:21px;font-family:var(--font-display)}
+.mhead .de{color:var(--muted);font-size:13.5px}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:12px}
+.steps{counter-reset:s;list-style:none;padding:0;margin:4px 0}
+.steps li{counter-increment:s;position:relative;padding:4px 0 4px 30px;font-size:14px}
+.steps li:before{content:counter(s);position:absolute;left:0;top:5px;width:20px;height:20px;border-radius:50%;background:var(--fg);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:4px 0}
+.figs div{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.figs b{display:block;font-size:17px;color:#1F7A36}
+.figs span{font-size:12px;color:var(--muted)}
+.pc{display:grid;grid-template-columns:1fr 1fr .8fr;gap:12px;margin:12px 0 0}
+.pcc{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg)}
+.pcc ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
+.pcc li{margin:3px 0}
+.pcc p{margin:4px 0 0;font-size:13.5px}
+.pcc.pro{border-left:5px solid var(--ok)}
+.pcc.con{border-left:5px solid var(--bad)}
+.pcc.when{border-left:5px solid var(--acc2)}
+.tblwrap{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th,table.t td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.t th{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+table.t tr:last-child td{border-bottom:0}
+.ctl{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;margin:4px 0 8px}
+.ctl label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.ctl input[type=range]{width:180px;accent-color:#39A650}
+.ctl b{color:var(--fg);font-family:var(--font-mono);font-weight:600;min-width:7ch}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.lk{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+.node{cursor:pointer}
+.node:hover rect{stroke:var(--acc);stroke-width:2.5}
+.node.sel rect{stroke:var(--acc);stroke-width:3}
+.node.web{cursor:default}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:860px){.grid2,.pc{grid-template-columns:1fr}}
+@media (max-width:760px){header{flex-direction:column}details ol{columns:1}}
+</style>
+<script src="weaving_preparation_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 typical routes -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <div class="seg" id="rseg"></div>
+      <svg id="rsvg" viewBox="0 0 1100 232" role="img" style="margin-top:10px"></svg>
+      <p class="note" id="rtxt"></p>
+    </div>
+  </div>
+  <!-- 1 processes in detail -->
+  <div class="sc" id="sc1">
+    <div class="mtabs" id="ptabs"></div>
+    <div class="card">
+      <div class="mhead"><h3 id="pname"></h3><div class="de" id="pde"></div></div>
+      <svg class="bg" id="psvg" viewBox="0 0 900 320" role="img" style="margin-top:8px"></svg>
+      <div class="stepbar" id="pbar"></div>
+      <div class="grid2">
+        <div><span class="lbl" id="lhow"></span><ol class="steps" id="psteps"></ol></div>
+        <div><span class="lbl" id="lfigs"></span><div class="figs" id="pfigs"></div></div>
+      </div>
+      <div class="pc" id="ppc"></div>
+    </div>
+  </div>
+  <!-- 2 comparison -->
+  <div class="sc" id="sc2">
+    <div class="card"><h3 id="v1T"></h3><div class="tblwrap"><table class="t" id="v1"></table></div></div>
+    <div class="cmp" id="v2"></div>
+  </div>
+  <!-- 3 worked example -->
+  <div class="sc" id="sc3">
+    <div class="card">
+      <div class="ctl">
+        <label><span id="cbL"></span> <input type="range" id="cb" min="100" max="350" value="200"><b id="cbv"></b></label>
+        <label><span id="cdL"></span> <input type="range" id="cd" min="15" max="80" value="40"><b id="cdv"></b></label>
+        <label><span id="cgL"></span> <input type="range" id="cg" min="400" max="1200" step="20" value="800"><b id="cgv"></b></label>
+      </div>
+      <svg id="csvg" viewBox="0 0 1000 200" role="img"></svg>
+      <p class="note" id="cnote"></p>
+    </div>
+  </div>
+
+  <span class="lbl" id="lkL" style="margin-top:6px"></span>
+  <div class="links" id="links"></div>
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const PAUSED=params.get('paused')==='1'||matchMedia('(prefers-reduced-motion: reduce)').matches&&params.get('paused')!=='0';
+const T=()=>TEXTS[lang];
+const NSC=4;
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink SVG labels that would overflow their slot
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=/[⺀-鿿＀-￯　-〿]/.test(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+const Tm=(x,y,t,a='middle',max=0)=>TX(x,y,t,'var(--muted)',a,400,11,max);
+const num=v=>T().ui.loc==='none'?String(v):v.toLocaleString(T().ui.loc).replace(/[’'  ]/g,' ');
+const ARR=`<defs><marker id="am" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>`;
+const YARN='#1864ab';
+const lerp=(a,b,u)=>a+(b-a)*Math.max(0,Math.min(1,u));
+const seg=(t,a,b)=>Math.max(0,Math.min(1,(t-a)/(b-a)));
+
+// ── language-neutral data (texts in weaving_preparation_texts.js, same order)
+const PK=['spulen','direkt','konus','schlichten','denim','einziehen','knuepfen'];
+const ST_T={spulen:[0,0.38,0.47,0.58,0.7,0.8],direkt:[0,0.2,0.4,0.6,0.85],konus:[0,0.08,0.3,0.76,0.95],schlichten:[0,0.2,0.4,0.6,0.8],
+  denim:[0,0.25,0.3,0.35,0.75,0.86],einziehen:[0,0.25,0.5,0.75],knuepfen:[0,0.12,0.45,0.9]};
+const PAUSE_T={spulen:0.7,direkt:0.6,konus:0.5,schlichten:0.5,denim:0.9,einziehen:0.6,knuepfen:0.5};
+const NODES=[['spulen',100],['direkt',330],['konus',330],['denim',330],['schlichten',560],['einziehen',790],['knuepfen',790],['web',1005]];
+const NY={spulen:110,direkt:50,konus:120,denim:190,schlichten:110,einziehen:70,knuepfen:150,web:110};
+const RK=['roh','bunt','denim','wechsel'];
+const ROUTES={roh:{n:['spulen','direkt','schlichten','einziehen','web'],e:[['spulen','direkt'],['direkt','schlichten'],['schlichten','einziehen'],['einziehen','web']]},
+ bunt:{n:['spulen','konus','schlichten','einziehen','web'],e:[['spulen','konus'],['konus','schlichten'],['schlichten','einziehen'],['konus','einziehen'],['einziehen','web']]},
+ denim:{n:['spulen','denim','schlichten','einziehen','knuepfen','web'],e:[['spulen','denim'],['denim','schlichten'],['schlichten','einziehen'],['schlichten','knuepfen'],['einziehen','web'],['knuepfen','web']]},
+ wechsel:{n:['schlichten','knuepfen','web'],e:[['schlichten','knuepfen'],['knuepfen','web']]}};
+const EDGES=[['spulen','direkt'],['spulen','konus'],['spulen','denim'],['direkt','schlichten'],['konus','schlichten'],['konus','einziehen'],['denim','schlichten'],['schlichten','einziehen'],['schlichten','knuepfen'],['einziehen','web'],['knuepfen','web']];
+const LINK_KEYS=['weaving_machines','shaft_weaving','weave_structures','air_splicing','textile_dyeing'];
+const SOURCES=['Teaching material Warping – worked example 8,000 ends, creel types','IJTFT 2017 – direct and sectional warping, creel 1,000–1,200',
+ 'IJTFT 2017 – direct warping > 600 m/min, single colour only','Textile Fashion Study – sectional vs. direct warping',
+ 'Teaching material – direct warping 500–1,000 ends per beam','Textile Learner – warping calculation','NITER – direct, sectional and ball warping',
+ 'Fibre2Fashion – zones of the sizing machine','Teaching material Sizing – drying cylinders, add-on','US patent 4793035 – definition of size add-on',
+ 'US patent 4859509 – sizing sequence, lease rods','US patent 4251403 – filament sizing 10–100 m/min','Teaching material – drying methods, PVA vs. starch',
+ 'Textile Details – size add-on and warp breaks','Teaching material – ball warping, 350–500 ends, 12–36 ropes','Trade news – rope vs. slasher dyeing in denim',
+ 'texdata – winding balls, rope dyeing, long chain beaming','Textile World – drawing-in with camera control','Textile World – separating up to 200 ends/cm',
+ 'Trade document – drawing-in from a single package, independent of the warp beam','Textile World – tying-in up to 600 knots/min','Trade document Tying-in – double knot',
+ 'Textilegence – end separation with needles or cones','Trade news – splicing at every cop change','Textile World – winding, yarn clearing, splice cycle'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+
+// ── step bar (back / play-pause / forward + label)
+const bars=[];
+function mkBar(id,o){
+  const el=$(id);
+  el.innerHTML=`<button type="button" class="pbtn" data-a="p"></button><button type="button" class="pbtn" data-a="t"></button><button type="button" class="pbtn" data-a="n"></button><span class="ins" data-a="l"></span>`;
+  const q=a=>el.querySelector(`[data-a=${a}]`);
+  let last={};
+  const set=(a,v)=>{if(last[a]!==v){last[a]=v;q(a).textContent=v}};
+  const upd=()=>{const u=T().ui;set('p',u.prev);set('n',u.next);set('t',o.isPlay()?u.pause:u.play);set('l',o.label())};
+  q('p').onclick=()=>{o.prev();upd()};q('n').onclick=()=>{o.next();upd()};q('t').onclick=()=>{o.toggle();upd()};
+  bars.push(upd);upd();return upd;
+}
+function segBtns(el,keys,labels,cur,cb){
+  el.innerHTML=keys.map((k,i)=>`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${esc(labels[i])}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.k));
+}
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+// deterministic "random" (screenshots stay reproducible)
+const rnd=i=>{const x=Math.sin(i*127.1+311.7)*43758.5453;return x-Math.floor(x)};
+
+// ── process diagrams (viewBox 900 x 320), t = 0..1
+const D={};
+D.spulen=(t,L)=>{
+  let s=ARR;
+  s+=`<path d="M70 280 L110 280 L100 170 L80 170 Z" fill="#ffe8cc" stroke="#495057"/>`+Tm(90,300,L.kops,'middle',160);
+  const cut=t>=0.45&&t<0.74;
+  const defX=lerp(120,360,seg(t,0.15,0.42));
+  s+=`<path d="M90 170 Q90 110 140 110 L220 110" fill="none" stroke="${YARN}" stroke-width="2.5"/>`;
+  s+=`<circle cx="235" cy="110" r="11" fill="#dee2e6" stroke="#495057"/><circle cx="235" cy="110" r="5" fill="#adb5bd"/>`+Tm(235,90,L.tens,'middle',130);
+  s+=`<rect x="320" y="96" width="70" height="28" rx="5" fill="${t>=0.38&&t<0.5?'#F4D4D4':'var(--panel)'}" stroke="#495057"/>`+Tm(355,88,L.clear,'middle',140);
+  s+=`<rect x="460" y="150" width="70" height="40" rx="6" fill="${t>=0.6&&t<0.8?'#CBE3D1':'var(--panel)'}" stroke="#495057"/>`+Tm(495,208,L.splicer,'middle',130);
+  if(!cut)s+=`<path d="M246 110 L630 110" fill="none" stroke="${YARN}" stroke-width="2.5"/>`;
+  else s+=`<path d="M246 110 L340 110" fill="none" stroke="${YARN}" stroke-width="2.5"/><path d="M400 110 L630 110" fill="none" stroke="${YARN}" stroke-width="2.5" opacity="${t<0.55?1:0.3}"/>`;
+  if(t>=0.15&&t<0.47)s+=`<ellipse cx="${defX}" cy="110" rx="8" ry="5" fill="#c92a2a"/>`;
+  if(t>=0.38&&t<0.5)s+=TX(355,145,L.cut,'#c92a2a','middle',600,12,300);
+  if(t>=0.55&&t<0.74){const u=seg(t,0.55,0.66);
+    s+=`<path d="M${lerp(330,470,u)} ${lerp(110,165,u)} L470 165" stroke="var(--acc)" stroke-width="2.5" fill="none"/><path d="M${lerp(400,520,u)} ${lerp(110,175,u)} L520 175" stroke="var(--acc)" stroke-width="2.5" fill="none"/>`;
+    s+=TX(470,240,L.arms,'var(--acc)','middle',600,12,320);
+    if(t>=0.66){for(let k=0;k<6;k++)s+=`<circle cx="${480+rnd(k+Math.floor(t*40))*30}" cy="${160+rnd(k+7+Math.floor(t*40))*20}" r="2" fill="var(--ok)"/>`;s+=TX(470,260,L.air,'var(--ok)','middle',600,12,320)}}
+  const gx=650+Math.sin(t*Math.PI*16)*24;
+  s+=`<circle cx="700" cy="230" r="34" fill="#dee2e6" stroke="#495057"/>`+Tm(720,290,L.drum,'middle',200);
+  const R=36+t*14;
+  s+=`<rect x="${700-R}" y="${196-R*1.2}" width="${2*R}" height="${R*1.2}" rx="8" fill="#d0ebff" stroke="${YARN}"/>`;
+  for(let i=0;i<5;i++)s+=`<line x1="${700-R+6}" y1="${196-R*1.2+6+i*R*0.22}" x2="${700+R-6}" y2="${196-R*1.2+14+i*R*0.22}" stroke="${YARN}" opacity=".5"/>`;
+  s+=Tm(700,196-R*1.2-10,L.grow,'middle',190);
+  s+=`<path d="M630 110 L${gx} 150" stroke="${YARN}" stroke-width="2" ${cut?'opacity=".3"':''}/>`;
+  return s;};
+D.direkt=(t,L)=>{
+  let s=ARR;
+  const rows=10,cols=6;
+  for(let c=0;c<cols;c++)for(let r=0;r<rows;r++)s+=`<circle cx="${50+c*30}" cy="${40+r*26}" r="9" fill="#ffe8cc" stroke="#495057" stroke-width="1"/>`;
+  s+=TX(125,305,L.creel,'var(--fg)','middle',600,12,240);
+  const show=t>=0.2;
+  for(let c=0;c<cols;c++)for(let r=0;r<rows;r+=2){const y0=40+r*26,yk=70+((c*rows+r)/(rows*cols))*180;
+    s+=`<path d="M${59+c*30} ${y0} C 300 ${y0}, 330 ${yk}, 420 ${yk}" fill="none" stroke="${YARN}" stroke-width="1" opacity=".6"/>`;
+    if(show)s+=`<rect x="270" y="${yk-3}" width="6" height="6" fill="${t>=0.2&&t<0.4?'var(--acc)':'#868e96'}"/>`;}
+  s+=Tm(273,30,L.stop,'middle',130);
+  s+=`<rect x="415" y="60" width="10" height="200" fill="none" stroke="${t>=0.4&&t<0.6?'var(--acc)':'#495057'}" stroke-width="2"/>`;
+  for(let i=0;i<20;i++)s+=`<line x1="415" y1="${62+i*10}" x2="425" y2="${62+i*10}" stroke="#495057"/>`;
+  s+=Tm(420,280,L.comb,'middle',150);
+  const R=40+t*45;
+  for(let i=0;i<10;i++){const yk=70+i*20;s+=`<path d="M425 ${yk} L700 ${160-R+((i-4.5)*1.2)}" stroke="${YARN}" stroke-width="1.2" opacity=".7"/>`;}
+  s+=`<g style="transform-origin:720px 160px;transform:rotate(${t*1440}deg)"><circle cx="720" cy="160" r="${R}" fill="#d0ebff" stroke="${YARN}" stroke-width="2"/><circle cx="720" cy="160" r="22" fill="#adb5bd" stroke="#495057"/><line x1="720" y1="140" x2="720" y2="180" stroke="#495057"/></g>`;
+  s+=TX(710,272,L.beam,'var(--fg)','middle',600,12,360)+Tm(710,290,fmt(L.len,{n:num(Math.round(t*24000))}),'middle',340);
+  if(t>=0.85)s+=TX(560,40,L.full,'var(--acc)','middle',600,13,420);
+  return s;};
+D.konus=(t,L)=>{
+  let s=ARR;
+  for(let c=0;c<3;c++)for(let r=0;r<8;r++){const col=(r%4<2)?'#1864ab':'#f1f3f5';s+=`<circle cx="${40+c*26}" cy="${50+r*24}" r="8" fill="${col}" stroke="#495057"/>`;}
+  s+=TX(66,262,L.creel,'var(--fg)','middle',600,12,125)+Tm(66,278,L.pattern,'middle',125);
+  const nb=6,phase=t<0.75?Math.min(nb,Math.floor(t/0.75*nb)+1):nb,bu=seg(t,0.75,0.95);
+  const x0=420,x1=860,y0=60,y1=170,bw=(x1-x0-40)/nb;
+  s+=`<rect x="${x0}" y="${y0}" width="${x1-x0}" height="${y1-y0}" rx="8" fill="#f1f3f5" stroke="#495057"/>`;
+  s+=`<path d="M${x0} ${y0} L${x0+40} ${y0+20} L${x0+40} ${y1-20} L${x0} ${y1} Z" fill="#dee2e6" stroke="#495057"/>`+Tm(x0+20,y1+16,L.cone,'middle',80);
+  const curX=x0+40+(phase-1)*bw;
+  for(let b=0;b<phase;b++){const bx=x0+40+b*bw;const partial=(b===phase-1&&t<0.75)?((t/0.75*nb)%1):1;
+    for(let k=0;k<8;k++){const col=(k%4<2)?'#1864ab':'#ced4da';s+=`<rect x="${bx+k*bw/8}" y="${y0+6}" width="${bw/8-1}" height="${Math.max(0,(y1-y0-12)*(bu>0?1-bu:partial))}" fill="${col}" opacity=".9"/>`;}}
+  s+=TX((x0+x1)/2+20,y0-14,L.drum,'var(--fg)','middle',600,12,440);
+  if(t<0.75){for(let r=0;r<8;r++)s+=`<path d="M${48+2*26} ${50+r*24} C 250 ${50+r*24}, 300 115, ${curX+r*bw/8} ${y0+6}" fill="none" stroke="${(r%4<2)?'#1864ab':'#adb5bd'}" stroke-width="1.3"/>`;
+    s+=`<rect x="${curX-4}" y="${y1+22}" width="${bw+8}" height="10" rx="3" fill="var(--acc)" opacity=".8"/>`+TX(Math.min(curX+bw/2,800),y1+48,fmt(L.band,{n:phase,total:nb}),'var(--acc)','middle',600,12,180);}
+  if(t>=0.75){s+=`<rect x="${x0+40}" y="250" width="${nb*bw}" height="${14+bu*22}" rx="6" fill="url(#bstr)" stroke="${YARN}"/>`;
+    for(let b=0;b<nb;b++)s+=`<path d="M${x0+40+b*bw+bw/2} ${y1} L${x0+40+b*bw+bw/2} 250" stroke="${YARN}" stroke-dasharray="4 3"/>`;
+    s+=TX((x0+x1)/2+20,303,L.beaming,'var(--acc)','middle',600,12,460);
+    s=`<defs><pattern id="bstr" width="${bw/8*4}" height="10" patternUnits="userSpaceOnUse"><rect width="${bw/8*2}" height="10" fill="#1864ab"/><rect x="${bw/8*2}" width="${bw/8*2}" height="10" fill="#ced4da"/></pattern></defs>`+s;}
+  return s;};
+D.schlichten=(t,L)=>{
+  let s=ARR;const zone=t<0.2?0:t<0.4?1:t<0.6?2:t<0.8?3:4;
+  const hl=z=>zone===z?'var(--acc)':'#495057';
+  [[70,80],[150,80],[70,200],[150,200]].forEach(([x,y],i)=>{s+=`<circle cx="${x}" cy="${y}" r="30" fill="#d0ebff" stroke="${hl(0)}" stroke-width="2"/><circle cx="${x}" cy="${y}" r="10" fill="#adb5bd"/>`;
+    s+=`<path d="M${x+30} ${y} L250 ${150+i*3}" stroke="${YARN}" stroke-width="1.5"/>`;});
+  s+=Tm(110,145,L.beams,'middle',160);
+  s+=`<path d="M260 190 L280 250 L380 250 L400 190 Z" fill="#FDE3A8" stroke="${hl(1)}" stroke-width="2"/>`;
+  s+=`<path d="M250 150 L300 220 L350 220 L360 150" fill="none" stroke="${YARN}" stroke-width="3"/>`;
+  s+=`<circle cx="325" cy="222" r="12" fill="#dee2e6" stroke="#495057"/><circle cx="372" cy="140" r="14" fill="#dee2e6" stroke="${hl(1)}" stroke-width="2"/><circle cx="372" cy="168" r="14" fill="#868e96" stroke="${hl(1)}" stroke-width="2"/>`;
+  s+=Tm(330,270,L.trough,'middle',210);
+  if(zone===1)for(let k=0;k<4;k++)s+=`<circle cx="${360+k*6}" cy="${185+((t*400+k*13)%40)}" r="2.4" fill="#e67700"/>`;
+  [[450,110],[500,200],[550,110],[600,200],[650,110]].forEach(([x,y])=>{s+=`<circle cx="${x}" cy="${y}" r="32" fill="${zone===2?'url(#hotc)':'#e9ecef'}" stroke="${hl(2)}" stroke-width="2"/>`;});
+  s+=`<path d="M372 154 L418 120 A32 32 0 0 1 482 120 L468 210 A32 32 0 0 0 532 210 L518 120 A32 32 0 0 1 582 120 L568 210 A32 32 0 0 0 632 210 L618 120 A32 32 0 0 1 682 120 L720 150" fill="none" stroke="${YARN}" stroke-width="3"/>`;
+  s+=Tm(550,265,L.cyl,'middle',230);
+  for(let i=0;i<4;i++)s+=`<circle cx="${740+i*22}" cy="${150+(i%2?10:-10)}" r="5" fill="${zone===3?'var(--acc)':'#495057'}"/>`;
+  for(let i=0;i<4;i++)s+=`<path d="M720 150 L${740+i*22} ${150+(i%2?10:-10)} L840 150" fill="none" stroke="${YARN}" stroke-width="1.2" opacity=".7"/>`;
+  s+=Tm(775,190,L.rods,'middle',100);
+  const R=28+t*10;
+  s+=`<circle cx="860" cy="150" r="${R}" fill="#d0ebff" stroke="${hl(4)}" stroke-width="2"/><circle cx="860" cy="150" r="10" fill="#adb5bd"/>`+Tm(860,150+R+16,L.weaver,'middle',76);
+  s+=TX(450,30,L.zones[zone],'var(--acc)','middle',600,14,860);
+  return `<defs><radialGradient id="hotc"><stop offset="0" stop-color="#ffd8a8"/><stop offset="1" stop-color="#f08c00"/></radialGradient></defs>`+s;};
+D.denim=(t,L)=>{
+  let s=ARR;
+  for(let r=0;r<6;r++)s+=`<circle cx="40" cy="${60+r*30}" r="8" fill="#fff" stroke="#495057"/>`;
+  s+=`<path d="M48 60 L120 140 M48 210 L120 145" stroke="#ced4da" stroke-width="2"/><path d="M120 142 L170 142" stroke="#868e96" stroke-width="5"/>`;
+  s+=`<ellipse cx="190" cy="142" rx="22" ry="40" fill="#f8f9fa" stroke="#495057" stroke-width="2"/>`+Tm(152,215,L.ball,'middle',188);
+  const boxes=[290,370,450,530],fills=['#E3F5C4','#DFF3BA','#DBF2B0','#D7F0A7'];
+  boxes.forEach((x,i)=>{
+    s+=`<rect x="${x-34}" y="170" width="68" height="70" rx="4" fill="${fills[i]}" stroke="#495057"/>`;
+    const dipCol=i===0?'#a9e34b':'#5c940d';
+    const airCol=['#4dabf7','#1c7ed6','#1864ab','#0b3d91'][i];
+    const reached=t>=0.3+i*0.1;
+    s+=`<path d="M${x-20} 80 L${x-20} 230 L${x+20} 230" fill="none" stroke="${reached?dipCol:'#e9ecef'}" stroke-width="6"/>`;
+    s+=`<path d="M${x+20} 230 L${x+20} 80 L${x+60} 80" fill="none" stroke="${reached&&t>=0.35+i*0.1?airCol:'#e9ecef'}" stroke-width="6"/>`;
+    s+=Tm(x,258,fmt(L.bath,{n:i+1}),'middle',72);});
+  s+=`<path d="M212 142 L270 80" stroke="#e9ecef" stroke-width="6"/>`;
+  s+=TX(440,40,L.title,'var(--fg)','middle',600,12,820);
+  s+=`<path d="M590 80 L640 80 L640 142 L690 142" fill="none" stroke="${t>=0.75?'#0b3d91':'#e9ecef'}" stroke-width="6"/>`;
+  s+=`<rect x="690" y="140" width="50" height="80" rx="6" fill="#f1f3f5" stroke="#495057"/>`+Tm(715,236,L.can,'middle',74);
+  const op=seg(t,0.86,1);
+  s+=`<path d="M740 150 C 780 150, 790 ${150-30*op}, 820 ${150-40*op} M740 150 C 780 150, 790 ${150+30*op}, 820 ${150+40*op} M740 150 L820 150" stroke="#0b3d91" stroke-width="${6-3*op}" fill="none"/>`;
+  s+=`<circle cx="850" cy="150" r="${26+op*10}" fill="${t>=0.86?'#0b3d91':'#f1f3f5'}" stroke="#495057"/>`+Tm(850,215,L.open1,'middle',96)+Tm(850,229,L.open2,'middle',96);
+  return s;};
+D.einziehen=(t,L)=>{
+  let s=ARR;const N=8;
+  s+=Tm(200,24,L.drop,'middle',200)+Tm(450,24,L.heald,'middle',190)+Tm(650,24,L.reed,'middle',90);
+  for(let k=0;k<N;k++){const y=50+k*30;s+=`<rect x="194" y="${y-9}" width="12" height="18" rx="2" fill="#dee2e6" stroke="#495057"/>`;}
+  for(let sh=0;sh<4;sh++){const x=390+sh*40;s+=`<line x1="${x}" y1="36" x2="${x}" y2="290" stroke="#868e96" stroke-width="3"/>`;
+    for(let k=0;k<N;k++){const y=50+k*30;if(k%4===sh)s+=`<ellipse cx="${x}" cy="${y}" rx="5" ry="7" fill="#fff" stroke="#495057"/>`;}
+    s+=Tm(x,305,`S${sh+1}`);}
+  for(let i=0;i<=N;i++)s+=`<line x1="640" y1="${35+i*30}" x2="660" y2="${35+i*30}" stroke="#495057" stroke-width="2"/>`;
+  s+=`<line x1="650" y1="35" x2="650" y2="${35+N*30}" stroke="#495057"/>`;
+  s+=`<rect x="20" y="40" width="70" height="250" rx="6" fill="#d0ebff" stroke="${YARN}"/>`+Tm(55,305,L.beam,'middle',108);
+  const path=k=>{const y=50+k*30,x=390+(k%4)*40;return [[90,y],[200,y],[x,y],[650,y],[760,y]];};
+  for(let k=0;k<N-1;k++){const p=path(k);s+=`<polyline points="${p.map(q=>q.join(',')).join(' ')}" fill="none" stroke="${YARN}" stroke-width="2"/>`;}
+  const p=path(N-1),u=t,xs=[90,200,p[2][0],650,760];
+  const hx=u<0.25?lerp(90,200,u/0.25):u<0.5?lerp(200,xs[2],(u-0.25)/0.25):u<0.75?lerp(xs[2],650,(u-0.5)/0.25):lerp(650,760,(u-0.75)/0.25);
+  const y=p[0][1];
+  s+=`<line x1="90" y1="${y}" x2="${hx}" y2="${y}" stroke="var(--acc)" stroke-width="3"/>`;
+  s+=`<path d="M${hx} ${y-6} l14 6 l-14 6" fill="none" stroke="var(--acc)" stroke-width="2"/>`;
+  if(u<0.25)s+=`<circle cx="120" cy="${y}" r="13" fill="none" stroke="var(--acc)" stroke-width="2" stroke-dasharray="3 2"/>`;
+  s+=TX(780,y+4,L.thread,'var(--acc)','start',600,12,115);
+  s+=TX(780,70,L.draft,'var(--fg)','start',600,12,115)+Tm(780,88,L.d1,'start',115)+Tm(780,103,L.d2,'start',115)+Tm(780,122,L.d3,'start',115);
+  return s;};
+D.knuepfen=(t,L)=>{
+  let s=ARR;const N=10;const cy=lerp(30,300,t);
+  s+=`<rect x="40" y="30" width="80" height="270" rx="6" fill="#e9ecef" stroke="#495057"/>`+Tm(80,316,L.old,'middle',150);
+  s+=`<rect x="780" y="30" width="80" height="270" rx="6" fill="#d0ebff" stroke="${YARN}"/>`+Tm(820,316,L.new,'middle',150);
+  s+=`<rect x="380" y="26" width="14" height="278" fill="#868e96"/><rect x="506" y="26" width="14" height="278" fill="#868e96"/>`+Tm(450,316,L.clamp,'middle',420);
+  for(let k=0;k<N;k++){const y=45+k*26;const done=y<cy-14,cur=Math.abs(y-cy)<14;
+    if(done)s+=`<path d="M120 ${y} L445 ${y}" stroke="#868e96" stroke-width="2"/><path d="M455 ${y} L780 ${y}" stroke="${YARN}" stroke-width="2"/><circle cx="450" cy="${y}" r="5" fill="var(--ok)"/>`;
+    else s+=`<path d="M120 ${y-3} L520 ${y-3}" stroke="#868e96" stroke-width="2"/><path d="M380 ${y+3} L780 ${y+3}" stroke="${YARN}" stroke-width="2"/>`;
+    if(cur)s+=`<circle cx="450" cy="${y}" r="11" fill="none" stroke="var(--acc)" stroke-width="2"/>`;}
+  s+=`<rect x="405" y="${cy-16}" width="90" height="32" rx="6" fill="#F7DECD" stroke="var(--acc)" stroke-width="2"/>`+TX(450,cy+4,L.tier,'var(--acc)','middle',700,11,82);
+  s+=TX(450,18,t<0.9?L.busy:L.done,'var(--fg)','middle',600,12,820);
+  return s;};
+
+// ── 0 routes
+let rk='roh';
+function drawRoute(){
+  const t=T().route,R=ROUTES[rk];
+  segBtns($('rseg'),RK,t.seg,rk,k=>{rk=k;drawRoute()});
+  let s=`<defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--acc)"/></marker><marker id="ag" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ced4da"/></marker></defs>`;
+  const pos=id=>[NODES.find(x=>x[0]===id)[1],NY[id]];
+  EDGES.forEach(([a,b])=>{const on=R.e.some(e=>e[0]===a&&e[1]===b);const [x1,y1]=pos(a),[x2,y2]=pos(b);
+    const dash=(rk==='bunt'&&a==='konus'&&b==='einziehen')?'stroke-dasharray="6 4"':'';
+    s+=`<path d="M${x1+85} ${y1} C ${x1+130} ${y1}, ${x2-130} ${y2}, ${x2-90} ${y2}" fill="none" stroke="${on?'var(--acc)':'#e9ecef'}" stroke-width="${on?3:2}" ${dash} marker-end="url(#${on?'ar':'ag'})"/>`;});
+  NODES.forEach(([id,x],i)=>{const y=NY[id],on=R.n.includes(id),sel=id===cur;
+    s+=`<g class="node${sel?' sel':''}${id==='web'?' web':''}" data-id="${id}"><rect x="${x-85}" y="${y-22}" width="170" height="44" rx="10" fill="${on?'var(--panel)':'var(--bg)'}" stroke="${on?'var(--acc)':'var(--line)'}" stroke-width="${on?2:1}" opacity="${on?1:.6}"/>${TX(x,y+5,t.nodes[i],on?'var(--fg)':'var(--muted)','middle',on?700:500,id==='denim'?12:13,158)}</g>`;});
+  const svg=$('rsvg');svg.innerHTML=s;svg.setAttribute('aria-label',t.aria);$('rtxt').textContent=t.txt[RK.indexOf(rk)];
+  svg.querySelectorAll('.node').forEach(g=>g.onclick=()=>{if(g.dataset.id==='web')return;showP(g.dataset.id);go(1)});
+}
+
+// ── 1 processes
+let cur='spulen',play=!PAUSED,tt=PAUSE_T.spulen*(PAUSED?1:0),last=performance.now(),dirty=true;
+const SP=6000;
+const procOf=id=>T().proc[PK.indexOf(id)];
+function idxOf(st,v){let k=0;st.forEach((a,i)=>{if(v>=a-0.004)k=i});return k}
+function showP(id){
+  cur=id;tt=PAUSED&&!play?PAUSE_T[id]:0;dirty=true;
+  const t=T(),u=t.ui,m=procOf(id);
+  segBtns($('ptabs'),PK,t.proc.map(x=>x.n),cur,k=>showP(k));
+  $('pname').textContent=m.n;$('pde').textContent=m.de;
+  $('lhow').textContent=u.how;$('lfigs').textContent=u.figs;
+  $('psteps').innerHTML=m.how.map(h=>`<li>${esc(h)}</li>`).join('');
+  $('pfigs').innerHTML=m.figs.map(f=>`<div><b>${esc(f[0])}</b><span>${esc(f[1])}</span></div>`).join('');
+  $('ppc').innerHTML=`<div class="pcc pro"><span class="lbl">${esc(u.pro)}</span><ul>${m.pro.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="pcc con"><span class="lbl">${esc(u.con)}</span><ul>${m.con.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="pcc when"><span class="lbl">${esc(u.when)}</span><p>${esc(m.when)}</p></div>`;
+  $('psvg').setAttribute('aria-label',t.procAria+': '+m.n);
+  drawRoute();pUpd();
+}
+const pUpd=mkBar('pbar',{isPlay:()=>play,toggle:()=>{play=!play;dirty=true},
+  prev:()=>{play=false;dirty=true;const st=ST_T[cur],k=idxOf(st,tt);tt=(Math.abs(tt-st[k])>0.01?st[k]:st[(k-1+st.length)%st.length])},
+  next:()=>{play=false;dirty=true;const st=ST_T[cur],k=idxOf(st,tt);tt=st[(k+1)%st.length]},
+  label:()=>procOf(cur).st[idxOf(ST_T[cur],tt)]});
+function loop(now){
+  const dt=now-last;last=now;
+  if(play){tt=(tt+dt/SP)%1;dirty=true}
+  if(scene===1&&dirty){$('psvg').innerHTML=D[cur](tt,procOf(cur).svg);pUpd();dirty=false}
+  requestAnimationFrame(loop);
+}
+
+// ── 2 comparison
+function drawCmp(){
+  const t=T().cmp;
+  $('v1T').textContent=t.title;
+  $('v1').innerHTML=`<tr>${t.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+t.rows.map(r=>`<tr><td><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('');
+  $('v2').innerHTML=t.cards.map(c=>`<div class="c"><h4>${esc(c[0])}</h4><p>${esc(c[1])}</p></div>`).join('');
+}
+
+// ── 3 worked example
+function calc(){
+  const L=T().calc,b=+$('cb').value,d=+$('cd').value,g=+$('cg').value;
+  $('cbL').textContent=L.width;$('cdL').textContent=L.density;$('cgL').textContent=L.creel;$('cnote').textContent=L.note;
+  $('cbv').textContent=fmt(L.wv,{v:num(b)});$('cdv').textContent=fmt(L.dv,{v:num(d)});$('cgv').textContent=num(g);
+  const n=b*d,z=Math.ceil(n/g),per=Math.ceil(n/z);
+  let s=TX(20,30,fmt(L.result,{n:num(n),z:num(z),per:num(per)}),'var(--fg)','start',700,15,960);
+  const w=Math.min(70,900/z-8);
+  for(let i=0;i<z;i++){const x=40+i*(w+8);s+=`<circle cx="${x+w/2}" cy="110" r="${w/2.4}" fill="#d0ebff" stroke="#1864ab"/><circle cx="${x+w/2}" cy="110" r="${w/7}" fill="#adb5bd"/>`;}
+  s+=Tm(40,180,L.circle,'start',900);
+  const svg=$('csvg');svg.innerHTML=s;svg.setAttribute('aria-label',L.aria);
+}
+['cb','cd','cg'].forEach(i=>$(i).oninput=calc);
+
+// ── links
+function drawLinks(){
+  const t=T();
+  $('lkL').textContent=t.ui.lkL;
+  $('links').innerHTML=t.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${esc(l[0])} →</b><span>${esc(l[1])}</span><em>${esc(t.ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(scene===1)dirty=true;
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k[0])}</b><span>${esc(k[1])}</span></div>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  const keepT=tt;showP(cur);tt=keepT;dirty=true;
+  drawCmp();calc();drawLinks();
+  bars.forEach(f=>f());go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+requestAnimationFrame(now=>{last=now;loop(now)});
+})();
+</script>
+</body>
+</html>

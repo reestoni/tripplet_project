@@ -15,13 +15,15 @@ Der Index wird direkt aus den Textmodulen gebaut (SOURCES unten) - neue
 Hilfen dort eintragen, dann sind sie automatisch durchsuchbar.
 """
 
+import functools
 import html
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QPushButton, QSplitter, QWidget, QScrollArea, QFrame,
@@ -144,7 +146,9 @@ def _word_match(token: str, word: str) -> bool:
 _SYN_NORM: List[Set[str]] = [{normalize(w) for w in group} for group in SYNONYMS]
 
 
-def concepts_of(token: str) -> Set[int]:
+@functools.lru_cache(maxsize=None)
+def concepts_of(token: str) -> FrozenSet[int]:
+    """Synonym groups of a word (cached: the KB index has ~40k words)."""
     out: Set[int] = set()
     for i, group in enumerate(_SYN_NORM):
         for w in group:
@@ -153,7 +157,7 @@ def concepts_of(token: str) -> Set[int]:
             if _word_match(token, w):
                 out.add(i)
                 break
-    return out
+    return frozenset(out)
 
 
 def _phrase_concepts(norm_text: str) -> Set[int]:
@@ -253,18 +257,40 @@ def hit_for_key(key: str) -> Optional[SearchHit]:
     return SearchHit(key, any_e.screen, any_e.tab, 0.0, any_e.lang, by_lang)
 
 
-def search(query: str, limit: int = 12) -> List[SearchHit]:
+KB_LIMIT = 5            # Knowledge Base hits shown after the help hits
+KB_MIN_COVERAGE = 0.5   # share of the search words a KB hit must contain
+
+
+def search(query: str, limit: int = 12, with_kb: bool = False) -> List[SearchHit]:
     """Sucht in allen Sprachen; Treffer werden pro Eintrag (sprachunabhaengig)
     zusammengefasst. Ranking: Anteil getroffener Suchbegriffe zuerst, dann
-    Treffer in der Frage (x3) vor Treffern im Text (x1)."""
+    Treffer in der Frage (x3) vor Treffern im Text (x1).
+    with_kb: Knowledge-Base-Treffer (ui/kb_search.py) kommen danach, hoechstens
+    KB_LIMIT - sie verdraengen nie eine Hilfe-Antwort."""
+    hits = _rank(get_index(), query, limit)
+    if with_kb:
+        try:
+            from ui import kb_search
+            hits += _rank(kb_search.get_index(), query, KB_LIMIT, KB_MIN_COVERAGE, title_phrase=True)
+        except Exception:
+            pass
+    return hits
+
+
+def _rank(index: List[HelpEntry], query: str, limit: int, min_coverage: float = 0.0,
+          title_phrase: bool = False) -> List[SearchHit]:
+    """title_phrase (KB): two search words in a row in the title count extra,
+    so "set heater" ranks the station "Set heater" above texts that only
+    mention both words somewhere."""
     q_tokens = tokens(query)
+    bigrams = [f" {a} {b} " for a, b in zip(q_tokens, q_tokens[1:])] if title_phrase else []
     if not q_tokens:
         return []
     q_norm = normalize(query)
     terms = [(t, concepts_of(t)) for t in q_tokens]
     phrase = _phrase_concepts(q_norm)
     best: Dict[str, SearchHit] = {}
-    for e in get_index():
+    for e in index:
         score, matched = 0.0, 0
         for tok, cons in terms:
             lit_q = any(_word_match(tok, w) for w in e.q_tokens)
@@ -284,10 +310,13 @@ def search(query: str, limit: int = 12) -> List[SearchHit]:
             elif lit_b:
                 score += 0.3
         score += 2 * len(phrase & e.q_concepts) + len(phrase & e.b_concepts)
+        if bigrams:
+            title = f" {' '.join(e.q_tokens)} "
+            score += 4 * sum(1 for bg in bigrams if bg in title)
         if matched == 0:
             continue
         coverage = matched / len(terms)
-        if len(terms) >= 3 and coverage < 0.34:
+        if (len(terms) >= 3 and coverage < 0.34) or coverage < min_coverage:
             continue
         total = coverage * 10 + score
         hit = best.get(e.key)
@@ -298,7 +327,7 @@ def search(query: str, limit: int = 12) -> List[SearchHit]:
         hit.by_lang[e.lang] = e
     # alle Sprachfassungen nachtragen (auch nicht getroffene), fuer die Anzeige
     if best:
-        for e in get_index():
+        for e in index:
             if e.key in best:
                 best[e.key].by_lang.setdefault(e.lang, e)
     return sorted(best.values(), key=lambda h: -h.score)[:limit]
@@ -314,7 +343,9 @@ UI = {
            "areas": "Numbers like (1) refer to the screen sketch in the full help.",
            "ask": "Ask AI", "ask_tip": "Let the AI answer in your own words (uses your AI token quota).",
            "asking": "Asking the AI…", "ai_label": "AI answer", "ai_none": "The help does not cover this question yet.",
-           "fb_q": "Did this help?", "fb_up": "Helpful", "fb_down": "Not helpful", "fb_thanks": "Thanks for the feedback!"},
+           "fb_q": "Did this help?", "fb_up": "Helpful", "fb_down": "Not helpful", "fb_thanks": "Thanks for the feedback!",
+           "kb": "Knowledge Base", "kb_open": "Open in Knowledge Base",
+           "kb_hint": "Background knowledge: opens the page in a window – close it and you are back here."},
     "de": {"title": "Hilfe – wo finde ich…?", "placeholder": "Was suchst du? z. B. alle Aufträge einer Maschine",
            "go": "Hinführen", "full": "Ganze Hilfe öffnen", "none": "Keine passende Hilfe gefunden. Versuch es mit "
            "anderen Worten – z. B. dem Namen eines Bildschirms, eines Buttons oder was du tun willst.",
@@ -323,7 +354,9 @@ UI = {
            "areas": "Nummern wie (1) verweisen auf die Bildschirm-Skizze in der ganzen Hilfe.",
            "ask": "KI fragen", "ask_tip": "Die KI antwortet in eigenen Worten (verbraucht dein KI-Kontingent).",
            "asking": "Die KI wird gefragt…", "ai_label": "KI-Antwort", "ai_none": "Die Hilfe deckt diese Frage noch nicht ab.",
-           "fb_q": "Hat das geholfen?", "fb_up": "Hilfreich", "fb_down": "Nicht hilfreich", "fb_thanks": "Danke für die Rückmeldung!"},
+           "fb_q": "Hat das geholfen?", "fb_up": "Hilfreich", "fb_down": "Nicht hilfreich", "fb_thanks": "Danke für die Rückmeldung!",
+           "kb": "Knowledge Base", "kb_open": "In der Knowledge Base öffnen",
+           "kb_hint": "Hintergrundwissen: öffnet die Seite in einem Fenster – schliessen, und du bist wieder hier."},
     "es": {"title": "Ayuda – ¿dónde encuentro…?", "placeholder": "¿Qué buscas? p. ej. todos los pedidos de una máquina",
            "go": "Llévame allí", "full": "Abrir la ayuda completa", "none": "No se encontró ayuda. Prueba con "
            "otras palabras – p. ej. el nombre de una pantalla, de un botón o lo que quieres hacer.",
@@ -332,7 +365,9 @@ UI = {
            "areas": "Los números como (1) se refieren al esquema de la pantalla en la ayuda completa.",
            "ask": "Preguntar a la IA", "ask_tip": "La IA responde con sus palabras (usa tu cuota de tokens de IA).",
            "asking": "Preguntando a la IA…", "ai_label": "Respuesta de la IA", "ai_none": "La ayuda aún no cubre esta pregunta.",
-           "fb_q": "¿Te ha ayudado?", "fb_up": "Útil", "fb_down": "No útil", "fb_thanks": "¡Gracias por tu opinión!"},
+           "fb_q": "¿Te ha ayudado?", "fb_up": "Útil", "fb_down": "No útil", "fb_thanks": "¡Gracias por tu opinión!",
+           "kb": "Knowledge Base", "kb_open": "Abrir en la Knowledge Base",
+           "kb_hint": "Conocimiento de fondo: abre la página en una ventana; al cerrarla vuelves aquí."},
 }
 
 # Screens, die eine geoeffnete Serie brauchen - "Take me there" fuehrt dann zu All Experiments.
@@ -471,7 +506,7 @@ class HelpSearchDialog(QDialog):
     def _run_search(self) -> None:
         q = self.txt.text().strip()
         self._ai_result = None
-        self._hits = search(q) if q else []
+        self._hits = search(q, with_kb=True) if q else []
         # Anzeige-Sprache automatisch auf die Sprache der Frage, solange keine Flagge gewaehlt wurde
         if self._hits and not self._lang_pinned and self._hits[0].best_lang != self._lang:
             self._lang = self._hits[0].best_lang
@@ -485,7 +520,10 @@ class HelpSearchDialog(QDialog):
         for h in self._hits:
             e = h.by_lang.get(self._lang) or h.by_lang[h.best_lang]
             title = f"{u['ai_label']}: {normalize_display(e.question)}" if h.ai_answer else normalize_display(e.question)
-            it = QListWidgetItem(f"{title}\n{SCREEN_NAMES.get(h.screen, h.screen)}")
+            where = u["kb"] if h.screen == "kb" else SCREEN_NAMES.get(h.screen, h.screen)
+            it = QListWidgetItem(f"{title}\n{where}")
+            if h.screen == "kb":
+                it.setForeground(QColor("#2b7a3d"))
             if h.ai_answer:
                 f = it.font(); f.setBold(True); it.setFont(f)
             self.lst.addItem(it)
@@ -518,6 +556,18 @@ class HelpSearchDialog(QDialog):
         h = self._hits[row]
         u = UI[self._lang]
         e = h.by_lang.get(self._lang) or h.by_lang[h.best_lang]
+        is_kb = h.screen == "kb"
+        self.btn_go.setText(u["kb_open"] if is_kb else u["go"])
+        self.btn_go.setVisible(is_kb or callable(self._navigate))
+        self.btn_full.setVisible(not is_kb)
+        if is_kb:
+            from ui import kb_search
+            self.detail.setText(
+                f"<p style='color:#2b7a3d;font-weight:600'>{u['kb']}</p><h3>{e.question}</h3>"
+                f"<p>{html.escape(kb_search.summary(h.key, e.lang))}</p>"
+                f"<p style='color:#565656'>{u['kb_hint']}</p>")
+            self._update_feedback_ui()
+            return
         steps = "".join(f"<li>{s}</li>" for s in e.steps)
         extra = f"<p style='color:#565656'>{e.note}</p>" if e.note else ""
         warn = (f"<p style='background:#fff3cd;padding:6px'>{u['needs_series']}</p>"
@@ -606,6 +656,16 @@ class HelpSearchDialog(QDialog):
 
     def _on_go(self) -> None:
         h = self._current_hit()
+        if h is not None and h.screen == "kb":
+            # popup over the search window; closing it comes back here
+            from ui import kb_search
+            from ui.kb_links import open_target
+            target = kb_search.parse_key(h.key)
+            if target:
+                self._opened_key = h.key
+                self._log("help_search_open", f"{self.txt.text().strip()} -> {h.key}")
+                open_target(self, target, "help_search")
+            return
         if h is None or not callable(self._navigate):
             return
         self._opened_key = h.key
@@ -615,7 +675,7 @@ class HelpSearchDialog(QDialog):
 
     def _on_full_help(self) -> None:
         h = self._current_hit()
-        if h is None:
+        if h is None or h.screen == "kb":
             return
         self._opened_key = h.key
         self._log("help_search_open", f"{self.txt.text().strip()} -> {h.key} (full help)")

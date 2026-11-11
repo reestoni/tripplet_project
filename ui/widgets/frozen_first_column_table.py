@@ -44,6 +44,17 @@ class _GridView(QTableView):
         self.scrollTo(nxt)
         return True
 
+    def mousePressEvent(self, event):  # noqa: N802
+        # Right-click on a cell that can't be selected (trial-number header
+        # row): keep the selection, so its context menu can act on the
+        # selected trials (e.g. "Delete 20 selected trials", 2026-11-11).
+        if event.button() == Qt.RightButton:
+            idx = self.indexAt(event.position().toPoint())
+            if idx.isValid() and not (idx.flags() & Qt.ItemIsSelectable):
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
     def keyPressEvent(self, event):  # noqa: N802
         if event.key() in (Qt.Key_Return, Qt.Key_Enter) and self.state() != QAbstractItemView.EditingState:
             if self._step(-1 if event.modifiers() & Qt.ShiftModifier else 1):
@@ -67,8 +78,54 @@ class _GridView(QTableView):
         return m if (m is not None and getattr(m, "_notes_by_key", None) is not None
                      and hasattr(m, "notes_at")) else None
 
+    # ── Highlighted rows (DTY process schema, ui/dty_schema_panel.py): a
+    # light tint over the whole row, a frame around the cells of the chosen
+    # columns. Pure painting - the model (dirty/undo/save) is not touched.
+    HL_FILL = QColor(255, 193, 7, 60)
+    HL_FRAME = QColor("#E08A00")
+    _hl_rows: frozenset = frozenset()
+    _hl_cols: frozenset = frozenset()
+
+    def _paint_highlight(self):
+        m = self.model()
+        if m is None or not self._hl_rows:
+            return
+        vp = self.viewport()
+        p = QPainter(vp)
+        p.setRenderHint(QPainter.Antialiasing, False)
+        n_cols = m.columnCount()
+        for r in self._hl_rows:
+            if r < 0 or r >= m.rowCount() or self.isRowHidden(r):
+                continue
+            y, h = self.rowViewportPosition(r), self.rowHeight(r)
+            if y + h < 0 or y > vp.height():
+                continue
+            p.fillRect(0, y, vp.width(), h, self.HL_FILL)
+            # one frame per block of neighbouring columns (spanned trial cells)
+            cols = sorted(c for c in self._hl_cols if 0 <= c < n_cols and not self.isColumnHidden(c))
+            blocks, start, prev = [], None, None
+            for c in cols:
+                if start is None:
+                    start = prev = c
+                elif c == prev + 1:
+                    prev = c
+                else:
+                    blocks.append((start, prev))
+                    start = prev = c
+            if start is not None:
+                blocks.append((start, prev))
+            p.setPen(self.HL_FRAME)
+            p.setBrush(Qt.NoBrush)
+            for c0, c1 in blocks:
+                x = self.columnViewportPosition(c0)
+                w = self.columnViewportPosition(c1) + self.columnWidth(c1) - x
+                p.drawRect(x, y, w - 1, h - 1)
+                p.drawRect(x + 1, y + 1, w - 3, h - 3)
+        p.end()
+
     def paintEvent(self, event):  # noqa: N802
         super().paintEvent(event)
+        self._paint_highlight()
         m = self._notes_model()
         if m is None or not (m._notes_by_key or getattr(m, "_note_trial_cols", None)):
             return
@@ -259,6 +316,8 @@ class FrozenFirstColumnTable(QWidget):
         """Alle vier Ansichten auf dasselbe Model setzen, Zeilen/Spalten passend ausblenden."""
         self._model = model
         self._n_hdr = int(getattr(model, "_n_hdr", 0) or 0)
+        for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):
+            v._hl_rows = v._hl_cols = frozenset()  # row numbers change with the model
         try:
             import weakref
             model._ffct_owner = weakref.ref(self)  # lets the model find its screen (recycle bin preview)
@@ -310,6 +369,27 @@ class FrozenFirstColumnTable(QWidget):
 
         self.top_left.model().rowsInserted.connect(lambda *a: self._update_top_height())
         self.top_left.model().modelReset.connect(lambda: self._update_top_height())
+
+    def set_highlight(self, rows=(), cols=(), scroll: bool = True):
+        """Highlights model rows (tint) and frames their cells in model
+        columns `cols`; empty `rows` clears it. Scrolls to the first row."""
+        rows, cols = frozenset(int(r) for r in rows), frozenset(int(c) for c in cols)
+        for v in (self.top_left, self.top_right, self.bottom_left, self.bottom_right):
+            v._hl_rows, v._hl_cols = rows, cols
+            v.viewport().update()
+        if scroll and rows and self._model is not None:
+            visible = [r for r in sorted(rows) if not self.bottom_right.isRowHidden(r)]
+            if visible:
+                col = min(cols) if cols else max(1, self.bottom_right.columnAt(0))
+                self.bottom_right.scrollTo(self._model.index(visible[0], max(1, col)),
+                                           QAbstractItemView.PositionAtCenter
+                                           if len(visible) == 1 else QAbstractItemView.EnsureVisible)
+                if len(visible) > 1:
+                    self.bottom_right.scrollTo(self._model.index(visible[-1], max(1, col)))
+                    self.bottom_right.scrollTo(self._model.index(visible[0], max(1, col)))
+
+    def highlighted_rows(self):
+        return set(self.bottom_right._hl_rows)
 
     def verticalHeader(self):  # noqa: N802
         """Gibt den vertikalen Header der Hauptansicht (Datenzeilen, rechts unten) zurück."""

@@ -1,6 +1,6 @@
 window.TEXTS = {
 "de": {
- "ui": {"eyebrow": "Onboarding · Spleissen", "h1": "Wie Filamentgarne mit Luft verbunden werden",
+ "ui": {"eyebrow": "Knowledge Base · Spleissen", "h1": "Wie Filamentgarne mit Luft verbunden werden",
   "lead": "Ein Luftspleisser verbindet zwei Garnenden ohne Knoten: Die Enden werden überlappend eingelegt, geklemmt, abgeschnitten und mit einem Luftstoss verwirbelt. Fünf kurze Szenen zeigen, wofür das gebraucht wird und wie es funktioniert.",
   "points": "Verbindungsstellen", "pause": "⏸ Pause", "play": "▶ Abspielen", "scenes": "Szenen",
   "note": "Schematische Darstellung. Ablauf und Geometrie der Blaskammer sind vereinfacht; die Gerätedaten stammen aus den Heberlein-Produktseiten und sind dort als unverbindliche Richtwerte angegeben."},
@@ -37,7 +37,7 @@ window.TEXTS = {
   "clampsKnives": "Klemmen und Messer"}
 },
 "en": {
- "ui": {"eyebrow": "Onboarding · Splicing", "h1": "How filament yarns are joined with air",
+ "ui": {"eyebrow": "Knowledge Base · Splicing", "h1": "How filament yarns are joined with air",
   "lead": "An air splicer joins two yarn ends without a knot: the ends are laid in overlapping, clamped, cut and intermingled with a blast of air. Five short scenes show what it is needed for and how it works.",
   "points": "Connection points", "pause": "⏸ Pause", "play": "▶ Play", "scenes": "Scenes",
   "note": "Schematic. Sequence and splicing chamber geometry are simplified; device data come from the Heberlein product pages, where they are given as non-binding guide values."},
@@ -74,7 +74,7 @@ window.TEXTS = {
   "clampsKnives": "Clamps and knives"}
 },
 "es": {
- "ui": {"eyebrow": "Onboarding · Empalme", "h1": "Cómo se unen los hilos de filamento con aire",
+ "ui": {"eyebrow": "Knowledge Base · Empalme", "h1": "Cómo se unen los hilos de filamento con aire",
   "lead": "Un empalmador neumático une dos extremos de hilo sin nudo: los extremos se colocan solapados, se sujetan, se cortan y se entrelazan con un golpe de aire. Cinco escenas cortas muestran para qué se usa y cómo funciona.",
   "points": "Puntos de unión", "pause": "⏸ Pausa", "play": "▶ Reproducir", "scenes": "Escenas",
   "note": "Representación esquemática. La secuencia y la geometría de la cámara de empalme están simplificadas; los datos de los equipos proceden de las páginas de producto de Heberlein, donde figuran como valores orientativos sin compromiso."},
@@ -111,7 +111,7 @@ window.TEXTS = {
   "clampsKnives": "Pinzas y cuchillas"}
 },
 "zh": {
- "ui": {"eyebrow": "入门 · 捻接", "h1": "长丝是如何用空气连接的",
+ "ui": {"eyebrow": "知识库 · 捻接", "h1": "长丝是如何用空气连接的",
   "lead": "空气捻接器无需打结即可连接两个纱头：纱头重叠放入、夹紧、剪断，然后用一股气流使其交缠。五个短场景介绍捻接的用途和工作原理。",
   "points": "连接点", "pause": "⏸ 暂停", "play": "▶ 播放", "scenes": "场景",
   "note": "示意图。流程和捻接腔的几何形状均为简化表示；设备数据来自 Heberlein 产品页面，在那里作为无约束力的参考值给出。"},

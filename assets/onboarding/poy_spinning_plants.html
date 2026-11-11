@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POY Spinning Plants</title>
+<!-- Knowledge-Base-Modul (ui/screen_onboarding.py), Kategorie Spinnerei.
+     Inhalt aus der Recherche-Seite des Nutzers "POY-Spinnanlagen - Hersteller, Bauformen & Varianten" (Stand Nov. 2026).
+     Texte in poy_spinning_plants_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (ohne eigenen Kopf/Kapitel-Knoepfe, meldet das Kapitel per document.title "scene:n"),
+     ?scene=n fuer Screenshots. Keine externen Ressourcen (Quellen nur als Text).
+     Die Verwirbelungsduese verlinkt das Modul filament_spinning: eingebettet per document.title "open:<key>",
+     sonst direkt <key>.html. SVG/DOM statt Canvas, weil Schema, Hersteller und Balken Daten sind. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--yarn:#B5651D;--twist:#6A4FC8;--soft:#EEF3EC;
+  --jet:#0C8599;--wind:#495057;--cn:#C62828;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{padding:5px 10px;font-size:13.5px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{font-family:var(--font-display);font-size:22px;margin:2px 0 6px}
+.card p{margin:6px 0}
+.card ul{padding-left:18px;margin:6px 0}
+.grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:12px;align-items:start}
+.grid2.g0{grid-template-columns:1.8fr 1fr}
+.lbl{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:block;margin:0 0 4px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:10px}
+.tag{display:inline-block;font-size:11px;font-family:var(--font-mono);padding:2px 8px;border-radius:999px;background:var(--soft);border:1px solid var(--line);margin:0 4px 8px 0}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;margin:2px 4px 2px 0;background:var(--soft);border:1px solid var(--line)}
+.muted,.note{font-size:13px;color:var(--muted)}
+.note{margin:8px 0 0}
+.lk{margin-top:10px;border-color:var(--jet);color:var(--jet);font-weight:600;flex-direction:column;align-items:flex-start;gap:0;text-align:left}
+.lk:hover{border-color:var(--hl);color:var(--hl)}
+.lk small{font-weight:400;color:var(--muted);font-size:12px}
+.node{cursor:pointer}
+.node:hover rect,.node:hover circle{stroke:var(--hl);stroke-width:2.5}
+.node.sel rect,.node.sel circle{stroke:var(--hl);stroke-width:3}
+.yarn{fill:none;stroke:var(--yarn);stroke-width:2.6;stroke-dasharray:7 6;animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-26}}
+@media (prefers-reduced-motion: reduce){.yarn{animation:none}}
+/* tree */
+.tree{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.dim{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.dim h4{margin:0 0 8px;font-size:15px;display:flex;align-items:center;gap:8px}
+.dim h4 .num{font-family:var(--font-mono);font-size:11px;background:var(--fg);color:#fff;border-radius:4px;padding:2px 6px}
+.opt{border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin:6px 0;cursor:pointer;transition:border-color .15s,background .15s}
+.opt:hover{border-color:var(--hl)}
+.opt b{font-size:14px}
+.opt small{display:block;color:var(--muted);font-size:12.5px}
+.opt.hl{background:#E8F5EA;border-color:var(--hl)}
+/* manufacturers */
+.filters{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.filters input{font:inherit;padding:6px 10px;border-radius:4px;border:1px solid var(--line);background:#fff;color:var(--fg);min-width:240px}
+.tf{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tf button{padding:3px 9px;font-size:12.5px}
+.mfr{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.mcard{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
+.mcard .top{padding:12px 14px 8px;display:flex;gap:10px;align-items:flex-start}
+.flag{font-family:var(--font-mono);font-size:11px;padding:3px 7px;border-radius:4px;background:var(--fg);color:#fff;white-space:nowrap}
+.mcard h3{margin:0;font-size:17px;font-family:var(--font-body)}
+.mcard .meta{color:var(--muted);font-size:13px}
+.mcard .thumb{background:var(--bg);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.mcard .thumb svg{height:120px}
+.mnote{padding:10px 14px 0;font-size:13.5px}
+.models{padding:6px 14px 12px}
+.model{border-top:1px dashed var(--line);padding:8px 0}
+.model:first-child{border-top:0}
+.model .mn{font-weight:600;font-size:14px}
+.model .mn span{font-family:var(--font-mono);font-weight:400;color:var(--muted);font-size:12px}
+.model .ms{font-size:13px;color:var(--muted)}
+.chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);margin:3px 3px 0 0;font-family:var(--font-mono)}
+.chip.auto{border-color:var(--hl);color:#2B7F3C}
+.chip.man{border-color:var(--muted);color:var(--muted)}
+.chip.pa{border-color:var(--twist);color:var(--twist)}
+.chip.pes{border-color:var(--air);color:var(--air)}
+.chip.lg{border-color:var(--muted);color:var(--muted);font-style:italic}
+.site{margin-top:8px;font-size:12.5px;color:var(--muted);font-family:var(--font-mono)}
+.empty{color:var(--muted);padding:20px}
+/* bars */
+.bars .row{display:grid;grid-template-columns:260px 1fr 54px;gap:10px;align-items:center;margin:5px 0;font-size:13.5px}
+.bars .track{height:18px;background:var(--soft);border-radius:4px;overflow:hidden}
+.bars .fill{height:100%;border-radius:4px;transition:width .6s}
+.bars .v{font-family:var(--font-mono);text-align:right}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+/* timeline */
+.timeline{position:relative;padding-left:22px;border-left:2px solid var(--line);margin-left:6px}
+.ev{margin:0 0 14px;position:relative}
+.ev:before{content:"";position:absolute;left:-30px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--hl);border:2px solid var(--panel)}
+.ev b{font-family:var(--font-mono);font-size:13px;color:var(--hl)}
+.assess li{margin-bottom:6px}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}header{flex-direction:column}details ol{columns:1}.bars .row{grid-template-columns:130px 1fr 44px;font-size:12px}}
+</style>
+<script src="poy_spinning_plants_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 process -->
+  <div class="sc" id="sc0">
+    <div class="grid2 g0">
+      <div class="card">
+        <div class="controls" id="controls"></div>
+        <svg id="procsvg" viewBox="0 0 830 620" role="img"></svg>
+      </div>
+      <div class="card" id="detail"></div>
+    </div>
+  </div>
+  <!-- 1 variant scheme -->
+  <div class="sc" id="sc1">
+    <p class="muted" id="treehint" style="margin:0"></p>
+    <div class="tree" id="tree"></div>
+  </div>
+  <!-- 2 layouts -->
+  <div class="sc" id="sc2">
+    <div class="seg" id="ptabs"></div>
+    <div class="grid2">
+      <div class="card"><svg id="profsvg" viewBox="0 0 620 420" role="img"></svg></div>
+      <div class="card" id="profdesc"></div>
+    </div>
+  </div>
+  <!-- 3 manufacturers -->
+  <div class="sc" id="sc3">
+    <div class="filters">
+      <div><span class="lbl" id="l-search"></span><input id="q" type="search"></div>
+      <div><span class="lbl" id="l-region"></span><div class="seg" id="f-reg"></div></div>
+      <div><span class="lbl" id="l-scope"></span><div class="seg" id="f-scope"></div></div>
+    </div>
+    <div class="tf" id="treefilter"></div>
+    <div class="mfr" id="mfr"></div>
+  </div>
+  <!-- 4 winders compared -->
+  <div class="sc" id="sc4">
+    <div class="card">
+      <div class="seg" id="c-sort" style="margin-bottom:10px"></div>
+      <div class="bars" id="bars"></div>
+      <div class="legend" id="legend"></div>
+      <p class="note" id="barsnote"></p>
+    </div>
+  </div>
+  <!-- 5 market -->
+  <div class="sc" id="sc5">
+    <div class="grid2">
+      <div class="card"><div class="timeline" id="timeline"></div></div>
+      <div class="card"><h3 id="assesst"></h3><ul class="assess" id="assess"></ul></div>
+    </div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// SVG text; max = available width in viewBox units (fit() squeezes longer texts after rendering)
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>`<text x="${x}" y="${y}" font-size="${s}" text-anchor="${a}" fill="${c}" font-weight="${w}"${max?` data-max="${max}"`:''}>${esc(t)}</text>`;
+function fit(root){
+  (root||document).querySelectorAll('text[data-max]').forEach(el=>{
+    el.removeAttribute('textLength');el.removeAttribute('lengthAdjust');
+    const m=+el.dataset.max,l=el.getComputedTextLength();
+    if(l>m){el.setAttribute('textLength',m);el.setAttribute('lengthAdjust','spacingAndGlyphs')}
+  });
+}
+
+// ── language-neutral data (texts in poy_spinning_plants_texts.js, same order)
+// manufacturers: region, country, scope, layout thumbnail, source domain; models: max ends, chuck mm, tags
+const MFR=[
+ {reg:'EU',country:'DE',scope:'plant',thumb:'wings',dom:'barmag.com',short:'Barmag',models:[
+  [12,1800,['wings','radial','autostring','pes','rotor']],[16,1800,['wings','pes','rotor']],[12,1800,['wings','pes','hightiter','rotor']],
+  [12,1500,['wings','pa','hoy','rotor']],[12,1800,['wings','retrofit','rotor']],[8,1200,['sep','reverse','retrofit']],
+  [null,null,['radial','micro','pa','pes']],[null,1600,['sep','legacy']]]},
+ {reg:'JP',country:'JP',scope:'plant',thumb:'conv',dom:'tmt-machinery.jp',short:'TMT',models:[
+  [12,1800,['sep','pes','rotor']],[16,1800,['sep','pes']],[null,1520,['sep','rotor','cam']],[null,null,['sep']],[6,1350,['industrial','special']]]},
+ {reg:'EU',country:'AT',scope:'plant',thumb:'vertex',dom:'sml.at',short:'SML',models:[
+  [8,null,['vertical','pes','pp','pa','cam','rotor','chip']]]},
+ {reg:'EU',country:'DE',scope:'winder',thumb:'conv',dom:'itmaasia.german-pavilion.com',short:'STC Spinnzwirn',models:[
+  [8,1200,['sep','retrofit']],[null,600,['sep','special']]]},
+ {reg:'CN',country:'CN',scope:'plant',thumb:'conv',dom:'texmachines.com',short:'Beijing Chonglee',models:[
+  [null,null,['sep','pes']],[16,1380,['sep','cam']]]},
+ {reg:'CN',country:'CN',scope:'plant',thumb:'conv',dom:'jwextrusion.com',short:'Jwell Fiber',models:[
+  [12,null,['sep','cross','radial','pes','pa','bico','chip','cp']],[20,1800,['sep','cam','rotor']]]},
+ {reg:'CN',country:'CN',scope:'plant',thumb:'conv',dom:'shtita.en.made-in-china.com',short:'Jiangsu TITA',models:[
+  [null,1800,['sep']]]},
+ {reg:'CN',country:'CN / IN',scope:'plant',thumb:'conv',dom:'ategroup.com',short:'Hi-Tech',models:[
+  [16,1680,['sep','cam','chip']],[20,1500,['sep','rotor']]]},
+ {reg:'EU',country:'DE',scope:'plant',thumb:'lab',dom:'chemeurope.com',short:'Fourné Polymertechnik',models:[
+  [null,null,['lab','chip','special']]]},
+ {reg:'US',country:'US',scope:'plant',thumb:'lab',dom:'mtec-sc.org',short:'Hills Inc.',models:[
+  [null,null,['lab','bico','chip','special']]]}
+];
+const DIM_KEYS=[['pes','pa','hoy','bico','hightiter'],['cp','chip'],['cross','radial','micro'],['wings','sep','vertical'],
+  ['cam','rotor','reverse','autostring'],['retrofit','lab','special']];
+const CTRL=[['src',['cp','chip']],['q',['cross','radial']],['g',['sep','wings','none']],['t',['cam','rotor']]];
+const CTRL_SEL={src:'src',q:'quench',g:'godet',t:'trav'};
+const PROF_KEYS=['conv','wings','vertex','lab'];
+const REGIONS=['all','EU','JP','CN','US'],SCOPES=['all','plant','winder'];
+const RC={EU:'var(--air)',JP:'var(--heat)',CN:'var(--cn)',US:'var(--hl)'};
+const TL_YEARS=['2002','2004','2007','2010','2014','2015','2018','2019','2025','2026'];
+const CHIP_CLS=[['wings','auto'],['radial','pes'],['legacy','lg'],['retrofit','man'],['pa','pa'],['pes','pes'],['bico',''],['lab','']];
+const LINK_KEYS=['filament_spinning'];
+
+let scene=Math.max(0,Math.min(5,parseInt(params.get('scene')||'0',10)||0));
+const st={src:'cp',q:'cross',g:'wings',t:'cam'};
+let sel='godet',treeSel=null,prof='conv',mode='ends';
+const flt={reg:'all',scope:'all',q:''};
+
+function segHtml(labels,values,cur){return values.map((v,i)=>`<button type="button" data-v="${v}" aria-pressed="${v===cur}">${esc(labels[i])}</button>`).join('')}
+function bindSeg(el,cb){el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.v))}
+function linkBtn(){const u=T().ui;return `<button type="button" class="lk" data-k="${LINK_KEYS[0]}">${esc(u.openFil)} <small>${esc(u.openFilHint)}</small></button>`}
+function bindLinks(root){root.querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k))}
+
+// ── scene 0: process
+function drawControls(){
+  const c=T().ctrl;
+  $('controls').innerHTML=CTRL.map(([k,vals],i)=>`<div><span class="lbl">${esc(c.lbl[i])}</span><div class="seg" data-k="${k}">${segHtml(c.opt[i],vals,st[k])}</div></div>`).join('');
+  $('controls').querySelectorAll('.seg').forEach(el=>bindSeg(el,v=>{const k=el.dataset.k;st[k]=v;sel=CTRL_SEL[k];drawControls();drawProc();showDetail()}));
+}
+function godetSvg(x,y){return `<circle cx="${x}" cy="${y}" r="16" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/><circle cx="${x}" cy="${y}" r="4" fill="var(--wind)"/>`}
+function drawProc(){
+  const p=T().proc;
+  let s=`<defs><marker id="aq" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8z" fill="var(--air)"/></marker></defs>`;
+  const fl=(y,t)=>`<line x1="10" y1="${y}" x2="820" y2="${y}" stroke="var(--line)" stroke-width="3"/>`+TX(14,y-6,t.toUpperCase(),'var(--muted)','start',400,11,300);
+  s+=fl(30,p.floorSpin)+fl(330,p.floorShaft+' / '+(st.g==='sep'?p.floorGodet:p.floorMid))+fl(440,p.floorWind);
+  // polymer feed
+  s+=`<g class="node" data-id="src">`;
+  if(st.src==='cp'){
+    s+=`<rect x="40" y="60" width="54" height="120" rx="20" fill="#E8F2FB" stroke="var(--air)" stroke-width="1.5"/><rect x="110" y="90" width="54" height="90" rx="18" fill="#E8F2FB" stroke="var(--air)" stroke-width="1.5"/>`+
+      TX(100,200,p.cp,'var(--air)','middle',600,12,190)+TX(100,216,p.cpSub,'var(--muted)','middle',400,11,190);
+  }else{
+    s+=`<path d="M50 60 L110 60 L95 100 L65 100 Z" fill="#F3C98B" stroke="#B07A2A"/>`+TX(80,52,p.chips,'var(--fg)','middle',600,12,120)+
+      `<rect x="62" y="104" width="36" height="40" rx="6" fill="#FFF3BF" stroke="#E67700"/>`+TX(106,130,p.dryer,'#B85E00','start',600,11,130)+
+      `<rect x="40" y="150" width="150" height="26" rx="10" fill="#FCE5D3" stroke="var(--heat)"/><path d="M50 163 h130" stroke="var(--heat)" stroke-dasharray="8 5"/>`+
+      TX(115,200,p.extr,'var(--heat)','middle',600,12,200);
+  }
+  s+=`<rect x="20" y="40" width="190" height="180" fill="transparent"/></g>`;
+  // melt pipe
+  s+=`<path d="M${st.src==='cp'?164:190} ${st.src==='cp'?140:163} L250 ${st.src==='cp'?140:163} L250 75 L300 75" fill="none" stroke="var(--heat)" stroke-width="5" stroke-linejoin="round"/>`;
+  // spin beam
+  s+=`<g class="node" data-id="beam"><rect x="300" y="50" width="260" height="50" rx="8" fill="#FCE5D3" stroke="var(--heat)" stroke-width="1.5"/>`+
+     `<circle cx="338" cy="75" r="12" fill="var(--panel)" stroke="var(--heat)"/><path d="M332 75 h12 M338 69 v12" stroke="var(--heat)"/>`+
+     [380,430,480].map(x=>`<rect x="${x-14}" y="100" width="28" height="14" rx="3" fill="#F8C9A0" stroke="var(--heat)"/>`).join('')+
+     TX(430,44,p.beam,'var(--heat)','middle',600,12,400)+`</g>`;
+  // quench
+  s+=`<g class="node" data-id="quench"><rect x="340" y="122" width="180" height="170" rx="6" fill="#EDF5FC" stroke="var(--air)" stroke-width="1.5" stroke-dasharray="${st.q==='radial'?'0':'5 4'}"/>`;
+  if(st.q==='cross'){s+=[150,185,220,255].map(y=>`<path d="M560 ${y} L528 ${y}" stroke="var(--air)" stroke-width="2" marker-end="url(#aq)"/>`).join('')+TX(568,210,p.cross,'var(--air)','start',600,12,180)}
+  else{s+=[150,200,250].map(y=>`<path d="M555 ${y} L528 ${y}" stroke="var(--air)" stroke-width="2" marker-end="url(#aq)"/><path d="M305 ${y} L332 ${y}" stroke="var(--air)" stroke-width="2" marker-end="url(#aq)"/>`).join('')+
+    TX(568,210,p.radial,'var(--air)','start',600,12,180)+TX(568,226,p.lessAir,'var(--muted)','start',400,11,180)}
+  s+=`<rect x="300" y="122" width="40" height="170" fill="transparent"/></g>`;
+  s+=TX(334,118,p.quench,'var(--air)','end',600,11,300);
+  // filaments
+  s+=[380,430,480].map(x=>`<path d="M${x} 114 L430 312" stroke="var(--yarn)" stroke-width="1.2" opacity=".7"/>`).join('');
+  // spin finish
+  s+=`<g class="node" data-id="oil"><rect x="414" y="304" width="32" height="14" rx="4" fill="#FFF3BF" stroke="#E67700" stroke-width="1.5"/>${TX(454,316,p.oil,'var(--fg)','start',600,11,170)}</g>`;
+  // yarn path
+  let d='M430 318 ';const W={x:330,y:450,w:300,h:160};
+  if(st.g==='sep')d+='L430 350 L556 364 L556 380 L452 398 L452 414 L452 500 ';
+  else if(st.g==='wings')d+='L430 470 L556 470 L556 486 L452 500 ';
+  else d+='L452 500 ';
+  d+='L452 540 L460 560';
+  s+=`<path d="${d}" fill="none" stroke="var(--line)" stroke-width="6" stroke-linejoin="round"/><path d="${d}" class="yarn" stroke-linejoin="round"/>`;
+  // winder housing
+  s+=`<rect x="${W.x}" y="${W.y}" width="${W.w}" height="${W.h}" rx="12" fill="none" stroke="var(--wind)" stroke-width="1.5" stroke-dasharray="${st.g==='wings'?'0':'5 4'}"/>`+
+     TX(W.x+W.w+8,W.y+W.h-6,st.g==='wings'?p.windW:p.wind,'var(--wind)','start',600,11,185);
+  // godets
+  if(st.g!=='none'){const gy=st.g==='sep'?[372,406]:[478,494];
+    s+=`<g class="node" data-id="godet">${godetSvg(556,gy[0]-8)}${godetSvg(452,gy[1]-8)}${TX(586,gy[0]-4,p.godets,'var(--fg)','start',600,12,120)}</g>`}
+  else{s+=`<g class="node" data-id="godet"><rect x="470" y="372" width="160" height="22" rx="6" fill="var(--bg)" stroke="var(--line)"/>${TX(550,387,p.noGodet,'var(--muted)','middle',400,11,150)}</g>`}
+  // interlacing jet
+  s+=`<g class="node" data-id="jet"><rect x="436" y="506" width="32" height="20" rx="5" fill="#C5F6FA" stroke="var(--jet)" stroke-width="1.5"/>${TX(476,520,p.jet,'var(--jet)','start',600,11,150)}</g>`;
+  // traverse
+  s+=`<g class="node" data-id="trav"><rect x="372" y="536" width="170" height="12" rx="4" fill="var(--panel)" stroke="var(--twist)" stroke-width="1.5"/>`;
+  if(st.t==='rotor')s+=`<path d="M430 542 l14 -10 M430 542 l-14 10 M484 542 l14 10 M484 542 l-14 -10" stroke="var(--twist)" stroke-width="2"/>`;
+  else s+=`<path d="M378 542 q10 -6 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0" stroke="var(--twist)" fill="none"/>`;
+  s+=TX(550,546,st.t==='rotor'?p.rotor:p.cam,'var(--twist)','start',600,11,190)+`</g>`;
+  // packages on the turret
+  s+=`<g class="node" data-id="wind"><circle cx="500" cy="585" r="6" fill="var(--wind)"/><line x1="460" y1="585" x2="560" y2="585" stroke="var(--wind)" stroke-width="2"/>`+
+     [0,1,2,3,4,5].map(i=>`<rect x="${352+i*24}" y="556" width="22" height="22" rx="5" fill="#E9ECEF" stroke="var(--wind)"/>`).join('')+
+     `<rect x="560" y="574" width="60" height="10" rx="3" fill="var(--panel)" stroke="var(--wind)"/>${TX(590,600,p.emptyTube,'var(--muted)','middle',400,10,80)}`+
+     TX(400,604,p.pkgs,'var(--fg)','middle',600,11,150)+`</g>`;
+  // take-up speed
+  s+=TX(730,470,p.take,'var(--muted)','middle',400,11,180)+TX(730,488,p.pes,'var(--muted)','middle',400,11,180)+TX(730,506,p.speed,'var(--fg)','middle',600,12,180);
+  const svg=$('procsvg');svg.innerHTML=s;fit(svg);
+  svg.querySelectorAll('.node').forEach(n=>{n.classList.toggle('sel',n.dataset.id===sel);n.onclick=()=>{sel=n.dataset.id;drawProc();showDetail()}});
+}
+function showDetail(){
+  const t=T(),c=t.comp[sel];
+  let p=c.p||'';
+  if(sel==='src')p=c[st.src];
+  if(sel==='quench')p=c[st.q];
+  if(sel==='godet')p=c[st.g];
+  if(sel==='trav')p=c[st.t];
+  const link=sel==='jet'||(sel==='godet'&&st.g==='wings');
+  $('detail').innerHTML=`<span class="lbl">${esc(t.ui.component)}</span><h3>${esc(c.t)}</h3>${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}<p>${esc(p)}</p>`+
+    (c.l.length?`<ul>${c.l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'')+(link?linkBtn():'')+`<p class="note">${esc(t.ui.tip)}</p>`;
+  bindLinks($('detail'));
+}
+
+// ── scene 1: variant scheme (option click filters scene 3 and switches to it)
+function drawTree(){
+  const t=T();
+  $('treehint').textContent=t.ui.treeHint;
+  $('tree').innerHTML=t.dims.map((d,i)=>`<div class="dim"><h4><span class="num">${String(i+1).padStart(2,'0')}</span>${esc(d.t)}</h4>`+
+    d.o.map((o,j)=>`<div class="opt ${treeSel===DIM_KEYS[i][j]?'hl':''}" role="button" tabindex="0" data-k="${DIM_KEYS[i][j]}"><b>${esc(o.b)}</b><small>${esc(o.s)}</small></div>`).join('')+`</div>`).join('');
+  $('tree').querySelectorAll('.opt').forEach(el=>{
+    const act=()=>{const k=el.dataset.k;treeSel=treeSel===k?null:k;drawTree();drawMfr();if(treeSel){go(3);window.scrollTo(0,0)}};
+    el.onclick=act;el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();act()}};
+  });
+}
+
+// ── scene 2: layouts
+function profSVG(k){
+  const v=T().psvg;
+  let s=`<rect x="0" y="390" width="620" height="6" fill="var(--line)"/>`;
+  const L=(x,y,t,c='var(--fg)',a='middle',max=0)=>TX(x,y,t,c,a,600,12,max);
+  const person=(x,y)=>`<g fill="var(--muted)"><circle cx="${x}" cy="${y-88}" r="9"/><rect x="${x-8}" y="${y-77}" width="16" height="40" rx="5"/><rect x="${x-7}" y="${y-38}" width="6" height="38"/><rect x="${x+1}" y="${y-38}" width="6" height="38"/></g>`;
+  const beam=(x,y,w)=>`<rect x="${x}" y="${y}" width="${w}" height="26" rx="5" fill="#FCE5D3" stroke="var(--heat)"/>`;
+  const quench=(x,y,h)=>`<rect x="${x}" y="${y}" width="70" height="${h}" rx="4" fill="#E3EFFA" stroke="var(--air)"/>`;
+  const winder=(x,y)=>`<rect x="${x}" y="${y}" width="110" height="70" rx="10" fill="var(--panel)" stroke="var(--wind)"/>${[0,1,2,3].map(i=>`<rect x="${x+10+i*24}" y="${y+40}" width="20" height="20" rx="5" fill="#E9ECEF" stroke="var(--wind)"/>`).join('')}`;
+  const floor=(y,t)=>`<line x1="20" y1="${y}" x2="600" y2="${y}" stroke="var(--line)" stroke-width="4"/>`+TX(24,y-6,t,'var(--muted)','start',400,11,190);
+  if(k==='conv'){
+    s+=floor(130,v.floorSpin)+floor(260,v.floorGodet);
+    s+=beam(220,40,180)+L(310,32,v.beam,'var(--heat)','middle',300)+quench(275,66,64)+L(400,104,v.quench,'var(--air)','start',190);
+    s+=`<circle cx="330" cy="215" r="13" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/><circle cx="380" cy="235" r="13" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/>`+L(420,230,v.godets,'var(--fg)','start',150);
+    s+=winder(260,300)+L(315,292,v.wind,'var(--fg)','middle',200);
+    s+=person(500,260)+person(500,390);
+    s+=`<path d="M310 66 L310 200 L330 202 L380 222 L380 248 L320 300 L320 340" class="yarn"/>`;
+  }
+  if(k==='wings'){
+    s+=floor(160,v.floorSpin);
+    s+=beam(220,40,180)+L(310,32,v.beam,'var(--heat)','middle',300)+quench(275,66,90)+L(400,110,v.quench,'var(--air)','start',170);
+    s+=`<rect x="240" y="250" width="150" height="130" rx="12" fill="var(--panel)" stroke="var(--hl)" stroke-width="2"/>`+L(315,242,v.wingsUnit,'#2B7F3C','middle',200);
+    s+=`<circle cx="290" cy="275" r="11" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/><circle cx="335" cy="290" r="11" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/><rect x="300" y="305" width="20" height="10" rx="3" fill="#C5F6FA" stroke="var(--jet)"/>`;
+    s+=[0,1,2,3,4].map(i=>`<rect x="${252+i*26}" y="345" width="22" height="22" rx="5" fill="#E9ECEF" stroke="var(--wind)"/>`).join('');
+    s+=L(400,290,v.wingsA,'var(--fg)','start',165)+TX(400,306,v.wingsB,'var(--muted)','start',600,12,165);
+    s+=person(160,390);
+    s+=`<path d="M310 66 L310 262 L290 264 L335 280 L310 300 L310 345" class="yarn"/>`;
+    s+=`<line x1="580" y1="40" x2="580" y2="390" stroke="var(--muted)"/><text x="595" y="215" font-size="11" fill="var(--muted)" transform="rotate(-90 595 215)" text-anchor="middle" data-max="340">${esc(v.noStage)}</text>`;
+  }
+  if(k==='vertex'){
+    [0,1,2].forEach(i=>{const x=60+i*180;
+      s+=`<rect x="${x}" y="30" width="150" height="350" rx="10" fill="var(--panel)" stroke="var(--line)"/>`;
+      s+=`<rect x="${x+20}" y="44" width="110" height="20" rx="4" fill="#FCE5D3" stroke="var(--heat)"/>`;
+      s+=`<rect x="${x+45}" y="70" width="60" height="110" rx="4" fill="#E3EFFA" stroke="var(--air)"/>`;
+      s+=`<circle cx="${x+60}" cy="215" r="11" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/><circle cx="${x+95}" cy="240" r="11" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/>`;
+      s+=`<rect x="${x+15}" y="290" width="120" height="70" rx="10" fill="var(--bg)" stroke="var(--wind)"/>${[0,1,2,3].map(j=>`<rect x="${x+22+j*28}" y="330" width="22" height="20" rx="5" fill="#E9ECEF" stroke="var(--wind)"/>`).join('')}`;
+      s+=`<path d="M${x+75} 64 L${x+75} 200 L${x+60} 204 L${x+95} 230 L${x+75} 290 L${x+75} 330" class="yarn"/>`;
+      s+=TX(x+75,22,fmt(v.module,{i:i+1}),'var(--fg)','middle',600,11,170);
+    });
+    s+=TX(310,410,v.grows,'#2B7F3C','middle',600,12,580);
+  }
+  if(k==='lab'){
+    s+=`<rect x="40" y="250" width="120" height="30" rx="10" fill="#FCE5D3" stroke="var(--heat)"/><rect x="40" y="300" width="120" height="30" rx="10" fill="#F8C9A0" stroke="var(--heat)"/>`+L(100,240,v.extr,'var(--heat)','middle',150);
+    s+=`<path d="M160 265 L196 265 L196 98 L220 98 M160 315 L206 315 L206 108 L220 108" stroke="var(--heat)" stroke-width="3" fill="none"/>`;
+    s+=beam(220,90,80)+L(260,80,v.bico,'var(--heat)','middle',170)+quench(225,118,90);
+    s+=`<circle cx="380" cy="230" r="12" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/><circle cx="430" cy="250" r="12" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/>`+L(405,214,v.godets,'var(--fg)','middle',150);
+    s+=winder(440,300)+L(495,292,v.compact,'var(--fg)','middle',170);
+    s+=`<g transform="translate(70,90)"><circle cx="0" cy="0" r="22" fill="#F8C9A0" stroke="var(--heat)"/><path d="M0 -22 A22 22 0 0 1 0 22 Z" fill="#A5D8FF" stroke="var(--air)"/></g>`+TX(70,130,v.ss,'var(--muted)','middle',600,12,78);
+    s+=`<g transform="translate(150,90)"><circle cx="0" cy="0" r="22" fill="#A5D8FF" stroke="var(--air)"/><circle cx="0" cy="0" r="11" fill="#F8C9A0" stroke="var(--heat)"/></g>`+TX(150,130,v.cs,'var(--muted)','middle',600,12,78);
+    s+=`<path d="M260 118 L260 210 L380 220 L430 240 L495 320" class="yarn"/>`;
+  }
+  return s;
+}
+function drawProf(){
+  const t=T();
+  $('ptabs').innerHTML=segHtml(PROF_KEYS.map(k=>t.prof[k].t),PROF_KEYS,prof);
+  bindSeg($('ptabs'),v=>{prof=v;drawProf()});
+  $('profsvg').innerHTML=profSVG(prof);fit($('profsvg'));
+  const p=t.prof[prof],u=t.ui;
+  $('profdesc').innerHTML=`<h3>${esc(p.t)}</h3><p>${esc(p.d)}</p><span class="lbl">${esc(u.examples)}</span>${p.ex.map(e=>`<span class="pill">${esc(e)}</span>`).join('')}`+
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px"><div><span class="lbl" style="color:#2B7F3C">${esc(u.pros)}</span><ul style="padding-left:16px;margin:0">${p.pro.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div><span class="lbl" style="color:var(--heat)">${esc(u.cons)}</span><ul style="padding-left:16px;margin:0">${p.con.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`+
+    (prof==='wings'?linkBtn():'');
+  bindLinks($('profdesc'));
+}
+
+// ── scene 3: manufacturers
+function drawFilters(){
+  const u=T().ui;
+  $('l-search').textContent=u.search;$('q').placeholder=u.searchPh;
+  $('l-region').textContent=u.region;$('l-scope').textContent=u.scope;
+  $('f-reg').innerHTML=segHtml(u.regions,REGIONS,flt.reg);
+  $('f-scope').innerHTML=segHtml(u.scopes,SCOPES,flt.scope);
+  bindSeg($('f-reg'),v=>{flt.reg=v;drawFilters();drawMfr()});
+  bindSeg($('f-scope'),v=>{flt.scope=v;drawFilters();drawMfr()});
+}
+$('q').addEventListener('input',e=>{flt.q=e.target.value.toLowerCase();drawMfr()});
+function thumb(k){return `<svg viewBox="0 0 620 420" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${profSVG(k)}</svg>`}
+function drawMfr(){
+  const t=T(),u=t.ui,tf=$('treefilter');
+  if(treeSel){
+    let o=null;DIM_KEYS.forEach((r,i)=>r.forEach((k,j)=>{if(k===treeSel)o=t.dims[i].o[j]}));
+    tf.innerHTML=`<span>${esc(u.treeFilter)} <b>${esc(o.b)}</b></span><button type="button" id="clr">${esc(u.reset)}</button>`;
+    $('clr').onclick=()=>{treeSel=null;drawTree();drawMfr()};
+  }else tf.innerHTML='';
+  const out=[];
+  MFR.forEach((M,mi)=>{
+    const tm=t.mfr[mi];
+    if(flt.reg!=='all'&&M.reg!==flt.reg)return;
+    if(flt.scope!=='all'&&M.scope!==flt.scope)return;
+    const ms=M.models.map((m,i)=>({ends:m[0],chuck:m[1],tags:m[2],n:tm.models[i].n,spec:tm.models[i].spec})).filter(m=>{
+      if(treeSel&&!m.tags.includes(treeSel))return false;
+      if(flt.q){const h=(tm.name+' '+tm.city+' '+tm.note+' '+m.n+' '+m.spec).toLowerCase();if(!h.includes(flt.q))return false}
+      return true;
+    });
+    if(!ms.length)return;
+    out.push(`<div class="mcard"><div class="top"><span class="flag">${esc(M.country)}</span><div><h3>${esc(tm.name)}</h3><div class="meta">${esc(tm.city)} · ${esc(tm.owner)}</div></div></div>`+
+      `<div class="thumb">${thumb(M.thumb)}</div><div class="mnote">${esc(tm.note)}</div><div class="models">`+
+      ms.map(m=>`<div class="model"><div class="mn">${esc(m.n)}${m.ends?` <span>· ${esc(fmt(u.upTo,{n:m.ends}))}</span>`:''}${m.chuck?` <span>· ${m.chuck} mm</span>`:''}</div>`+
+        `<div class="ms">${esc(m.spec)}</div><div>${CHIP_CLS.filter(([k])=>m.tags.includes(k)).map(([k,c])=>`<span class="chip ${c}">${esc(t.chips[k])}</span>`).join('')}</div></div>`).join('')+
+      `<div class="site">${esc(fmt(u.srcSite,{d:M.dom}))}</div></div></div>`);
+  });
+  $('mfr').innerHTML=out.join('')||`<div class="empty">${esc(u.empty)}</div>`;
+  if(scene===3)fit($('mfr'));
+}
+
+// ── scene 4: winders compared
+function drawBars(){
+  const t=T(),u=t.ui;
+  $('c-sort').innerHTML=segHtml([u.sortEnds,u.sortChuck],['ends','chuck'],mode);
+  bindSeg($('c-sort'),v=>{mode=v;drawBars()});
+  const rows=[];
+  MFR.forEach((M,mi)=>M.models.forEach((m,i)=>{const v=mode==='ends'?m[0]:m[1];
+    if(v&&!m[2].includes('legacy'))rows.push({l:M.short+' · '+t.mfr[mi].models[i].n.split(/ ?[(（„“«"]/)[0],v,r:M.reg})}));
+  rows.sort((a,b)=>b.v-a.v);
+  const max=mode==='ends'?22:2000;
+  $('bars').innerHTML=rows.map(r=>`<div class="row"><div>${esc(r.l)}</div><div class="track"><div class="fill" style="width:${r.v/max*100}%;background:${RC[r.r]}"></div></div><div class="v">${r.v}</div></div>`).join('');
+  $('legend').innerHTML=['EU','JP','CN'].map((k,i)=>`<span><i style="background:${RC[k]}"></i>${esc(u.legend[i])}</span>`).join('');
+  $('barsnote').textContent=u.barsNote;
+}
+
+// ── scene 5: market
+function drawMarket(){
+  const t=T();
+  $('timeline').innerHTML=TL_YEARS.map((y,i)=>`<div class="ev"><b>${y}</b><div>${esc(t.tl[i])}</div></div>`).join('');
+  $('assesst').textContent=t.ui.assess;
+  $('assess').innerHTML=t.assess.map(a=>`<li><b>${esc(a[0])}</b> ${esc(a[1])}</li>`).join('');
+}
+
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+6)%6;
+  for(let k=0;k<6;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  fit($('sc'+scene));
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=t.sources.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  drawControls();drawProc();showDetail();drawTree();drawProf();drawFilters();drawMfr();drawBars();drawMarket();go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+})();
+</script>
+</body>
+</html>

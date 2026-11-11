@@ -25,7 +25,7 @@ def test_catalog_complete():
     keys = [m.key for m in cat.MODULES]
     assert len(keys) == len(set(keys))
     for m in cat.MODULES:
-        assert m.category in cat.CATEGORIES
+        assert m.category in cat.CATEGORIES or (m.key == cat.START_MODULE and m.category == cat.START_CATEGORY)
         assert not m.group or m.group in cat.GROUPS, m.key
         assert os.path.exists(resource_path(m.file)), m.file
         for d in (m.title, m.summary):
@@ -89,3 +89,40 @@ def test_quiz_result_keeps_best(tmp_path, monkeypatch):
     assert so.load_quiz_result("x") == (9, 10)
     so.save_quiz_result("x", 10, 10)
     assert so.load_quiz_result("x") == (10, 10)
+
+
+def test_every_category_has_an_area():
+    assert set(cat.CATEGORY_AREA) == set(cat.CATEGORIES)
+    assert set(cat.CATEGORY_AREA.values()) <= set(cat.AREAS)
+    for d in cat.AREAS.values():
+        assert set(d) == set(cat.LANGS)
+    # areas appear in their own order: categories of one area are next to each other
+    order = [cat.CATEGORY_AREA[c] for c in cat.CATEGORIES]
+    seen = []
+    for a in order:
+        if not seen or seen[-1] != a:
+            assert a not in seen, f"categories of area {a} are split up"
+            seen.append(a)
+    assert seen == [a for a in cat.AREAS if a in seen]
+
+
+def test_module_links_point_to_existing_modules():
+    keys = {m.key for m in cat.MODULES}
+    for m in cat.MODULES:
+        html = open(resource_path(m.file), encoding="utf-8").read()
+        for k in re.findall(r"LINK_KEYS=\[([^\]]*)\]", html):
+            for key in re.findall(r"'([a-z_]+)'", k):
+                assert key in keys, (m.key, key)
+
+
+def test_start_page_links_every_module():
+    """The start page (textile chain) is the map of the whole Knowledge Base: every
+    other module must appear in its LINK_KEYS - add new modules there too."""
+    start = next(m for m in cat.MODULES if m.key == cat.START_MODULE)
+    assert start.category not in cat.CATEGORIES      # stand-alone entry above the areas
+    html = open(resource_path(start.file), encoding="utf-8").read()
+    linked = set()
+    for k in re.findall(r"LINK_KEYS=\[([^\]]*)\]", html):
+        linked |= set(re.findall(r"'([a-z_]+)'", k))
+    missing = {m.key for m in cat.MODULES} - linked - {start.key}
+    assert not missing, f"not on the textile chain start page: {sorted(missing)}"

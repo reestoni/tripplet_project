@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wilton Weaving</title>
+<!-- Onboarding module (ui/screen_onboarding.py), same pattern as air_splicing.html.
+     Texts in wilton_weaving_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1 for screenshots. No external resources. Scenes never change automatically.
+     Slider in scenes 3+4: cutting wire (cut pile) / round wire (loop pile). -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --yarn:#6E6556;--air:#2386C8;--heat:#E07B39;--hl:#39A650;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.langs{display:flex;gap:4px;flex-shrink:0}
+.langs[hidden]{display:none}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+canvas{display:block;width:100%;aspect-ratio:16/9}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.scenes{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.scenes button span{font-family:var(--font-mono);font-size:12px;opacity:.7}
+.right{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.slider{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.slider[hidden]{display:none}
+.slider input{accent-color:var(--hl);width:120px}
+.slider output{min-width:9em;color:var(--fg)}
+.play{min-width:120px;justify-content:center}
+.caption{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;border-top:1px solid var(--line);padding-top:16px}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 8px}
+.caption p{margin:0 0 10px;max-width:70ch}
+.now{font-family:var(--font-mono);font-size:13px;color:var(--hl);min-height:1.5em}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.facts li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.facts b{font-family:var(--font-mono);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+.note{font-size:12px;color:var(--muted);margin:0}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.caption{grid-template-columns:1fr;gap:14px}.facts li{grid-template-columns:96px minmax(0,1fr)}header{flex-direction:column}}
+</style>
+<script src="wilton_weaving_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="stage"><canvas id="cv" width="1600" height="900"></canvas></div>
+  <div class="controls">
+    <div class="scenes" id="scenes" role="group"></div>
+    <div class="right">
+      <label class="slider" id="rwrap" hidden><span id="rlab"></span>
+        <input id="rt" type="range" min="0" max="1" step="1" value="0"><output id="rout"></output></label>
+      <button class="play" id="play" type="button"></button>
+    </div>
+  </div>
+  <section class="caption" aria-live="polite">
+    <div><h2 id="ctitle"></h2><p class="now" id="cnow"></p><p id="ctext"></p></div>
+    <ul class="facts" id="cfacts"></ul>
+  </section>
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');const W=1600,H=900;
+if(!CanvasRenderingContext2D.prototype.roundRect){CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(r||0,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this}}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/* Light-theme colours: chain/weft/steel darkened so they stay visible on the white panel */
+const C={bg:css('--panel'),line:css('--line'),fg:css('--fg'),muted:css('--muted'),yarn:css('--yarn'),air:css('--air'),heat:css('--heat'),hl:css('--hl'),
+  steel:'#7E898C',wire:'#5D686B',weft:'#A8894F',chain:'#3E4745',stuffer:'#8A7A5C',fabric:'rgba(138,122,92,.10)'};
+const MONO=css('--font-mono'),DISP=css('--font-display'),SANS=css('--font-body');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const params=new URLSearchParams(location.search);
+let lang=(params.get('lang')||'de');if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+let fitW=0;function fit(){const w=cv.getBoundingClientRect().width||W;if(w===fitW&&cv.width>0)return;fitW=w;const d=Math.min(devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(w*d));cv.height=Math.max(1,Math.round(w*9/16*d))}
+addEventListener('resize',fit);if(window.ResizeObserver)new ResizeObserver(fit).observe(cv);fit();
+const smooth=(a,b,x)=>{const q=Math.max(0,Math.min(1,(x-a)/(b-a)));return q*q*(3-2*q)},lerp=(a,b,q)=>a+(b-a)*q;
+
+const NSC=5,SLIDER=[false,false,true,true,false];
+/* Pile colours red / beige / blue; beige darkened for the white panel */
+const COL=['#C4524A','#C9A55E','#4F7FB8'];
+const PAT=[0,0,1,1,2,2,2,1,0,1,2,0,0,1,2,2];const sel=i=>PAT[((i%PAT.length)+PAT.length)%PAT.length];
+
+/* ---------- UI ---------- */
+const sceneEl=$('scenes'),play=$('play'),rin=$('rt');
+/* auto = motion runs (pause freezes it). Scenes never change on their own. */
+let scene=0,sceneT=0,auto=!reduce,t=0,LOOP=0,lastSt=null;
+function setPlay(){play.setAttribute('aria-pressed',auto);play.textContent=auto?T().ui.pause:T().ui.play}
+play.onclick=()=>{auto=!auto;setPlay()};
+rin.oninput=()=>{LOOP=+rin.value;$('rout').textContent=LOOP?T().ui.wireRound:T().ui.wireCut};
+function go(i){const n=(i+NSC)%NSC;scene=n;sceneT=0;lastSt=null;if(EMBED)document.title='scene:'+scene;
+  [...sceneEl.children].forEach((b,j)=>b.setAttribute('aria-pressed',j===scene));
+  const s=T().scenes[scene];$('ctitle').textContent=`${scene+1}  ·  ${s.title}`;$('ctext').textContent=s.text;
+  $('cfacts').innerHTML='';s.facts.forEach(f=>{const li=document.createElement('li');const b=document.createElement('b');b.textContent=f[0];const sp=document.createElement('span');sp.textContent=f[1];li.append(b,sp);$('cfacts').appendChild(li)});
+  $('cnow').textContent='';$('rwrap').hidden=!SLIDER[scene]}
+function applyLang(){const u=T().ui;document.documentElement.lang=lang;
+  ['eyebrow','h1','lead','note'].forEach(k=>$(k).textContent=u[k]);$('rlab').textContent=u.wire;
+  sceneEl.setAttribute('aria-label',u.scenes);sceneEl.innerHTML='';
+  T().scenes.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<span>${i+1}</span>`;b.append(s.k);b.onclick=()=>go(i);sceneEl.appendChild(b)});
+  [...$('langs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  rin.oninput();setPlay();const keep=sceneT;go(scene);sceneT=keep}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')go(scene+1);if(e.key==='ArrowLeft')go(scene-1);if(e.key===' '){e.preventDefault();auto=!auto;setPlay()}});
+
+/* ---------- Helpers ---------- */
+/* o.mw = max width: text is squeezed rather than overflowing */
+function label(s,x,y,o={}){ctx.font=`${o.w||500} ${o.s||20}px ${o.f||MONO}`;ctx.fillStyle=o.c||C.muted;ctx.textAlign=o.a||'center';ctx.textBaseline='middle';ctx.globalAlpha=o.al??1;
+  if(o.mw)ctx.fillText(s,x,y,o.mw);else ctx.fillText(s,x,y);ctx.globalAlpha=1}
+/* Word wrap (per character for text without spaces, e.g. Chinese) */
+function wrap(s,maxW,font){ctx.font=font;const tok=/\s/.test(s)?s.split(/(\s+)/):[...s];const out=[];let cur='';
+  tok.forEach(w=>{const tr=cur+w;if(cur&&ctx.measureText(tr.trimEnd()).width>maxW){out.push(cur.trimEnd());cur=w.trimStart()}else cur=tr});if(cur.trim())out.push(cur.trimEnd());return out}
+function leader(x1,y1,x2,y2,c){ctx.strokeStyle=c||C.line;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+function now(s){if(s!==lastSt){lastSt=s;$('cnow').textContent='▸ '+s}}
+
+/* ---------- Longitudinal section ----------
+ o: i0,i1, xr(i), P, yb, h, wire(i)->alpha, cut(i)->0..1, tuft(i)->0..1 (lift), T(i)/B(i)->alpha, hl, xEnd */
+function section(o){const {P,yb,h}=o,ytop=yb-34-h,A=k=>o.hl&&o.hl!==k?.18:1;const xs=o.xr(o.i0)-P*.6,xe=o.xEnd??o.xr(o.i1)+P*.6;
+  // stuffer warp
+  ctx.globalAlpha=A('stuffer');ctx.strokeStyle=C.stuffer;ctx.lineWidth=9;ctx.beginPath();ctx.moveTo(xs,yb+10);ctx.lineTo(xe,yb+10);ctx.stroke();ctx.globalAlpha=1;
+  // pile yarns (ground + tufts)
+  for(let c=0;c<3;c++){const yd=yb-15+c*7;ctx.strokeStyle=COL[c];ctx.lineWidth=5;
+    // dead sections
+    ctx.globalAlpha=A('dead');ctx.beginPath();ctx.moveTo(xs,yd);ctx.lineTo(xe,yd);ctx.stroke();
+    ctx.globalAlpha=A('pile');
+    for(let i=o.i0;i<=o.i1;i++){if(sel(i)!==c)continue;const lift=o.tuft(i);if(lift<=0)continue;const x=o.xr(i),top=lerp(yd,ytop+8,lift),cut=o.cut(i);
+      ctx.beginPath();ctx.moveTo(x-.34*P,yd);ctx.quadraticCurveTo(x-.14*P,yd,x-.12*P,lerp(yd,yb-46,lift));ctx.lineTo(x-.1*P,top);
+      if(cut>0){const sp=cut*8;ctx.lineTo(x-.1*P-sp,top-14*cut);ctx.stroke();ctx.lineWidth=1.5;ctx.beginPath();for(const d of[-1,1])for(let f=-1;f<=1;f++){const ex=x+d*(.1*P+sp),ey=top-14*cut;ctx.moveTo(ex,ey);ctx.lineTo(ex+d*cut*(3+f*4)+f*2,ey-cut*(10-Math.abs(f)*3))}ctx.stroke();ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x+.1*P+sp,top-14*cut);ctx.lineTo(x+.1*P,top)}
+      else ctx.arc(x,top,.1*P,Math.PI,0);
+      ctx.lineTo(x+.12*P,lerp(yd,yb-46,lift));ctx.quadraticCurveTo(x+.14*P,yd,x+.34*P,yd);ctx.stroke()}
+    ctx.globalAlpha=1}
+  // wefts
+  for(let i=o.i0;i<=o.i1;i++){const x=o.xr(i);ctx.fillStyle=C.weft;ctx.globalAlpha=A('weft')*o.T(i);ctx.beginPath();ctx.arc(x+.5*P,yb-32,9,0,7);ctx.fill();ctx.globalAlpha=A('weft')*o.B(i);ctx.beginPath();ctx.arc(x,yb+32,9,0,7);ctx.fill();ctx.globalAlpha=1}
+  // binder (chain) warp
+  ctx.globalAlpha=A('chain');ctx.strokeStyle=C.chain;ctx.lineWidth=2.5;ctx.beginPath();let f=1;
+  for(let i=o.i0;i<=o.i1;i++){const x=o.xr(i);if(o.B(i)<.5)break;const p1=[x,yb+46],p2=[x+.5*P,yb-46];if(f){ctx.moveTo(x-.5*P,yb-46);f=0}ctx.quadraticCurveTo(x-.25*P,yb,p1[0],p1[1]);if(o.T(i)<.5)break;ctx.quadraticCurveTo(x+.25*P,yb,p2[0],p2[1])}ctx.stroke();ctx.globalAlpha=1;
+  // wires
+  for(let i=o.i0;i<=o.i1;i++){const a=o.wire(i);if(a<=0)continue;const x=o.xr(i);ctx.globalAlpha=a;ctx.fillStyle=C.wire;ctx.strokeStyle=C.steel;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,ytop+8,.08*P,0,7);ctx.fill();ctx.stroke();ctx.globalAlpha=1}
+  return ytop}
+
+/* ---------- 1 Wilton ---------- */
+function staticOpts(hl){const P=86;return{i0:0,i1:14,P,yb:600,h:200,xr:i=>130+i*P,wire:()=>0,cut:()=>1,tuft:()=>1,T:()=>1,B:()=>1,hl}}
+function scene1(){const cvT=T().cv,o=staticOpts();const ytop=section(o);
+  label(cvT.pileCut,130,ytop-40,{a:'left',s:18,c:C.fg});label(cvT.ground,1420,o.yb,{a:'left',s:16,c:C.fg,mw:175});
+  label(cvT.back,1420,o.yb+60,{a:'left',s:14,mw:175});
+  const al=smooth(3,4.5,sceneT);
+  label(cvT.sect,130,720,{a:'left',s:15,al});
+  label(cvT.woven,130,760,{a:'left',s:17,f:SANS,c:C.air,al});
+  label(cvT.tufted,130,795,{a:'left',s:17,f:SANS,al})}
+/* ---------- 2 Yarn systems ---------- */
+const HLK=['pile','dead','stuffer','weft','chain'];
+function scene2(){const cvT=T().cv,k=Math.floor(sceneT/4)%5,o=staticOpts(HLK[k]);section(o);now(cvT.hlNow[k]);
+  HLK.forEach((key,i)=>{const x=130+i*280;label(cvT.hlNames[i],x,150,{a:'left',s:20,f:SANS,w:600,c:i===k?C.fg:C.muted,mw:260});if(i===k){ctx.fillStyle=C.hl;ctx.fillRect(x,168,180,3)}})}
+/* ---------- 3 Wires ---------- */
+const D=2.6,K=4;
+function scene3(){const cvT=T().cv,TT=sceneT,N=20+Math.floor(TT/D),u=(TT%D)/D,P=72,FELL=1080,yb=520,h=130;
+  const xr=i=>FELL-(N-i)*P-smooth(.86,1,u)*P;
+  const o={i0:N-17,i1:N,P,yb,h,xr,xEnd:xr(N)+.6*P,
+    wire:i=>i>N?0:i===N?smooth(.08,.22,u):i>N-K?1:i===N-K?1-smooth(.35,.6,u):0,
+    cut:i=>LOOP?0:i<N-K?1:i===N-K?smooth(.3,.55,u):0,
+    tuft:i=>i<N?1:smooth(0,.12,u),T:i=>i<N?1:smooth(.3,.42,u),B:i=>i<N?1:smooth(.42,.52,u)};
+  const ytop=section(o);
+  // incoming pile yarns and Jacquard
+  const xf=xr(N)+.6*P;
+  for(let c=0;c<3;c++){const yd=yb-15+c*7;ctx.strokeStyle=COL[c];ctx.beginPath();ctx.moveTo(xf-6,yd);
+    const up=(sel(N)===c?1-smooth(.6,.85,u):0)+(sel(N+1)===c?smooth(.9,1,u):0);ctx.lineTo(xf+30,yd);ctx.lineTo(xf+260,lerp(yd,ytop-10,Math.min(1,up)));ctx.lineTo(1540,lerp(yd,ytop-10,Math.min(1,up)));ctx.lineWidth=5;ctx.stroke()}
+  ctx.strokeStyle=C.stuffer;ctx.lineWidth=9;ctx.beginPath();ctx.moveTo(xf,yb+10);ctx.lineTo(1540,yb+10);ctx.stroke();
+  ctx.strokeStyle=C.chain;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(xf,yb-46);ctx.lineTo(1540,yb-70);ctx.moveTo(xf,yb+46);ctx.lineTo(1540,yb+70);ctx.stroke();
+  label(cvT.jacq,1540,ytop-40,{a:'right',s:15,c:C.fg});
+  // reed
+  const rx=xf+8+(1-smooth(.52,.64,u)*(1-smooth(.68,.82,u)))*70;ctx.strokeStyle=C.steel;ctx.lineWidth=3;for(let k=0;k<3;k++){ctx.beginPath();ctx.moveTo(rx+k*6,ytop-20);ctx.lineTo(rx+k*6,yb+78);ctx.stroke()}label(cvT.reed,rx+8,yb+96,{s:15});
+  // labels
+  label(cvT.wiresIn,xr(N-2),ytop-50,{s:15,c:C.fg});leader(xr(N-2),ytop-38,xr(N-2),ytop-4,C.muted);
+  if(!LOOP&&u>.3&&u<.6)label(cvT.knifeCut,xr(N-K),ytop-90,{s:16,c:C.heat});
+  if(LOOP&&u>.3&&u<.6)label(cvT.roundPull,xr(N-K),ytop-90,{s:16,c:C.air});
+  label(LOOP?cvT.loopPile:cvT.cutPile,130,ytop-40,{a:'left',s:22,f:DISP,w:700,c:C.fg});label(cvT.takeoffL,130,yb+110,{a:'left',s:15});
+  const B=[0,.12,.3,.52,.82,1.01];
+  cvT.steps.forEach((s,i)=>{const act=u>=B[i]&&u<B[i+1];label(`${i+1}`,1110,700+i*34,{s:16,c:act?C.hl:C.muted,w:700});label(s,1130,700+i*34,{a:'left',s:14,c:act?C.fg:C.muted,w:act?600:500,mw:450});
+    if(act)now(i===0?fmt(cvT.shedNow,{c:cvT.colours[sel(N)]}):s)})}
+/* ---------- 5 Colours ---------- */
+function pat2(r,c){const d=Math.abs(c-12)+Math.abs(r-7);return d<3?2:d<6?0:(d<8?1:(r+c)%4===0?2:1)}
+function scene4(){const cvT=T().cv,cols=25,rows=15,s=26,x0=110,y0=150,nr=Math.min(rows,Math.floor(sceneT/.7)+1),c0=9;
+  for(let r=0;r<nr;r++)for(let c=0;c<cols;c++){ctx.fillStyle=COL[pat2(r,c)];ctx.fillRect(x0+c*s,y0+(rows-1-r)*s,s-3,s-3)}
+  ctx.strokeStyle=C.fg;ctx.lineWidth=2;ctx.strokeRect(x0+c0*s-3,y0-3,s+3,rows*s+3);label(cvT.top,x0,y0-24,{a:'left',s:15});label(cvT.dent,x0+c0*s+s/2,y0+rows*s+22,{s:14,c:C.fg});
+  label(cvT.dir,x0+cols*s,y0+rows*s+22,{a:'right',s:14});
+  const r=nr-1,ch=pat2(r,c0),px=900;label(fmt(cvT.rowGap,{r:r+1,g:c0+1}),px,170,{a:'left',s:18,c:C.fg});
+  for(let c=0;c<3;c++){const y=250+c*110;ctx.fillStyle=COL[c];ctx.beginPath();ctx.roundRect(px,y-30,60,60,8);ctx.fill();label(fmt(cvT.frame,{n:c+1}),px+30,y+46,{s:13});
+    const up=c===ch;ctx.strokeStyle=COL[c];ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(px+60,y);ctx.lineTo(px+180,y);ctx.lineTo(px+260,up?y-30:y+20);ctx.stroke();
+    label(up?cvT.toPile:cvT.dead,px+280,up?y-30:y+20,{a:'left',s:17,c:up?C.fg:C.muted,w:up?600:500,mw:400})}
+  label(cvT.info1,px,620,{a:'left',s:16,f:SANS,c:C.fg,mw:660});label(cvT.info2,px,650,{a:'left',s:16,f:SANS,mw:660});
+  now(fmt(cvT.colNow,{r:r+1,c:cvT.colours[ch]}))}
+/* ---------- 4 Wire cycle (top view) ---------- */
+function scene4b(){const cvT=T().cv,D=3,K=5,R=54,x0=150,x1=1190,sc=40,ncol=26,TT=sceneT,N=30+Math.floor(TT/D),u=(TT%D)/D;
+  const yr=i=>200+(N-i)*R+smooth(.9,1,u)*R,L=x1-x0+80;
+  // fabric
+  ctx.fillStyle=C.fabric;ctx.fillRect(x0-20,yr(N)-R/2,x1-x0+40,800);
+  label(cvT.selvedge,x0-30,yr(N)+R*6,{a:'right',s:13,mw:110});label(cvT.selvedge,x1+30,yr(N)+R*6,{a:'left',s:13});
+  label(cvT.fell,x0,96,{a:'left',s:15,c:C.fg});
+  // wire state
+  const old=N-K+1,tipOld=lerp(x0-40,x1+60+L,smooth(0,.45,u));// tip of the oldest wire
+  const ins=smooth(.62,.88,u),tipNew=lerp(x1+60,x0-40,ins);
+  for(let i=N+1;i>=N-12;i--){const y=yr(i);if(y>880)continue;if(i===N+1&&u<.62)continue;
+    for(let c=0;c<ncol;c++){const x=x0+c*sc+sc/2;
+      if(i===N+1&&x<tipNew)continue;
+      const cut=!LOOP&&(i<old||(i===old&&x<tipOld));const pc=COL[pat2(((i%15)+15)%15,c-1)];ctx.fillStyle=pc;ctx.strokeStyle=pc;
+      if(cut){ctx.beginPath();ctx.arc(x-5,y-2,6,0,7);ctx.arc(x+5,y+2,6,0,7);ctx.fill()}
+      else{ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(x,y,12,7,0,0,7);ctx.stroke()}}}
+  function wire(tip,y,a){ctx.globalAlpha=a;ctx.fillStyle=C.wire;ctx.strokeStyle=C.steel;ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(tip,y-4,L,8,3);ctx.fill();ctx.stroke();
+    ctx.fillStyle=C.steel;ctx.fillRect(tip+L-6,y-10,22,20);
+    if(!LOOP){ctx.fillStyle=C.heat;ctx.beginPath();ctx.moveTo(tip-14,y);ctx.lineTo(tip+6,y-8);ctx.lineTo(tip+6,y+8);ctx.fill()}ctx.globalAlpha=1}
+  for(let i=old+1;i<=N;i++)wire(x0-40,yr(i),1);
+  if(u<.45)wire(tipOld,yr(old),1);
+  else if(u<.62){const q=smooth(.45,.62,u);const y=lerp(yr(old),yr(N+1),q);wire(x1+60+Math.sin(q*Math.PI)*60,y,1)}
+  else wire(tipNew,yr(N+1),1);
+  // return arrow
+  ctx.strokeStyle=C.air;ctx.setLineDash([6,6]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x1+L-40,yr(old));ctx.bezierCurveTo(x1+L+60,yr(old),x1+L+60,yr(N+1),x1+L-40,yr(N+1));ctx.stroke();ctx.setLineDash([]);
+  // take-off label on a panel-coloured backing so it stays readable over the pile dots
+  ctx.font=`500 14px ${MONO}`;const tw=ctx.measureText(cvT.takeoffD).width;ctx.fillStyle=C.bg;ctx.fillRect(x0-6,848,tw+12,24);label(cvT.takeoffD,x0,860,{a:'left',s:14});
+  // explanation box on the right (wrapped, grows upwards from the bottom)
+  const ex=1290,bw=290,lh=28,font=`500 15px ${MONO}`;
+  const items=[[cvT.box1,C.fg],[cvT.box2,C.fg],[LOOP?cvT.roundA:cvT.cutA,LOOP?C.air:C.heat],[LOOP?cvT.roundB:cvT.cutB,LOOP?C.air:C.heat],[cvT.box3,C.fg]];
+  const lines=[];items.forEach(([s,c])=>wrap(s,bw,font).forEach(l=>lines.push([l,c])));
+  const y1=830,y0b=y1-24-lines.length*lh-30;
+  ctx.fillStyle=C.bg;ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(ex-16,y0b,bw+28,y1-y0b+18,6);ctx.fill();ctx.stroke();
+  lines.forEach(([l,c],k)=>label(l,ex,y0b+24+k*lh,{a:'left',s:15,c}));
+  label(fmt(cvT.count,{n:K}),ex,y1,{a:'left',s:13,mw:bw});
+  now(u<.45?(LOOP?cvT.pullLoop:cvT.pullCut):u<.62?cvT.returns:u<.9?cvT.insert:cvT.beat)}
+
+/* ---------- Loop ---------- */
+applyLang();
+if(params.get('scene'))go((+params.get('scene')||1)-1);
+if(params.get('paused')==='1'){auto=false;setPlay()}
+const DRAW=[scene1,scene2,scene3,scene4b,scene4];let last=performance.now();
+function frame(nw){const real=Math.min(.05,(nw-last)/1000)*(reduce?.5:1),dt=auto?real:0;last=nw;t+=dt;sceneT+=dt;fit();
+  try{const s=cv.width/W;ctx.setTransform(s,0,0,s,0,0);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(90,100,96,.05)';ctx.lineWidth=1;for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+    ctx.setLineDash([]);ctx.lineCap='round';ctx.lineJoin='round';DRAW[scene]();
+    label(`${scene+1}/${NSC}`,1540,50,{a:'right',s:22});label(T().scenes[scene].k.toUpperCase(),60,50,{a:'left',s:30,c:C.fg,f:DISP,w:600});
+  }catch(e){console.error(e)}
+  requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

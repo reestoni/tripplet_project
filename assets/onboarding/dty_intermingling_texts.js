@@ -1,7 +1,7 @@
 window.TEXTS = {
  "de": {
   "ui": {
-   "eyebrow": "Onboarding · Texturierung",
+   "eyebrow": "Knowledge Base · Texturierung",
    "h1": "Wie ein Multifilamentgarn verwirbelt wird",
    "lead": "Vom POY-Faden auf der DTY-Maschine bis zum verwirbelten Garn mit Knoten: fünf kurze Szenen, die man selbst durchklicken oder automatisch ablaufen lassen kann.",
    "pressure": "Luftdruck",
@@ -477,7 +477,7 @@ window.TEXTS = {
  },
  "en": {
   "ui": {
-   "eyebrow": "Onboarding · Texturing",
+   "eyebrow": "Knowledge Base · Texturing",
    "h1": "How a multifilament yarn is intermingled",
    "lead": "From the POY on the DTY machine to the intermingled yarn with its nips: five short scenes - click through them yourself or let them play.",
    "pressure": "Air pressure",
@@ -953,7 +953,7 @@ window.TEXTS = {
  },
  "es": {
   "ui": {
-   "eyebrow": "Onboarding · Texturizado",
+   "eyebrow": "Knowledge Base · Texturizado",
    "h1": "Cómo se entrelaza un hilo multifilamento",
    "lead": "Del hilo POY en la máquina DTY al hilo entrelazado con sus nudos: cinco escenas cortas que puedes recorrer tú mismo o dejar que se reproduzcan solas.",
    "pressure": "Presión de aire",
@@ -1434,7 +1434,7 @@ window.TEXTS = {
  },
  "zh": {
   "ui": {
-   "eyebrow": "入门 · 加弹",
+   "eyebrow": "知识库 · 加弹",
    "h1": "复丝是如何被网络（交缠）的",
    "lead": "从加弹机上的 POY 原丝到带网络点的网络丝：五个短场景，可以自己点击浏览，也可以自动播放。",
    "pressure": "气压",

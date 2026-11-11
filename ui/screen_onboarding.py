@@ -61,6 +61,28 @@ def save_quiz_result(key: str, right: int, total: int) -> None:
         pass
 
 
+def record_quiz_result(key: str, title: str, lang: str) -> bool:
+    """Page reports "quiz:<right>:<total>" when all questions are answered (assets/onboarding/quiz.js).
+    Lernnachweis: usage log (with user, also on prod) + best result on this PC for the tick in the list.
+    Also used by the popup (ui/widgets/kb_popup.py). True if a valid result was recorded."""
+    try:
+        _, r, t = title.split(":")
+        right, total = int(r), int(t)
+    except ValueError:
+        return False
+    if total <= 0 or not 0 <= right <= total:
+        return False
+    passed = cat.quiz_passed(right, total)
+    save_quiz_result(key, right, total)
+    try:
+        from db.usage_log import log_usage_event
+        log_usage_event("feature", "onboarding_quiz",
+                        f"{key} {right}/{total} {'passed' if passed else 'failed'} ({lang})")
+    except Exception:
+        pass
+    return True
+
+
 def load_language() -> str:
     try:
         org, app, key = _SETTINGS
@@ -141,6 +163,11 @@ class OnboardingScreen(QWidget):
                                 "QTreeWidget::item{padding:6px 2px;}"
                                 "QTreeWidget::item:selected{background:#E3F1E6;color:#1C2321;}")
         self.tree.itemSelectionChanged.connect(self._on_pick)
+        # chapters/categories open and close with a click on their name; the
+        # open/closed state of the chapters is remembered (QSettings)
+        self.tree.itemClicked.connect(self._on_item_clicked)
+        self.tree.itemExpanded.connect(lambda it: self._remember_area(it, True))
+        self.tree.itemCollapsed.connect(lambda it: self._remember_area(it, False))
         split.addWidget(self.tree)
 
         right = QWidget()
@@ -173,7 +200,7 @@ class OnboardingScreen(QWidget):
             self.web.titleChanged.connect(self._on_page_title)
             self.stack.addWidget(self.web)
         except Exception:  # WebEngine missing - list still works, page says why
-            self.lbl_empty.setText("The onboarding pages need Qt WebEngine, which is not available here.")
+            self.lbl_empty.setText("The Knowledge Base pages need Qt WebEngine, which is not available here.")
         split.addWidget(right)
         split.setStretchFactor(0, 0)
         split.setStretchFactor(1, 1)
@@ -202,23 +229,52 @@ class OnboardingScreen(QWidget):
             last = QSettings(*_LAST_MODULE[:2]).value(_LAST_MODULE[2], None)
         except Exception:
             last = None
-        self.open_module(last if last in self._items else cat.MODULES[0].key)
+        first = cat.START_MODULE if cat.START_MODULE in self._items else cat.MODULES[0].key
+        self.open_module(last if last in self._items else first)
 
     # ── list ────────────────────────────────────────────────────────────
     def _fill_tree(self) -> None:
         self.tree.blockSignals(True)
         self.tree.clear()
         self._items.clear()
+        area_items: Dict[str, QTreeWidgetItem] = {}
+        closed = self._closed_areas()
+        start = next((m for m in cat.MODULES if m.key == cat.START_MODULE), None)
+        if start is not None:   # start page (textile chain): stand-alone first entry above the areas
+            it = QTreeWidgetItem([cat.text(start.title, self._lang)])
+            it.setData(0, Qt.UserRole, start.key)
+            it.setToolTip(0, cat.text(start.summary, self._lang))
+            fs = it.font(0)
+            fs.setBold(True)
+            it.setFont(0, fs)
+            self.tree.addTopLevelItem(it)
+            self._items[start.key] = it
         for ckey, names in cat.CATEGORIES.items():
             mods = [m for m in cat.MODULES if m.category == ckey]
             if not mods:
                 continue
+            area = cat.CATEGORY_AREA.get(ckey)
+            head = area_items.get(area) if area else None
+            if area and head is None:   # chapter (Heberlein / Our technology / ...), can be closed
+                head = QTreeWidgetItem([cat.text(cat.AREAS[area], self._lang).upper()])
+                head.setFlags(Qt.ItemIsEnabled)
+                fh = head.font(0)
+                fh.setBold(True)
+                fh.setPointSizeF(max(7.0, fh.pointSizeF() - 1))
+                head.setFont(0, fh)
+                head.setForeground(0, QColor("#39A650"))
+                head.setData(0, Qt.UserRole + 1, area)
+                self.tree.addTopLevelItem(head)
+                area_items[area] = head
             top = QTreeWidgetItem([cat.text(names, self._lang)])
             top.setFlags(Qt.ItemIsEnabled)
             f = top.font(0)
             f.setBold(True)
             top.setFont(0, f)
-            self.tree.addTopLevelItem(top)
+            if head is not None:
+                head.addChild(top)
+            else:
+                self.tree.addTopLevelItem(top)
             folders = {}
             for m in [m for m in mods if not m.group] + [m for m in mods if m.group]:
                 parent = top
@@ -248,9 +304,45 @@ class OnboardingScreen(QWidget):
             top.setExpanded(True)
             for f_item in folders.values():
                 f_item.setExpanded(True)
+        for area, head in area_items.items():
+            head.setExpanded(area not in closed)
         if self._module is not None and self._module.key in self._items:
             self._items[self._module.key].setSelected(True)
         self.tree.blockSignals(False)
+
+    # ── open / close chapters ──────────────────────────────────────────
+    def _closed_areas(self) -> set:
+        try:
+            val = QSettings(*_QUIZ).value("closed_areas", [])
+        except Exception:
+            return set()
+        if isinstance(val, str):
+            val = [val] if val else []
+        return {str(v) for v in (val or [])}
+
+    def _remember_area(self, item, opened: bool) -> None:
+        area = item.data(0, Qt.UserRole + 1)
+        if not area:
+            return
+        closed = self._closed_areas()
+        (closed.discard if opened else closed.add)(str(area))
+        try:
+            QSettings(*_QUIZ).setValue("closed_areas", sorted(closed))
+        except Exception:
+            pass
+
+    def _on_item_clicked(self, item, _col=0) -> None:
+        """A click on a chapter, category or folder name opens/closes it."""
+        if item.data(0, Qt.UserRole) is None and item.childCount():
+            item.setExpanded(not item.isExpanded())
+
+    def _reveal(self, item) -> None:
+        """Opens the chapter/category of a module that is opened from elsewhere."""
+        p = item.parent()
+        while p is not None:
+            if not p.isExpanded():
+                p.setExpanded(True)
+            p = p.parent()
 
     def _on_pick(self) -> None:
         sel = self.tree.selectedItems()
@@ -265,6 +357,8 @@ class OnboardingScreen(QWidget):
             return
         self._module = mod
         it = self._items.get(key)
+        if it is not None:
+            self._reveal(it)
         if it is not None and not it.isSelected():
             self.tree.blockSignals(True)
             self.tree.clearSelection()
@@ -310,7 +404,7 @@ class OnboardingScreen(QWidget):
         while self.scene_tabs.count():
             self.scene_tabs.removeTab(0)
         for n in names:
-            self.scene_tabs.addTab(n)
+            self.scene_tabs.addTab(n.replace("&", "&&"))  # "&" would be eaten as a mnemonic marker
         if names:
             self.scene_tabs.setCurrentIndex(max(0, min(current, len(names) - 1)))
         self.scene_tabs.setVisible(bool(names))
@@ -321,6 +415,20 @@ class OnboardingScreen(QWidget):
             self.web.page().runJavaScript(f"window.goScene && window.goScene({int(index)});")
 
     def _on_page_title(self, title: str) -> None:
+        if title.startswith("open:"):   # a page links to another module (e.g. history -> DTY)
+            key = title.split(":", 1)[1]
+            if any(m.key == key for m in cat.MODULES):
+                QTimer.singleShot(0, lambda: self.open_module(key))
+            return
+        if title.startswith("tool:"):   # start page links an app tool (Yarn Count Converter)
+            if title.split(":", 1)[1] == "yarn_count":
+                try:
+                    import app_meta
+                    if callable(app_meta.open_yarn_count):
+                        QTimer.singleShot(0, app_meta.open_yarn_count)
+                except Exception:
+                    pass
+            return
         if title.startswith("quiz:"):
             self._on_quiz_result(title)
             return
@@ -336,27 +444,8 @@ class OnboardingScreen(QWidget):
             self.scene_tabs.blockSignals(False)
 
     def _on_quiz_result(self, title: str) -> None:
-        """Page reports "quiz:<right>:<total>" when all questions are answered (assets/onboarding/quiz.js).
-        Lernnachweis: usage log (with user, also on prod) + best result on this PC for the tick in the list."""
-        if self._module is None:
-            return
-        try:
-            _, r, t = title.split(":")
-            right, total = int(r), int(t)
-        except ValueError:
-            return
-        if total <= 0 or not 0 <= right <= total:
-            return
-        key = self._module.key
-        passed = cat.quiz_passed(right, total)
-        save_quiz_result(key, right, total)
-        try:
-            from db.usage_log import log_usage_event
-            log_usage_event("feature", "onboarding_quiz",
-                            f"{key} {right}/{total} {'passed' if passed else 'failed'} ({self._lang})")
-        except Exception:
-            pass
-        self._fill_tree()
+        if self._module is not None and record_quiz_result(self._module.key, title, self._lang):
+            self._fill_tree()
 
     @property
     def language(self) -> str:

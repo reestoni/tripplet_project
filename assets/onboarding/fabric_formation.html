@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Further Fabric Formation</title>
+<!-- Knowledge-Base-Modul (ui/screen_onboarding.py), Oberkapitel "Textiles Wissen" > Weitere Flaechenbildung (Nutzerwunsch 2026-11-09,
+     Inhalt aus Internet-Recherche: Flachstricken, Bindungen, Formstricken, Tufting, Teilung, Teppichruecken, Flechten,
+     Flechtwinkel). Gleiches Muster wie textile_dyeing.html. Texte in fabric_formation_texts.js (de/en/es/zh).
+     ?lang=xx, window.setLang('xx'), window.goScene(i), ?embedded=1 (ohne eigenen Kopf/Szenen-Knoepfe, meldet die Szene per
+     document.title "scene:n"), ?scene=n&paused=1 fuer Screenshots. Keine externen Ressourcen. Szenen wechseln nie automatisch.
+     Regler pro Szene (Feinheit, Bindung, Verfahren, Pol, Teilung, Schritt, Kloeppel, Flechtwinkel). Quiz ueber quiz.js (TEXTS[lang].quiz).
+     Links unten oeffnen andere Module (LINK_KEYS): eingebettet per document.title "open:<key>", sonst <key>.html. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--indigo:#27408B;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.langs{display:flex;gap:4px;flex-shrink:0}
+.langs[hidden]{display:none}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+canvas{display:block;width:100%;aspect-ratio:16/9}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.scenes{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.scenes button span{font-family:var(--font-mono);font-size:12px;opacity:.7}
+.right{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.slider{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.slider[hidden]{display:none}
+.slider input{accent-color:var(--hl);width:170px}
+.slider output{min-width:7em;color:var(--fg)}
+.play{min-width:120px;justify-content:center}
+.caption{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;border-top:1px solid var(--line);padding-top:16px}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 8px}
+.caption p{margin:0 0 10px;max-width:70ch}
+.now{font-family:var(--font-mono);font-size:13px;color:var(--hl);min-height:1.5em}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.facts li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.facts b{font-family:var(--font-mono);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+.note{font-size:12px;color:var(--muted);margin:0}
+.lkL{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.lk{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+body.quizmode .lkL,body.quizmode .links{display:none}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.caption{grid-template-columns:1fr;gap:14px}.facts li{grid-template-columns:96px minmax(0,1fr)}header{flex-direction:column}}
+</style>
+
+<script src="fabric_formation_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="stage"><canvas id="cv" width="1600" height="900"></canvas></div>
+  <div class="controls">
+    <div class="scenes" id="scenes" role="group"></div>
+    <div class="right">
+      <label class="slider" id="swrap"><span id="slab"></span>
+        <input id="sl" type="range" min="0" max="4" step="1" value="0"><output id="sout"></output></label>
+      <button class="play" id="play" type="button"></button>
+    </div>
+  </div>
+  <section class="caption" aria-live="polite">
+    <div><h2 id="ctitle"></h2><p class="now" id="cnow"></p><p id="ctext"></p></div>
+    <ul class="facts" id="cfacts"></ul>
+  </section>
+  <div class="lkL" id="lkL"></div>
+  <div class="links" id="links"></div>
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');const W=1600,H=900;
+if(!CanvasRenderingContext2D.prototype.roundRect){CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(r||0,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this}}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C={bg:css('--panel'),line:css('--line'),fg:css('--fg'),muted:css('--muted'),hl:css('--hl'),air:css('--air'),heat:css('--heat'),indigo:css('--indigo'),
+  fab:'#F7F4EC',fabLine:'#C9BFAA',steel:'#8C979B',steelD:'#5F6A6E',belt:'#3E4A4F',ink:'#C2185B',inkL:'#F3C4D6',paper:'#FBF8F0',steam:'#DDE7EE',nickel:'#B8C0C4'};
+const PC=['#C2185B','#1E88C8','#F2B705','#2E7D32','#6A1B9A','#E65100'];
+const MONO=css('--font-mono'),DISP=css('--font-display'),SANS=css('--font-body');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang],CV=()=>TEXTS[lang].cv;
+const fmt=(s,o)=>String(s).replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+let fitW=0;function fit(){const w=cv.getBoundingClientRect().width||W;if(w===fitW&&cv.width>0)return;fitW=w;const d=Math.min(devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(w*d));cv.height=Math.max(1,Math.round(w*9/16*d))}
+addEventListener('resize',fit);if(window.ResizeObserver)new ResizeObserver(fit).observe(cv);fit();
+const smooth=(a,b,x)=>{const q=Math.max(0,Math.min(1,(x-a)/(b-a)));return q*q*(3-2*q)},lerp=(a,b,q)=>a+(b-a)*q,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const hx=c=>c[0]==='#'?[1,3,5].map(i=>parseInt(c.slice(i,i+2),16)):c.match(/[\d.]+/g).slice(0,3).map(Number);
+const hsh=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453;return v-Math.floor(v)};
+const mix=(c1,c2,q)=>{const a=hx(c1),b=hx(c2);return`rgb(${a.map((v,i)=>Math.round(lerp(v,b[i],q))).join(',')})`};
+let rs=1;const rnd=()=>{rs=(rs*16807)%2147483647;return(rs-1)/2147483646};
+
+// ── scenes: slider config (key into ui texts, min, max, default) ─────────────
+const NSC=8;
+const SL=[{k:'E',min:3,max:18,def:7},{k:'bi',min:0,max:3,def:0},{k:'ff',min:0,max:2,def:0},{k:'pile',min:0,max:2,def:0},
+  {k:'gauge',min:0,max:4,def:3},{k:'bk',min:0,max:3,def:0},{k:'car',min:8,max:32,def:16,step:8},{k:'ang',min:15,max:75,def:45,step:5}];
+const SV=SL.map(s=>s?s.def:0);
+let scene=clamp(parseInt(params.get('scene')||'0',10)||0,0,NSC-1),sceneT=0,t=0,auto=!reduce&&params.get('paused')!=='1',lastNow='';
+
+// ── text helpers ──────────────────────────────────────────────────────────────
+function label(s,x,y,o={}){ctx.font=`${o.w||500} ${o.s||20}px ${o.f||SANS}`;ctx.fillStyle=o.c||C.muted;ctx.textAlign=o.a||'center';ctx.textBaseline='middle';ctx.globalAlpha=o.al??1;
+  if(o.mw&&ctx.measureText(s).width>o.mw){const k=o.mw/ctx.measureText(s).width;ctx.font=`${o.w||500} ${Math.max(10,(o.s||20)*k)}px ${o.f||SANS}`}
+  ctx.fillText(s,x,y);ctx.globalAlpha=1}
+// wraps text into lines of max width; Chinese wraps per character
+function wrap(s,x,y,mw,o={}){ctx.font=`${o.w||500} ${o.s||18}px ${o.f||SANS}`;const cjk=/[　-鿿]/.test(s);const parts=cjk?[...s]:String(s).split(' ');
+  const lines=[];let line='';for(const p of parts){const tst=line?(cjk?line+p:line+' '+p):p;if(ctx.measureText(tst).width>mw&&line){lines.push(line);line=p}else line=tst}if(line)lines.push(line);
+  const lh=o.lh||(o.s||18)*1.35;lines.forEach((l,i)=>label(l,x,y+i*lh,{...o,a:o.a||'left'}));return lines.length*lh}
+function now(s){if(s!==lastNow){lastNow=s;$('cnow').textContent='▸ '+s}}
+function box(x,y,w,h,fill,stroke,r=10,lw=1.5){ctx.fillStyle=fill;ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();if(stroke)ctx.stroke()}
+function arrow(x1,y1,x2,y2,c,lw=2.5){ctx.strokeStyle=c;ctx.fillStyle=c;ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();const a=Math.atan2(y2-y1,x2-x1);ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-12*Math.cos(a-.4),y2-12*Math.sin(a-.4));ctx.lineTo(x2-12*Math.cos(a+.4),y2-12*Math.sin(a+.4));ctx.closePath();ctx.fill()}
+function circ(x,y,r,fill,stroke,lw=1.5){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke()}}
+// woven fabric texture in a rectangle
+function weave(x,y,w,h,col=C.fab,ln=C.fabLine,step=14){box(x,y,w,h,col,ln,4,1.2);ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.strokeStyle=ln;ctx.globalAlpha=.35;ctx.lineWidth=1;
+  for(let i=x+step/2;i<x+w;i+=step){ctx.beginPath();ctx.moveTo(i,y);ctx.lineTo(i,y+h);ctx.stroke()}for(let j=y+step/2;j<y+h;j+=step){ctx.beginPath();ctx.moveTo(x,j);ctx.lineTo(x+w,j);ctx.stroke()}ctx.restore()}
+// flower motif path (used on swatches)
+function flower(x,y,r){ctx.beginPath();for(let k=0;k<5;k++){const a=k/5*Math.PI*2-Math.PI/2;ctx.moveTo(x+Math.cos(a)*r*.55+r*.42,y+Math.sin(a)*r*.55);ctx.arc(x+Math.cos(a)*r*.55,y+Math.sin(a)*r*.55,r*.42,0,Math.PI*2)}}
+// motif element j inside a repeat tile (flat + rotary screen)
+function element(j,x,y,w,h){ctx.fillStyle=PC[j];ctx.beginPath();
+  if(j===0)ctx.roundRect(x+w*.08,y+h*.12,w*.84,h*.22,6);
+  else if(j===1){ctx.arc(x+w*.32,y+h*.6,Math.min(w,h)*.2,0,Math.PI*2)}
+  else if(j===2){ctx.moveTo(x+w*.62,y+h*.42);ctx.lineTo(x+w*.9,y+h*.88);ctx.lineTo(x+w*.36,y+h*.88);ctx.closePath()}
+  else if(j===3)ctx.rect(x+w*.08,y+h*.82,w*.84,h*.07);
+  else if(j===4){ctx.arc(x+w*.32,y+h*.6,Math.min(w,h)*.08,0,Math.PI*2)}
+  else {ctx.arc(x+w*.8,y+h*.5,Math.min(w,h)*.07,0,Math.PI*2)}
+  ctx.globalAlpha=.88;ctx.fill();ctx.globalAlpha=1}
+
+const YC=['#C2185B','#1E88C8','#E0A100','#2E7D32'];
+// knitted loop (front face "V" look) at x,y with width w, height h
+function loopV(x,y,w,h,col){ctx.strokeStyle=col;ctx.lineWidth=Math.max(2,w*.22);ctx.beginPath();ctx.moveTo(x-w/2,y-h/2);ctx.quadraticCurveTo(x-w*.1,y+h*.1,x,y+h/2);ctx.quadraticCurveTo(x+w*.1,y+h*.1,x+w/2,y-h/2);ctx.stroke()}
+function loopP(x,y,w,h,col){ctx.strokeStyle=col;ctx.lineWidth=Math.max(2,w*.22);ctx.beginPath();ctx.ellipse(x,y,w*.45,h*.22,0,Math.PI,Math.PI*2);ctx.stroke()}
+
+// ── 1 Flachstricken: Prinzip ─────────────────────────────────────────────────
+function scene1(){const E=SV[0],c=CV(),f=c.fl,x0=100,x1=1500,bedY=330,pitch=lerp(9,40,(18-E)/15);
+  const P=4.2,ph=(sceneT%P)/P,dir=ph<.5?1:-1,cx=lerp(x0+260,x1-260,ph<.5?smooth(0,.5,ph):1-smooth(.5,1,ph));
+  // needle bed (front)
+  box(x0,bedY,x1-x0,90,'#EEF2F3',C.steelD,8,2);label(f.bed,x0,bedY+120,{a:'left',s:15,c:C.fg});
+  for(let x=x0+pitch/2;x<x1;x+=pitch){const d=x-cx,lift=Math.max(0,1-Math.abs(d)/110)*(Math.abs(d)<110?1:0),h=lift*70;
+    ctx.strokeStyle=C.steelD;ctx.lineWidth=Math.max(1.5,pitch*.18);ctx.beginPath();ctx.moveTo(x,bedY+80);ctx.lineTo(x,bedY+10-h);ctx.stroke();
+    ctx.beginPath();ctx.arc(x+pitch*.12,bedY+10-h,Math.max(2,pitch*.15),Math.PI,Math.PI*2);ctx.stroke()}
+  // carriage with cam triangle
+  box(cx-150,bedY-200,300,110,'#DCE6EA',C.steelD,12,2);ctx.fillStyle='rgba(95,106,110,.25)';ctx.beginPath();ctx.moveTo(cx-110,bedY-90);ctx.lineTo(cx,bedY-150);ctx.lineTo(cx+110,bedY-90);ctx.closePath();ctx.fill();
+  label(f.carriage,cx,bedY-178,{s:16,c:C.fg,w:600});label(f.cam,cx,bedY-112,{s:13,c:C.muted});arrow(cx+(dir>0?160:-160),bedY-145,cx+(dir>0?230:-230),bedY-145,C.heat,3);
+  // yarn carrier + yarn
+  circ(cx-dir*60,bedY-60,7,YC[0]);ctx.strokeStyle=YC[0];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx-dir*60,bedY-60);ctx.lineTo(cx,bedY-5);ctx.stroke();label(f.carrier,cx-dir*72,bedY-60,{s:13,c:YC[0],a:dir>0?'right':'left'});
+  // knitted fabric below
+  const fy=520,lw=pitch,lh=pitch*.9,rows=Math.floor(260/lh);label(fmt(f.fabric,{e:E}),x0,fy-20,{a:'left',s:15,c:C.fg,w:600});
+  ctx.save();ctx.beginPath();ctx.rect(x0,fy,x1-x0,260);ctx.clip();for(let r=0;r<rows+1;r++)for(let x=x0+pitch/2;x<x1;x+=pitch)loopV(x,fy+r*lh+lh/2,lw*.9,lh*1.2,mix(YC[0],'#ffffff',.25));ctx.restore();
+  label(fmt(f.npi,{e:E,mm:(25.4/E).toFixed(1).replace('.',lang==='de'||lang==='es'?',':'.')}),x1,fy-20,{a:'right',s:15,f:MONO,c:C.fg});
+  now(E<=7?f.coarse:E<=12?f.mid:f.fine)}
+
+// ── 2 Bindungen ───────────────────────────────────────────────────────────────
+function scene2(){const b=SV[1],c=CV(),f=c.bi,st=f.st[b];
+  // V-bed cross-section (inverted V)
+  const vx=330,vy=260,act=[[1,0],[1,1],[1,1],[1,1]][b],ph=(sceneT%2)/2,up=Math.sin(ph*Math.PI);
+  [[-1,act[0],f.front],[1,act[1],f.back]].forEach(([s2,on,l])=>{const dx=s2*Math.cos(.8),dy=Math.sin(.8),ox=vx+s2*18,oy=vy,nx=-dy,ny=dx;
+    ctx.fillStyle='#EEF2F3';ctx.strokeStyle=C.steelD;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(ox+nx*28,oy+ny*28*s2);
+    const P=[[0,-28],[300,-28],[300,28],[0,28]].map(([u,v])=>[ox+dx*u+(-dy)*v*s2,oy+dy*u+dx*v*s2]);ctx.beginPath();P.forEach(([x,y],k)=>k?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();ctx.stroke();
+    const ext=on?(b===2&&s2>0?.5:1)*up:0,t0=250,t1=20-ext*70;ctx.strokeStyle=on?C.hl:'#9AA6AC';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(ox+dx*t0,oy+dy*t0);ctx.lineTo(ox+dx*t1,oy+dy*t1);ctx.stroke();
+    label(l,ox+dx*320,oy+dy*320+30,{s:15,c:C.fg})});
+  circ(vx,vy-30,7,YC[0]);ctx.strokeStyle=YC[0];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(vx,vy-30);ctx.lineTo(vx,vy-100);ctx.stroke();label(f.vbed,vx,140,{s:17,c:C.fg,w:600});
+  if(b===3){const t=smooth(.2,.8,ph);circ(lerp(vx-50,vx+50,t),vy+10,10,YC[0]);arrow(vx-60,vy+140,vx+60,vy+140,C.heat,2);label(f.transfer,vx,vy+175,{s:14,c:C.heat})}
+  // swatch
+  const sx=780,sy=170,W=700,H=520;box(sx,sy,W,H,C.bg,C.line,12);label(st.n,sx+20,sy+30,{a:'left',s:22,f:DISP,w:700,c:C.fg});
+  const cw=36,ch=32,col=mix(YC[1],'#ffffff',.2);
+  for(let r=0;r<12;r++)for(let k=0;k<17;k++){const x=sx+60+k*cw,y=sy+80+r*ch;
+    if(b===0)loopV(x,y,cw*.9,ch*1.2,col);
+    else if(b===1){(k%2?loopP:loopV)(x,y,cw*.9,ch*1.2,col)}
+    else if(b===2){if(r%2===1&&k%2===0){ctx.strokeStyle=col;ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x-cw*.4,y-ch*.4);ctx.quadraticCurveTo(x,y+ch*.6,x+cw*.4,y-ch*.4);ctx.stroke()}else loopV(x,y,cw*.9,ch*1.2,col)}
+    else{const hole=(r===5||r===6)&&(k===8);if(!hole)loopV(x+((r===6&&k>8)?-6:0),y,cw*.9,ch*1.2,col)}}
+  box(sx,sy+H+20,W,110,C.bg,C.line,10);wrap(st.d,sx+20,sy+H+52,W-40,{s:16,c:C.fg});now(st.n)}
+
+// ── 3 Cut & Sew / Fully fashioned / Komplett ─────────────────────────────────
+function sweater(x,y,s,col,seams){ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(x-60*s,y-110*s);ctx.lineTo(x-25*s,y-120*s);ctx.quadraticCurveTo(x,y-100*s,x+25*s,y-120*s);ctx.lineTo(x+60*s,y-110*s);
+  ctx.lineTo(x+140*s,y-20*s);ctx.lineTo(x+115*s,y+5*s);ctx.lineTo(x+60*s,y-45*s);ctx.lineTo(x+60*s,y+110*s);ctx.lineTo(x-60*s,y+110*s);ctx.lineTo(x-60*s,y-45*s);ctx.lineTo(x-115*s,y+5*s);ctx.lineTo(x-140*s,y-20*s);ctx.closePath();ctx.fill();
+  if(seams){ctx.strokeStyle='rgba(0,0,0,.45)';ctx.setLineDash([5,5]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-60*s,y-110*s);ctx.lineTo(x-60*s,y+110*s);ctx.moveTo(x+60*s,y-110*s);ctx.lineTo(x+60*s,y+110*s);ctx.stroke();ctx.setLineDash([])}}
+function scene3(){const m=SV[2],c=CV(),f=c.ff,me=f.m[m],col=mix(YC[0],'#ffffff',.25);
+  const px=110,py=170;label(f.pieces,px,py-20,{a:'left',s:16,c:C.fg,w:600});
+  if(m===0){[[px,py,300,330],[px+330,py,300,330],[px+660,py,180,330],[px+860,py,180,330]].forEach(([x,y,w,h],k)=>{ctx.fillStyle='#E7E1D3';ctx.fillRect(x,y,w,h);ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.strokeStyle='rgba(120,100,70,.35)';ctx.lineWidth=1;for(let i=-h;i<w;i+=12){ctx.beginPath();ctx.moveTo(x+i,y+h);ctx.lineTo(x+i+h,y);ctx.stroke()}ctx.restore();
+      ctx.fillStyle=col;ctx.beginPath();if(k<2){ctx.moveTo(x+30,y+20);ctx.lineTo(x+110,y+10);ctx.quadraticCurveTo(x+150,y+50,x+190,y+10);ctx.lineTo(x+270,y+20);ctx.lineTo(x+270,y+320);ctx.lineTo(x+30,y+320)}else{ctx.moveTo(x+40,y+10);ctx.lineTo(x+140,y+10);ctx.lineTo(x+170,y+320);ctx.lineTo(x+10,y+320)}ctx.closePath();ctx.fill();ctx.strokeStyle=C.heat;ctx.setLineDash([6,4]);ctx.lineWidth=2;ctx.stroke();ctx.setLineDash([])})}
+  else if(m===1){[[px,py,0],[px+330,py,0],[px+660,py,1],[px+860,py,1]].forEach(([x,y,sl])=>{ctx.fillStyle=col;ctx.beginPath();if(!sl){ctx.moveTo(x+30,y+20);ctx.lineTo(x+110,y+10);ctx.quadraticCurveTo(x+150,y+50,x+190,y+10);ctx.lineTo(x+270,y+20);ctx.lineTo(x+270,y+320);ctx.lineTo(x+30,y+320)}else{ctx.moveTo(x+40,y+10);ctx.lineTo(x+140,y+10);ctx.lineTo(x+170,y+320);ctx.lineTo(x+10,y+320)}ctx.closePath();ctx.fill()});
+    sweater(1330,330,.95,col,true);label(f.link,1330,470,{s:14,c:C.muted})}
+  else{sweater(560,330,1.4,col,false);label(f.oneP,560,510,{s:15,c:C.hl,w:600})}
+  // bars
+  const bx=110,by=600;label(f.waste,bx,by-10,{a:'left',s:16,c:C.fg,w:600});
+  f.m.forEach((mm,k)=>{const y=by+30+k*52,on=k===m;label(mm.n,bx,y,{a:'left',s:15,c:on?C.fg:C.muted,w:on?600:500});ctx.fillStyle='#EEF0EE';ctx.fillRect(bx+260,y-12,600,24);ctx.fillStyle=on?(k===0?C.heat:C.hl):'#C9D0CC';ctx.fillRect(bx+260,y-12,600*[.25,.05,.02][k]/.25,24);label(mm.w,bx+880,y,{a:'left',s:15,f:MONO,c:C.fg})});
+  box(1100,560,420,260,C.bg,C.line,12);wrap(me.d,1120,595,380,{s:16,c:C.fg});now(me.n)}
+
+// ── 4 Tufting: Prinzip ───────────────────────────────────────────────────────
+function scene4(){const p=SV[3],c=CV(),f=c.tu,ph=(sceneT%1.4)/1.4,nd=Math.sin(ph*Math.PI*2)*-1,step=Math.floor(sceneT/1.4);
+  const by=380,x0=80,x1=1520,needX=700,sp=46;
+  // backing
+  ctx.fillStyle='#D8CFB8';ctx.fillRect(x0,by-6,x1-x0,12);label(f.backing,x0,by-30,{a:'left',s:15,c:C.fg});arrow(x0+20,by+60,x0+140,by+60,C.muted,2);label(f.feed,x0+20,by+86,{a:'left',s:14,c:C.muted});
+  // tufts already formed (to the left of needle; backing moves right->left? we move left->right: tufts to the right)
+  const off=(smooth(.55,1,ph))*sp;
+  for(let k=1;k<16;k++){const x=needX+k*sp+off-sp;if(x>x1-10)break;const type=p===2?(k%2):p;const col=YC[k%2?0:1];
+    ctx.strokeStyle=col;ctx.lineWidth=7;ctx.lineCap='round';
+    if(type===0){ctx.beginPath();ctx.moveTo(x-8,by+6);ctx.quadraticCurveTo(x-10,by+120,x,by+120);ctx.quadraticCurveTo(x+10,by+120,x+8,by+6);ctx.stroke()}
+    else{const h=p===2?95:120;ctx.beginPath();ctx.moveTo(x-8,by+6);ctx.lineTo(x-12,by+h);ctx.moveTo(x+8,by+6);ctx.lineTo(x+12,by+h);ctx.stroke()}
+    ctx.strokeStyle=col;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x-8,by-8);ctx.lineTo(x+8-sp,by-8);ctx.stroke()}
+  // needle
+  const ny=by-170+Math.max(0,nd)*0+((1-Math.cos(ph*Math.PI*2))/2)*210;
+  ctx.fillStyle=C.steelD;ctx.fillRect(needX-6,ny-160,12,160);ctx.beginPath();ctx.moveTo(needX-6,ny);ctx.lineTo(needX,ny+18);ctx.lineTo(needX+6,ny);ctx.fill();
+  ctx.strokeStyle=YC[0];ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(needX-40,by-260);ctx.lineTo(needX-3,ny-150);ctx.lineTo(needX-3,ny+8);ctx.stroke();
+  box(needX-260,by-300,520,40,'#DCE6EA',C.steelD,8,2);label(f.bar,needX,by-280,{s:15,c:C.fg});label(f.needle,needX+20,by-200,{a:'left',s:15,c:C.fg});
+  // looper (+knife)
+  const lx=needX-90+((1-Math.cos(ph*Math.PI*2))/2)*80;ctx.fillStyle='#8C979B';ctx.beginPath();ctx.moveTo(lx-80,by+100);ctx.lineTo(lx,by+100);ctx.lineTo(lx+20,by+86);ctx.lineTo(lx,by+112);ctx.lineTo(lx-80,by+112);ctx.closePath();ctx.fill();
+  label(p===0?f.looper:f.hook,needX-160,by+150,{s:15,c:C.fg});
+  if(p>0){const ky=by+130-Math.max(0,Math.sin(ph*Math.PI*2))*30;ctx.fillStyle=C.heat;ctx.beginPath();ctx.moveTo(needX+20,ky);ctx.lineTo(needX+60,ky-18);ctx.lineTo(needX+60,ky+4);ctx.closePath();ctx.fill();label(f.knife,needX+70,ky+20,{a:'left',s:15,c:C.heat})}
+  label(f.pile,1200,by+160,{s:15,c:C.fg});
+  box(80,620,1440,190,C.bg,C.line,12);label(f.types[p].n,110,655,{a:'left',s:22,f:DISP,w:700,c:C.fg});wrap(f.types[p].d,110,695,1380,{s:17,c:C.fg});
+  now(ph<.5?f.down:f.up)}
+
+// ── 5 Teilung & Stich ────────────────────────────────────────────────────────
+const GA=[[1/4,'1/4"'],[3/16,'3/16"'],[5/32,'5/32"'],[1/8,'1/8"'],[1/10,'1/10"']];
+function scene5(){const g=SV[4],c=CV(),f=c.ga,[gi,gl]=GA[g],npi=1/gi,spi=8;
+  // top view 2x2 inch area
+  const sx=120,sy=170,S=480;box(sx-20,sy-20,S+40,S+40,'#F2EDE0',C.line,10);label(f.top,sx-20,sy-44,{a:'left',s:16,c:C.fg,w:600});
+  const dx=S/2/npi,dy=S/2/spi;for(let i=0;i<2*npi;i++)for(let j=0;j<2*spi;j++)circ(sx+dx/2+i*dx,sy+dy/2+j*dy,Math.min(dx,dy)*.36,YC[(i+j)%2?0:1]);
+  arrow(sx,sy+S+30,sx+S/2,sy+S+30,C.muted,2);label(f.inch,sx+S/2+14,sy+S+30,{a:'left',s:13,c:C.muted});
+  f.gw.split('\n').forEach((l,k)=>label(l,sx-20,sy+S+80+k*22,{a:'left',s:14,c:C.muted}));
+  // values
+  const x0=780;box(x0,150,740,520,C.bg,C.line,14);
+  const per=Math.round(npi*spi),wN=Math.round(4000/(25.4*gi));
+  [[f.gL,gl+' · '+fmt(f.npiT,{n:npi.toFixed(npi%1?1:0).replace('.',lang==='de'||lang==='es'?',':'.')})],[f.sL,fmt(f.spiT,{n:spi})],[f.dL,fmt(f.dens,{n:per})],[f.wL,fmt(f.needles,{n:wN.toLocaleString(lang==='de'?'de-CH':lang)})]].forEach(([l,v],k)=>{label(l,x0+30,200+k*90,{a:'left',s:14,f:MONO});label(v,x0+30,236+k*90,{a:'left',s:26,f:DISP,w:700,c:k===2?C.hl:C.fg,mw:680})});
+  wrap(f.note,x0+30,580,680,{s:15,c:C.muted});
+  box(80,700,1440,110,C.bg,C.line,12);wrap(f.machine,110,735,1380,{s:17,c:C.fg});now(g<2?f.coarse:f.fine)}
+
+// ── 6 Rücken & Ausrüstung ────────────────────────────────────────────────────
+function scene6(){const s=SV[5],c=CV(),f=c.bk,x0=160,x1=1060,y=440;
+  // pile
+  for(let k=0;k<26;k++){const x=x0+20+k*34,h=s>=3?110:110+hsh(k)*30;ctx.strokeStyle=YC[k%2?0:1];ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x-6,y);ctx.lineTo(x-9,y-h);ctx.moveTo(x+6,y);ctx.lineTo(x+9,y-h);ctx.stroke()}
+  if(s>=3){ctx.strokeStyle=C.heat;ctx.setLineDash([8,6]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x0,y-112);ctx.lineTo(x1,y-112);ctx.stroke();ctx.setLineDash([])}
+  // primary backing
+  ctx.fillStyle='#D8CFB8';ctx.fillRect(x0,y,x1-x0,14);
+  // stitch backs
+  for(let k=0;k<26;k++){const x=x0+20+k*34;ctx.strokeStyle=YC[k%2?0:1];ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(x-6,y+18);ctx.lineTo(x+28,y+18);ctx.stroke()}
+  if(s>=1){ctx.fillStyle='rgba(235,232,220,.95)';ctx.fillRect(x0,y+14,x1-x0,26);for(let k=0;k<60;k++)circ(x0+hsh(k)*(x1-x0),y+20+hsh(k+30)*16,2,'#B9B2A0')}
+  if(s>=2){ctx.fillStyle='#C9BE9F';ctx.fillRect(x0,y+40,x1-x0,14);ctx.strokeStyle='rgba(0,0,0,.15)';for(let x=x0;x<x1;x+=10){ctx.beginPath();ctx.moveTo(x,y+40);ctx.lineTo(x,y+54);ctx.stroke()}}
+  const L=[[y-60,f.pile,1],[y+7,f.primary,1],[y+27,f.latex,s>=1],[y+47,f.secondary,s>=2]];L.forEach(([yy,l,on])=>{if(!on)return;ctx.strokeStyle=C.muted;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x1+10,yy);ctx.lineTo(x1+60,yy);ctx.stroke();label(l,x1+70,yy,{a:'left',s:15,c:C.fg,mw:390})});
+  // pull-out arrow (tuft bind)
+  const pull=s>=1?6:36+Math.sin(sceneT*3)*14;ctx.strokeStyle=YC[0];ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x0+20+12*34-6,y-pull*.2);ctx.lineTo(x0+20+12*34-9,y-140-pull);ctx.stroke();arrow(x0+20+12*34,y-150-pull,x0+20+12*34,y-210-pull,s>=1?C.hl:C.heat,2.5);
+  label(s>=1?f.bound:f.loose,x0+20+12*34,y-240-pull,{s:15,c:s>=1?C.hl:C.heat,w:600});
+  // steps
+  f.steps.forEach((st,k)=>{const x=160+k*350,on=k===s;box(x,640,320,150,on?'#EAF6EC':C.bg,on?C.hl:C.line,10,on?3:1.5);label(`${k+1}`,x+22,670,{a:'left',s:22,f:DISP,w:700,c:on?C.hl:C.muted});label(st.n,x+56,670,{a:'left',s:17,c:C.fg,w:600,mw:250});wrap(st.d,x+22,705,280,{s:14,c:C.muted})});
+  now(f.steps[s].n)}
+
+// ── 7 Flechten: Prinzip ──────────────────────────────────────────────────────
+function scene7(){const n=SV[6],c=CV(),f=c.br,cx=400,cy=470,R=230,amp=26,half=n/2,sp=.25;
+  // track: two serpentines
+  ctx.strokeStyle='#D5DADC';ctx.lineWidth=10;[0,1].forEach(o=>{ctx.beginPath();for(let a=0;a<=Math.PI*2+.01;a+=.01){const r=R+amp*Math.sin(a*half+o*Math.PI);const x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r;a?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.stroke()});
+  for(let k=0;k<half;k++){const a=k/half*Math.PI*2+Math.PI/half/2;circ(cx+Math.cos(a)*R,cy+Math.sin(a)*R,R*Math.PI/half*.42,null,'#B9C1C4',2)}
+  // carriers
+  const pts=[];for(let k=0;k<n;k++){const cw=k%2===0,base=Math.floor(k/2)/half*Math.PI*2,a=base+(cw?1:-1)*(sceneT*sp+.1);const r=R+amp*Math.sin(a*half+(cw?0:Math.PI));pts.push([cx+Math.cos(a)*r,cy+Math.sin(a)*r,cw])}
+  pts.forEach(([x,y,cw])=>{ctx.strokeStyle=cw?'rgba(194,24,91,.45)':'rgba(30,136,200,.45)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(cx,cy);ctx.stroke()});
+  pts.forEach(([x,y,cw])=>{circ(x,y,11,cw?YC[0]:YC[1],'#fff',2)});
+  circ(cx,cy,10,C.fg);label(f.point,cx,cy+30,{s:14,c:C.fg});
+  label(f.cw,cx-R,cy+R+60,{a:'left',s:15,c:YC[0],w:600});label(f.ccw,cx-R,cy+R+86,{a:'left',s:15,c:YC[1],w:600});
+  // tubular braid
+  const bx=820,bw=680,by=300,bh=190;box(bx-20,150,bw+40,420,C.bg,C.line,14);label(fmt(f.tube,{n}),bx,180,{a:'left',s:17,c:C.fg,w:600});
+  ctx.save();ctx.beginPath();ctx.rect(bx,by,bw,bh);ctx.clip();const pitch=bh*2/Math.max(1,half/4),off=sceneT*30;
+  for(let k=-20;k<40;k++){[[1,YC[0]],[-1,YC[1]]].forEach(([s,col])=>{ctx.strokeStyle=col;ctx.lineWidth=Math.max(6,60/half*4);ctx.beginPath();const x=bx+k*(bw/ (half))+ (s>0?off:-off)%(bw/half);ctx.moveTo(x,by);ctx.lineTo(x+s*bh,by+bh);ctx.stroke()})}ctx.restore();
+  ctx.strokeStyle=C.steelD;ctx.lineWidth=2;ctx.strokeRect(bx,by,bw,bh);arrow(bx+bw+8,by+bh/2,bx+bw+8,by+bh/2,C.muted,1);
+  label(f.takeup,bx+bw/2,by+bh+40,{s:15,c:C.muted});
+  box(bx-20,600,bw+40,210,C.bg,C.line,14);wrap(f.how,bx,635,bw,{s:16,c:C.fg});now(fmt(f.nowN,{n,h:half}))}
+
+// ── 8 Flechtwinkel & Muster ──────────────────────────────────────────────────
+function scene8(){const th=SV[7],c=CV(),f=c.ba,t=th*Math.PI/180;
+  const bx=100,by=160,bw=680,bh=420;box(bx-20,by-20,bw+40,bh+40,C.bg,C.line,14);
+  ctx.save();ctx.beginPath();ctx.rect(bx,by,bw,bh);ctx.clip();const sp=44,dx=sp/Math.sin(t);
+  // axis horizontal; yarns at +/-theta to axis
+  for(let k=-40;k<40;k++){[[1,YC[0]],[-1,YC[1]]].forEach(([s,col])=>{ctx.strokeStyle=col;ctx.lineWidth=16;const x=bx+bw/2+k*dx+(s>0?1:-1)*(sceneT*20%dx);ctx.beginPath();ctx.moveTo(x-Math.cos(t)*900*s,by+bh/2-Math.sin(t)*900);ctx.lineTo(x+Math.cos(t)*900*s,by+bh/2+Math.sin(t)*900);ctx.stroke()})}
+  ctx.restore();
+  ctx.strokeStyle=C.fg;ctx.setLineDash([8,6]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(bx,by+bh/2);ctx.lineTo(bx+bw,by+bh/2);ctx.stroke();ctx.setLineDash([]);
+  const ax=bx+bw/2,ay=by+bh/2;ctx.strokeStyle=C.heat;ctx.lineWidth=3;ctx.beginPath();ctx.arc(ax,ay,90,0,t);ctx.stroke();box(ax+96,ay+14,96,52,'#ffffff',C.heat,8,2);label(th+'°',ax+144,ay+41,{s:28,f:DISP,w:700,c:C.heat});
+  box(bx+bw-150,ay-46,140,32,'#ffffff',null,6);label(f.axis,bx+bw-80,ay-30,{s:14,c:C.fg,mw:130});
+  // tendency
+  const x0=960;label(f.tend,x0,170,{a:'left',s:17,c:C.fg,w:600});
+  [[f.stiffL,1-smooth(15,75,th)],[f.stiffT,smooth(15,75,th)],[f.flex,smooth(30,75,th)]].forEach(([l,v],k)=>{const y=220+k*80;label(l,x0,y,{a:'left',s:15,c:C.fg});ctx.fillStyle='#EEF0EE';ctx.fillRect(x0,y+16,540,22);ctx.fillStyle=C.hl;ctx.fillRect(x0,y+16,540*(.08+.92*v),22)});
+  label(f.schem,x0+540,470,{a:'right',s:13,c:C.muted});
+  box(80,620,700,190,C.bg,C.line,12);wrap(f.rule,100,655,660,{s:16,c:C.fg});
+  box(820,520,700,290,C.bg,C.line,12);label(f.appT,840,550,{a:'left',s:17,c:C.fg,w:600});f.apps.forEach((a,k)=>label('• '+a,840,590+k*36,{a:'left',s:16,c:C.fg,mw:660}));
+  now(th<35?f.low:th<=55?f.mid:f.high)}
+
+const DRAW=[scene1,scene2,scene3,scene4,scene5,scene6,scene7,scene8];
+
+// ── controls / language ───────────────────────────────────────────────────────
+function sliderOut(){const s=SL[scene];if(!s)return;const c=CV(),v=SV[scene];let o;
+  if(s.k==='E')o='E '+v;else if(s.k==='bi')o=c.bi.st[v].n;else if(s.k==='ff')o=c.ff.m[v].n;else if(s.k==='pile')o=c.tu.types[v].n;
+  else if(s.k==='gauge')o=GA[v][1];else if(s.k==='bk')o=c.bk.steps[v].n;else if(s.k==='car')o=fmt(c.carN,{n:v});else o=v+'°';$('sout').textContent=o}
+function go(i){scene=(i+NSC)%NSC;sceneT=0;lastNow='';if(EMBED)document.title='scene:'+scene;
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=`${scene+1} · ${sc.title}`;$('ctext').textContent=sc.text;$('cnow').textContent='';
+  $('cfacts').innerHTML=sc.facts.map(f=>`<li><b>${f[0]}</b><span>${f[1]}</span></li>`).join('');
+  const s=SL[scene];$('swrap').hidden=!s;if(s){const sl=$('sl');sl.min=s.min;sl.max=s.max;sl.step=s.step||1;sl.value=SV[scene];$('slab').textContent=T().ui.sl[s.k]}
+  sliderOut()}
+$('sl').oninput=()=>{SV[scene]=+$('sl').value;sliderOut()};
+function setPlay(){$('play').textContent=auto?T().ui.pause:T().ui.play}
+$('play').onclick=()=>{auto=!auto;setPlay()};
+function applyLang(){const u=T().ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  cv.setAttribute('aria-label',u.h1);
+  $('scenes').innerHTML=T().scenes.map((s,i)=>`<button type="button" data-i="${i}"><span>${i+1}</span>${s.k}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  drawLinks();setPlay();const keep=sceneT;go(scene);sceneT=keep}
+const LINK_KEYS=['circular_knitting','warp_knitting','shaft_weaving','wilton_weaving','nonwovens'];
+const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function openModule(key){if(EMBED){document.title='open:'+key;return}location.href=key+'.html?lang='+encodeURIComponent(lang)}
+function drawLinks(){const t=T();$('lkL').textContent=t.ui.lkL;
+  $('links').innerHTML=t.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${escH(l[0])} →</b><span>${escH(l[1])}</span><em>${escH(t.ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k))}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')go(scene+1);if(e.key==='ArrowLeft')go(scene-1);if(e.key===' '){e.preventDefault();auto=!auto;setPlay()}});
+
+let last=performance.now();
+function frame(nw){const dt=Math.min(.05,(nw-last)/1000);last=nw;if(auto){t+=dt;sceneT+=dt}fit();
+  try{const s=cv.width/W;ctx.setTransform(s,0,0,s,0,0);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);ctx.setLineDash([]);ctx.lineCap='round';ctx.lineJoin='round';
+    DRAW[scene](auto?dt:0);
+    label(`${scene+1}/${NSC}`,1540,60,{a:'right',s:22,f:MONO});label(T().scenes[scene].k.toUpperCase(),60,60,{a:'left',s:28,c:C.fg,f:DISP,w:600});
+  }catch(err){console.error(err)}
+  requestAnimationFrame(frame)}
+applyLang();
+if(!auto&&params.get('paused')==='1'){sceneT=6.3}
+requestAnimationFrame(frame);
+})();
+</script>
+<script src="quiz.js"></script>
+</body>

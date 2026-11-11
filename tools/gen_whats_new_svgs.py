@@ -387,7 +387,7 @@ for i, (yarn, stock) in enumerate((("PA6 POY 52/44f36", True), ("PA6 FDY 44f34",
 save(s, "wn_create_search.svg")
 
 # ── Onboarding ──────────────────────────────────────────────────────────
-s = new("Onboarding")
+s = new("Knowledge Base")
 s.rect(12, 10, 70, 110, "#ffffff", LINE, 4)
 s.text(18, 26, "Topics", 9, INK, True)
 s.rect(14, 32, 66, 16, "#E3F1E6", None, 2)
@@ -791,3 +791,128 @@ s.arrow_right(150, 124, 290, GREEN)
 s.parts.append(f'  <polygon points="10,124 18,120 18,128" fill="{GREEN}"/>')
 s.line(18, 124, 150, 124, GREEN, 1.5)
 save(s, "wn_all_experiments.svg")
+
+# ── Show Experiment: DTY process + machine path ─────────────────────────
+s = new("DTY machine path")
+HEAT, JET, HL, HLF = "#F4A259", "#43A047", "#E08A00", "#FFF0C2"
+s.text(12, 20, "V3", 9, INK, True)
+s.text(12, 30, "Cotton-like: before heater", 7, GREEN)
+for x, lab in ((62, "LW 0"), (92, "Pre-jet"), (124, "LW 1"), (158, "Heater"), (196, "LW 2"),
+               (226, "Main jet"), (262, "Winder")):
+    s.text(x, 44, lab, 7, MUTED, anchor="middle")
+s.line(16, 56, 270, 56, GREEN, 2)
+s.line(16, 74, 110, 74, GREEN, 2)
+s.polyline(((110, 74), (116, 70), (120, 60), (124, 56)), GREEN, 2)
+s.circle(14, 56, 4, GREEN)
+s.circle(14, 74, 4, GREEN)
+for x, y in ((62, 56), (62, 74), (124, 56), (196, 56)):
+    s.circle(x - 3, y - 3, 3, "#E8F5E9")
+    s.circle(x + 3, y + 3, 3, "#E8F5E9")
+s.rect(83, 47, 18, 18, HLF, HL, 3, 1.5)
+s.rect(86, 50, 12, 12, JET, None, 2)
+s.rect(86, 68, 12, 12, JET, None, 2)
+s.rect(146, 52, 24, 8, HEAT, None, 2)
+s.rect(218, 50, 16, 12, JET, None, 2)
+s.circle(262, 56, 7, "#ffffff")
+s.circle(262, 56, 2.5, MUTED)
+# table below with highlighted rows
+y = 90
+rows = (("PreIntermingling Jet", ("S12", ""), True), ("Pre... Air Pressure", ("2.5", ""), True))
+for r, (title, vals, hl) in enumerate(rows):
+    s.rect(12, y + r * 16, 276, 16, HLF if hl else STRIPE_A, "#c9dfcb", 0)
+    s.text(16, y + r * 16 + 11, title, 8, INK)
+    for c, v in enumerate(vals):
+        if c == 0:
+            s.rect(150, y + r * 16, 60, 16, HLF, HL, 0, 1.5)
+        s.text(180 + c * 60, y + r * 16 + 11, v, 8, INK, anchor="middle")
+save(s, "wn_dty_schema.svg")
+
+# ── Show Experiment: ATY machine path ───────────────────────────────────
+s = new("ATY machine path")
+CORE, EFF, WATER = GREEN, "#C08A1E", "#9ED0F0"
+s.text(12, 20, "V1", 9, INK, True)
+s.text(12, 30, "Air texturing", 7, GREEN)
+for x, lab in ((70, "Feed roll"), (130, "Wetting"), (170, "Jet"), (210, "LW 2"), (262, "Winder")):
+    s.text(x, 44, lab, 7, MUTED, anchor="middle")
+s.line(16, 56, 270, 56, CORE, 2)
+s.line(16, 76, 104, 76, EFF, 2)
+s.polyline(((104, 76), (112, 72), (116, 62), (122, 56)), EFF, 2)
+s.circle(14, 56, 4, CORE)
+s.circle(14, 76, 4, EFF)
+s.text(22, 53, "Core", 7, CORE, True)
+s.text(22, 73, "Effect", 7, EFF, True)
+for x, y in ((70, 56), (70, 76), (210, 56)):
+    s.circle(x - 3, y - 3, 3, "#E8F5E9")
+    s.circle(x + 3, y + 3, 3, "#E8F5E9")
+s.text(70, 66, "OF 12 %", 6, MUTED, anchor="middle")
+s.text(70, 86, "OF 24 %", 6, MUTED, anchor="middle")
+s.rect(162, 47, 18, 18, HLF, HL, 3, 1.5)
+s.rect(122, 50, 16, 12, WATER, None, 2)
+s.rect(165, 50, 12, 12, JET, None, 2)
+s.circle(262, 56, 7, "#ffffff")
+s.circle(262, 56, 2.5, MUTED)
+y = 98
+rows = (("Jet", ("D13 K3", "D13 K3"), True), ("Air pressure", ("8.0", "7.5"), True))
+for r, (title, vals, hl) in enumerate(rows):
+    s.rect(12, y + r * 14, 276, 14, HLF if hl else STRIPE_A, "#c9dfcb", 0)
+    s.text(16, y + r * 14 + 10, title, 8, INK)
+    for c, v in enumerate(vals):
+        if c == 0:
+            s.rect(150, y + r * 14, 60, 14, HLF, HL, 0, 1.5)
+        s.text(180 + c * 60, y + r * 14 + 10, v, 8, INK, anchor="middle")
+save(s, "wn_aty_schema.svg")
+
+# ── Show Experiment: delete trials (numbers stay) ───────────────────────
+s = new("Delete trials")
+RED = "#C62828"
+cols = ["V21", "V22", "V23", "V24", "V25"]
+grid(s, 12, 12, [("Air Pressure", ["3.5", "4.0", "3.5", "4.0", "3.5"]),
+                 ("Tenacity", ["38.2", "29.6", "37.9", "36.1", "35.0"])],
+     5, 36, 18, first_w=64, header=cols,
+     fills={(r, c): "#FFE0E0" for r in (0, 1) for c in (2, 3)})
+for c in (2, 3):
+    s.rect(12 + 64 + 36 * c, 12, 36, 54, "none", RED, 0, 1.5)
+# context menu
+mx, my = 186, 34
+s.rect(mx, my, 108, 44, "#ffffff", "#9e9e9e", 3)
+s.text(mx + 8, my + 13, "Copy trials…", 8, MUTED)
+s.line(mx + 4, my + 19, mx + 104, my + 19, LINE, 1)
+s.rect(mx + 2, my + 23, 104, 18, "#FDECEA", None, 2)
+s.text(mx + 6, my + 35, "Delete 2 selected trials…", 7.5, RED, True)
+# after: V21 V22 . . V25, next = V26
+s.text(12, 100, "After:", 8, MUTED)
+for i, (t, gone) in enumerate((("V21", 0), ("V22", 0), ("V23", 1), ("V24", 1), ("V25", 0))):
+    x = 48 + i * 34
+    if gone:
+        s.rect(x, 90, 30, 14, "#ffffff", "#bdbdbd", 2)
+        s.line(x + 4, 97, x + 26, 97, "#bdbdbd", 1, "3,2")
+    else:
+        s.rect(x, 90, 30, 14, STRIPE_A, "#c9dfcb", 2)
+        s.text(x + 15, 100, t, 8, INK, anchor="middle")
+s.text(48 + 5 * 34 + 4, 100, "next: V26", 8, GREEN, True)
+s.text(12, 121, "Numbers stay - nothing moves up, no gaps filled · Recycle Bin", 8, MUTED)
+save(s, "wn_trial_delete.svg")
+
+# ── Tools: Yarn Count Converter ─────────────────────────────────────────
+s = new("Yarn Count Converter")
+s.rect(12, 14, 132, 102, "#ffffff", LINE, 6)
+s.text(20, 30, "Convert", 9, INK, True)
+s.rect(20, 38, 56, 16, "#ffffff", "#39a650", 3)
+s.text(26, 50, "150", 9, INK)
+s.rect(80, 38, 56, 16, "#ffffff", LINE, 3)
+s.text(86, 50, "den", 9, INK)
+s.rect(20, 60, 56, 34, "#ffffff", LINE, 4)
+s.text(26, 72, "dtex", 7, MUTED, True)
+s.text(26, 88, "166.7", 12, INK, True)
+s.rect(80, 60, 56, 34, "#F0F8F2", "#39a650", 4)
+s.text(86, 72, "den", 7, MUTED, True)
+s.text(86, 88, "150", 12, INK, True)
+s.text(20, 108, "tex 16.67   Nm 60", 7, MUTED)
+s.rect(156, 14, 132, 102, "#ffffff", LINE, 6)
+s.text(164, 30, "Filament yarn", 9, INK, True)
+s.rect(164, 38, 116, 16, "#ffffff", LINE, 3)
+s.text(170, 50, "2x150D/48F", 9, INK)
+for i, (k, v) in enumerate((("Total den", "300"), ("Filaments", "96"), ("den/f", "3.13"), ("Diameter", "19.7 um"))):
+    s.text(164, 70 + i * 12, k, 7, MUTED)
+    s.text(280, 70 + i * 12, v, 8, INK, True, "end")
+save(s, "wn_yarn_count.svg")

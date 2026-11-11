@@ -1,6 +1,6 @@
 window.TEXTS = {
 "de": {
- "ui": {"eyebrow": "Onboarding · Einfädeln", "h1": "Die Lufan-Absaugpistole",
+ "ui": {"eyebrow": "Knowledge Base · Einfädeln", "h1": "Die Lufan-Absaugpistole",
   "lead": "Mit der Lufan wird Garn eingefädelt, während die Maschine läuft. Die Pistole saugt den laufenden Faden mit Druckluft an, und die Bedienperson führt ihn über Galetten und Düsen bis auf die Spule. Drei kurze Szenen zeigen Einsatz, Prinzip und Varianten.",
   "pressure": "Betriebsdruck", "dec": ",", "pause": "⏸ Pause", "play": "▶ Abspielen", "scenes": "Szenen",
   "note": "Schematische Darstellung. Gerätedaten und Luftverbrauchsformel stammen von den Heberlein-Produktseiten und sind dort als unverbindliche Richtwerte angegeben. Das Innenleben der Pistole ist vereinfacht nach dem Injektorprinzip gezeichnet."},
@@ -27,7 +27,7 @@ window.TEXTS = {
   "stationary": "Stationär: LufanStat und LufanStat-Cut (Saugen und Schneiden), bis 35 000 dtex, 5000 m/min"}
 },
 "en": {
- "ui": {"eyebrow": "Onboarding · Threading", "h1": "The Lufan suction gun",
+ "ui": {"eyebrow": "Knowledge Base · Threading", "h1": "The Lufan suction gun",
   "lead": "With the Lufan, yarn is threaded up while the machine is running. The gun sucks in the running thread with compressed air, and the operator guides it over godets and jets to the package. Three short scenes show use, principle and variants.",
   "pressure": "Operating pressure", "dec": ".", "pause": "⏸ Pause", "play": "▶ Play", "scenes": "Scenes",
   "note": "Schematic. Device data and the air consumption formula come from the Heberlein product pages, where they are given as non-binding guide values. The inside of the gun is drawn in simplified form according to the injector principle."},
@@ -54,7 +54,7 @@ window.TEXTS = {
   "stationary": "Stationary: LufanStat and LufanStat-Cut (suction and cutting), up to 35,000 dtex, 5000 m/min"}
 },
 "es": {
- "ui": {"eyebrow": "Onboarding · Enhebrado", "h1": "La pistola de aspiración Lufan",
+ "ui": {"eyebrow": "Knowledge Base · Enhebrado", "h1": "La pistola de aspiración Lufan",
   "lead": "Con la Lufan se enhebra el hilo mientras la máquina funciona. La pistola aspira el hilo en marcha con aire comprimido y el operario lo guía por los godets y las toberas hasta la bobina. Tres escenas cortas muestran el uso, el principio y las variantes.",
   "pressure": "Presión de trabajo", "dec": ",", "pause": "⏸ Pausa", "play": "▶ Reproducir", "scenes": "Escenas",
   "note": "Representación esquemática. Los datos de los equipos y la fórmula de consumo de aire proceden de las páginas de producto de Heberlein, donde figuran como valores orientativos sin compromiso. El interior de la pistola está dibujado de forma simplificada según el principio del inyector."},
@@ -81,7 +81,7 @@ window.TEXTS = {
   "stationary": "Estacionaria: LufanStat y LufanStat-Cut (aspirar y cortar), hasta 35 000 dtex, 5000 m/min"}
 },
 "zh": {
- "ui": {"eyebrow": "入门 · 穿丝", "h1": "Lufan 吸丝枪",
+ "ui": {"eyebrow": "知识库 · 穿丝", "h1": "Lufan 吸丝枪",
   "lead": "使用 Lufan 可以在机器运行时穿丝。吸丝枪用压缩空气吸住运行中的丝条，操作人员将其引过导丝辊和喷嘴，直到卷绕筒子上。三个短场景介绍用途、原理和型号。",
   "pressure": "工作压力", "dec": ".", "pause": "⏸ 暂停", "play": "▶ 播放", "scenes": "场景",
   "note": "示意图。设备数据和耗气量公式来自 Heberlein 产品页面，在那里作为无约束力的参考值给出。吸丝枪内部按引射器原理简化绘制。"},

@@ -24,6 +24,15 @@ in reverse):
 Logs/tracking tables are left alone. Yarns made from a trial (tblYarn.
 SourceTrialID) block the delete, as before.
 
+Single trials (Show Experiment, right-click a trial number, Nutzerwunsch
+2026-11-11) go in as their own entry, ObjectType "trials" (ObjectID = series
+ID): the trials, every table with a TrialID column and FK children of those
+rows - nothing of the series itself. The other trials keep their numbers
+(nothing moves up); new trials always come after the highest remaining
+number, so gaps are never filled - numbers deleted at the end may be given
+out again (Nutzerentscheid 2026-11-11), which is why a restore checks that
+its numbers are still free.
+
 MySQL only (uses information_schema); offline the screens keep their old
 direct delete.
 """
@@ -135,6 +144,33 @@ def _select(cur, table: str, column: str, values: Sequence[Any]) -> List[Dict[st
 
 def collect_series(cur, series_id: int) -> List[Tuple[str, List[Dict[str, Any]]]]:
     """Everything that belongs to a series, parents first (see module doc)."""
+    groups, add = _collector()
+    series = _select(cur, "tblTrialSeries", "ID", [series_id])
+    if not series:
+        raise RecycleBinError("Trial series not found.")
+    exp_id = series[0].get("ExperimentID")
+    if exp_id is not None:
+        cur.execute("SELECT COUNT(*) FROM tblTrialSeries WHERE ExperimentID = ? AND ID <> ?", (exp_id, series_id))
+        if int((cur.fetchone() or [0])[0] or 0) == 0:
+            add("tblExperimente", _select(cur, "tblExperimente", "ID", [exp_id]))
+    add("tblTrialSeries", series)
+    trials = add("tblTrial", _select(cur, "tblTrial", "TrialSeriesID", [series_id]))
+    frontier: List[str] = ["tblTrial", "tblTrialSeries"]
+    _add_trial_children(cur, add, frontier, [r["ID"] for r in trials], "this series")
+    for t in _tables_with_column(cur, "TrialSeriesID"):
+        if t.lower() not in ("tbltrial",):
+            if add(t, _select(cur, t, "TrialSeriesID", [series_id])):
+                frontier.append(t)
+    for t in _tables_with_column(cur, "SeriesPK"):
+        if add(t, _select(cur, t, "SeriesPK", [series_id])):
+            frontier.append(t)
+    _add_fk_children(cur, add, frontier, groups)
+    return groups
+
+
+def _collector():
+    """(groups, add) - add(table, rows) appends rows not collected yet and
+    returns the new ones."""
     groups: List[Tuple[str, List[Dict[str, Any]]]] = []
     seen: Dict[str, set] = {}
 
@@ -146,47 +182,32 @@ def collect_series(cur, series_id: int) -> List[Tuple[str, List[Dict[str, Any]]]
         new = [r for r in rows if r.get("ID") is None or r.get("ID") not in ids]
         ids.update(r.get("ID") for r in new if r.get("ID") is not None)
         if new:
-            for i, (t, existing) in enumerate(groups):
-                if t.lower() == key:
+            for _t, existing in groups:
+                if _t.lower() == key:
                     existing.extend(new)
                     break
             else:
                 groups.append((table, new))
         return new
+    return groups, add
 
-    series = _select(cur, "tblTrialSeries", "ID", [series_id])
-    if not series:
-        raise RecycleBinError("Trial series not found.")
-    exp_id = series[0].get("ExperimentID")
-    if exp_id is not None:
-        cur.execute("SELECT COUNT(*) FROM tblTrialSeries WHERE ExperimentID = ? AND ID <> ?", (exp_id, series_id))
-        if int((cur.fetchone() or [0])[0] or 0) == 0:
-            add("tblExperimente", _select(cur, "tblExperimente", "ID", [exp_id]))
-    add("tblTrialSeries", series)
-    trials = add("tblTrial", _select(cur, "tblTrial", "TrialSeriesID", [series_id]))
-    trial_ids = [r["ID"] for r in trials]
 
+def _add_trial_children(cur, add, frontier: List[str], trial_ids: List[Any], what: str) -> None:
+    """Every table with a TrialID column; yarns made from a trial block."""
     for t in _BLOCKING_TABLES:
         for child, col, _ref in _fk_children(cur, "tblTrial"):
             if child.lower() == t and trial_ids and _select(cur, child, col, trial_ids):
                 raise RecycleBinError(
-                    "Yarns were created from trials of this series (half-finished products). "
+                    f"Yarns were created from trials of {what} (half-finished products). "
                     "Delete or relink these yarns first.")
-
-    frontier: List[str] = ["tblTrial", "tblTrialSeries"]
     for t in _tables_with_column(cur, "TrialID"):
         if t.lower() not in ("tbltrial",) and t.lower() not in _BLOCKING_TABLES:
             if add(t, _select(cur, t, "TrialID", trial_ids)):
                 frontier.append(t)
-    for t in _tables_with_column(cur, "TrialSeriesID"):
-        if t.lower() not in ("tbltrial",):
-            if add(t, _select(cur, t, "TrialSeriesID", [series_id])):
-                frontier.append(t)
-    for t in _tables_with_column(cur, "SeriesPK"):
-        if add(t, _select(cur, t, "SeriesPK", [series_id])):
-            frontier.append(t)
 
-    # rows referencing collected rows via real FKs (e.g. image analyses)
+
+def _add_fk_children(cur, add, frontier: List[str], groups) -> None:
+    """Rows referencing collected rows via real FKs (e.g. image analyses)."""
     done = {"tblexperimente"}
     while frontier:
         parent = frontier.pop(0)
@@ -200,7 +221,89 @@ def collect_series(cur, series_id: int) -> List[Tuple[str, List[Dict[str, Any]]]
             vals = [r.get(ref) for r in parent_rows if r.get(ref) is not None]
             if vals and add(child, _select(cur, child, col, vals)):
                 frontier.append(child)
+
+
+def collect_trials(cur, series_id: int, trial_ids: Sequence[int]) -> List[Tuple[str, List[Dict[str, Any]]]]:
+    """Everything that belongs to some trials of a series (not the series
+    itself), parents first."""
+    groups, add = _collector()
+    ids = sorted({int(t) for t in trial_ids})
+    if not ids:
+        raise RecycleBinError("No trials selected.")
+    trials = _select(cur, "tblTrial", "ID", ids)
+    if len(trials) != len(ids):
+        raise RecycleBinError("Some of these trials don't exist any more - reload the series.")
+    if any(int(r.get("TrialSeriesID") or 0) != int(series_id) for r in trials):
+        raise RecycleBinError("These trials don't all belong to this series.")
+    add("tblTrial", trials)
+    frontier: List[str] = ["tblTrial"]
+    _add_trial_children(cur, add, frontier, ids, "these trials")
+    _add_fk_children(cur, add, frontier, groups)
     return groups
+
+
+def preview_trials(series_id: int, trial_ids: Sequence[int]) -> List[Tuple[str, int]]:
+    """Read only: [(table, rows)] that delete_trials() would delete, trials
+    first. Raises RecycleBinError (e.g. yarns made from a trial)."""
+    from db.connection import get_connection
+    with get_connection() as cn:
+        groups = collect_trials(cn.cursor(), int(series_id), trial_ids)
+    return [(t, len(rows)) for t, rows in groups]
+
+
+def can_delete_trials_now(series_id: Any) -> bool:
+    """Same rule as deleting the whole series (db/series_permissions.py),
+    and only with the recycle bin."""
+    from db.series_permissions import can_delete_series, can_move_series_now
+    if not available():
+        return False
+    return can_move_series_now(series_id, _rule=can_delete_series)
+
+
+def delete_trials(series_id: int, trial_ids: Sequence[int], label: str = "") -> int:
+    """Copies the trials (with lab rows, plies, notes ...) into the recycle
+    bin and deletes them - one transaction. The numbers of the other
+    trials are not touched. Returns the recycle bin ID."""
+    from db.connection import get_connection
+    import app_meta
+    if not can_delete_trials_now(series_id):
+        raise RecycleBinError("You may only delete trials of a series you are allowed to move in the Backlog "
+                              "(in To Be Cleaned: superusers only).")
+    uid = (app_meta.current_user or {}).get("id")
+    when = datetime.datetime.now().replace(microsecond=0)
+    with get_connection() as cn:
+        cur = cn.cursor()
+        cur.execute("START TRANSACTION")   # the pool is autocommit=True
+        try:
+            groups = collect_trials(cur, int(series_id), trial_ids)
+            trials = next(rows for t, rows in groups if t.lower() == "tbltrial")
+            payload = json.dumps({"version": 1, "groups": [
+                {"table": t, "rows": [{k: _enc(v) for k, v in r.items()} for r in rows]} for t, rows in groups]})
+            cur.execute(
+                "INSERT INTO tblRecycleBin (DeletedAt, DeletedBy, ObjectType, ObjectID, Label, Summary, Payload) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (when, uid, "trials", int(series_id), (label or "")[:255], _summary(groups), payload))
+            bin_id = cur.lastrowid
+            for table, rows in reversed(groups):
+                ids = [r["ID"] for r in rows if r.get("ID") is not None]
+                if len(ids) != len(rows):
+                    raise RecycleBinError(f"Rows without ID in {table} - nothing was deleted.")
+                for k in range(0, len(ids), 500):
+                    chunk = ids[k:k + 500]
+                    cur.execute(f"DELETE FROM `{table}` WHERE ID IN ({','.join(['?'] * len(chunk))})", chunk)
+            cn.commit()
+        except Exception:
+            try:
+                cn.rollback()
+            except Exception:
+                pass
+            raise
+    try:
+        from db.usage_log import log_usage_event
+        log_usage_event("feature", "trial_delete", f"{series_id}: {len(trials)}")
+    except Exception:
+        pass
+    return int(bin_id) if bin_id is not None else 0
 
 
 def _summary(groups) -> str:
@@ -230,6 +333,7 @@ def delete_series(series_id: int, label: str = "", *, deleted_at: Optional[datet
     when = deleted_at or datetime.datetime.now().replace(microsecond=0)
     with get_connection() as cn:
         cur = cn.cursor()
+        cur.execute("START TRANSACTION")   # the pool is autocommit=True - make rollback real
         try:
             groups = collect_series(cur, int(series_id))
             payload = json.dumps({"version": 1, "groups": [
@@ -310,13 +414,17 @@ def restore(bin_id: int) -> str:
     uid = (app_meta.current_user or {}).get("id")
     with get_connection() as cn:
         cur = cn.cursor()
-        cur.execute("SELECT Payload, Label, RestoredAt FROM tblRecycleBin WHERE ID = ?", (int(bin_id),))
+        cur.execute("SELECT Payload, Label, RestoredAt, ObjectType, ObjectID FROM tblRecycleBin WHERE ID = ?",
+                    (int(bin_id),))
         row = cur.fetchone()
         if not row:
             raise RecycleBinError("Entry not found.")
         if row[2] is not None:
             raise RecycleBinError("This entry was already restored.")
         data = json.loads(row[0])
+        if (row[3] or "") == "trials":
+            _check_trials_restorable(cur, int(row[4]), data)
+        cur.execute("START TRANSACTION")   # the pool is autocommit=True - make rollback real
         try:
             for g in data.get("groups", []):
                 table = g["table"]
@@ -358,6 +466,25 @@ def restore(bin_id: int) -> str:
     except Exception:
         pass
     return str(row[1] or "")
+
+
+def _check_trials_restorable(cur, series_id: int, data: Dict[str, Any]) -> None:
+    """Trials go back into their series - it must exist and their numbers
+    must still be free."""
+    cur.execute("SELECT COUNT(*) FROM tblTrialSeries WHERE ID = ?", (series_id,))
+    if not int((cur.fetchone() or [0])[0] or 0):
+        raise RecycleBinError("The trial series of these trials was deleted - restore the series first.")
+    rows = next((g.get("rows") or [] for g in data.get("groups", [])
+                 if (g.get("table") or "").lower() == "tbltrial"), [])
+    nos = [int(r["Versuchsnummer"]) for r in rows if r.get("Versuchsnummer") is not None]
+    if nos:
+        cur.execute("SELECT Versuchsnummer FROM tblTrial WHERE TrialSeriesID = ? "
+                    f"AND Versuchsnummer IN ({','.join(['?'] * len(nos))})", [series_id] + nos)
+        taken = sorted({int(r[0]) for r in cur.fetchall() or []})
+        if taken:
+            from db.trial_reference import format_number_list
+            raise RecycleBinError("These trial numbers are used again in the series: "
+                                  + format_number_list(taken) + " - nothing was restored.")
 
 
 def delete_permanently(bin_id: int) -> None:

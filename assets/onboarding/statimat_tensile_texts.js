@@ -1,7 +1,7 @@
 window.TEXTS = {
  "de": {
   "ui": {
-   "eyebrow": "Onboarding · Labor",
+   "eyebrow": "Knowledge Base · Labor",
    "h1": "Titer, Festigkeit und Dehnung mit dem STATIMAT DS",
    "lead": "Das STATIMAT DS prüft Garnspulen automatisch: Es bestimmt den Titer durch Wägen einer abgemessenen Garnlänge und zieht Garnabschnitte bis zum Bruch. Aus beidem ergeben sich Höchstzugkraft, Bruchdehnung und Festigkeit. Fünf kurze Szenen zeigen, wie das funktioniert.",
    "note": "Schematische Darstellung. Gerätedaten aus dem Textechno-Datenblatt zum STATIMAT DS. Garnwerte und Kraft-Dehnungs-Kurven sind Beispielwerte zur Veranschaulichung, keine Messergebnisse.",
@@ -247,7 +247,7 @@ window.TEXTS = {
  },
  "en": {
   "ui": {
-   "eyebrow": "Onboarding · Lab",
+   "eyebrow": "Knowledge Base · Lab",
    "h1": "Count, tenacity and elongation with the STATIMAT DS",
    "lead": "The STATIMAT DS tests yarn packages automatically: it determines the count by weighing a measured yarn length and pulls yarn sections until they break. Both together give maximum force, elongation at break and tenacity. Five short scenes show how it works.",
    "note": "Schematic representation. Device data from the Textechno data sheet for the STATIMAT DS. Yarn values and force-elongation curves are example values for illustration, not measurement results.",
@@ -493,7 +493,7 @@ window.TEXTS = {
  },
  "es": {
   "ui": {
-   "eyebrow": "Onboarding · Laboratorio",
+   "eyebrow": "Knowledge Base · Laboratorio",
    "h1": "Título, tenacidad y alargamiento con el STATIMAT DS",
    "lead": "El STATIMAT DS ensaya bobinas de hilo automáticamente: determina el título pesando una longitud de hilo medida y estira tramos de hilo hasta la rotura. De ambos resultan la fuerza máxima, el alargamiento a la rotura y la tenacidad. Cinco escenas cortas muestran cómo funciona.",
    "note": "Representación esquemática. Datos del equipo según la hoja técnica de Textechno del STATIMAT DS. Los valores del hilo y las curvas fuerza-alargamiento son valores de ejemplo, no resultados de medición.",
@@ -739,7 +739,7 @@ window.TEXTS = {
  },
  "zh": {
   "ui": {
-   "eyebrow": "入门 · 实验室",
+   "eyebrow": "知识库 · 实验室",
    "h1": "用 STATIMAT DS 测纤度、强度和伸长",
    "lead": "STATIMAT DS 自动测试丝筒：通过称量一段定长丝确定纤度，并把丝段拉伸至断裂。由两者得出最大拉力、断裂伸长和强度。五个简短场景展示其工作原理。",
    "note": "示意图。设备数据来自 Textechno STATIMAT DS 数据表。纱线数值和力-伸长曲线为示例值，不是测量结果。",

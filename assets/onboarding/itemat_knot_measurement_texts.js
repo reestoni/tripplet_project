@@ -1,7 +1,7 @@
 window.TEXTS = {
  "de": {
   "ui": {
-   "eyebrow": "Onboarding · Labor",
+   "eyebrow": "Knowledge Base · Labor",
    "h1": "Knotenmessung mit dem ITEMAT",
    "lead": "Das ITEMAT zählt die Knoten eines verwirbelten Filamentgarns und prüft, wie stabil sie unter Last sind. Sechs kurze Szenen zeigen Aufbau, Messprinzip, Schwelle, Stabilitätstest und Auswertung.",
    "note": "Schematische Darstellung auf Basis des ITEMAT+ von Textechno (Nachfolger des ITEMAT von Enka Tecnica). Das Garn ist simuliert, die Zahlen im Bild sind Beispielwerte. Gerätedaten aus dem Textechno-Datenblatt; die Stabilitätsformel ist die übliche Definition, keine Herstellerangabe.",
@@ -262,7 +262,7 @@ window.TEXTS = {
  },
  "en": {
   "ui": {
-   "eyebrow": "Onboarding · Lab",
+   "eyebrow": "Knowledge Base · Lab",
    "h1": "Nip measurement with the ITEMAT",
    "lead": "The ITEMAT counts the nips of an intermingled filament yarn and checks how stable they are under load. Six short scenes show set-up, measuring principle, threshold, stability test and evaluation.",
    "note": "Schematic representation based on the ITEMAT+ by Textechno (successor of the ITEMAT by Enka Tecnica). The yarn is simulated, the figures in the picture are example values. Device data from the Textechno data sheet; the stability formula is the usual definition, not a manufacturer statement.",
@@ -523,7 +523,7 @@ window.TEXTS = {
  },
  "es": {
   "ui": {
-   "eyebrow": "Onboarding · Laboratorio",
+   "eyebrow": "Knowledge Base · Laboratorio",
    "h1": "Medición de nudos con el ITEMAT",
    "lead": "El ITEMAT cuenta los nudos de un hilo de filamento entrelazado y comprueba lo estables que son bajo carga. Seis escenas cortas muestran el montaje, el principio de medición, el umbral, el ensayo de estabilidad y la evaluación.",
    "note": "Representación esquemática basada en el ITEMAT+ de Textechno (sucesor del ITEMAT de Enka Tecnica). El hilo es simulado, las cifras de la imagen son valores de ejemplo. Datos del equipo según la hoja técnica de Textechno; la fórmula de estabilidad es la definición habitual, no un dato del fabricante.",
@@ -786,7 +786,7 @@ window.TEXTS = {
  },
  "zh": {
   "ui": {
-   "eyebrow": "入门 · 实验室",
+   "eyebrow": "知识库 · 实验室",
    "h1": "用 ITEMAT 测量网络点",
    "lead": "ITEMAT 统计网络丝的网络点数量，并检测网络点在负荷下的牢度。六个简短场景展示结构、测量原理、阈值、牢度测试和评估。",
    "note": "基于 Textechno ITEMAT+（Enka Tecnica ITEMAT 的后继机型）的示意图。纱线为模拟，图中数字为示例值。设备数据来自 Textechno 数据表；牢度公式为通用定义，并非厂商数据。",

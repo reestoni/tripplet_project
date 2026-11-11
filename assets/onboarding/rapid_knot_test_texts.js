@@ -1,7 +1,7 @@
 window.TEXTS = {
  "de": {
   "ui": {
-   "eyebrow": "Onboarding · Labor",
+   "eyebrow": "Knowledge Base · Labor",
    "h1": "Verwirbelungsknoten prüfen mit dem RAPID 600 V",
    "lead": "Das RAPID 600 V von Lenzing Instruments zählt die Verwirbelungsknoten im laufenden Garn und prüft, wie fest sie sind. Eine Nadel sticht zwischen die Filamente und läuft bis zum nächsten Knoten. Hält der Knoten die eingestellte Kraft, zählt er als guter Knoten. Fünf kurze Szenen zeigen, wie das funktioniert.",
    "note": "Schematische Darstellung. Gerätedaten aus Datenblatt und Produktseite von Lenzing Instruments. Garn, Knotenfestigkeiten und Auslösekraft sind Beispielwerte; die Nadelbewegung ist in Zeitlupe und vereinfacht dargestellt.",
@@ -215,7 +215,7 @@ window.TEXTS = {
  },
  "en": {
   "ui": {
-   "eyebrow": "Onboarding · Lab",
+   "eyebrow": "Knowledge Base · Lab",
    "h1": "Testing intermingling nips with the RAPID 600 V",
    "lead": "The RAPID 600 V by Lenzing Instruments counts the intermingling nips in the running yarn and checks how firm they are. A needle pierces between the filaments and runs to the next nip. If the nip holds the set force, it counts as a good nip. Five short scenes show how it works.",
    "note": "Schematic representation. Device data from the data sheet and product page of Lenzing Instruments. Yarn, nip strengths and trigger force are example values; the needle movement is shown in slow motion and simplified.",
@@ -429,7 +429,7 @@ window.TEXTS = {
  },
  "es": {
   "ui": {
-   "eyebrow": "Onboarding · Laboratorio",
+   "eyebrow": "Knowledge Base · Laboratorio",
    "h1": "Ensayo de nudos de entrelazado con el RAPID 600 V",
    "lead": "El RAPID 600 V de Lenzing Instruments cuenta los nudos de entrelazado en el hilo en marcha y comprueba lo firmes que son. Una aguja pincha entre los filamentos y avanza hasta el siguiente nudo. Si el nudo aguanta la fuerza ajustada, cuenta como nudo bueno. Cinco escenas cortas muestran cómo funciona.",
    "note": "Representación esquemática. Datos del equipo según la hoja técnica y la página de producto de Lenzing Instruments. El hilo, la resistencia de los nudos y la fuerza de disparo son valores de ejemplo; el movimiento de la aguja se muestra a cámara lenta y simplificado.",
@@ -643,7 +643,7 @@ window.TEXTS = {
  },
  "zh": {
   "ui": {
-   "eyebrow": "入门 · 实验室",
+   "eyebrow": "知识库 · 实验室",
    "h1": "用 RAPID 600 V 检测网络点",
    "lead": "Lenzing Instruments 的 RAPID 600 V 在运行的丝上统计网络点，并检测其牢度。一根针刺入单丝之间，随丝移动到下一个网络点。如果网络点能承受设定的力，就计为好网络点。五个简短场景展示其工作原理。",
    "note": "示意图。设备数据来自 Lenzing Instruments 的数据表和产品页面。丝、网络点牢度和触发力为示例值；针的运动以慢动作简化显示。",

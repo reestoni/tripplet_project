@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AC Machines</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category Air Covering, group "Machines & manufacturers".
+     Content from the user's research page "Air-Covering-Maschinen - Hersteller und Modelle" (as of Nov 2026).
+     Texts in ac_machines_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n for screenshots. No external resources (sources as plain text only).
+     Scene 5 links other modules: embedded via document.title "open:<key>", otherwise <key>.html directly.
+     No canvas - SVG/DOM, because the content is data (filters, cards, bars). -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--twist:#6A4FC8;--soft:#EEF3EC;
+  --wind:#495057;--cn:#C2255C;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg.sm button{font-size:13px;padding:5px 10px}
+.seg button i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.lbl{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);margin:0}
+.muted{color:var(--muted);font-size:13px;margin:0}
+.pill{display:inline-block;font-size:12px;padding:1px 9px;border-radius:999px;border:1px solid var(--line);background:var(--soft)}
+/* variants */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font-family:var(--font-display);font-size:26px;line-height:1.1;color:var(--hl)}
+.kpi span{color:var(--muted);font-size:13px}
+.vnode{cursor:pointer}
+.vnode:hover .vbg{stroke-width:2}
+/* catalogue */
+.legendrow{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted);align-items:center}
+.ver{font-size:11px;font-family:var(--font-mono);padding:1px 7px;border-radius:999px;border:1px solid;white-space:nowrap}
+.cnt{font-family:var(--font-mono);color:var(--muted);font-size:13px;margin:0}
+.mcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.mc{background:var(--panel);border:1px solid var(--line);border-top:5px solid var(--c);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.mc h3{margin:0;font-size:17px;font-family:var(--font-display)}
+.mc .mk{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.mc .tags{display:flex;flex-wrap:wrap;gap:4px}
+.mc dl{display:grid;grid-template-columns:minmax(90px,auto) 1fr;gap:3px 10px;margin:4px 0 0;font-size:13px}
+.mc dt{color:var(--muted)}
+.mc dd{margin:0}
+.mc p{margin:2px 0 0;font-size:13px}
+.empty{color:var(--muted);padding:20px}
+/* timeline */
+.tl{display:grid;gap:8px}
+.tli{display:grid;grid-template-columns:150px 1fr;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.tli .d{font-family:var(--font-mono);color:#1F7A36;font-size:13px;font-weight:600}
+.tli b{display:block}
+.tli span{font-size:13.5px;color:var(--muted)}
+/* jets */
+.tblwrap{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th,table.t td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.t th{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+table.t tr:last-child td{border-bottom:0}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.lk{display:block;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){header{flex-direction:column}details ol{columns:1}.tli{grid-template-columns:1fr}}
+</style>
+<script src="ac_machines_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 variants -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="stage"><svg id="varsvg" viewBox="0 0 1100 330" role="img"></svg></div>
+    <p class="muted" id="varhint"></p>
+  </div>
+  <!-- 1 machine catalogue -->
+  <div class="sc" id="sc1">
+    <div class="seg sm" id="fv"></div>
+    <div class="seg sm" id="fr"></div>
+    <div class="legendrow" id="vlegend"></div>
+    <p class="cnt" id="cnt"></p>
+    <div class="mcards" id="cards"></div>
+  </div>
+  <!-- 2 speed comparison -->
+  <div class="sc" id="sc2">
+    <div class="stage"><svg id="spdsvg" viewBox="0 0 1100 470" role="img"></svg></div>
+  </div>
+  <!-- 3 suppliers by region -->
+  <div class="sc" id="sc3">
+    <div class="stage"><svg id="regsvg" viewBox="0 0 1100 500" role="img"></svg></div>
+  </div>
+  <!-- 4 milestones -->
+  <div class="sc" id="sc4">
+    <div class="tl" id="tl"></div>
+  </div>
+  <!-- 5 jets -->
+  <div class="sc" id="sc5">
+    <div class="card tblwrap"><table class="t" id="jets"></table></div>
+    <div class="links" id="links"></div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const NSC=6;
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink SVG labels that would overflow their slot
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=/[⺀-鿿＀-￯　-〿]/.test(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+
+// ── language-neutral data (texts in ac_machines_texts.js, same order)
+// v = variant A/B/C, r = region, s = status (h manufacturer, b B2B listing, x historical, m mention only), sp = max. speed m/min
+const VARC={A:'#2386C8',B:'#E07B39',C:'#6A4FC8'};
+const VERC={h:'#1F7A36',b:'#C76A0A',x:'#7A8580',m:'#9AA39F'};
+const REGK=['CH','IT','DE','JP','CN','IN','TR'];
+const COLS=[[['CH','IT','DE'],'#2386C8'],[['JP'],'#C2255C'],[['CN'],'#E07B39'],[['IN','TR'],'#7A8580']];
+// step box widths per variant (labels in TEXTS.var[k].steps, same order)
+const STEPW={A:[80,120,95,190,100],B:[80,120,130,80,100],C:[130,190,120]};
+const M=[
+ {v:'A',r:'CH',s:'h',sp:2000},{v:'A',r:'CH',s:'h',sp:2000},{v:'A',r:'CH',s:'x',sp:1200},{v:'C',r:'CH',s:'x',sp:1200},
+ {v:'B',r:'CH',s:'h',sp:null},{v:'B',r:'IT',s:'h',sp:1100},{v:'C',r:'IT',s:'h',sp:1100},{v:'B',r:'IT',s:'h',sp:null},
+ {v:'A',r:'IT',s:'x',sp:null},{v:'A',r:'IT',s:'h',sp:1750},{v:'A',r:'IT',s:'x',sp:null},{v:'A',r:'JP',s:'h',sp:1000},
+ {v:'B',r:'DE',s:'h',sp:null},{v:'A',r:'CN',s:'b',sp:500},{v:'A',r:'CN',s:'b',sp:800},{v:'A',r:'CN',s:'b',sp:1000},
+ {v:'A',r:'CN',s:'b',sp:900},{v:'A',r:'CN',s:'b',sp:800},{v:'A',r:'CN',s:'b',sp:400},{v:'A',r:'CN',s:'b',sp:null},
+ {v:'A',r:'CN',s:'b',sp:800},{v:'A',r:'CN',s:'b',sp:null},{v:'A',r:'CN',s:'m',sp:null},{v:'A',r:'IN',s:'m',sp:null},
+ {v:'A',r:'TR',s:'m',sp:null}
+];
+const LINK_KEYS=['air_covering','dty_machines','aty_machines','heberlein_history'];
+const SOURCES=['SSM – XENO-AC / XENO-AC TWIN','SSM – XENO-AC brochure','Rieter/SSM – air covering efficiency','SSM – product overview DP3-C / DP3-CT',
+  'Wotol – SSM DP3-C (2014)','texdata – Bishnu: DP3-C 2012, XENO-AC','fibre2fashion – SSM DP5-FT with elastane feeder','SSM – TG2-FT, DTY incl. air covering',
+  'SSM Giudici – TG.30 AE/AEM','SSM Giudici – TG30-ETC','SSM Giudici – company profile (RG.3, RG.6BE)','Fadis – Sincro Multipla, air covering since 1987',
+  'Technofashion – Fadis Sincro Multipla Airjet','Indian Textile Journal – Fadis, Queen version','resale – Fadis AJ900 with Heberlein jet',
+  'Aiki Riotech – AT-501 RWSI','Aiki Riotech – head office Inazawa','Textalks – Oerlikon Barmag eFK with elastane covering',
+  'Textile World – Barmag: elastane-covered DTY (2026)','Yuejian – YJKB500','Yuejian – YJKB800D','Listing – 500D machine, 96 spindles',
+  'Lanbo – LB-102','Made-in-China – AC manufacturers and prices','Sanfang – AGEN280','Taihe – TH-18','Hengrun – HR288','Kaicheng – KC215B',
+  'Alibaba – Tangshi, Taian Jiamei, Sanfang','Qingdao Leafs – AC machine','Made-in-China – typical specification (draft 2.6–3.4)',
+  'Allproducts – GV800A/B','Jinggong – covering machines','Aalidhra – Lycra Air Covering Machine','Market report – air covering machines',
+  'pmarketresearch – market 2025','Textotex – Hemaks product range','Wotol – covering manufacturers and models',
+  'Textile World – Heberlein air covering (2026)','Textile World – Heberlein APh: knot stability in AC','Heberlein – PolyJet-SP-3',
+  'Rieter/Temco – air interlacing jets','Accio – listings with Heberlein jet','CN102560776A – texturing and AC combination machine'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+let fv='all',fr='all';
+
+function segBtns(el,items,cur,cb){
+  el.innerHTML=items.map(([v,l,c])=>`<button type="button" data-v="${v}" aria-pressed="${v===cur}">${c?`<i style="background:${c}"></i>`:''}${esc(l)}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.v));
+}
+const short=f=>f.split(' (')[0].split(' ·')[0];
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+
+// ── 0 variants
+function drawVar(){
+  const t=T();
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k[0])}</b><span>${esc(k[1])}</span></div>`).join('');
+  let s=`<defs><marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0L9 4.5L0 9z" fill="var(--muted)"/></marker></defs>`;
+  const box=(x,y,w,l,c,sub)=>`<rect x="${x}" y="${y}" width="${w}" height="44" rx="8" fill="var(--panel)" stroke="${c}" stroke-width="1.8"/>`+
+    TX(x+w/2,y+(sub?19:27),l,'var(--fg)','middle',600,12,w-10)+(sub?TX(x+w/2,y+35,sub,'var(--muted)','middle',400,10.5,w-8):'');
+  const arr=(x1,y,x2)=>`<line x1="${x1}" y1="${y}" x2="${x2-3}" y2="${y}" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ar)"/>`;
+  ['A','B','C'].forEach((k,ri)=>{
+    const y=20+ri*110,c=VARC[k],on=fv===k,vt=t.var[k];
+    s+=`<g class="vnode" data-v="${k}"><rect class="vbg" x="10" y="${y-8}" width="1080" height="96" rx="8" fill="${on?c+'1A':'var(--panel)'}" stroke="${on?c:'var(--line)'}" stroke-width="${on?2:1}"/>`;
+    s+=TX(30,y+16,k,c,'start',700,22)+TX(60,y+16,vt.n,c,'start',700,13,360);
+    let x=60;vt.steps.forEach((st,i)=>{const w=STEPW[k][i];s+=box(x,y+28,w,st[0],c,st[1]);if(i<vt.steps.length-1)s+=arr(x+w,y+50,x+w+30);x+=w+30});
+    s+=TX(1075,y+16,vt.ex,'var(--muted)','end',400,11.5,600)+`</g>`;
+  });
+  const svg=$('varsvg');svg.innerHTML=s;svg.setAttribute('aria-label',t.ui.ariaVar);
+  svg.querySelectorAll('.vnode').forEach(n=>n.onclick=()=>{fv=fv===n.dataset.v?'all':n.dataset.v;drawVar();drawCat();if(fv!=='all')go(1)});
+  $('varhint').textContent=t.ui.varHint;
+}
+
+// ── 1 catalogue
+function drawCat(){
+  const t=T(),u=t.ui;
+  segBtns($('fv'),[['all',u.allVar]].concat(['A','B','C'].map(k=>[k,t.var[k].n,VARC[k]])),fv,v=>{fv=v;drawVar();drawCat()});
+  segBtns($('fr'),[['all',u.allReg]].concat(REGK.map(k=>[k,t.reg[k]])),fr,v=>{fr=v;drawCat()});
+  $('vlegend').innerHTML=`<span class="lbl">${esc(u.statusLbl)}:</span>`+['h','b','x'].map(k=>`<span><span class="ver" style="color:${VERC[k]};border-color:${VERC[k]}">${esc(t.ver[k][0])}</span> = ${esc(t.ver[k][1])}</span>`).join('');
+  const L=M.map((x,i)=>[x,t.cards[i]]).filter(([x])=>(fv==='all'||x.v===fv)&&(fr==='all'||x.r===fr));
+  $('cnt').textContent=fmt(u.count,{n:L.length,total:M.length});
+  $('cards').innerHTML=L.map(([x,c])=>`<div class="mc" style="--c:${VARC[x.v]}"><div class="mk">${esc(c.f)} · ${esc(t.reg[x.r])}</div><h3>${esc(c.m)}</h3>`+
+    `<div class="tags"><span class="pill" style="border-color:${VARC[x.v]};color:${VARC[x.v]};background:#fff">${esc(t.var[x.v].n)}</span><span class="ver" style="color:${VERC[x.s]};border-color:${VERC[x.s]}">${esc(t.ver[x.s][0])}</span></div>`+
+    `<dl>${c.d.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl><p>${esc(c.p)}</p></div>`).join('')||`<div class="empty">${esc(u.empty)}</div>`;
+}
+
+// ── 2 speed comparison
+function drawSpd(){
+  const t=T();
+  const L=M.map((x,i)=>[x,t.cards[i]]).filter(([x])=>x.sp).sort((a,b)=>b[0].sp-a[0].sp);
+  let s='';const x0=330,sc=0.36,n=L.length;
+  [0,500,1000,1500,2000].forEach(v=>{s+=`<line x1="${x0+v*sc}" y1="8" x2="${x0+v*sc}" y2="${12+n*32}" stroke="var(--line)"/>`+TX(x0+v*sc,28+n*32,v+' m/min','var(--muted)','middle',400,11)});
+  L.forEach(([x,c],i)=>{const y=12+i*32;
+    s+=TX(x0-10,y+15,`${c.m} (${short(c.f)})`,'var(--fg)','end',500,11.5,310)+
+      `<rect x="${x0}" y="${y}" width="${x.sp*sc}" height="20" rx="4" fill="${VARC[x.v]}" opacity="${x.s==='b'?0.6:0.95}"/>`+
+      TX(x0+x.sp*sc+8,y+15,x.sp+(x.s==='b'?' · '+t.ui.adTag:''),'var(--muted)','start',500,11)});
+  const svg=$('spdsvg');svg.setAttribute('viewBox',`0 0 1100 ${40+n*32}`);svg.innerHTML=s;svg.setAttribute('aria-label',t.ui.ariaSpd);
+}
+
+// ── 3 suppliers by region
+function drawReg(){
+  const t=T();let s='';const w=262,g=12;
+  const firms=COLS.map(([regs])=>[...new Set(M.map((m,j)=>[m,t.cards[j]]).filter(([m])=>regs.includes(m.r)).map(([,c])=>c.f.split(' (')[0]))].flatMap(f=>f.split(' · ')));
+  const H=Math.max(...firms.map(f=>f.length))*30+86;
+  COLS.forEach(([regs,col],i)=>{const x=10+i*(w+g),ct=t.cols[i];
+    s+=`<rect x="${x}" y="10" width="${w}" height="${H-10}" rx="8" fill="${col}0F" stroke="${col}" stroke-width="1.5"/>`+TX(x+w/2,40,ct[0],col,'middle',700,15,w-20)+TX(x+w/2,60,ct[1],'var(--muted)','middle',400,10.5,w-16);
+    let y=86;firms[i].forEach(p=>{
+      s+=`<rect x="${x+14}" y="${y-15}" width="${w-28}" height="24" rx="5" fill="var(--panel)" stroke="var(--line)"/>`+TX(x+w/2,y+1,p,'var(--fg)','middle',600,11.5,w-40);y+=30});
+  });
+  const svg=$('regsvg');svg.setAttribute('viewBox',`0 0 1100 ${H+10}`);svg.innerHTML=s;svg.setAttribute('aria-label',t.ui.ariaReg);
+}
+
+// ── 4 milestones
+function drawTl(){
+  $('tl').innerHTML=T().tl.map(e=>`<div class="tli"><div class="d">${esc(e[0])}</div><div><b>${esc(e[1])}</b><span>${esc(e[2])}</span></div></div>`).join('');
+}
+
+// ── 5 jets + module links
+function drawJets(){
+  const t=T();
+  $('jets').innerHTML=`<tr>${t.ui.jetsHead.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+t.jets.map(j=>`<tr><td><b>${esc(j[0])}</b></td><td>${esc(j[1])}</td><td>${esc(j[2])}</td><td>${esc(j[3])}</td></tr>`).join('');
+  $('links').innerHTML=t.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${esc(l[0])} →</b><span>${esc(l[1])}</span><em>${esc(t.ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  drawVar();drawCat();drawSpd();drawReg();drawTl();drawJets();go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+})();
+</script>
+</body>
+</html>

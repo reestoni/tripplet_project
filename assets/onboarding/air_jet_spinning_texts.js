@@ -1,6 +1,6 @@
 window.TEXTS = {
 "de": {
- "ui": {"eyebrow": "Onboarding · Stapelfaserspinnen", "h1": "Wie Luftdüsengarn entsteht",
+ "ui": {"eyebrow": "Knowledge Base · Stapelfaserspinnen", "h1": "Wie Luftdüsengarn entsteht",
   "lead": "Beim Luftdüsenspinnen wird ein verzogenes Faserband nicht mit einer Spindel gedreht, sondern in einer Düse mit einem Luftwirbel verfestigt. Es entsteht ein Garn aus einem fast parallelen Faserkern, um den Faserenden gewunden sind. Fünf kurze Szenen zeigen den Weg.",
   "pause": "⏸ Pause", "play": "▶ Abspielen", "scenes": "Szenen",
   "clickHint": "Auf eine Station der Prozesskette klicken - sie wird hier erklärt.",
@@ -42,7 +42,7 @@ window.TEXTS = {
   "indep": "Geschwindigkeit unabhängig von der Garnfeinheit, anders als beim Ringspinnen"}
 },
 "en": {
- "ui": {"eyebrow": "Onboarding · Staple fibre spinning", "h1": "How air-jet yarn is made",
+ "ui": {"eyebrow": "Knowledge Base · Staple fibre spinning", "h1": "How air-jet yarn is made",
   "lead": "In air-jet spinning a drafted fibre strand is not twisted by a spindle but consolidated in a jet by an air vortex. The result is a yarn with an almost parallel fibre core, wrapped by fibre ends. Five short scenes show the path.",
   "pause": "⏸ Pause", "play": "▶ Play", "scenes": "Scenes",
   "clickHint": "Click a station of the process chain - it is explained here.",
@@ -84,7 +84,7 @@ window.TEXTS = {
   "indep": "Speed independent of the yarn count, unlike ring spinning"}
 },
 "es": {
- "ui": {"eyebrow": "Onboarding · Hilatura de fibras cortas", "h1": "Cómo se produce el hilo de chorro de aire",
+ "ui": {"eyebrow": "Knowledge Base · Hilatura de fibras cortas", "h1": "Cómo se produce el hilo de chorro de aire",
   "lead": "En la hilatura por chorro de aire, una cinta de fibras estirada no se tuerce con un huso, sino que se consolida en una tobera con un remolino de aire. Se obtiene un hilo con un núcleo de fibras casi paralelas, envuelto por extremos de fibras. Cinco escenas cortas muestran el recorrido.",
   "pause": "⏸ Pausa", "play": "▶ Reproducir", "scenes": "Escenas",
   "clickHint": "Haz clic en una estación de la cadena de proceso: aquí se explica.",
@@ -126,7 +126,7 @@ window.TEXTS = {
   "indep": "Velocidad independiente del título, a diferencia de la hilatura de anillos"}
 },
 "zh": {
- "ui": {"eyebrow": "入门 · 短纤纺纱", "h1": "喷气涡流纱是如何纺成的",
+ "ui": {"eyebrow": "知识库 · 短纤纺纱", "h1": "喷气涡流纱是如何纺成的",
   "lead": "喷气涡流纺纱时，经过牵伸的纤维条不是靠锭子加捻，而是在喷嘴中靠空气涡流固结。形成的纱线由几乎平行的芯纤维和缠绕在其外的纤维端组成。五个短场景介绍工艺路线。",
   "pause": "⏸ 暂停", "play": "▶ 播放", "scenes": "场景",
   "clickHint": "点击工艺链中的某个工位，这里会显示说明。",

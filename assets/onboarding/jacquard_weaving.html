@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jacquard Weaving</title>
+<!-- Onboarding module (ui/screen_onboarding.py), same pattern as air_splicing.html.
+     Texts in jacquard_weaving_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1 for screenshots. No external resources. Scenes never change automatically. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --yarn:#6E6556;--air:#2386C8;--heat:#E07B39;--hl:#39A650;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.langs{display:flex;gap:4px;flex-shrink:0}
+.langs[hidden]{display:none}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+canvas{display:block;width:100%;aspect-ratio:16/9}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.scenes{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.scenes button span{font-family:var(--font-mono);font-size:12px;opacity:.7}
+.right{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.play{min-width:120px;justify-content:center}
+.caption{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;border-top:1px solid var(--line);padding-top:16px}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 8px}
+.caption p{margin:0 0 10px;max-width:70ch}
+.now{font-family:var(--font-mono);font-size:13px;color:var(--hl);min-height:1.5em}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.facts li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.facts b{font-family:var(--font-mono);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+.note{font-size:12px;color:var(--muted);margin:0}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.caption{grid-template-columns:1fr;gap:14px}.facts li{grid-template-columns:110px minmax(0,1fr)}header{flex-direction:column}}
+</style>
+<script src="jacquard_weaving_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="stage"><canvas id="cv" width="1600" height="900"></canvas></div>
+  <div class="controls">
+    <div class="scenes" id="scenes" role="group"></div>
+    <div class="right">
+      <button class="play" id="play" type="button"></button>
+    </div>
+  </div>
+  <section class="caption" aria-live="polite">
+    <div><h2 id="ctitle"></h2><p class="now" id="cnow"></p><p id="ctext"></p></div>
+    <ul class="facts" id="cfacts"></ul>
+  </section>
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');const W=1600,H=900;
+if(!CanvasRenderingContext2D.prototype.roundRect){CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(r||0,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this}}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/* light theme: warp blue, weft a deeper yellow so it stays visible on white */
+const C={bg:css('--panel'),line:css('--line'),fg:css('--fg'),muted:css('--muted'),yarn:css('--yarn'),air:css('--air'),heat:css('--heat'),hl:css('--hl'),
+  ok:css('--hl'),steel:'#8f9a9d',warp:'#3f6fae',weft:'#E2B43E',metal:'#D5DBDA',dark:'#6d777b',empty:'#E8ECE9'};
+const MONO=css('--font-mono'),DISP=css('--font-display'),SANS=css('--font-body');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const params=new URLSearchParams(location.search);
+let lang=(params.get('lang')||'de');if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+let fitW=0;function fit(){const w=cv.getBoundingClientRect().width||W;if(w===fitW&&cv.width>0)return;fitW=w;const d=Math.min(devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(w*d));cv.height=Math.max(1,Math.round(w*9/16*d))}
+addEventListener('resize',fit);if(window.ResizeObserver)new ResizeObserver(fit).observe(cv);fit();
+const smooth=(a,b,x)=>{const q=Math.max(0,Math.min(1,(x-a)/(b-a)));return q*q*(3-2*q)},lerp=(a,b,q)=>a+(b-a)*q;
+const NSC=5;
+/* Pattern: flower (made up), 1 = warp end up */
+function motif(r,c,n=32){const x=((c%n)+n)%n-n/2+.5,y=((r%n)+n)%n-n/2+.5,rr=Math.hypot(x,y),a=Math.atan2(y,x);
+  if(rr<3)return 0;if(rr<3+9*Math.abs(Math.cos(2.5*a))&&rr<12)return 1;
+  return ((c+3*r)%8===0)?1:0}
+
+/* ---------- UI ---------- */
+const sceneEl=$('scenes'),play=$('play');
+/* auto = motion runs (pause freezes it). Scenes never change by themselves. */
+let scene=0,sceneT=0,auto=!reduce,t=0,lastSt=null;
+function setPlay(){play.setAttribute('aria-pressed',auto);play.textContent=auto?T().ui.pause:T().ui.play}
+play.onclick=()=>{auto=!auto;setPlay()};
+function go(i){scene=(i+NSC)%NSC;sceneT=0;lastSt=null;if(EMBED)document.title='scene:'+scene;
+  [...sceneEl.children].forEach((b,j)=>b.setAttribute('aria-pressed',j===scene));
+  const s=T().scenes[scene];$('ctitle').textContent=`${scene+1}  ·  ${s.title}`;$('ctext').textContent=s.text;
+  $('cfacts').innerHTML='';s.facts.forEach(f=>{const li=document.createElement('li');const b=document.createElement('b');b.textContent=f[0];const sp=document.createElement('span');sp.textContent=f[1];li.append(b,sp);$('cfacts').appendChild(li)});
+  $('cnow').textContent=''}
+function applyLang(){const u=T().ui;document.documentElement.lang=lang;
+  ['eyebrow','h1','lead','note'].forEach(k=>$(k).textContent=u[k]);cv.setAttribute('aria-label',u.canvas);
+  sceneEl.setAttribute('aria-label',u.scenes);sceneEl.innerHTML='';
+  T().scenes.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<span>${i+1}</span>`;b.append(s.k);b.onclick=()=>go(i);sceneEl.appendChild(b)});
+  [...$('langs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  setPlay();const keep=sceneT;go(scene);sceneT=keep}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')go(scene+1);if(e.key==='ArrowLeft')go(scene-1);if(e.key===' '){e.preventDefault();auto=!auto;setPlay()}});
+
+/* ---------- helpers ---------- */
+/* o.mw = max width: the font shrinks until the text fits (long de/es strings) */
+function label(s,x,y,o={}){let sz=o.s||20;if(sz<=16)sz+=2;/* small labels read better on the light panel */const ff=o.f||MONO,w=o.w||500;ctx.font=`${w} ${sz}px ${ff}`;
+  if(o.mw)while(sz>10&&ctx.measureText(s).width>o.mw){sz-=1;ctx.font=`${w} ${sz}px ${ff}`}
+  ctx.fillStyle=o.c||C.muted;ctx.textAlign=o.a||'center';ctx.textBaseline='middle';ctx.globalAlpha=o.al??1;ctx.fillText(s,x,y);ctx.globalAlpha=1}
+function leader(x1,y1,x2,y2,c){ctx.strokeStyle=c||C.line;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+function now(s){if(s!==lastSt){lastSt=s;$('cnow').textContent='▸ '+s}}
+function grid(x0,y0,s,rows,cols,f,nr){for(let r=0;r<nr;r++)for(let c=0;c<cols;c++){ctx.fillStyle=f(r,c)?C.warp:C.weft;ctx.fillRect(x0+c*s,y0+(rows-1-r)*s,s-1,s-1)}}
+
+/* ---------- 1 Weaving (side view) ---------- */
+function scene1(){const cvT=T().cv;const D=1.8,p=Math.floor(sceneT/D),u=(sceneT%D)/D,cy=470,sgn=p%2?1:-1,sh=70*smooth(0,.3,u)*(1-smooth(.75,1,u));
+  const bx=180,hx=620,rx0=800,fell=1000,adv=smooth(.8,1,u)*14;
+  // warp beam
+  ctx.fillStyle=C.metal;ctx.strokeStyle=C.steel;ctx.lineWidth=2;ctx.beginPath();ctx.arc(bx,cy+120,60,0,7);ctx.fill();ctx.stroke();label(cvT.warpBeam,bx,cy+210,{s:15,mw:300});
+  ctx.fillStyle=C.steel;ctx.beginPath();ctx.arc(330,cy,10,0,7);ctx.fill();label(cvT.backRest,330,cy+40,{s:13,mw:170});
+  // warp ends: two layers
+  for(const L of[0,1]){const up=(L===0?sgn:-sgn)*sh;ctx.strokeStyle=C.warp;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(bx,cy+60);ctx.lineTo(330,cy);ctx.lineTo(hx,cy+up);ctx.lineTo(fell,cy);ctx.stroke()}
+  // heddles
+  for(const L of[0,1]){const up=(L===0?sgn:-sgn)*sh,x=hx+(L?-24:24);ctx.strokeStyle=C.steel;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,cy-200+up);ctx.lineTo(x,cy+200+up);ctx.stroke();ctx.strokeStyle=C.fg;ctx.beginPath();ctx.ellipse(x,cy+up,4,7,0,0,7);ctx.stroke()}
+  label(cvT.heddles,hx,cy-240,{s:15,c:C.fg,mw:260});
+  // reed
+  const beat=smooth(.55,.7,u)*(1-smooth(.72,.85,u)),rx=lerp(rx0,fell-8,beat);ctx.strokeStyle=C.steel;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(rx,cy-110);ctx.lineTo(rx,cy+110);ctx.stroke();label(cvT.reed,rx,cy-135,{s:15,c:C.fg});
+  // weft in the shed
+  if(u>.3&&u<.75){const x=Math.min(fell-6,Math.max(910,rx+10));ctx.fillStyle=C.weft;ctx.beginPath();ctx.arc(x,cy,7,0,7);ctx.fill()}
+  // fabric
+  for(let k=0;k<20;k++){const x=fell+8+k*14+adv;if(x>1440)break;ctx.fillStyle=C.weft;ctx.beginPath();ctx.arc(x,cy,6,0,7);ctx.fill()}
+  for(const L of[0,1]){ctx.strokeStyle=C.warp;ctx.lineWidth=3;ctx.beginPath();for(let k=0;k<=24;k++){const x=fell+k*14+adv-7;const y=cy+((k+p+L)%2?-9:9);k?ctx.lineTo(Math.min(x,1450),y):ctx.moveTo(fell,cy)}ctx.stroke()}
+  label(cvT.fabric,1250,cy+60,{s:15,c:C.fg});label(cvT.takeUp,1450,cy+100,{a:'right',s:14,mw:440});
+  label(cvT.shed,hx+150,cy-sh*.6-26,{s:15,c:C.air,al:sh/70});
+  now(cvT.now1[u<.3?0:u<.55?1:u<.85?2:3])}
+/* ---------- 2 Dobby or Jacquard ---------- */
+function scene2(){const cvT=T().cv;const N=16,s=24,rows=16,nr=Math.min(rows,Math.floor(sceneT/.9)+1),r=nr-1;
+  const twill=(r,c)=>((c-r)%4+4)%4<2?1:0;const SH=['#3f6fae','#6c8fc4','#2c4f80','#8aa9d6'];
+  [[150,cvT.dobby,twill,true],[880,cvT.jacquard,(rr,c)=>motif(rr+8,c+8,16)&&rr<16?motif(rr+8,c+8,16):0,false]].forEach(([x0,ti,f,sh])=>{
+    label(ti,x0,130,{a:'left',s:28,f:DISP,w:700,c:C.fg,mw:600});
+    // warp ends, front view
+    for(let c=0;c<N;c++){const up=f(r,c),x=x0+c*s+s/2;ctx.strokeStyle=sh?SH[c%4]:C.warp;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x,up?190:250);ctx.lineTo(x,up?230:290);ctx.stroke()}
+    if(sh){for(let k=0;k<4;k++){ctx.fillStyle=SH[k];ctx.fillRect(x0+N*s+30,180+k*28,26,18);label(fmt(cvT.shaft,{n:k+1}),x0+N*s+66,189+k*28,{a:'left',s:13,mw:150})}}
+    else label(cvT.eachHook,x0+N*s+30,200,{a:'left',s:13,mw:270});
+    grid(x0,330,s,rows,N,f,nr);label(sh?cvT.dobbyGrid:cvT.jacqGrid,x0,330+rows*s+28,{a:'left',s:15,mw:sh?640:660});
+  });
+  label(cvT.frontView,150,310,{a:'left',s:13,mw:640});
+  now(fmt(cvT.now2,{n:r+1}))}
+/* ---------- 3 Structure ---------- */
+function scene3(){const cvT=T().cv;const D=2.4,p=Math.floor(sceneT/D),u=(sceneT%D)/D,n=8,lift=smooth(.15,.45,u)*(1-smooth(.7,.95,u)),K=60*lift;
+  const selRow=c=>motif(p+5,c*3+2,32);const hx=c=>520+c*60;
+  // head
+  ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.strokeRect(450,90,520,260);label(cvT.jacquard,450,72,{a:'left',s:16,c:C.fg});
+  // knives
+  ctx.fillStyle=C.steel;ctx.fillRect(470,260-K,480,8);label(cvT.knives,990,264-K,{a:'left',s:14,c:C.fg,mw:580});
+  // magnets
+  for(let c=0;c<n;c++){const x=hx(c),s=selRow(c);ctx.fillStyle=s?C.heat:C.metal;ctx.fillRect(x+10,120,16,30);if(!s){ctx.strokeStyle=C.steel;ctx.lineWidth=1;ctx.strokeRect(x+10,120,16,30)}}
+  label(cvT.magnet,990,135,{a:'left',s:14,c:C.heat,mw:580});
+  const lc=[];
+  for(let c=0;c<n;c++){const x=hx(c),s=selRow(c),dy=s?K:0;lc.push(dy);
+    ctx.strokeStyle=s?C.air:C.muted;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,160-dy);ctx.lineTo(x,330-dy);ctx.moveTo(x,160-dy);ctx.lineTo(x+8,150-dy);ctx.stroke();
+    // hook catching the knife
+    ctx.beginPath();ctx.moveTo(x,262-dy);ctx.lineTo(x-8,262-dy);ctx.stroke()}
+  label(cvT.hooks,435,300,{a:'right',s:14,c:C.fg,mw:380});
+  // harness cords through the comber board to the heddles
+  const cb=520,lx=c=>300+c*130;ctx.fillStyle=C.metal;ctx.fillRect(260,cb-6,1000,12);ctx.strokeStyle=C.steel;ctx.lineWidth=1;ctx.strokeRect(260,cb-6,1000,12);label(cvT.comber,1280,cb,{a:'left',s:14,c:C.fg,mw:300});
+  for(let c=0;c<n;c++){const dy=lc[c];ctx.strokeStyle=C.yarn;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(hx(c),330-dy);ctx.lineTo(lx(c),cb);ctx.lineTo(lx(c),620-dy);ctx.stroke();
+    ctx.strokeStyle=C.steel;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(lx(c),620-dy);ctx.lineTo(lx(c),760-dy);ctx.stroke();
+    ctx.strokeStyle=C.fg;ctx.beginPath();ctx.ellipse(lx(c),690-dy,6,10,0,0,7);ctx.stroke();ctx.fillStyle=C.warp;ctx.beginPath();ctx.arc(lx(c),690-dy,5,0,7);ctx.fill();
+    ctx.fillStyle=C.dark;ctx.fillRect(lx(c)-5,760-dy,10,40)}
+  label(cvT.cords,1280,440,{a:'left',s:14,c:C.fg,mw:300});label(cvT.heddle,1280,690,{a:'left',s:14,c:C.fg,mw:300});label(cvT.weight,1280,780,{a:'left',s:14,c:C.fg,mw:300});
+  leader(300,690,1270,690,'rgba(90,100,96,.18)');
+  label(cvT.xsec,60,650,{a:'left',s:13,mw:225});
+  now(cvT.now3[u<.15?0:u<.7?1:2])}
+/* ---------- 4 Weaving sequence ---------- */
+function scene4(){const cvT=T().cv;const D=.55,p=Math.floor(sceneT/D),u=(sceneT%D)/D,cols=64,s=13,rows=40,x0=150,y0=150;
+  const total=p;
+  // fabric: newest row on top
+  for(let k=0;k<Math.min(total,rows);k++){const r=total-1-k;for(let c=0;c<cols;c++){ctx.fillStyle=motif(r,c)?C.warp:C.weft;ctx.fillRect(x0+c*s,y0+44+k*s*.62,s-1,s*.62-1)}}
+  // shed / current row
+  for(let c=0;c<cols;c++){const up=motif(p,c);ctx.strokeStyle=C.warp;ctx.lineWidth=3;const x=x0+c*s+s/2;ctx.beginPath();ctx.moveTo(x,up?y0-30:y0);ctx.lineTo(x,up?y0-6:y0+24);ctx.stroke()}
+  // rapier
+  const gx=lerp(x0-80,x0+cols*s+20,u);ctx.fillStyle=C.weft;ctx.fillRect(x0-60,y0+8,Math.max(0,gx-x0+60),4);ctx.fillStyle=C.steel;ctx.beginPath();ctx.moveTo(gx+18,y0+10);ctx.lineTo(gx,y0+2);ctx.lineTo(gx,y0+18);ctx.fill();
+  label(cvT.rapier,x0+cols*s+40,y0+10,{a:'left',s:14,c:C.fg,mw:540});label(cvT.raised,x0+cols*s+40,y0-22,{a:'left',s:14,mw:540});
+  // design file
+  const px=1100,ps=7;label(cvT.designFile,px,y0+70,{a:'left',s:15,c:C.fg,mw:440});
+  for(let r=0;r<32;r++)for(let c=0;c<32;c++){ctx.fillStyle=motif(r,c)?C.warp:C.empty;ctx.fillRect(px+c*ps,y0+90+(31-r)*ps,ps-1,ps-1)}
+  const cr=p%32;ctx.strokeStyle=C.heat;ctx.lineWidth=2;ctx.strokeRect(px-2,y0+90+(31-cr)*ps-1,32*ps+3,ps+1);label(fmt(cvT.rowPick,{r:cr+1,n:p+1}),px,y0+90+32*ps+24,{a:'left',s:14,c:C.heat,mw:440});
+  label(cvT.fabricDown,x0,y0+44+rows*s*.62+24,{a:'left',s:14,mw:830});
+  now(fmt(cvT.now4,{n:p+1,r:cr+1}))}
+/* ---------- 5 Repeat ---------- */
+function scene5(){const cvT=T().cv;const ps=14,n=16,x0=140,y0=170;
+  label(cvT.pointPaper,x0,y0-30,{a:'left',s:15,c:C.fg,mw:420});
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++){ctx.fillStyle=motif(r+8,c+8,16)?C.warp:C.weft;ctx.fillRect(x0+c*ps,y0+(n-1-r)*ps,ps-1,ps-1)}
+  const hc=Math.floor(sceneT*1.5)%n;ctx.strokeStyle=C.heat;ctx.lineWidth=2;ctx.strokeRect(x0+hc*ps-1,y0-1,ps+1,n*ps+1);label(fmt(cvT.hookN,{n:hc+1}),x0+hc*ps+ps/2,y0+n*ps+22,{s:14,c:C.heat});
+  // harness
+  const hy=y0+n*ps+50,fx=600,fw=900,rep=3,fs=fw/(n*rep);
+  ctx.fillStyle=C.heat;ctx.beginPath();ctx.arc(x0+hc*ps+ps/2,hy,7,0,7);ctx.fill();
+  for(let k=0;k<rep;k++){const tx=fx+(k*n+hc)*fs+fs/2;ctx.strokeStyle=C.heat;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x0+hc*ps+ps/2,hy);ctx.quadraticCurveTo((x0+tx)/2,hy+60,tx,560);ctx.stroke()}
+  label(cvT.oneHook,x0,620,{a:'left',s:14,c:C.heat,mw:430});
+  // fabric with 3 repeats
+  for(let r=0;r<16;r++)for(let c=0;c<n*rep;c++){ctx.fillStyle=motif(r+8,c+8,16)?C.warp:C.weft;ctx.fillRect(fx+c*fs,560+(15-r)*fs*.8,fs-1,fs*.8-1)}
+  for(let k=1;k<rep;k++){ctx.strokeStyle=C.fg;ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(fx+k*n*fs,550);ctx.lineTo(fx+k*n*fs,560+16*fs*.8+10);ctx.stroke();ctx.setLineDash([])}
+  label(cvT.fabricRep,fx,560+16*fs*.8+30,{a:'left',s:14,c:C.fg,mw:900});
+  // calculation
+  const ax=600;label(cvT.formula,ax,190,{a:'left',s:18,c:C.fg,mw:940});
+  label(cvT.calc,ax,230,{a:'left',s:18,mw:940});label(cvT.result,ax,290,{a:'left',s:52,f:DISP,w:700,c:C.ok});
+  label(cvT.example,ax,345,{a:'left',s:15,f:SANS,mw:940});
+  now(fmt(cvT.now5,{n:hc+1}))}
+
+/* ---------- loop ---------- */
+applyLang();
+if(params.get('scene'))go((+params.get('scene')||1)-1);
+if(params.get('paused')==='1'){auto=false;setPlay()}
+const DRAW=[scene1,scene2,scene3,scene4,scene5];let last=performance.now();
+function frame(nw){const real=Math.min(.05,(nw-last)/1000)*(reduce?.5:1),dt=auto?real:0;last=nw;t+=dt;sceneT+=dt;fit();
+  try{const s=cv.width/W;ctx.setTransform(s,0,0,s,0,0);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(90,100,96,.05)';ctx.lineWidth=1;for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+    ctx.setLineDash([]);ctx.lineCap='round';ctx.lineJoin='round';DRAW[scene]();
+    label(`${scene+1}/${NSC}`,1540,50,{a:'right',s:22});label(T().scenes[scene].k.toUpperCase(),60,50,{a:'left',s:30,c:C.fg,f:DISP,w:600});
+  }catch(e){console.error(e)}
+  requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

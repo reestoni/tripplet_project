@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heberlein History</title>
+<!-- Onboarding-Modul (ui/screen_onboarding.py), Oberkapitel "Heberlein" (Nutzerwunsch 2026-11-08).
+     Inhalt aus der Recherche-Seite des Nutzers "Heberlein - 190 Jahre Firmengeschichte" (Stand Nov. 2026).
+     Texte in heberlein_history_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (ohne eigenen Kopf/Kapitel-Knoepfe, meldet das Kapitel per document.title "scene:n"),
+     ?scene=n fuer Screenshots. Keine externen Ressourcen (Quellen nur als Text).
+     Szene 4 verlinkt andere Module: eingebettet per document.title "open:<key>" (screen_onboarding
+     oeffnet das Modul), sonst direkt <key>.html. Kein Canvas - SVG, weil Zeitleiste/Ketten Daten sind. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--yarn:#B5651D;--twist:#6A4FC8;--soft:#EEF3EC;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:80ch}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font-family:var(--font-display);font-size:28px;line-height:1.1;color:var(--hl)}
+.kpi span{color:var(--muted);font-size:13px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{font-family:var(--font-display);font-size:22px;margin:2px 0 6px}
+.card p{margin:6px 0}
+.yr{font-family:var(--font-mono);font-size:13px;color:var(--hl)}
+.nav2{display:flex;gap:8px;align-items:center;margin-top:10px}
+.muted{color:var(--muted);font-size:13px}
+.grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:12px}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;margin:2px 4px 2px 0;background:var(--soft);border:1px solid var(--line)}
+.lbl{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:block;margin-top:10px}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.lk{display:block;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+.ev{cursor:pointer}
+.ev:hover circle{stroke-width:4}
+.own{cursor:pointer}
+.own:hover rect{stroke-width:3}
+.evlist{margin:6px 0 0;padding-left:18px}
+.note{font-size:12px;color:var(--muted);margin:0}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}header{flex-direction:column}details ol{columns:1}}
+</style>
+<script src="heberlein_history_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 timeline -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="seg" id="eras"></div>
+    <div class="stage"><svg id="tlsvg" viewBox="0 0 1100 230" role="img"></svg></div>
+    <div class="card" id="evcard"></div>
+  </div>
+  <!-- 1 owners -->
+  <div class="sc" id="sc1">
+    <div class="stage"><svg id="ownsvg" viewBox="0 0 1100 300" role="img"></svg></div>
+    <div class="card" id="owncard"></div>
+  </div>
+  <!-- 2 technology -->
+  <div class="sc" id="sc2">
+    <div class="seg" id="ttabs"></div>
+    <div class="grid2">
+      <div class="stage"><svg id="techsvg" viewBox="0 0 620 360" role="img"></svg></div>
+      <div class="card" id="techdesc"></div>
+    </div>
+  </div>
+  <!-- 3 chain -->
+  <div class="sc" id="sc3">
+    <div class="stage"><svg id="chainsvg" viewBox="0 0 1100 220" role="img"></svg></div>
+    <div class="links" id="links"></div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12)=>`<text x="${x}" y="${y}" font-size="${s}" text-anchor="${a}" fill="${c}" font-weight="${w}">${esc(t)}</text>`;
+
+// ── data that does not depend on the language (texts in heberlein_history_texts.js, same order)
+const ERAS=[{k:'fam',from:1830,to:1930,c:'#2386C8'},{k:'hel',from:1930,to:1978,c:'#E07B39'},
+  {k:'comp',from:1978,to:2005,c:'#39A650'},{k:'grp',from:2005,to:2023,c:'#6A4FC8'},{k:'ind',from:2023,to:2027,c:'#C2255C'}];
+const EV=[[1805,'fam'],[1825,'fam'],[1835,'fam'],[1873,'fam'],[1897,'fam'],[1915,'fam'],[1916,'fam'],[1925,'fam'],[1927,'fam'],
+  [1931,'hel'],[1936,'hel'],[1950,'hel'],[1951,'hel'],[1953,'hel'],[1954,'hel'],[1962,'hel'],
+  [1978,'comp'],[1982,'comp'],[1984,'comp'],[1991,'comp'],[1995,'comp'],[1997,'comp'],[2000,'comp'],[2003,'comp'],[2004,'comp'],
+  [2005,'grp'],[2006,'grp'],[2007,'grp'],[2010,'grp'],[2011,'grp'],[2013,'grp'],[2016,'grp'],
+  [2023,'ind'],[2024,'ind'],[2025,'ind']];
+const OWN=[['1835','#2386C8',1835],['1915','#2386C8',1915],['1984','#E07B39',1984],['2005','#6A4FC8',2005],
+  ['2006/07','#6A4FC8',2007],['2013','#6A4FC8',2013],['2023','#C2255C',2023]];
+const LINK_KEYS=['filament_spinning','filament_spinning','dty_intermingling','aty_air_texturing'];
+const SOURCES=['Heberlein – History (heberlein.com)','Heberlein – Press release "190 years" (April 2025)',
+  'Textile World – A Dynasty of Textile Innovators (2025)','Texleader – 190 years Heberlein',
+  'textiletechnology.net – From yarn dyeing to world market leader','Historisches Lexikon der Schweiz – Gurit-Heberlein',
+  'HLS – Georg Philipp Heberlein','HLS – Eduard Heberlein','HLS – Georges Heberlein','Deutsche Biographie – Familie Heberlein',
+  'Wirtschaftsforum – "Seit 1835 dem Markt voraus"','Textile World Asia – Saurer acquires Heberlein (2005)',
+  'Rupp Report – Saurer → Oerlikon → Saurer','Textile World – New Saurer Group (2013)','Innovation in Textiles – Saurer under Jinsheng',
+  'Textile World – New Swiss owners (Oct. 2023)','Heberlein – Press release sale (Oct. 2023)','Swiss Textiles – Heberlein hat neue Eigentümer',
+  'Indian Textile Magazine – TexJet-ATY','Indian Textile Journal – PolyJet-TG-3','Specialty Fabrics Review – AirSplicer-3 Flex (2024)',
+  'texdata – Textile Technology Centre','texdata – ITMA Asia 2025'];
+
+let scene=Math.max(0,Math.min(3,parseInt(params.get('scene')||'0',10)||0));
+let era=null, cur=EV.findIndex(e=>e[0]===1931), own=0, tech=1;
+
+// ── timeline
+function domain(){if(!era)return[1800,2030];const E=ERAS.find(x=>x.k===era);return[E.from-2,E.to+2]}
+function drawEras(){
+  const t=T();
+  $('eras').innerHTML=`<button type="button" data-k="" aria-pressed="${!era}">${esc(t.ui.all)}</button>`+
+    ERAS.map((E,i)=>`<button type="button" data-k="${E.k}" aria-pressed="${era===E.k}"><i style="background:${E.c}"></i>${esc(t.eras[i])} (${E.from===1830?1835:E.from}–${E.to===2027?esc(t.ui.today):E.to})</button>`).join('');
+  $('eras').querySelectorAll('button').forEach(b=>b.onclick=()=>{era=b.dataset.k||null;cur=EV.findIndex(e=>!era||e[1]===era);drawEras();drawTL();showEv()});
+}
+function drawTL(){
+  const t=T(),[a,b]=domain(),X=y=>40+(y-a)/(b-a)*1020;
+  let s=`<line x1="40" y1="115" x2="1060" y2="115" stroke="var(--line)" stroke-width="3"/>`;
+  ERAS.forEach(E=>{const x1=Math.max(40,X(E.from)),x2=Math.min(1060,X(E.to));if(x2>x1)s+=`<rect x="${x1}" y="108" width="${x2-x1}" height="14" fill="${E.c}" opacity=".2"/>`});
+  const step=era?5:25;for(let y=Math.ceil(a/step)*step;y<=b;y+=step)s+=`<line x1="${X(y)}" y1="123" x2="${X(y)}" y2="130" stroke="var(--muted)"/>`+TX(X(y),146,y,'var(--muted)','middle',400,11);
+  const vis=EV.map((e,i)=>({y:e[0],e:e[1],i})).filter(e=>e.y>=a&&e.y<=b);
+  vis.forEach((e,k)=>{const x=X(e.y),up=k%2===0,E=ERAS.find(z=>z.k===e.e);const ly=up?(k%4===0?40:70):(k%4===1?190:215);
+    const tt=t.events[e.i].t;
+    s+=`<g class="ev" data-i="${e.i}"><line x1="${x}" y1="115" x2="${x}" y2="${up?ly+6:ly-16}" stroke="${E.c}" stroke-width="1" opacity=".6"/>`+
+      `<circle cx="${x}" cy="115" r="${e.i===cur?9:6}" fill="${e.i===cur?E.c:'#fff'}" stroke="${E.c}" stroke-width="2.5"/>`+
+      TX(x,ly,e.y,E.c,'middle',700,11)+(era?TX(x,ly+(up?-12:14),tt.length>22?tt.slice(0,21)+'…':tt,'var(--fg)','middle',400,10):'')+
+      `<title>${esc(e.y+' · '+tt)}</title></g>`});
+  $('tlsvg').innerHTML=s;
+  $('tlsvg').querySelectorAll('.ev').forEach(g=>g.onclick=()=>{cur=+g.dataset.i;drawTL();showEv()});
+}
+function showEv(){
+  const t=T(),e=EV[cur],ei=ERAS.findIndex(z=>z.k===e[1]),E=ERAS[ei];
+  $('evcard').innerHTML=`<span class="yr">${e[0]} · <span style="color:${E.c}">${esc(t.eras[ei])}</span></span><h3>${esc(t.events[cur].t)}</h3><p>${esc(t.events[cur].d)}</p>`+
+    `<div class="nav2"><button type="button" id="pv">${esc(t.ui.earlier)}</button><button type="button" id="nx">${esc(t.ui.later)}</button>`+
+    `<span class="muted" style="margin-left:auto">${esc(fmt(t.ui.counter,{i:cur+1,n:EV.length}))}</span></div>`;
+  const step=d=>{const n=cur+d;if(n<0||n>=EV.length)return;cur=n;if(era&&EV[cur][1]!==era){era=EV[cur][1];drawEras()}drawTL();showEv()};
+  $('pv').onclick=()=>step(-1);$('nx').onclick=()=>step(1);
+}
+
+// ── owners
+function drawOwn(){
+  const t=T();
+  let s=`<defs><marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9z" fill="var(--muted)"/></marker></defs>`;
+  const w=145,gap=8;
+  OWN.forEach((o,i)=>{const x=20+i*(w+gap),y=i%2?150:60,sel=i===own;
+    s+=`<g class="own" data-i="${i}"><rect x="${x}" y="${y}" width="${w}" height="104" rx="8" fill="${sel?'#F0F7F2':'#fff'}" stroke="${o[1]}" stroke-width="${sel?3:2}"/>`+
+      TX(x+12,y+22,o[0],o[1],'start',700,13)+wrap(t.owners[i][0],x+12,y+42,19,'var(--fg)',700,12,2)+
+      wrap(t.owners[i][1],x+12,y+76,22,'var(--muted)',400,10.5,2)+'</g>';
+    if(i<OWN.length-1){const nx=20+(i+1)*(w+gap),ny=(i+1)%2?150:60;
+      s+=`<path d="M${x+w} ${y+46} C${x+w+12} ${y+46} ${nx-12} ${ny+46} ${nx-2} ${ny+46}" fill="none" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#ar)"/>`}});
+  s+=`<rect x="20" y="268" width="1060" height="22" rx="6" fill="#E8F5EA"/>`+TX(550,283,t.ui.site,'var(--hl)','middle',600,12);
+  $('ownsvg').innerHTML=s;
+  $('ownsvg').querySelectorAll('.own').forEach(g=>g.onclick=()=>{own=+g.dataset.i;drawOwn();showOwn()});
+}
+function wrap(text,x,y,max,c,w,s,lines){
+  // Chinese has no spaces: cut into chunks of characters instead of words
+  const str=String(text),cjk=!/\s/.test(str)&&/[　-鿿]/.test(str);
+  const words=cjk?(str.match(new RegExp('.{1,'+Math.max(4,Math.floor(max*0.55))+'}','g'))||[]):str.split(' ');
+  let out='',line='',n=0;
+  const flush=()=>{if(line&&n<lines){out+=TX(x,y+n*(s+3),line.trim(),c,'start',w,s);n++}line=''};
+  words.forEach(wd=>{if((line+' '+wd).trim().length>max&&line){flush()}line+=' '+wd});flush();return out;
+}
+function showOwn(){
+  const t=T(),o=OWN[own],from=o[2],to=own<OWN.length-1?OWN[own+1][2]:9999;
+  const evs=EV.map((e,i)=>({y:e[0],i})).filter(e=>e.y>=from&&e.y<to);
+  $('owncard').innerHTML=`<span class="yr">${esc(o[0])}</span><h3>${esc(t.owners[own][0])}</h3><p>${esc(t.owners[own][1])}</p>`+
+    (evs.length?`<ul class="evlist">${evs.map(e=>`<li><b>${e.y}</b> – ${esc(t.events[e.i].t)}</li>`).join('')}</ul>`:'')+
+    `<p class="muted">${esc(t.ui.clickOwner)}</p>`;
+}
+
+// ── technology
+function techSVG(k){
+  const sv=T().tech[k].sv;let s='';
+  const ah=`<defs><marker id="ah" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9z" fill="var(--muted)"/></marker></defs>`;
+  if(k===0){
+    s+=`<rect x="60" y="120" width="160" height="160" rx="12" fill="#D6EAF8" stroke="var(--air)" stroke-width="2"/><path d="M60 170 q40 -20 80 0 t80 0" stroke="var(--air)" fill="none" stroke-width="2"/>`+TX(140,305,sv[0],'var(--air)');
+    ['#C62828','#E07B39','#39A650','#2386C8','#6A4FC8'].forEach((c,i)=>{s+=`<path d="M${90+i*25} 60 L${90+i*25} 230" stroke="${c}" stroke-width="5"/>`});
+    s+=`<rect x="80" y="50" width="120" height="12" rx="4" fill="#5A6460"/>`+TX(140,40,sv[1]);
+    s+=`<g transform="translate(300,90)"><rect width="270" height="190" rx="10" fill="#fff" stroke="var(--line)"/>${TX(135,28,sv[2])}`+
+      sv.slice(3,8).map((x,i)=>`<circle cx="22" cy="${58+i*30}" r="6" fill="var(--air)"/>${TX(38,62+i*30,x,'var(--fg)','start',400,12)}`).join('')+`</g>`;
+  }
+  if(k===1){
+    const p1="M40 0 C55 10 25 20 40 30 C55 40 25 50 40 60 C55 70 25 80 40 90 C55 100 25 110 40 120";
+    const p2="M40 0 C70 15 10 25 40 40 C75 55 5 65 40 80 C70 95 15 105 40 120";
+    [p1,p1,p2].forEach((p,i)=>{const x=60+i*190;
+      s+=`<g transform="translate(${x},90)"><rect x="-10" y="-20" width="100" height="170" rx="10" fill="${i===1?'#FCE5D3':'#fff'}" stroke="${i===1?'var(--heat)':'var(--line)'}"/>`+
+        [0,8,-8].map(o=>`<path d="${p}" transform="translate(${o},0)" stroke="var(--yarn)" fill="none" stroke-width="2"/>`).join('')+`</g>`+TX(x+40,290,sv[i],i===1?'var(--heat)':'var(--fg)');
+      if(i<2)s+=`<path d="M${x+100} 160 L${x+170} 160" stroke="var(--muted)" stroke-width="2" marker-end="url(#ah)"/>`});
+    s=ah+s+TX(310,330,sv[3],'var(--yarn)','middle',600,13);
+  }
+  if(k===2){
+    s+=`<path d="M40 180 L560 180" stroke="var(--line)" stroke-width="7"/>`;
+    s+=`<rect x="120" y="165" width="160" height="30" rx="6" fill="#FCE5D3" stroke="var(--heat)"/>`+TX(200,155,sv[0],'var(--heat)');
+    s+=`<rect x="330" y="150" width="40" height="60" rx="8" fill="#E7E1F8" stroke="var(--twist)" stroke-width="2"/><path d="M335 165 l30 30 M335 195 l30 -30" stroke="var(--twist)"/>`+TX(350,140,sv[1],'var(--twist)');
+    for(let i=0;i<9;i++)s+=`<path d="M${60+i*28} 170 l14 20" stroke="var(--yarn)" stroke-width="2"/>`;
+    s+=TX(180,235,sv[2],'var(--yarn)')+TX(470,235,sv[3],'var(--hl)');
+    s+=`<path d="M400 180 q10 -12 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0" stroke="var(--hl)" fill="none" stroke-width="2"/>`;
+    s+=TX(310,300,sv[4],'var(--muted)','middle',400,12);
+  }
+  if(k===3){
+    s+=`<rect x="200" y="120" width="220" height="110" rx="16" fill="#DCEFFA" stroke="var(--air)" stroke-width="2.5"/><rect x="200" y="160" width="220" height="30" fill="#EEF7FC"/>`;
+    s+=`<path d="M310 40 L310 158" stroke="var(--air)" stroke-width="4"/><path d="M302 148 L310 162 L318 148" fill="var(--air)"/>`+TX(310,30,sv[0],'var(--air)');
+    s+=`<path d="M40 175 L200 175" stroke="var(--yarn)" stroke-width="2.5"/>`+[0,1,2].map(i=>`<path d="M40 ${171+i*4} L200 ${171+i*4}" stroke="var(--yarn)" stroke-width="1" opacity=".6"/>`).join('');
+    let d='M200 175 ';for(let i=0;i<11;i++)d+=`q10 ${i%2?14:-14} 20 0 `;s+=`<path d="${d}" stroke="var(--yarn)" fill="none" stroke-width="2.5"/>`;
+    s+=`<path d="M420 175 L470 175 C480 160 490 190 500 175 L530 175 C540 160 550 190 560 175 L590 175" stroke="var(--yarn)" fill="none" stroke-width="3"/>`+TX(530,210,sv[1],'var(--yarn)');
+    s+=TX(310,260,sv[2],'var(--air)')+TX(310,300,sv[3],'var(--muted)','middle',400,12);
+  }
+  return s;
+}
+function drawTech(){
+  const t=T();
+  $('ttabs').innerHTML=t.tech.map((v,i)=>`<button type="button" data-k="${i}" aria-pressed="${i===tech}">${esc(v.t.split(' (')[0].split('（')[0])}</button>`).join('');
+  $('ttabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{tech=+b.dataset.k;drawTech()});
+  $('techsvg').innerHTML=techSVG(tech);
+  const v=t.tech[tech];
+  $('techdesc').innerHTML=`<h3>${esc(v.t)}</h3><p>${esc(v.d)}</p><span class="lbl">${esc(t.ui.keywords)}</span>${v.ex.map(e=>`<span class="pill">${esc(e)}</span>`).join('')}`;
+}
+
+// ── chain
+function drawChain(){
+  const t=T(),c=t.chain;
+  const N=[[60,110,'#E8F2FB','var(--air)'],[250,60,'#FCE5D3','var(--heat)'],[250,165,'#FCE5D3','var(--heat)'],
+           [520,40,'#fff','var(--twist)'],[520,110,'#fff','var(--air)'],[850,110,'#fff','var(--muted)']];
+  let s=`<defs><marker id="ac" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9z" fill="var(--muted)"/></marker></defs>`;
+  const E=[[0,1],[0,2],[1,3],[1,4],[2,4],[3,5],[4,5],[2,5]];
+  const ctr=i=>[N[i][0]+75,N[i][1]+20];
+  E.forEach(([a,b])=>{const A=ctr(a),B=ctr(b);s+=`<path d="M${A[0]+75} ${A[1]} L${B[0]-80} ${B[1]}" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#ac)"/>`});
+  N.forEach((n,i)=>{s+=`<rect x="${n[0]}" y="${n[1]}" width="150" height="40" rx="8" fill="${n[2]}" stroke="${n[3]}" stroke-width="2"/>`+TX(n[0]+75,n[1]+25,c.nodes[i],n[3],'middle',700,12)});
+  const jet=(x,y,l)=>`<rect x="${x-13}" y="${y-9}" width="26" height="18" rx="4" fill="#DCEFFA" stroke="var(--air)" stroke-width="1.5"/><circle cx="${x}" cy="${y}" r="3" fill="var(--air)"/>${TX(x+16,y+4,l,'var(--air)','start',700,10.5)}`;
+  s+=jet(400,60,c.jets[0])+jet(400,165,c.jets[1])+jet(670,40,c.jets[2])+jet(670,110,c.jets[3]);
+  s+=TX(550,212,c.note,'var(--muted)','middle',400,12);
+  $('chainsvg').innerHTML=s;
+  $('links').innerHTML=c.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${esc(l[0])} →</b><span>${esc(l[1])}</span><em>${esc(t.ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+4)%4;
+  for(let k=0;k<4;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k[0])}</b><span>${esc(k[1])}</span></div>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  drawEras();drawTL();showEv();drawOwn();showOwn();drawTech();drawChain();go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+})();
+</script>
+</body>
+</html>

@@ -35,6 +35,67 @@ RELEASES = [
         "texts": {
             # ═══════════════════════════════ EN ═══════════════════════════════
             "en": [
+                ("h", "Tools"),
+                ("feature", "Yarn Count Converter",
+                 "New under <b>Tools</b>: convert yarn counts. Type a value and pick its unit - <b>dtex</b> and "
+                 "<b>den</b> are shown large, plus tex, ktex, mtex, Nm, Ne, NeK, NeL, Run and grain/yd. Click a "
+                 "result to use it as the new starting value. On the right, enter the filaments and plies to get "
+                 "dtex and den per filament, the filament diameter, the totals and the ready-made designation (e.g. "
+                 "<i>2 × dtex 167 f48</i>); or type a notation like <i>2x150D/48F</i> and press Enter to fill everything "
+                 "in. Formulas &amp; definitions can be opened below. Every value has a <b>Copy</b> button, the last "
+                 "input is remembered, and it works without a network connection.",
+                 "Sidebar → Tools → <b>Yarn Count Converter</b>", "wn_yarn_count.svg"),
+                ("h", "Show Experiment"),
+                ("feature", "DTY: choose the process and see the machine path",
+                 "On DTY machines, Machine Data has a new row <b>DTY Process</b>: Standard, Elastane or one of the "
+                 "cotton-like variants. Existing trials are already filled in (Elastane where an elastane yarn runs, "
+                 "otherwise Standard). The rows for the pre-intermingling jet (LW 0 - LW 1) and for jet 3 (after the "
+                 "set heater, before LW 3) now sit in Machine Data and only show up when a trial needs them. "
+                 "Above the table, <b>Schema</b> draws the machine path of the trial you clicked: every ply on its "
+                 "position, where they run together, elastane from its own source. <b>Click a station</b> (e.g. the "
+                 "heater) and its rows light up in the table, a <b>double-click</b> jumps to the first value. Click a "
+                 "cell and the schema marks its station. Values are still changed in the table only. With two or more "
+                 "plies, three rows decide how they run together: <b>Route</b> (full path, bypass without heater and "
+                 "friction, or a separate source like elastane), <b>Merge into ply</b> and <b>Merge point</b> - e.g. "
+                 "ply 4 into ply 3 at LW 1, ply 3 into ply 1 at LW 2. The schema draws exactly that; left empty, "
+                 "TrippleT assumes the usual path. Under every feed roll and the winder you see its <b>speed in m/min</b>, "
+                 "calculated from the main speed at LW 2 (LW 1 = LW 2 / draw ratio, LW 0 = LW 1 / (1 - W0-W1 OF), LW 2.x, LW 3 and winder = LW 2 "
+                 "minus their %).",
+                 "Show Experiment → Machine Data → <b>Schema</b>", "wn_dty_schema.svg"),
+                ("feature", "ATY: the machine path too",
+                 "On ATY machines, <b>Schema</b> above Machine Data now draws the air-texturing path of the trial you "
+                 "clicked - just like the Knowledge Base page: <b>core</b> (green) and <b>effect</b> (amber) each with their draw "
+                 "zone and feed roll; only the core passes the wetting, the effect joins it dry just before the jet; then LW 2, stabilising zone, LW 3 and winder. Under every feed roll you "
+                 "see its <b>speed</b> (LW 2 × (1 + OF %)). Core is always on top, no matter which ply number it has. "
+                 "<b>Click a station</b> and its rows light up, a <b>double-click</b> jumps to the first value, "
+                 "<b>right-click</b> opens the station in the Knowledge Base. Right-clicking a row title or value in Machine "
+                 "Data now also works on ATY machines. Plies without a yarn use are shown grey with a note below the schema.",
+                 "Show Experiment → Machine Data → <b>Schema</b>", "wn_aty_schema.svg"),
+                ("feature", "Delete single trials - the numbers stay",
+                 "Too many trials created, or some runs are not needed? In Machine Data, <b>right-click a trial number</b> "
+                 "→ <b>Delete V23…</b>. For several trials, first select cells in their columns (drag, or <b>Ctrl+click</b> / "
+                 "<b>Shift+click</b>), then right-click one of their numbers → <b>Delete 20 selected trials…</b>. Before "
+                 "anything happens you see what goes with them (plies, Itemat, Statimat, notes …). The other trials keep their "
+                 "numbers, nothing moves up, and new trials are always added after the highest remaining number - never "
+                 "into a gap. "
+                 "A superuser can bring deleted trials back from the <b>Recycle Bin</b> for 90 days. Allowed for whoever may "
+                 "move the series in the Backlog.",
+                 "Show Experiment → Machine Data → right-click a trial number → <b>Delete…</b>", "wn_trial_delete.svg"),
+                ("feature", "Learn more without leaving your series",
+                 "Not sure what a row means? <b>Right-click</b> a row title or a value in Machine Data or R&D Machine "
+                 "Data (DTY machines), or in a lab tab (Statimat, EKB, shrinkage, Itemat, DTYoMat, ATYoMat, Rapid 600), "
+                 "and choose <b>Learn more in Knowledge Base…</b> - in the DTY <b>Schema</b>, click a station and use the link below it (or right-click the station). The matching page opens in a window, already at the "
+                 "right place - e.g. Overfeed shows the machine with feed roll 2.x selected, a DTY Process cell shows its "
+                 "cotton-like variant. <b>Close</b> it (or press <b>Esc</b>) and you are back in your series, exactly where you were.",
+                 "Show Experiment → right-click → <b>Learn more in Knowledge Base…</b>", "wn_onboarding.svg"),
+                ("feature", "Fibres, yarn types and background in the help search",
+                 "In <b>Manage Yarn</b> (and New/Edit Yarn), right-click a <b>Material</b> such as PES, PA 6.6 or WO, or a "
+                 "<b>Garntyp</b> such as POY or DTY → <b>Learn more in Knowledge Base…</b>: the fibre portrait or the process "
+                 "page opens in a window. The Knowledge Base now also has portraits of polyethylene, PLA and PVC, and acetate "
+                 "includes triacetate. And the <b>help search (F1)</b> finds Knowledge Base pages too - search for e.g. "
+                 "<i>friction</i>, <i>set heater</i> or <i>crimp</i>: below the help answers you get the matching pages, one click "
+                 "opens them in a window and closing it brings you back to the search.",
+                 "Manage Yarn → right-click · <b>Help (F1)</b>", "wn_onboarding.svg"),
                 ("h", "Smart Chart"),
                 ("feature", "How many different jets? - Count (distinct)",
                  "A Card can now count how many <b>different</b> values a field has - e.g. how many different jets, "
@@ -56,9 +117,9 @@ RELEASES = [
                  "clears the search. Behind every yarn you also see the spool symbol from Show Experiment: green "
                  "spool = in stock (click it to see where the spools are), crossed-out tube = nothing in stock.",
                  "New Experiment → <b>Material</b> / <b>Jet</b> → search field", "wn_create_search.svg"),
-                ("h", "Onboarding"),
-                ("feature", "Onboarding - our work as short animations",
-                 "New entry <b>Onboarding</b> below <b>Help (F1)</b>: short animated introductions to our work, "
+                ("h", "Knowledge Base"),
+                ("feature", "Knowledge Base - our work as short animations",
+                 "New entry <b>Knowledge Base</b> below <b>Help (F1)</b>: short animated introductions to our work, "
                  "full screen. The first topic shows how a DTY yarn is intermingled - the path through the machine "
                  "with the overfeed between feed roll 2 and 2.x (click any position to have it explained), what "
                  "happens in the jet, and the nips. Each topic has tabs like the rest of TrippleT. Try the "
@@ -69,10 +130,147 @@ RELEASES = [
                  "drawing, hot-air texturing and interlacing in one step, incl. tricolour mixing, and <b>Air-jet spinning</b> (staple fibres) - from the bale to the yarn, vortex around the hollow spindle. Under <b>Splicing</b>: <b>Air splicing "
                  "of filament yarns</b> - joining two ends knot-free; click a step to jump to it. Under <b>Threading</b>: "
                  "<b>Lufan suction gun</b> - threading up with the machine running, injector principle, air consumption. Under <b>DTY</b> → <b>Specialist knowledge</b>: <b>Cotton-like DTY</b> (seven ways to a spun-yarn look, click any machine position) and <b>Hard nips, less elongation?</b> (a hypothesis with a live tensile-test model). In the DTY machine you can now enter the <b>FR 2</b> speed and the <b>draw ratio</b>: FR 1 and FR 2.x are shown in m/min. New scene <b>Evenness</b> in the DTY topic: the same number of nips is not enough, they have to be evenly spread (spread of the distances, longest open section). The DTY topic now ends with a <b>Quiz</b> tab: 13 questions, each with a link back to the matching scene - with 80 % correct the topic is passed and gets a tick in the list. New folder <b>Lab</b> with <b>Nip measurement with the ITEMAT</b>: set-up (click the stations), mechanical and optical sensor, what a wrong threshold does, stability test under load and evaluation, plus <b>Count, tenacity and elongation (STATIMAT DS)</b>: count by weighing, CRE tensile test comparing POY, FDY and DTY, statistics per package, and <b>Crimp and shrinkage (TEXTURMAT ME)</b>: from the hank via heat treatment to the five load steps (clickable) and the key figures crimp contraction, modulus, stability and shrinkage, and <b>Testing nips with the RAPID 600 V</b>: the needle method counts the nips in the running yarn and separates good from weak nips, with a slider for the trigger force. More topics will follow.",
-                 "Sidebar → <b>Onboarding</b>", "wn_onboarding.svg"),
+                 "Sidebar → <b>Knowledge Base</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Heberlein company history and clearer chapters",
+                 "The Knowledge Base list now has chapters: <b>Heberlein</b>, <b>Our technology</b> (spinning, DTY, ATY, "
+                 "splicing, threading, <b>Our lab</b>) and later <b>Textile knowledge</b> (weaving, knitting …). New "
+                 "under Heberlein: <b>Company history</b> - 190 years from the yarn dyeing works in Wattwil via Helanca "
+                 "and machine building to today's air jets: timeline with five eras, owners, technology and where our "
+                 "jets sit today. A click on POY, FDY, DTY or ATY opens the matching module.",
+                 "Sidebar → <b>Knowledge Base</b> → Heberlein → <b>Company history</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Textile knowledge - weaving and knitting",
+                 "New chapter <b>Textile knowledge</b> for what happens to our yarns later. <b>Weaving</b>: shaft weaving "
+                 "(harness, drawing-in, lifting plan), weave structures (plain, twill, satin - and draw your own weave, "
+                 "TrippleT tells you if it works), Jacquard weaving and Wilton carpet. <b>Knitting</b>: circular knitting "
+                 "(loop formation, cam track, single/double jersey) and warp knitting (guide bars, lapping, point paper).",
+                 "Sidebar → <b>Knowledge Base</b> → Textile knowledge", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Dyeing",
+                 "New under <b>Textile knowledge</b>: <b>Dyeing</b> in eight scenes - how the dye gets into the fibre "
+                 "(temperature slider), which dye class suits which fibre, when to dye (dope, stock, yarn, piece, garment), "
+                 "dyeing curves for polyester, cotton and polyamide, the dyeing machines, continuous padding, indigo for "
+                 "denim and why uneven texturing shows up as stripes after dyeing. With a quiz at the end.",
+                 "Sidebar → <b>Knowledge Base</b> → Textile knowledge → <b>Dyeing</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: machines and manufacturers",
+                 "New folder <b>Machines &amp; manufacturers</b> next to each process: POY and FDY spinning plants under "
+                 "<b>Spinning</b>, DTY machines under <b>DTY</b>, ATY machines under <b>ATY</b>. Each shows the yarn path "
+                 "(click the parts, switch the variants), a variant tree that filters the manufacturers, machine designs, "
+                 "manufacturers and models with search and filters, a comparison and the market history.",
+                 "Sidebar → <b>Knowledge Base</b> → Our technology → e.g. DTY → <b>Machines &amp; manufacturers</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Air covering",
+                 "New area <b>AC</b> under Our technology: <b>Air covering (ACY)</b> - how elastane and DTY are bonded by air "
+                 "knots, with sliders for draft, overfeed, jet pressure and speed that recalculate yarn count, elastane share "
+                 "and air consumption live; a look inside the jet, the yarn structure when stretched and relaxed, ACY compared "
+                 "with single and double covered yarn, uses, and the AC machines and their manufacturers.",
+                 "Sidebar → <b>Knowledge Base</b> → Our technology → <b>AC</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Finishing",
+                 "New under <b>Textile knowledge</b>: <b>Finishing</b> with two pages. <b>Chemical finishing</b>: the finishing "
+                 "chain, an effect atlas (water repellent, flame retardant, antimicrobial ...), application methods, the PFAS "
+                 "phase-out, regulation and suppliers. <b>Mechanical finishing</b>: goals, an atlas of processes from raising to "
+                 "sanforising, machines in detail, key figures, sustainability and manufacturers.",
+                 "Sidebar → <b>Knowledge Base</b> → Textile knowledge → <b>Finishing</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: weaving and finishing machines",
+                 "Two more <b>Machines &amp; manufacturers</b> folders: <b>Weaving machines</b> under Weaving (shedding, the five "
+                 "weft insertion systems with animation, dobby, Jacquard and Wilton machines, differences, manufacturer matrix) "
+                 "and <b>Finishing machines</b> under Finishing (the finishing line, ten machines in detail with moving diagrams, "
+                 "where manufacturers really differ, manufacturer matrix).",
+                 "Sidebar → <b>Knowledge Base</b> → Textile knowledge → Weaving / Finishing → <b>Machines &amp; manufacturers</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: staple fibre spinning and weaving preparation",
+                 "New under <b>Textile knowledge</b>: <b>Staple fibre spinning</b> - from the fibre tuft to the yarn, with animated "
+                 "diagrams from blow room to roving frame, ring, compact, rotor and air-jet spinning, a twist and speed calculator "
+                 "and a side trip to wool. And under Weaving: <b>Weaving preparation</b> - winding, warping, sizing, denim rope "
+                 "dyeing, drawing-in and tying-in, with a calculator for the number of warper's beams.",
+                 "Sidebar → <b>Knowledge Base</b> → Textile knowledge → <b>Staple fibre spinning</b> / Weaving", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: start page Textile chain",
+                 "The Knowledge Base now opens with the <b>Textile chain</b>: a map from fibre to finished fabric - click a "
+                 "station (spinning, texturing, weaving, finishing ...) to see its pages, green dots mark Heberlein technology. "
+                 "Plus all pages at a glance, a manufacturer matrix along the whole chain (search, country, stage) and the "
+                 "topics still missing.",
+                 "Sidebar → <b>Knowledge Base</b> → <b>Textile chain</b> (top of the list)", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: fibres and nonwovens",
+                 "Two new categories under <b>Textile knowledge</b>: <b>Fibres</b> with <b>Man-made fibres</b> (market shares, "
+                 "13 fibre portraits with a molecule view, properties compared, where each fibre is used, recycled shares) and "
+                 "<b>Nonwovens</b> (forming and bonding the web, ten animated processes from carding to meltblown and needle "
+                 "punching, comparison, crosslapper and punch density calculator). Next to it, <b>Natural fibres</b>: market shares, "
+                 "10 fibre portraits from cotton to cashmere, properties compared and where each fibre is used. All of them are "
+                 "also on the Textile chain start page.",
+                 "Sidebar → <b>Knowledge Base</b> → Textile knowledge → <b>Fibres</b> / <b>Nonwovens</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: pretreatment and textile printing",
+                 "New under <b>Dyeing</b>: <b>Pretreatment</b> (singeing, desizing, scouring, bleaching, mercerising, heat "
+                 "setting and the process routes) and <b>Textile printing</b>, each in eight animated scenes - print paste, pigment or dye, "
+                 "direct, discharge and resist printing, flat screen, rotary screen, digital and transfer printing and how the "
+                 "print is fixed. Both with a quiz at the end.",
+                 "Sidebar → <b>Knowledge Base</b> → Textile knowledge → <b>Dyeing</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: from twisting to the finished product",
+                 "Five more animated pages, each with a quiz: <b>Yarn twisting</b> (ring and two-for-one twisting, cabling, "
+                 "fancy yarns), <b>Further fabric formation</b> (flat knitting, tufting, braiding), <b>Coating and laminating</b> "
+                 "(knife coating, PVC tarpaulins, membranes), <b>Making-up</b> (cutting, stitch types, seam sealing, welding) and "
+                 "<b>Fabric testing</b> (tensile and tear strength, Martindale, pilling, colour fastness, shrinkage). All of them "
+                 "are on the Textile chain start page.",
+                 "Sidebar → <b>Knowledge Base</b> → Textile knowledge", "wn_onboarding.svg"),
             ],
             # ═══════════════════════════════ DE ═══════════════════════════════
             "de": [
+                ("h", "Tools"),
+                ("feature", "Yarn Count Converter: Garnfeinheiten umrechnen",
+                 "Neu unter <b>Tools</b>: Garnfeinheiten umrechnen. Wert eingeben und Einheit wählen - <b>dtex</b> und "
+                 "<b>den</b> stehen gross, dazu tex, ktex, mtex, Nm, Ne, NeK, NeL, Run und grain/yd. Ein Klick auf ein "
+                 "Ergebnis macht es zur neuen Ausgangsgrösse. Rechts Filamente und Fachung eingeben: dtex und den pro "
+                 "Filament, Filamentdurchmesser, Gesamtwerte und die fertige Bezeichnung (z.&nbsp;B. <i>2 × dtex 167 "
+                 "f48</i>); oder eine Schreibweise wie <i>2x150D/48F</i> eintippen und Enter drücken, dann wird alles "
+                 "ausgefüllt. Formeln &amp; Definitionen lassen sich unten aufklappen. Jeder Wert hat einen Knopf "
+                 "<b>Copy</b>, die letzte Eingabe wird gemerkt, und es geht auch ohne Netzwerk.",
+                 "Sidebar → Tools → <b>Yarn Count Converter</b>", "wn_yarn_count.svg"),
+                ("h", "Show Experiment"),
+                ("feature", "DTY: Verfahren wählen und den Maschinenweg sehen",
+                 "Bei DTY-Maschinen hat Machine Data eine neue Zeile <b>DTY Process</b>: Standard, Elastane oder eine "
+                 "der Cotton-like-Varianten. Bestehende Versuche sind schon eingetragen (Elastane, wo ein Elastan-Garn "
+                 "läuft, sonst Standard). Die Zeilen für die Vorverwirbelung (LW 0 - LW 1) und für die 3. Düse (nach dem "
+                 "Set-Heizer, vor LW 3) stehen jetzt in Machine Data und erscheinen nur, wenn ein Versuch sie braucht. "
+                 "Über der Tabelle zeichnet <b>Schema</b> den Maschinenweg des angeklickten Versuchs: jede Ply auf ihrer "
+                 "Position, wo sie zusammenlaufen, Elastan aus der eigenen Quelle. <b>Station anklicken</b> (z.&nbsp;B. "
+                 "den Heizer), und ihre Zeilen leuchten in der Tabelle auf; ein <b>Doppelklick</b> springt zum ersten "
+                 "Wert. Klickt man eine Zelle an, markiert das Schema die passende Station. Werte ändert man weiterhin "
+                 "nur in der Tabelle. Ab zwei Plies legen drei Zeilen fest, wie sie zusammenlaufen: <b>Route</b> "
+                 "(ganzer Weg, Bypass ohne Heizer und Friktion oder eigene Quelle wie Elastan), <b>Merge into ply</b> "
+                 "und <b>Merge point</b> - z.&nbsp;B. Ply 4 in Ply 3 an LW 1, Ply 3 in Ply 1 an LW 2. Das Schema "
+                 "zeichnet genau das; leer gelassen, nimmt TrippleT den üblichen Weg an. Unter jedem Lieferwerk und der Aufwicklung steht "
+                 "die <b>Geschwindigkeit in m/min</b>, berechnet aus der Hauptgeschwindigkeit an LW 2 (LW 1 = LW 2 / "
+                 "Verstreckung, LW 0 = LW 1 / (1 - W0-W1 OF), LW 2.x, LW 3 und Winder = LW 2 minus ihre %).",
+                 "Show Experiment → Machine Data → <b>Schema</b>", "wn_dty_schema.svg"),
+                ("feature", "ATY: auch hier der Maschinenweg",
+                 "Auf ATY-Maschinen zeichnet <b>Schema</b> über Machine Data jetzt den Weg durch die Lufttexturiermaschine - "
+                 "wie auf der Seite in der Knowledge Base: <b>Kern</b> (grün) und <b>Effekt</b> (ocker) je mit Verstreckzone und "
+                 "Lieferwerk; nur der Kern läuft durch die Benetzung, der Effekt kommt trocken erst vor der Düse dazu; dann LW 2, Stabilisierzone, LW 3 und Aufwicklung. Unter jedem Lieferwerk steht "
+                 "seine <b>Geschwindigkeit</b> (LW 2 × (1 + OF %)). Der Kern steht immer oben, egal welche Ply-Nummer er hat. "
+                 "<b>Station anklicken</b> markiert ihre Zeilen, <b>Doppelklick</b> springt zum ersten Wert, <b>Rechtsklick</b> "
+                 "öffnet die Station in der Knowledge Base. Rechtsklick auf Zeilentitel oder Werte in Machine Data geht jetzt "
+                 "auch auf ATY-Maschinen. Plies ohne Yarn Use erscheinen grau, mit Hinweis unter dem Schema.",
+                 "Show Experiment → Machine Data → <b>Schema</b>", "wn_aty_schema.svg"),
+                ("feature", "Einzelne Versuche löschen - die Nummern bleiben",
+                 "Zu viele Versuche angelegt oder ein paar Läufe braucht es nicht? In Machine Data <b>Rechtsklick auf eine "
+                 "Versuchsnummer</b> → <b>Delete V23…</b>. Für mehrere Versuche zuerst Zellen in ihren Spalten markieren "
+                 "(ziehen, oder <b>Strg+Klick</b> / <b>Umschalt+Klick</b>), dann Rechtsklick auf eine ihrer Nummern → "
+                 "<b>Delete 20 selected trials…</b>. Vorher siehst du, was alles mitgeht (Plies, Itemat, Statimat, Notizen …). "
+                 "Die übrigen Versuche behalten ihre Nummern, nichts rutscht nach, und neue Versuche kommen immer nach der "
+                 "höchsten verbliebenen Nummer - nie in eine Lücke. Ein Superuser kann gelöschte Versuche 90 Tage "
+                 "lang aus dem <b>Recycle Bin</b> zurückholen. Erlaubt für alle, die die Serie im Backlog verschieben dürfen.",
+                 "Show Experiment → Machine Data → Rechtsklick auf eine Versuchsnummer → <b>Delete…</b>", "wn_trial_delete.svg"),
+                ("feature", "Nachschlagen, ohne die Serie zu verlassen",
+                 "Unsicher, was eine Zeile bedeutet? <b>Rechtsklick</b> auf einen Zeilentitel oder einen Wert in Machine Data "
+                 "oder R&D Machine Data (DTY-Maschinen) oder in einem Labor-Reiter (Statimat, EKB, Schrumpf, Itemat, "
+                 "DTYoMat, ATYoMat, Rapid 600) und <b>Learn more in Knowledge Base…</b> wählen - im DTY-<b>Schema</b> eine Station anklicken und den Link darunter nehmen (oder Rechtsklick auf die Station). Die passende Seite öffnet "
+                 "sich in einem Fenster, gleich an der richtigen Stelle - z. B. zeigt Overfeed die Maschine mit Lieferwerk 2.x, "
+                 "eine DTY-Process-Zelle ihre Cotton-like-Variante. <b>Close</b> (oder <b>Esc</b>) und du bist wieder in deiner "
+                 "Serie, genau dort, wo du warst.",
+                 "Show Experiment → Rechtsklick → <b>Learn more in Knowledge Base…</b>", "wn_onboarding.svg"),
+                ("feature", "Fasern, Garntypen und Hintergrund in der Hilfe-Suche",
+                 "In <b>Manage Yarn</b> (und New/Edit Yarn) Rechtsklick auf ein <b>Material</b> wie PES, PA 6.6 oder WO oder auf "
+                 "einen <b>Garntyp</b> wie POY oder DTY → <b>Learn more in Knowledge Base…</b>: Das Faserporträt bzw. die Seite zum "
+                 "Verfahren öffnet sich in einem Fenster. Die Knowledge Base hat dafür neu auch Porträts von Polyethylen, PLA und "
+                 "PVC, und Acetat umfasst jetzt Triacetat. Und die <b>Hilfe-Suche (F1)</b> findet jetzt auch Knowledge-Base-Seiten - "
+                 "z. B. <i>Friktion</i>, <i>Set-Heizer</i> oder <i>Kräuselung</i> suchen: Unter den Hilfe-Antworten stehen die "
+                 "passenden Seiten, ein Klick öffnet sie in einem Fenster, schliessen bringt dich zurück zur Suche.",
+                 "Manage Yarn → Rechtsklick · <b>Help (F1)</b>", "wn_onboarding.svg"),
                 ("h", "Smart Chart"),
                 ("feature", "Wie viele verschiedene Jets? - Count (distinct)",
                  "Eine Card zählt jetzt, wie viele <b>verschiedene</b> Werte ein Feld hat - z.&nbsp;B. wie viele "
@@ -97,9 +295,9 @@ RELEASES = [
                  "aus Show Experiment: grüne Spule = am Lager (anklicken zeigt, wo die Spulen liegen), "
                  "durchgestrichene Hülse = nichts am Lager.",
                  "New Experiment → <b>Material</b> / <b>Jet</b> → Suchfeld", "wn_create_search.svg"),
-                ("h", "Onboarding"),
-                ("feature", "Onboarding - unsere Arbeit als kurze Animationen",
-                 "Neuer Eintrag <b>Onboarding</b> unter <b>Help (F1)</b>: kurze animierte Einführungen in unsere "
+                ("h", "Knowledge Base"),
+                ("feature", "Knowledge Base - unsere Arbeit als kurze Animationen",
+                 "Neuer Eintrag <b>Knowledge Base</b> unter <b>Help (F1)</b>: kurze animierte Einführungen in unsere "
                  "Arbeit, im ganzen Fenster. Das erste Thema zeigt, wie ein DTY-Garn verwirbelt wird - der Weg "
                  "durch die Maschine mit dem Overfeed zwischen Lieferwerk 2 und 2.x (jede Position anklicken, sie wird "
                  "erklärt), was in der Düse passiert, und die Knoten. Jedes Thema hat Reiter wie der Rest von TrippleT. "
@@ -112,10 +310,150 @@ RELEASES = [
                  "einen Schritt anklicken springt direkt dorthin. "
                  "Unter <b>Einfädeln</b>: <b>Lufan-Absaugpistole</b> - einfädeln bei "
                  "laufender Maschine, Injektorprinzip, Luftverbrauch. Unter <b>DTY</b> → <b>Spezialwissen</b>: <b>Cotton-like DTY</b> (sieben Wege zur Spinngarn-Optik, jede Maschinenposition anklickbar) und <b>Harte Knoten, weniger Dehnung?</b> (eine These mit einem Modell-Zugversuch zum Zuschauen). In der DTY-Maschine gibst du jetzt die Geschwindigkeit von <b>LW 2</b> und die <b>Verstreckung</b> ein: LW 1 und LW 2.x stehen dann in m/min da. Neue Szene <b>Gleichmässigkeit</b> im DTY-Thema: Gleich viele Knoten reichen nicht, sie müssen gleichmässig verteilt sein (Streuung der Abstände, längste offene Stelle). Das DTY-Thema hat jetzt am Schluss einen Reiter <b>Quiz</b>: 13 Fragen, zu jeder ein Link zurück zur passenden Szene - ab 80 % richtig ist das Thema bestanden und bekommt in der Liste ein Häkchen. Neuer Ordner <b>Labor</b> mit <b>Knotenmessung mit dem ITEMAT</b>: Aufbau (Stationen anklicken), mechanischer und optischer Sensor, was eine falsche Schwelle bewirkt, Stabilitätstest unter Last und Auswertung, sowie <b>Titer, Festigkeit und Dehnung (STATIMAT DS)</b>: Titer durch Wägen, Zugversuch nach CRE mit POY, FDY und DTY im Vergleich, Statistik pro Spule, und <b>Kräuselung und Schrumpf (TEXTURMAT ME)</b>: vom Strang über die Wärmebehandlung zu den fünf Laststufen (anklickbar) und den Kennwerten KK, KM, KB und Schrumpf, und <b>Knotenprüfung mit dem RAPID 600 V</b>: Die Nadelmethode zählt die Knoten im laufenden Garn und trennt gute von schwachen Knoten, mit Regler für die Auslösekraft. Weitere Themen folgen.",
-                 "Sidebar → <b>Onboarding</b>", "wn_onboarding.svg"),
+                 "Sidebar → <b>Knowledge Base</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Heberlein-Firmengeschichte und übersichtlichere Kapitel",
+                 "Die Liste der Knowledge Base hat jetzt Oberkapitel: <b>Heberlein</b>, <b>Unsere Technologie</b> (Spinnerei, "
+                 "DTY, ATY, Spleissen, Einfädeln, <b>Unser Labor</b>) und später <b>Textiles Wissen</b> (Weben, "
+                 "Stricken …). Neu unter Heberlein: <b>Firmengeschichte</b> - 190 Jahre von der Garnfärberei in "
+                 "Wattwil über Helanca und den Maschinenbau zu den Luftdüsen von heute: Zeitleiste mit fünf Epochen, "
+                 "Eigentümer, Technologie und wo unsere Düsen heute sitzen. Ein Klick auf POY, FDY, DTY oder ATY "
+                 "öffnet das passende Modul.",
+                 "Sidebar → <b>Knowledge Base</b> → Heberlein → <b>Firmengeschichte</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Textiles Wissen - Weben und Stricken",
+                 "Neues Oberkapitel <b>Textiles Wissen</b> für das, was später mit unseren Garnen passiert. <b>Weben</b>: "
+                 "Schaftweben (Webgeschirr, Einzug, Schaftprogramm), Bindungslehre (Leinwand, Köper, Atlas - und selbst "
+                 "eine Bindung zeichnen, TrippleT sagt, ob sie funktioniert), Jacquardweben und Wilton-Teppich. "
+                 "<b>Stricken / Wirken</b>: Rundstricken (Maschenbildung, Schlossbahn, Single/Double Jersey) und "
+                 "Kettenwirken (Legeschienen, Legung, Punktpatrone).",
+                 "Sidebar → <b>Knowledge Base</b> → Textiles Wissen", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Färben",
+                 "Neu unter <b>Textiles Wissen</b>: <b>Färben</b> in acht Szenen - wie der Farbstoff in die Faser kommt "
+                 "(Regler Temperatur), welche Farbstoffklasse zu welcher Faser passt, wann gefärbt wird (Spinn-, Flocke-, "
+                 "Garn-, Stück-, Konfektionsfärbung), Färbekurven für Polyester, Baumwolle und Polyamid, die Färbemaschinen, "
+                 "das Klotzen, Indigo für Denim und warum ungleiches Texturieren nach dem Färben als Streifen sichtbar wird. "
+                 "Mit Quiz am Schluss.",
+                 "Sidebar → <b>Knowledge Base</b> → Textiles Wissen → <b>Färben</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Maschinen und Hersteller",
+                 "Neuer Ordner <b>Maschinen &amp; Hersteller</b> bei jedem Prozess: POY- und FDY-Spinnanlagen unter "
+                 "<b>Spinnerei</b>, DTY-Maschinen unter <b>DTY</b>, ATY-Maschinen unter <b>ATY</b>. Jeweils mit Fadenlauf "
+                 "(Teile anklicken, Varianten umschalten), Variantenschema, das die Hersteller filtert, Bauformen, Herstellern "
+                 "und Modellen mit Suche und Filtern, einem Vergleich und der Marktentwicklung.",
+                 "Sidebar → <b>Knowledge Base</b> → Unsere Technologie → z.&nbsp;B. DTY → <b>Maschinen &amp; Hersteller</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Air Covering",
+                 "Neuer Bereich <b>AC</b> unter Unsere Technologie: <b>Air Covering (ACY)</b> - wie Elastan und DTY durch Luftknoten "
+                 "verbunden werden, mit Reglern für Verzug, Überlieferung, Düsendruck und Geschwindigkeit, die Garntiter, "
+                 "Elastananteil und Luftverbrauch live nachrechnen; ein Blick in die Düse, die Garnstruktur gedehnt und entspannt, "
+                 "ACY im Vergleich mit einfach und doppelt umwundenem Garn, Einsatzgebiete sowie die AC-Maschinen und ihre Hersteller.",
+                 "Sidebar → <b>Knowledge Base</b> → Unsere Technologie → <b>AC</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Veredlung",
+                 "Neu unter <b>Textiles Wissen</b>: <b>Veredlung</b> mit zwei Seiten. <b>Chemische Textilausrüstung</b>: "
+                 "Veredlungskette, Effekt-Atlas (wasserabweisend, flammhemmend, antimikrobiell ...), Auftragsverfahren, "
+                 "PFAS-Ausstieg, Regulierung und Anbieter. <b>Mechanische Textilausrüstung</b>: Ziele, Verfahrens-Atlas vom "
+                 "Rauen bis zum Sanforisieren, Maschinen im Detail, Kennzahlen, Nachhaltigkeit und Hersteller.",
+                 "Sidebar → <b>Knowledge Base</b> → Textiles Wissen → <b>Veredlung</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Web- und Ausrüstungsmaschinen",
+                 "Zwei weitere Ordner <b>Maschinen &amp; Hersteller</b>: <b>Webmaschinen</b> unter Weben (Fachbildung, die fünf "
+                 "Schusseintragsarten mit Animation, Schaft-, Jacquard- und Wilton-Maschinen, Unterschiede, Hersteller-Matrix) "
+                 "und <b>Ausrüstungsmaschinen</b> unter Veredlung (Ausrüstungslinie, zehn Maschinen im Detail mit bewegtem Schema, "
+                 "wo sich die Hersteller wirklich unterscheiden, Hersteller-Matrix).",
+                 "Sidebar → <b>Knowledge Base</b> → Textiles Wissen → Weben / Veredlung → <b>Maschinen &amp; Hersteller</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Stapelfaserspinnerei und Webereivorbereitung",
+                 "Neu unter <b>Textiles Wissen</b>: <b>Stapelfaserspinnerei</b> - von der Faserflocke zum Garn, mit animierten "
+                 "Schemata von der Putzerei bis zum Flyer, Ring-, Kompakt-, Rotor- und Luftspinnen, einem Rechner für Drehung und "
+                 "Tempo und einem Exkurs zur Wolle. Und unter Weben: <b>Webereivorbereitung</b> - Spulen, Schären, Schlichten, "
+                 "Denim-Strangfärben, Einziehen und Anknüpfen, mit einem Rechner für die Anzahl Zettelbäume.",
+                 "Sidebar → <b>Knowledge Base</b> → Textiles Wissen → <b>Stapelfaserspinnerei</b> / Weben", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Startseite Textilkette",
+                 "Die Knowledge Base beginnt jetzt mit der <b>Textilkette</b>: eine Landkarte von der Faser zum fertigen Stoff - "
+                 "Klick auf eine Station (Spinnen, Texturieren, Weben, Veredlung ...) zeigt ihre Seiten, grüne Punkte markieren "
+                 "Heberlein-Technologie. Dazu alle Seiten auf einen Blick, eine Herstellermatrix über die ganze Kette (Suche, "
+                 "Land, Stufe) und die Themen, die noch fehlen.",
+                 "Sidebar → <b>Knowledge Base</b> → <b>Textilkette</b> (ganz oben in der Liste)", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Fasern und Vliesstoffe",
+                 "Zwei neue Kategorien unter <b>Textiles Wissen</b>: <b>Fasern</b> mit <b>Chemiefasern</b> (Marktanteile, 13 "
+                 "Faserporträts mit Molekülbild, Kennwerte im Vergleich, Einsatzmatrix, Recyclinganteile) und <b>Vliesstoffe</b> "
+                 "(Vlies bilden und verfestigen, zehn animierte Verfahren vom Krempeln über Meltblown bis zum Vernadeln, Vergleich, "
+                 "Rechner für Kreuzleger und Einstichdichte). Dazu <b>Naturfasern</b>: Marktanteile, 10 Faserporträts von "
+                 "Baumwolle bis Kaschmir, Kennwerte im Vergleich und Einsatzmatrix. Alle sind auch auf der Startseite Textilkette verlinkt.",
+                 "Sidebar → <b>Knowledge Base</b> → Textiles Wissen → <b>Fasern</b> / <b>Vliesstoffe</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Vorbehandlung und Textildruck",
+                 "Neu unter <b>Färben</b>: <b>Vorbehandlung</b> (Sengen, Entschlichten, Abkochen, Bleichen, Mercerisieren, "
+                 "Thermofixieren und die Verfahrenswege) und <b>Textildruck</b>, je in acht animierten Szenen - Druckpaste, Pigment oder Farbstoff, "
+                 "Direkt-, Ätz- und Reservedruck, Flachfilm-, Rotationsfilm-, Digital- und Transferdruck und wie der Druck "
+                 "fixiert wird. Beide mit Quiz am Schluss.",
+                 "Sidebar → <b>Knowledge Base</b> → Textiles Wissen → <b>Färben</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: vom Zwirn bis zum fertigen Produkt",
+                 "Fünf weitere animierte Seiten, jede mit Quiz: <b>Zwirnen</b> (Ring- und Doppeldrahtzwirnen, Kordieren, "
+                 "Effektzwirne), <b>Weitere Flächenbildung</b> (Flachstricken, Tuften, Flechten), <b>Beschichten und Kaschieren</b> "
+                 "(Rakel, PVC-Planen, Membranen), <b>Konfektion</b> (Zuschnitt, Sticharten, Nahtabdichtung, Schweissen) und "
+                 "<b>Stoffprüfung</b> (Zug- und Weiterreissfestigkeit, Martindale, Pilling, Farbechtheit, Massänderung). Alle sind "
+                 "auf der Startseite Textilkette verlinkt.",
+                 "Sidebar → <b>Knowledge Base</b> → Textiles Wissen", "wn_onboarding.svg"),
             ],
             # ═══════════════════════════════ ES ═══════════════════════════════
             "es": [
+                ("h", "Tools"),
+                ("feature", "Yarn Count Converter: convertir títulos de hilo",
+                 "Nuevo en <b>Tools</b>: convertir títulos de hilo. Escriba un valor y elija la unidad - <b>dtex</b> y "
+                 "<b>den</b> aparecen en grande, además tex, ktex, mtex, Nm, Ne, NeK, NeL, Run y grain/yd. Un clic en "
+                 "un resultado lo convierte en el nuevo valor de partida. A la derecha, indique filamentos y cabos: "
+                 "dtex y den por filamento, diámetro del filamento, totales y la designación lista (p.&nbsp;ej. "
+                 "<i>2 × dtex 167 f48</i>); o escriba una notación como <i>2x150D/48F</i> y pulse Enter para rellenarlo "
+                 "todo. Fórmulas y definiciones se despliegan abajo. Cada valor tiene un botón <b>Copy</b>, la última "
+                 "entrada se recuerda y funciona sin conexión de red.",
+                 "Sidebar → Tools → <b>Yarn Count Converter</b>", "wn_yarn_count.svg"),
+                ("h", "Show Experiment"),
+                ("feature", "DTY: elegir el proceso y ver el recorrido en la máquina",
+                 "En las máquinas DTY, Machine Data tiene una fila nueva <b>DTY Process</b>: Standard, Elastane o una "
+                 "de las variantes cotton-like. Los ensayos existentes ya están rellenados (Elastane donde corre un "
+                 "hilo de elastano, si no Standard). Las filas del chorro de pre-entrelazado (LW 0 - LW 1) y del 3.er "
+                 "chorro (después del calentador de fijado, antes de LW 3) están ahora en Machine Data y solo aparecen "
+                 "cuando un ensayo las necesita. Encima de la tabla, <b>Schema</b> dibuja el recorrido del ensayo en el "
+                 "que hizo clic: cada ply en su posición, dónde se juntan, el elastano desde su propia fuente. "
+                 "<b>Haga clic en una estación</b> (p.&nbsp;ej. el calentador) y sus filas se resaltan en la tabla; "
+                 "un <b>doble clic</b> salta al primer valor. Al hacer clic en una celda, el esquema marca su estación. "
+                 "Los valores se siguen cambiando solo en la tabla. Con dos o más plies, tres filas deciden cómo se "
+                 "juntan: <b>Route</b> (recorrido completo, bypass sin calentador ni fricción, o fuente propia como el "
+                 "elastano), <b>Merge into ply</b> y <b>Merge point</b> - p.&nbsp;ej. ply 4 en ply 3 en LW 1, ply 3 en "
+                 "ply 1 en LW 2. El esquema dibuja exactamente eso; si se dejan vacías, TrippleT supone el recorrido "
+                 "habitual. Debajo de cada rodillo de alimentación y del bobinador aparece su <b>velocidad en m/min</b>, "
+                 "calculada a partir de la velocidad principal en LW 2 (LW 1 = LW 2 / estiraje; LW 0 = LW 1 / (1 - W0-W1 OF); LW 2.x, LW 3 y "
+                 "bobinador = LW 2 menos su %).",
+                 "Show Experiment → Machine Data → <b>Schema</b>", "wn_dty_schema.svg"),
+                ("feature", "ATY: también el recorrido de la máquina",
+                 "En las máquinas ATY, <b>Schema</b> encima de Machine Data dibuja ahora el recorrido por la máquina de "
+                 "texturizado por aire del ensayo seleccionado, igual que la página de la Knowledge Base: <b>alma</b> (verde) y "
+                 "<b>efecto</b> (ocre), cada uno con su zona de estirado y su rodillo de alimentación; solo el alma pasa por la "
+                 "humectación, el efecto se une en seco justo antes de la tobera; después LW 2, zona de estabilización, LW 3 y bobinado. Debajo de cada rodillo de alimentación aparece su "
+                 "<b>velocidad</b> (LW 2 × (1 + OF %)). El alma siempre está arriba, tenga el número de ply que tenga. "
+                 "<b>Clic en una estación</b> resalta sus filas, <b>doble clic</b> salta al primer valor, <b>clic derecho</b> "
+                 "abre la estación en la Knowledge Base. El clic derecho en títulos de fila o valores de Machine Data ahora "
+                 "también funciona en máquinas ATY. Las plies sin Yarn Use aparecen en gris, con un aviso debajo del esquema.",
+                 "Show Experiment → Machine Data → <b>Schema</b>", "wn_aty_schema.svg"),
+                ("feature", "Borrar ensayos sueltos - los números se mantienen",
+                 "¿Creaste demasiados ensayos o sobran algunas pruebas? En Machine Data, <b>clic derecho en un número de "
+                 "ensayo</b> → <b>Delete V23…</b>. Para varios ensayos, primero selecciona celdas en sus columnas (arrastrando, "
+                 "o con <b>Ctrl+clic</b> / <b>Mayús+clic</b>) y luego clic derecho en uno de sus números → <b>Delete 20 "
+                 "selected trials…</b>. Antes ves todo lo que se borra con ellos (plies, Itemat, Statimat, notas …). Los demás "
+                 "ensayos conservan su número, nada se desplaza, y los nuevos ensayos siempre van después del "
+                 "número más alto que queda - nunca en un hueco. Un superusuario puede recuperar ensayos borrados desde la <b>Recycle Bin</b> "
+                 "durante 90 días. Permitido a quien puede mover la serie en el Backlog.",
+                 "Show Experiment → Machine Data → clic derecho en un número de ensayo → <b>Delete…</b>", "wn_trial_delete.svg"),
+                ("feature", "Consulta sin salir de tu serie",
+                 "¿No sabes qué significa una fila? Haz <b>clic derecho</b> en el título de una fila o en un valor de Machine Data "
+                 "o R&D Machine Data (máquinas DTY), o en una pestaña de laboratorio (Statimat, EKB, encogimiento, Itemat, "
+                 "DTYoMat, ATYoMat, Rapid 600) y elige <b>Learn more in Knowledge Base…</b>; en el <b>Schema</b> DTY, haz clic en una estación y usa el enlace debajo (o clic derecho en la estación). La página correspondiente se abre "
+                 "en una ventana, ya en el lugar correcto: p. ej. Overfeed muestra la máquina con el rodillo 2.x seleccionado, una "
+                 "celda DTY Process muestra su variante cotton-like. <b>Close</b> (o <b>Esc</b>) y vuelves a tu serie, justo donde estabas.",
+                 "Show Experiment → clic derecho → <b>Learn more in Knowledge Base…</b>", "wn_onboarding.svg"),
+                ("feature", "Fibras, tipos de hilo y conocimiento de fondo en la búsqueda de ayuda",
+                 "En <b>Manage Yarn</b> (y New/Edit Yarn), clic derecho en un <b>Material</b> como PES, PA 6.6 o WO, o en un "
+                 "<b>Garntyp</b> como POY o DTY → <b>Learn more in Knowledge Base…</b>: el retrato de la fibra o la página del "
+                 "proceso se abre en una ventana. La Knowledge Base tiene ahora también retratos de polietileno, PLA y PVC, y el "
+                 "acetato incluye el triacetato. Y la <b>búsqueda de ayuda (F1)</b> encuentra también páginas de la Knowledge Base: "
+                 "busca p. ej. <i>fricción</i>, <i>set heater</i> o <i>rizado</i>; debajo de las respuestas de la ayuda aparecen las "
+                 "páginas, un clic las abre en una ventana y al cerrarla vuelves a la búsqueda.",
+                 "Manage Yarn → clic derecho · <b>Help (F1)</b>", "wn_onboarding.svg"),
                 ("h", "Smart Chart"),
                 ("feature", "¿Cuántos jets distintos? - Count (distinct)",
                  "Una Card cuenta ahora cuántos valores <b>distintos</b> tiene un campo - p.&nbsp;ej. cuántos jets, "
@@ -139,9 +477,9 @@ RELEASES = [
                  "además el símbolo de bobina de Show Experiment: bobina verde = en stock (clic para ver dónde "
                  "están las bobinas), tubo tachado = nada en stock.",
                  "New Experiment → <b>Material</b> / <b>Jet</b> → campo de búsqueda", "wn_create_search.svg"),
-                ("h", "Onboarding"),
-                ("feature", "Onboarding - nuestro trabajo en animaciones cortas",
-                 "Nueva entrada <b>Onboarding</b> debajo de <b>Help (F1)</b>: introducciones animadas cortas a "
+                ("h", "Knowledge Base"),
+                ("feature", "Knowledge Base - nuestro trabajo en animaciones cortas",
+                 "Nueva entrada <b>Knowledge Base</b> debajo de <b>Help (F1)</b>: introducciones animadas cortas a "
                  "nuestro trabajo, a pantalla completa. El primer tema muestra cómo se entrelaza un hilo DTY: el "
                  "recorrido por la máquina con la sobrealimentación entre el rodillo 2 y el 2.x (haz clic en una posición "
                  "y se explica), lo que pasa en la "
@@ -154,7 +492,85 @@ RELEASES = [
                  "sin nudo; haz clic en un paso para saltar a él. "
                  "En <b>Enhebrado</b>: <b>pistola de aspiración Lufan</b> - "
                  "enhebrar con la máquina en marcha, principio del inyector, consumo de aire. En <b>DTY</b> → <b>Conocimiento especializado</b>: <b>DTY tipo algodón</b> (siete caminos al aspecto de hilo hilado, cada posición de la máquina se puede pulsar) y <b>¿Nudos duros, menos alargamiento?</b> (una hipótesis con un ensayo de tracción simulado). En la máquina DTY ahora introduces la velocidad de <b>R 2</b> y el <b>estirado</b>: R 1 y R 2.x aparecen en m/min. Nueva escena <b>Regularidad</b> en el tema DTY: no basta con el mismo número de nudos, deben estar repartidos de forma regular (dispersión de las distancias, tramo abierto más largo). El tema DTY termina ahora con una pestaña <b>Quiz</b>: 13 preguntas, cada una con un enlace a la escena correspondiente; con un 80 % de aciertos el tema queda aprobado y recibe una marca en la lista. Nueva carpeta <b>Laboratorio</b> con <b>Medición de nudos con el ITEMAT</b>: montaje (haz clic en las estaciones), sensor mecánico y óptico, qué provoca un umbral incorrecto, ensayo de estabilidad bajo carga y evaluación, y <b>Título, tenacidad y alargamiento (STATIMAT DS)</b>: título por pesaje, tracción CRE comparando POY, FDY y DTY, estadística por bobina, y <b>Rizado y contracción (TEXTURMAT ME)</b>: de la madeja al tratamiento térmico, los cinco escalones de carga (se pueden pulsar) y los indicadores de rizado y contracción, y <b>Ensayo de nudos con el RAPID 600 V</b>: el método de aguja cuenta los nudos en el hilo en marcha y separa los buenos de los débiles, con regulador de la fuerza de disparo. Habrá más temas.",
-                 "Sidebar → <b>Onboarding</b>", "wn_onboarding.svg"),
+                 "Sidebar → <b>Knowledge Base</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: historia de Heberlein y capítulos más claros",
+                 "La lista de la Knowledge Base tiene ahora capítulos: <b>Heberlein</b>, <b>Nuestra tecnología</b> (hilatura, "
+                 "DTY, ATY, empalme, enhebrado, <b>Nuestro laboratorio</b>) y más adelante <b>Conocimiento textil</b> "
+                 "(tejeduría, punto …). Nuevo en Heberlein: <b>Historia de la empresa</b> - 190 años desde la "
+                 "tintorería de hilo en Wattwil, pasando por Helanca y la construcción de máquinas, hasta las toberas "
+                 "de hoy: cronología con cinco épocas, propietarios, tecnología y dónde están hoy nuestras toberas. "
+                 "Un clic en POY, FDY, DTY o ATY abre el módulo correspondiente.",
+                 "Sidebar → <b>Knowledge Base</b> → Heberlein → <b>Historia de la empresa</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Conocimiento textil - tejeduría y punto",
+                 "Nuevo capítulo <b>Conocimiento textil</b> para lo que pasa después con nuestros hilos. <b>Tejeduría</b>: "
+                 "tejeduría con lizos (lizos, remetido, programa de lizos), ligamentos (tafetán, sarga, raso, y dibuje su "
+                 "propio ligamento: TrippleT le dice si funciona), tejeduría Jacquard y alfombra Wilton. <b>Tejido de "
+                 "punto</b>: tejido circular (formación de malla, levas, single/double jersey) y punto por urdimbre "
+                 "(barras de guía, pasadas, papel de puntos).",
+                 "Sidebar → <b>Knowledge Base</b> → Conocimiento textil", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Tintura",
+                 "Nuevo en <b>Conocimiento textil</b>: <b>Tintura</b> en ocho escenas - cómo entra el colorante en la fibra "
+                 "(regulador de temperatura), qué clase de colorante va con cada fibra, cuándo se tiñe (en masa, floca, hilo, "
+                 "pieza, prenda), curvas de tintura para poliéster, algodón y poliamida, las máquinas, el fulardado, el índigo "
+                 "para el denim y por qué un texturizado desigual se ve como rayas tras teñir. Con quiz al final.",
+                 "Sidebar → <b>Knowledge Base</b> → Conocimiento textil → <b>Tintura</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: máquinas y fabricantes",
+                 "Nueva carpeta <b>Máquinas y fabricantes</b> junto a cada proceso: plantas de hilatura POY y FDY en "
+                 "<b>Hilatura</b>, máquinas DTY en <b>DTY</b>, máquinas ATY en <b>ATY</b>. Cada una con el recorrido del hilo "
+                 "(clic en las piezas, cambiar variantes), un esquema de variantes que filtra los fabricantes, tipos de máquina, "
+                 "fabricantes y modelos con búsqueda y filtros, una comparación y la evolución del mercado.",
+                 "Sidebar → <b>Knowledge Base</b> → Nuestra tecnología → p.&nbsp;ej. DTY → <b>Máquinas y fabricantes</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Air covering",
+                 "Nueva área <b>AC</b> en Nuestra tecnología: <b>Air covering (ACY)</b> - cómo se unen elastano y DTY con nudos "
+                 "de aire, con reguladores de estiraje, sobrealimentación, presión y velocidad que recalculan en vivo el título, "
+                 "la proporción de elastano y el consumo de aire; un vistazo dentro de la boquilla, la estructura del hilo estirado "
+                 "y relajado, ACY frente a hilo de recubrimiento simple y doble, usos, y las máquinas AC y sus fabricantes.",
+                 "Sidebar → <b>Knowledge Base</b> → Nuestra tecnología → <b>AC</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Acabado",
+                 "Nuevo en <b>Conocimiento textil</b>: <b>Acabado</b> con dos páginas. <b>Acabado químico</b>: la cadena de "
+                 "acabado, un atlas de efectos (hidrófugo, ignífugo, antimicrobiano ...), métodos de aplicación, la salida de "
+                 "los PFAS, normativa y proveedores. <b>Acabado mecánico</b>: objetivos, un atlas de procesos desde el perchado "
+                 "hasta el sanforizado, máquinas en detalle, indicadores, sostenibilidad y fabricantes.",
+                 "Sidebar → <b>Knowledge Base</b> → Conocimiento textil → <b>Acabado</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: telares y máquinas de acabado",
+                 "Dos carpetas más de <b>Máquinas y fabricantes</b>: <b>Telares</b> en Tejeduría (formación de calada, los cinco "
+                 "sistemas de inserción de trama con animación, telares de lizos, Jacquard y Wilton, diferencias, matriz de "
+                 "fabricantes) y <b>Máquinas de acabado</b> en Acabado (la línea de acabado, diez máquinas en detalle con esquemas "
+                 "animados, en qué se diferencian realmente los fabricantes, matriz de fabricantes).",
+                 "Sidebar → <b>Knowledge Base</b> → Conocimiento textil → Tejeduría / Acabado → <b>Máquinas y fabricantes</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: hilatura de fibra corta y preparación de tejeduría",
+                 "Nuevo en <b>Conocimiento textil</b>: <b>Hilatura de fibra corta</b> - del copo de fibra al hilo, con esquemas "
+                 "animados desde la sala de apertura hasta la mechera, hilatura de anillo, compacta, de rotor y por chorro de aire, "
+                 "una calculadora de torsión y velocidad y un excurso sobre la lana. Y en Tejeduría: <b>Preparación de tejeduría</b> - "
+                 "bobinado, urdido, encolado, tintura en cuerda del denim, remetido y anudado, con una calculadora de plegadores.",
+                 "Sidebar → <b>Knowledge Base</b> → Conocimiento textil → <b>Hilatura de fibra corta</b> / Tejeduría", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: página de inicio Cadena textil",
+                 "La Knowledge Base empieza ahora con la <b>Cadena textil</b>: un mapa de la fibra al tejido acabado - clic en "
+                 "una estación (hilatura, texturizado, tejeduría, acabado ...) muestra sus páginas, los puntos verdes marcan "
+                 "tecnología Heberlein. Además todas las páginas de un vistazo, una matriz de fabricantes a lo largo de toda la "
+                 "cadena (búsqueda, país, etapa) y los temas que aún faltan.",
+                 "Sidebar → <b>Knowledge Base</b> → <b>Cadena textil</b> (arriba en la lista)", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: fibras y no tejidos",
+                 "Dos categorías nuevas en <b>Conocimiento textil</b>: <b>Fibras</b> con <b>Fibras químicas</b> (cuotas de mercado, "
+                 "13 retratos de fibras con molécula, propiedades comparadas, matriz de aplicaciones, cuotas de reciclado) y "
+                 "<b>No tejidos</b> (formar y consolidar el velo, diez procesos animados del cardado al meltblown y el punzonado, "
+                 "comparación, calculadora de plegador y densidad de punzonado). Además, <b>Fibras naturales</b>: cuotas de "
+                 "mercado, 10 retratos de fibras del algodón al cachemir, propiedades comparadas y matriz de aplicaciones. Todas "
+                 "también en la página de inicio Cadena textil.",
+                 "Sidebar → <b>Knowledge Base</b> → Conocimiento textil → <b>Fibras</b> / <b>No tejidos</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: preparación y estampación textil",
+                 "Nuevo en <b>Tintura</b>: <b>Preparación</b> (chamuscado, desencolado, descrudado, blanqueo, mercerizado, "
+                 "termofijado y rutas de proceso) y <b>Estampación textil</b>, cada una en ocho escenas animadas: pasta de estampación, pigmento o "
+                 "colorante, estampación directa, por corrosión y por reserva, lionesa, rotativa, digital y por transferencia, y "
+                 "cómo se fija el estampado. Ambas con un quiz al final.",
+                 "Sidebar → <b>Knowledge Base</b> → Conocimiento textil → <b>Tintura</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: del retorcido al producto terminado",
+                 "Cinco páginas animadas más, cada una con quiz: <b>Retorcido</b> (retorcido de anillo y a doble torsión, "
+                 "cableado, hilos de fantasía), <b>Otras formas de crear tejido</b> (tricotado plano, tufting, trenzado), "
+                 "<b>Recubrimiento y laminado</b> (rasqueta, lonas de PVC, membranas), <b>Confección</b> (corte, tipos de puntada, "
+                 "sellado de costuras, soldadura) y <b>Ensayos de tejidos</b> (tracción y desgarro, Martindale, pilling, solidez "
+                 "del color, cambio dimensional). Todas están en la página de inicio Cadena textil.",
+                 "Sidebar → <b>Knowledge Base</b> → Conocimiento textil", "wn_onboarding.svg"),
             ],
         },
     },

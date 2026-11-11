@@ -1,6 +1,6 @@
 window.TEXTS = {
 "de": {
- "ui": {"eyebrow": "Onboarding · Lufttexturierung", "h1": "Wie ATY-Garn mit Luft texturiert wird",
+ "ui": {"eyebrow": "Knowledge Base · Lufttexturierung", "h1": "Wie ATY-Garn mit Luft texturiert wird",
   "lead": "Beim Lufttexturieren bläst eine Heberlein-Düse überschüssige Filamentlänge zu Schlingen und Bögen. Fünf kurze Szenen zeigen die Maschine, die Voreilung, die Düse, die Garnstruktur und die wichtigsten Einflussgrössen.",
   "ofCore": "Voreilung Kern", "ofEff": "Voreilung Effekt", "pressure": "Luftdruck", "dec": ",",
   "pause": "⏸ Pause", "play": "▶ Abspielen", "scenes": "Szenen",
@@ -9,7 +9,7 @@ window.TEXTS = {
  "stations": [
   {"n": "Gatter", "d": "Kern- und Effektgarn (oft POY oder FDY) laufen von getrennten Spulen zu. Es geht auch mit einem einzelnen Garn."},
   {"n": "Lieferwerke", "d": "Kern und Effekt werden getrennt und schneller zugeführt als abgezogen: Das ist die Voreilung."},
-  {"n": "Benetzung", "d": "Das Garn wird befeuchtet. Nass bilden sich die Schlingen besser als trocken."},
+  {"n": "Benetzung", "d": "Nur das Kerngarn wird befeuchtet. Nass bilden sich die Schlingen besser als trocken. Das Effektgarn läuft trocken vorbei und trifft erst vor der Düse auf den Kern."},
   {"n": "Texturierdüse", "d": "Heberlein-Düse: Druckluft öffnet das Bündel und formt die überschüssige Länge zu Schlingen."},
   {"n": "Lieferwerk 2", "d": "Zieht das texturierte Garn ab, langsamer als die Lieferwerke davor."},
   {"n": "Stabilisierzone", "d": "Das Garn wird leicht nachverstreckt, je nach Maschine mit Heizer. Lose Schlingen werden dabei in die Struktur gezogen."},
@@ -50,7 +50,7 @@ window.TEXTS = {
   "source": "Tendenzen aus einer Studie mit Heberlein HemaJet (ein Garntyp, nass texturiert als Referenz)"}
 },
 "en": {
- "ui": {"eyebrow": "Onboarding · Air texturing", "h1": "How ATY yarn is textured with air",
+ "ui": {"eyebrow": "Knowledge Base · Air texturing", "h1": "How ATY yarn is textured with air",
   "lead": "In air texturing a Heberlein jet blows the excess filament length into loops and arcs. Five short scenes show the machine, the overfeed, the jet, the yarn structure and the main influencing factors.",
   "ofCore": "Overfeed core", "ofEff": "Overfeed effect", "pressure": "Air pressure", "dec": ".",
   "pause": "⏸ Pause", "play": "▶ Play", "scenes": "Scenes",
@@ -59,7 +59,7 @@ window.TEXTS = {
  "stations": [
   {"n": "Creel", "d": "Core and effect yarn (often POY or FDY) come from separate packages. It also works with a single yarn."},
   {"n": "Feed rolls", "d": "Core and effect are fed separately and faster than they are taken off: this is the overfeed."},
-  {"n": "Wetting", "d": "The yarn is moistened. Wet, the loops form better than dry."},
+  {"n": "Wetting", "d": "Only the core yarn is moistened. Wet, the loops form better than dry. The effect yarn runs past dry and meets the core just before the jet."},
   {"n": "Texturing jet", "d": "Heberlein jet: compressed air opens the bundle and forms the excess length into loops."},
   {"n": "Feed roll 2", "d": "Takes off the textured yarn, slower than the feed rolls before."},
   {"n": "Stabilizing zone", "d": "The yarn is drawn slightly, depending on the machine with a heater. Loose loops are pulled into the structure."},
@@ -100,7 +100,7 @@ window.TEXTS = {
   "source": "Trends from a study with Heberlein HemaJet (one yarn type, wet texturing as reference)"}
 },
 "es": {
- "ui": {"eyebrow": "Onboarding · Texturizado por aire", "h1": "Cómo se texturiza el hilo ATY con aire",
+ "ui": {"eyebrow": "Knowledge Base · Texturizado por aire", "h1": "Cómo se texturiza el hilo ATY con aire",
   "lead": "En el texturizado por aire, una tobera Heberlein sopla la longitud sobrante de los filamentos formando bucles y arcos. Cinco escenas cortas muestran la máquina, la sobrealimentación, la tobera, la estructura del hilo y los factores más importantes.",
   "ofCore": "Sobrealim. núcleo", "ofEff": "Sobrealim. efecto", "pressure": "Presión de aire", "dec": ",",
   "pause": "⏸ Pausa", "play": "▶ Reproducir", "scenes": "Escenas",
@@ -109,7 +109,7 @@ window.TEXTS = {
  "stations": [
   {"n": "Fileta", "d": "El hilo de núcleo y el de efecto (a menudo POY o FDY) llegan de bobinas separadas. También funciona con un solo hilo."},
   {"n": "Rodillos de alimentación", "s": "Rodillos alim.", "d": "El núcleo y el efecto se alimentan por separado y más rápido de lo que se retiran: esta es la sobrealimentación."},
-  {"n": "Humectación", "d": "El hilo se humedece. En húmedo los bucles se forman mejor que en seco."},
+  {"n": "Humectación", "d": "Solo se humedece el hilo de alma. En húmedo los bucles se forman mejor que en seco. El hilo de efecto pasa seco y se une al alma justo antes de la tobera."},
   {"n": "Tobera de texturizado", "s": "Tobera", "d": "Tobera Heberlein: el aire comprimido abre el haz y forma bucles con la longitud sobrante."},
   {"n": "Rodillo 2", "d": "Retira el hilo texturizado, más lento que los rodillos anteriores."},
   {"n": "Zona de estabilización", "s": "Estabilización", "d": "El hilo se estira ligeramente, según la máquina con calentador. Los bucles sueltos se integran en la estructura."},
@@ -150,7 +150,7 @@ window.TEXTS = {
   "source": "Tendencias de un estudio con Heberlein HemaJet (un tipo de hilo, texturizado húmedo como referencia)"}
 },
 "zh": {
- "ui": {"eyebrow": "入门 · 空气变形", "h1": "ATY 丝是如何用空气变形的",
+ "ui": {"eyebrow": "知识库 · 空气变形", "h1": "ATY 丝是如何用空气变形的",
   "lead": "在空气变形过程中，Heberlein 喷嘴把多余的单丝长度吹成丝圈和弧圈。五个短场景介绍机器、超喂、喷嘴、纱线结构以及最重要的影响因素。",
   "ofCore": "芯丝超喂", "ofEff": "饰丝超喂", "pressure": "气压", "dec": ".",
   "pause": "⏸ 暂停", "play": "▶ 播放", "scenes": "场景",
@@ -159,7 +159,7 @@ window.TEXTS = {
  "stations": [
   {"n": "纱架", "d": "芯丝和饰丝（通常为 POY 或 FDY）从不同的丝筒喂入。也可以只用一根丝。"},
   {"n": "喂入罗拉", "d": "芯丝和饰丝分别喂入，喂入速度高于引出速度：这就是超喂。"},
-  {"n": "给湿", "d": "丝条被润湿。湿态下丝圈比干态更容易形成。"},
+  {"n": "给湿", "d": "只有芯丝被润湿。湿态下丝圈比干态更容易形成。效果丝保持干态，直到喷嘴前才与芯丝汇合。"},
   {"n": "空气变形喷嘴", "d": "Heberlein 喷嘴：压缩空气打开丝束，把多余的长度形成丝圈。"},
   {"n": "第二罗拉", "d": "引出变形后的丝，速度低于前面的喂入罗拉。"},
   {"n": "稳定区", "d": "丝条被轻微拉伸，视机器而定可配加热器。松散的丝圈被拉入结构中。"},

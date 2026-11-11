@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Finishing Machines</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category finishing.
+     Content from the user's research page "Ausruestungsmaschinen - Funktionsprinzipien und Hersteller" (as of Nov 2026).
+     Texts in finishing_machines_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1&machine=<id> for screenshots. No external resources (sources as plain text only).
+     Links to other modules (LINK_KEYS): embedded via document.title "open:<key>", otherwise <key>.html directly.
+     No canvas - SVG/DOM; machine schemas are animated with CSS (pause button stops them). -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--cool:#2386C8;--twist:#6A4FC8;--soft:#EEF3EC;
+  --fab:#1864AB;--pin:#C62828;--ok:#1F7A36;--wind:#495057;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{font-family:var(--font-display);font-size:22px;margin:2px 0 6px}
+.grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg.sm button{font-size:13px;padding:5px 10px}
+.lbl{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+.note{font-size:12px;color:var(--muted);margin:0}
+.muted{color:var(--muted);font-size:13px;margin:0}
+/* 0 line + kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.kpi b{display:block;font-family:var(--font-display);font-size:27px;line-height:1.1;color:var(--ok)}
+.kpi span{color:var(--muted);font-size:13px}
+.node{cursor:pointer}
+.node:hover rect{stroke:var(--hl);stroke-width:2.5}
+.node.sel rect{stroke:var(--hl);stroke-width:3}
+/* 1 machines: animation */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes flow{to{stroke-dashoffset:-16}}
+@keyframes flowS{to{stroke-dashoffset:-8}}
+@keyframes airf{to{stroke-dashoffset:-14}}
+@keyframes drop{0%{transform:translateY(0);opacity:1}100%{transform:translateY(34px);opacity:0}}
+.rot{transform-box:view-box;animation:spin 4s linear infinite}
+.rot.rev{animation-direction:reverse}
+.rot.fast{animation-duration:1.2s}
+.fab{fill:none;stroke:var(--fab);stroke-width:4;stroke-dasharray:10 6;animation:flow 1s linear infinite;stroke-linejoin:round}
+.fab2{fill:none;stroke:var(--fab);stroke-width:5;stroke-dasharray:4 4;animation:flowS 1.4s linear infinite}
+.air{fill:none;stroke:var(--heat);stroke-width:2;stroke-dasharray:5 4;animation:airf .8s linear infinite}
+.air.c{stroke:var(--cool)}
+.drop{animation:drop 1.2s linear infinite}
+body.paused .rot,body.paused .fab,body.paused .fab2,body.paused .air,body.paused .drop{animation-play-state:paused}
+@media (prefers-reduced-motion: reduce){.rot,.fab,.fab2,.air,.drop{animation:none}}
+.mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.mhead h3{margin:0}
+.mhead .de{color:var(--muted);font-size:13.5px}
+#msvg,#asvg,#csvg{background:var(--bg);border-radius:6px}
+.steps{counter-reset:s;list-style:none;padding:0;margin:4px 0}
+.steps li{counter-increment:s;position:relative;padding:4px 0 4px 30px;font-size:14px}
+.steps li:before{content:counter(s);position:absolute;left:0;top:6px;width:20px;height:20px;border-radius:50%;background:var(--fg);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:4px 0}
+.figs div{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.figs b{display:block;font-size:17px;color:var(--ok);font-family:var(--font-display)}
+.figs span{font-size:12px;color:var(--muted)}
+.st{font-family:var(--font-mono);font-size:10.5px;padding:1px 6px;border-radius:4px;border:1px solid var(--line);white-space:nowrap}
+.st.h{border-color:var(--ok);color:var(--ok)}
+.st.p{border-color:var(--fab);color:var(--fab)}
+.st.m{border-color:var(--muted);color:var(--muted)}
+.legendrow{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted);align-items:center;margin:2px 0 6px}
+.tblwrap{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th,table.t td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.t th{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+table.t tr:last-child td{border-bottom:0}
+/* 2 comparisons */
+.ctl{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin:8px 0}
+.ctl label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.ctl input[type=range]{width:200px;accent-color:var(--hl)}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:10px}
+.cmp .c{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px;border-top:4px solid var(--hl)}
+.cmp .c h4{margin:0 0 4px;font-size:15px}
+.cmp .c p{margin:4px 0;font-size:13.5px}
+.cmp .c .k{font-family:var(--font-mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.cpanel{display:none}
+.cpanel.on{display:block}
+/* 3 matrix */
+table.mx{border-collapse:collapse;width:100%;font-size:13px}
+table.mx th,table.mx td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:center}
+table.mx th{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);font-weight:500;text-transform:uppercase;vertical-align:bottom}
+table.mx th[data-id]{cursor:pointer}
+table.mx th[data-id]:hover{color:var(--ok)}
+table.mx td:first-child,table.mx th:first-child,table.mx td:nth-child(2),table.mx th:nth-child(2){text-align:left}
+table.mx td.y{color:var(--ok);font-weight:700}
+table.mx td.l{color:var(--muted)}
+table.mx tr:hover td{background:#F0F7F2}
+table.mx th.hl,table.mx td.hl{background:#E6F2E9}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.lk{display:block;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px;color:var(--ok)}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:820px){header{flex-direction:column}details ol{columns:1}.grid2{grid-template-columns:1fr}}
+</style>
+<script src="finishing_machines_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 finishing line -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="stage"><svg id="linesvg" viewBox="0 0 1100 250" role="img"></svg></div>
+    <p class="muted" id="linehint"></p>
+  </div>
+  <!-- 1 machines in detail -->
+  <div class="sc" id="sc1">
+    <div class="seg sm" id="mtabs"></div>
+    <div class="card">
+      <div class="mhead"><div><h3 id="mname"></h3><div class="de" id="mde"></div></div>
+        <button type="button" id="pause"></button></div>
+      <div class="seg sm" id="mvar" style="margin-top:10px"></div>
+      <svg id="msvg" viewBox="0 0 760 320" role="img" style="margin-top:8px"></svg>
+      <div class="grid2" style="margin-top:12px">
+        <div><span class="lbl" id="howlbl"></span><ol class="steps" id="msteps"></ol></div>
+        <div><span class="lbl" id="figlbl"></span><div class="figs" id="mfigs"></div></div>
+      </div>
+      <span class="lbl" style="margin-top:10px" id="mklbl"></span>
+      <div class="legendrow" id="stlegend"></div>
+      <div class="tblwrap"><table class="t" id="mtab"></table></div>
+      <p class="note" id="mnote" style="margin-top:8px"></p>
+    </div>
+  </div>
+  <!-- 2 differences between manufacturers -->
+  <div class="sc" id="sc2">
+    <div class="seg sm" id="ctabs"></div>
+    <div class="card cpanel" id="cpA">
+      <h3 id="atitle"></h3><p class="note" id="anote"></p>
+      <div class="ctl"><div class="seg sm" id="aseg"></div>
+        <label><span id="arlbl"></span> <input type="range" id="aratio" min="20" max="80" value="50"><b id="aratiov">50 %</b></label></div>
+      <svg id="asvg" viewBox="0 0 1000 295" role="img"></svg>
+      <div class="cmp" id="atxt"></div>
+    </div>
+    <div class="card cpanel" id="cpB">
+      <h3 id="btitle"></h3>
+      <div class="cmp" id="btxt"></div>
+    </div>
+    <div class="card cpanel" id="cpC">
+      <h3 id="ctitle2"></h3><p class="note" id="cnote"></p>
+      <div class="ctl"><label><span id="cplbl"></span> <input type="range" id="cp" min="10" max="100" value="60"><b id="cpv">60 %</b></label></div>
+      <svg id="csvg" viewBox="0 0 1000 300" role="img"></svg>
+      <div class="cmp" id="ctxt"></div>
+    </div>
+    <div class="card cpanel" id="cpD">
+      <h3 id="dtitle"></h3>
+      <div class="tblwrap"><table class="t" id="dtab"></table></div>
+      <p class="note" id="dnote" style="margin-top:8px"></p>
+    </div>
+  </div>
+  <!-- 3 manufacturer matrix -->
+  <div class="sc" id="sc3">
+    <div class="card tblwrap"><table class="mx" id="mx"></table></div>
+    <div class="links" id="links"></div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const NSC=4;
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink / wrap SVG labels that would overflow their slot
+const CJK=/[⺀-鿿＀-￯　-〿]/;
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=CJK.test(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+// wrap into lines of at most max px (CJK may break between any two characters)
+const wrap=(t,s,max,w)=>{
+  const tok=String(t).match(/[⺀-鿿＀-￯　-〿]|[^\s⺀-鿿＀-￯　-〿]+|\s+/g)||[];
+  const out=[];let cur='';
+  tok.forEach(k=>{if(cur.trim()&&textW((cur+k).trim(),s,w)>max){out.push(cur.trim());cur=k.trimStart()}else cur+=k});
+  if(cur.trim())out.push(cur.trim());return out;
+};
+// multi-line label; va = top (first line at y) | mid (block centred on y) | bottom (last line at y)
+const TW=(x,y,t,max,c='var(--muted)',a='middle',w=400,s=11,lh=13,va='top')=>{
+  const L=wrap(t,s,max,w),y0=va==='mid'?y-(L.length-1)*lh/2:va==='bottom'?y-(L.length-1)*lh:y;
+  return L.map((l,i)=>TX(x,y0+i*lh,l,c,a,w,s,max)).join('');
+};
+const Tm=(x,y,t,a='middle',max=0)=>TX(x,y,t,'var(--muted)',a,400,11,max);
+
+// ── language-neutral data (texts in finishing_machines_texts.js, same order)
+const MID=['foulard','hotflue','spann','sanfor','kompakt','kalander','rauen','dekatur','tumbler','beschicht'];
+const TOP=['foulard','hotflue','spann','sanfor','kompakt','kalander'],BOT=['rauen','dekatur','tumbler','beschicht'];
+// evidence per manufacturer row (TEXTS.m[i].mk, same order): h manufacturer, p trade press, m market list only
+const MKS={foulard:'phhhhh',hotflue:'h',spann:'hhhhpm',sanfor:'hphh',kompakt:'hhhhp',kalander:'hh',rauen:'phm',dekatur:'p',tumbler:'hph',beschicht:'hph'};
+const MX=[["Brückner","DE",{spann:1,beschicht:1}],["Monforts","DE",{foulard:1,hotflue:1,spann:1,sanfor:1,beschicht:1}],["Monforts Fong's","HK/CN",{spann:1}],
+ ["Santex Rimar","CH/IT",{spann:1,sanfor:1,kompakt:1,tumbler:1}],["Sperotto Rimar (Santex Rimar Group)","IT",{sanfor:1,kompakt:1,dekatur:1}],
+ ["Andritz (Küsters, ramisch)","AT/DE",{foulard:1,kalander:1}],["Navis TubeTex","US",{foulard:1,spann:1,kompakt:1,tumbler:1}],
+ ["Ferraro","IT",{foulard:1,sanfor:1,kompakt:1,kalander:1}],["Lafer","IT",{kompakt:1,rauen:1}],["Xetma Vollenweider","CH/DE",{rauen:1}],
+ ["Zimmer Austria","AT",{beschicht:1}],["Biancalani","IT",{tumbler:1}],["Suchy","DE",{foulard:1}],["Beta Machinery","IT",{foulard:1}],
+ ["Il Sung","KR",{spann:2}],["Harish Tex-Mach","IN",{spann:2}],["DMS Dilmenler","TR",{spann:2}]];
+const AK=[['br','Brückner SPLIT-FLOW'],['mo','Monforts TwinAir'],['sa','Santex AERO-SURF']];
+const LINK_KEYS=['mechanical_finishing','chemical_finishing'];
+const SOURCES=['German Pavilion – Brückner POWER-FRAME, Split-Flow, dual heating (german-pavilion.com)','Techtextil – Brückner SFP-4, up to 35 % savings (messefrankfurt.com)',
+  'TEXtalks – Brückner thermal zones every 1.5 m (textalks.com)','Textile World – Todtnau Bernauer, alternating thermal zones (textileworld.com)',
+  'texdata – SFP-4 at ITMA 2023 (electric/H₂ heating) (texdata.com)','Kitmondo – Brückner SFP 2018, 8 fields of 3 m, 80 m/min (kitmondo.com)',
+  'Innovation in Textiles – Montex 8000, TwinAir, Thermal Split +30 °C (innovationintextiles.com)','Indian Textile Journal – Montex 8500, split up to 70 °C, Montex XXL (indiantextilejournal.com)',
+  'Textile World – Montex XXL 7 m, CADstream nozzles (textileworld.com)','Textile World – Eco Booster HRC up to 35 % (textileworld.com)',
+  'texdata – Monforts: 80 % share in Pakistan, Montex®Coat (texdata.com)','ATE – Monforts Fong\'s Montex 6500c (ategroup.com)',
+  'Indian Textile Magazine – Santaframe, air cushion, heating above the fabric web (indiantextilemagazine.in)','texdata – Santex ESC up to 25 %, Santacompact RD Plus (texdata.com)',
+  'Indian Textile Journal – Santaframe, late 1990s (indiantextilejournal.com)','Monforts – Matex padder (monforts.de)',
+  'Fibre2Fashion – Küsters S-Roll, 12–50 N/mm (fibre2fashion.com)','DirectIndustry – S-Roll without crowning (directindustry.com)',
+  'Beta Machinery – Beta-Roll, crowned roll only at design pressure (issuu.com)','Suchy – padder up to 6000 mm, active deflection compensation (suchy-textil.de)',
+  'Monforts/ATE – Thermex 6500/7000 brochure (ategroup.com)','Textile World – Thermex 6500, Econtrol Knit (textileworld.com)',
+  'Textile World – Thermex 6500, 51 m, Exxotherm (textileworld.com)','Monforts – shrinkage ranges Monfortex/Toptex (monforts.de)',
+  'Monforts – rubber-belt shrinking ranges (monforts.de)','texdata – Sperotto Rimar Compas, indirect cooling (texdata.com)',
+  'Rieter/Accotex – shrinkage rubber belts (rieter.com)','Santex Rimar – company presentation (Santacompact, Santasynpact) (slideshare.net)',
+  'Navis TubeTex – C-2500 MC+ brochure (messefrankfurt.com)','Navis TubeTex – Pak Nit II e3+ (plantautomation-technology.com)',
+  'Textile World – Navis at Pinto (P5V, TM-100) (textileworld.com)','Textile Study Center – compactors, shoe parameters (textilestudycenter.com)',
+  'Machines Italia – Ferraro range (machinesitalia.org)','Ferraro – catalogue (machinesitalia.org)',
+  'Lafer – felt compactors (directindustry.com)','Lafer – raising machines (directindustry.com)',
+  'Atoka – Lafer SpA company data (atoka.io)','Gi-Tex – Lafer GRV90, 2×24 raising rollers (gi-tex.it)',
+  'texdata – Xetma Vollenweider, Gessner 1853 (texdata.com)','Andritz – textile calenders (andritz.com)',
+  'PTJ – Andritz teXcal Raconip (issuu.com)','texdata – Sperotto Rimar Decofast (texdata.com)',
+  'Biancalani – AIRO brochure (netetrade.com)','Textile World – Biancalani Airo 24 (textileworld.com)',
+  'Textile World – Santex Santashrink (textileworld.com)','Zimmer Austria – MAGNOROLL (zimmer-austria.com)',
+  'Textile World – 500th MAGNOROLL (textileworld.com)','Zimmer Austria – Coating Systems 2015, 500–5600 mm (zimmer-austria.com)',
+  '360iResearch – market for heat-setting stenters (marketresearch.com)'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+let cur=MID.includes(params.get('machine'))?params.get('machine'):'spann',curV=null,ak='br',ctab=params.get('cmp')||'A';
+if(!'ABCD'.includes(ctab)||ctab.length!==1)ctab='A';
+if(params.get('paused')==='1')document.body.classList.add('paused');
+
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+function segBtns(el,items,curv,cb){
+  el.innerHTML=items.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${v===curv}">${esc(l)}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.v));
+}
+const mi=id=>MID.indexOf(id);
+
+// ── SVG building blocks (schemas strongly simplified, as in the source page)
+const roll=(x,y,r,o={})=>`<g class="rot${o.rev?' rev':''}${o.fast?' fast':''}" style="transform-origin:${x}px ${y}px"><circle cx="${x}" cy="${y}" r="${r}" fill="${o.f||'#e9ecef'}" stroke="${o.s||'#495057'}" stroke-width="1.6"/><line x1="${x}" y1="${y-r+3}" x2="${x}" y2="${y+r-3}" stroke="#868e96" stroke-width="1.4"/>${r>30?`<line x1="${x-r+3}" y1="${y}" x2="${x+r-3}" y2="${y}" stroke="#adb5bd" stroke-width="1"/>`:''}</g>`;
+const fab=(d,cl='fab')=>`<path d="${d}" class="${cl}"/>`;
+const air=(d,c='')=>`<path d="${d}" class="air ${c}" marker-end="url(#${MP}ah${c?'c':''})"/>`;
+const arr=(x1,y1,x2,y2,c='var(--pin)',w=3)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${w}" marker-end="url(#${MP}${c==='var(--pin)'?'aha':'ahm'})"/>`;
+// marker/gradient ids get a per-SVG prefix: duplicate ids would resolve to the first (possibly hidden) SVG
+let MP='m';
+const DEFS=()=>`<defs><marker id="${MP}ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#E07B39"/></marker><marker id="${MP}ahc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2386C8"/></marker><marker id="${MP}aha" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#C62828"/></marker><marker id="${MP}ahm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5A6460"/></marker><linearGradient id="${MP}steel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dee2e6"/><stop offset=".5" stop-color="#adb5bd"/><stop offset="1" stop-color="#868e96"/></linearGradient><radialGradient id="${MP}hot"><stop offset="0" stop-color="#ffd8a8"/><stop offset="1" stop-color="#f08c00"/></radialGradient><pattern id="${MP}perf" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="5" cy="5" r="1.6" fill="#868e96"/></pattern></defs>`;
+const HEATBG='#FCF0E7',HEATBG2='#FDF5EF';
+
+const SV={};
+SV.foulard=L=>{
+  let s=`<path d="M300 170 L330 280 L590 280 L620 170 Z" fill="#fff" stroke="#495057" stroke-width="1.6"/><path d="M310 205 L330 280 L590 280 L610 205 Z" fill="rgba(24,100,171,.22)"/>`;
+  s+=roll(236,72,12)+roll(420,245,20,{rev:1})+roll(478,110,42,{f:'#ced4da'})+roll(562,110,42,{rev:1,f:'#ced4da'});
+  s+=fab("M20 60 L230 60 Q244 60 249 74 L400 245 Q420 268 440 245 L520 190 L520 18 L740 18");
+  for(let i=0;i<4;i++)s+=`<circle class="drop" style="animation-delay:${i*.3}s" cx="${508+i*8}" cy="158" r="2.6" fill="var(--fab)"/>`;
+  s+=arr(400,110,430,110)+arr(640,110,610,110);
+  s+=TX(415,98,L[0],'var(--pin)','middle',600,11,70)+TX(625,98,L[0],'var(--pin)','middle',600,11,70);
+  s+=TX(460,300,L[1],'var(--fg)','middle',600,12,300)+Tm(420,215,L[2],'middle',110)+TX(538,178,L[3],'var(--fg)','start',600,11,95);
+  s+=Tm(30,48,L[4],'start',200)+TW(740,36,L[5],210,'var(--muted)','end')+TW(692,142,L[6],110);
+  return s;};
+SV.hotflue=L=>{
+  let s=`<rect x="200" y="22" width="530" height="262" rx="8" fill="${HEATBG}" stroke="#495057"/>`;
+  s+=`<rect x="70" y="100" width="100" height="100" rx="6" fill="var(--panel)" stroke="#495057"/>`;
+  for(let i=0;i<5;i++){s+=`<rect x="78" y="${108+i*18}" width="12" height="10" fill="url(#${MP}hot)"/><rect x="150" y="${108+i*18}" width="12" height="10" fill="url(#${MP}hot)"/>`;}
+  let d="M10 150 L215 150 Q222 150 225 140 L225 60";let x=225;
+  for(let k=0;k<7;k++){d+=` A15 15 0 0 1 ${x+30} 60 L${x+30} 240 A15 15 0 0 0 ${x+60} 240 L${x+60} 60`;x+=60;}
+  d+=` A15 15 0 0 1 ${x+30} 60 L${x+30} 120 L760 120`;
+  s+=fab(d);
+  x=225;for(let k=0;k<8;k++){s+=roll(x+15,60,13);if(k<7)s+=roll(x+45,240,13,{rev:1});x+=60;}
+  for(let i=0;i<6;i++)s+=air(`M${270+i*75} 290 L${270+i*75} 262`);
+  s+=TX(120,90,L[0],'var(--fg)','middle',600,12,150)+TX(465,15,L[1],'var(--fg)','middle',600,12,700)+Tm(465,306,L[2],'middle',520)+TW(12,140,L[3],56,'var(--muted)','start',400,11,13,'bottom');
+  return s;};
+SV.spann=L=>{
+  let s=roll(40,120,13)+roll(40,148,13,{rev:1})+Tm(40,96,L[0],'middle',75);
+  s+=`<rect x="95" y="105" width="70" height="60" rx="6" fill="var(--panel)" stroke="#495057"/>`+TW(130,180,L[1],84);
+  for(let i=0;i<4;i++){const x=190+i*112;
+    s+=`<rect x="${x}" y="40" width="108" height="180" rx="5" fill="${HEATBG2}" stroke="#495057"/>`;
+    s+=`<rect x="${x+8}" y="92" width="92" height="22" rx="3" fill="#dee2e6" stroke="#868e96"/><rect x="${x+8}" y="156" width="92" height="22" rx="3" fill="#dee2e6" stroke="#868e96"/>`;
+    for(let j=0;j<4;j++){s+=air(`M${x+20+j*22} 115 L${x+20+j*22} 130`)+air(`M${x+20+j*22} 155 L${x+20+j*22} 141`);}
+    s+=`<g class="rot fast" style="transform-origin:${x+54}px 64px"><circle cx="${x+54}" cy="64" r="14" fill="#fff" stroke="#495057"/><path d="M${x+54} 52 L${x+54} 76 M${x+42} 64 L${x+66} 64" stroke="#495057"/></g>`;
+    s+=Tm(x+54,34,fmt(L[2],{n:i+1}),'middle',100);}
+  s+=`<rect x="650" y="105" width="40" height="60" rx="5" fill="#E3F0FA" stroke="#495057"/>`+TW(670,180,L[3],80);
+  s+=fab("M20 135 L740 135");s+=roll(728,135,14);
+  s+=Tm(420,238,L[4],'middle',660);
+  s+=`<path d="M100 252 L640 246 L640 290 L100 284 Z" fill="rgba(24,100,171,.18)"/>`;
+  s+=`<path d="M100 252 L190 246 L640 246" class="fab" style="stroke:var(--fg);stroke-width:2"/><path d="M100 284 L190 290 L640 290" class="fab" style="stroke:var(--fg);stroke-width:2"/>`;
+  s+=TW(702,268,L[5],108,'var(--muted)','middle',400,11,13,'mid');
+  return s;};
+const belt=(col,lbl,kind)=>{
+  const L=T().sv.belt;
+  let s=`<rect x="130" y="54" width="90" height="24" rx="4" fill="var(--panel)" stroke="#495057"/>`+Tm(175,46,kind==='g'?L[0]:L[1],'middle',200);
+  for(let i=0;i<4;i++)s+=`<circle class="drop" style="animation-delay:${i*.25}s" cx="${145+i*20}" cy="84" r="2.4" fill="var(--cool)"/>`;
+  s+=`<path d="M355 150 A95 95 0 0 0 532 197 L622 245 L600 270 L320 276 L289 160 L289 150 A33 33 0 0 1 355 150 Z" fill="none" stroke="${col}" stroke-width="15" stroke-linejoin="round"/>`;
+  s+=`<g class="rot rev" style="transform-origin:450px 150px"><circle cx="450" cy="150" r="85" fill="url(#${MP}hot)" stroke="#495057" stroke-width="1.6"/><line x1="450" y1="70" x2="450" y2="230" stroke="#e8590c"/><line x1="370" y1="150" x2="530" y2="150" stroke="#e8590c"/></g>`;
+  s+=roll(322,150,26,{f:'#ced4da'})+roll(608,256,16,{rev:1})+roll(318,268,12,{rev:1});
+  s+=fab("M20 98 L330 98 Q358 100 361 150 A89 89 0 0 0 527 194.5");
+  s+=fab("M527 194.5 L740 160","fab2");
+  s+=arr(262,150,284,150);
+  s+=TW(450,163,L[2],110,'#7c2d12','middle',600,11,14,'mid');
+  s+=TW(256,154,L[3],80,'var(--pin)','end',600,11,13,'mid');
+  s+=TX(470,304,lbl,col,'middle',600,12,420)+TW(690,140,L[4],110,'var(--muted)','middle',400,11,13,'bottom');
+  s+=TW(150,236,kind==='g'?L[5]:L[6],230);
+  return s;};
+SV.sanfor=L=>belt("#495057",L[0],"g");
+SV.kompakt=(L,v)=>{
+  if(v==='filz')return belt("#a07d50",L[11],"f");
+  let s=`<rect x="20" y="96" width="110" height="18" rx="4" fill="var(--panel)" stroke="#495057"/>`+Tm(75,88,L[0],'middle',150);
+  s+=fab("M20 105 L280 105 Q298 108 303 129 A48 48 0 0 1 388 160");
+  s+=fab("M388 160 A48 48 0 0 0 436 208 L740 208","fab2");
+  s+=roll(340,160,44,{f:`url(#${MP}hot)`})+roll(436,160,44,{rev:1,f:'#ced4da'});
+  s+=`<path d="M291 136 A56 56 0 0 1 392 128" fill="none" stroke="var(--heat)" stroke-width="11" stroke-linecap="round"/>`;
+  s+=arr(345,50,345,88);
+  s+=TX(345,44,L[1],'var(--pin)','middle',600,11,160)+TX(276,76,L[2],'var(--heat)','end',600,11,200);
+  s+=TX(330,228,L[3],'var(--fg)','middle',600,12,150)+Tm(330,242,L[4],'middle',150)+TX(475,262,L[5],'var(--fg)','middle',600,12,140)+Tm(475,276,L[6],'middle',140);
+  s+=`<circle cx="389" cy="160" r="9" fill="none" stroke="var(--pin)" stroke-width="2" stroke-dasharray="3 2"/>`+TX(500,110,L[7],'var(--pin)','start',600,11,250)+Tm(500,125,L[8],'start',250)+Tm(500,139,L[9],'start',250);
+  s+=Tm(640,228,L[10],'middle',200);
+  return s;};
+SV.kalander=L=>{
+  let s=fab("M20 152 L740 152");
+  s+=`<g class="rot" style="transform-origin:380px 92px"><circle cx="380" cy="92" r="58" fill="url(#${MP}steel)" stroke="#495057" stroke-width="1.6"/><line x1="380" y1="38" x2="380" y2="146" stroke="#f8f9fa"/></g>`;
+  s+=`<g class="rot rev" style="transform-origin:380px 212px"><circle cx="380" cy="212" r="58" fill="#e6dcc8" stroke="#495057" stroke-width="1.6"/><line x1="380" y1="158" x2="380" y2="266" stroke="#a07d50"/></g>`;
+  for(let i=0;i<5;i++)s+=`<rect x="${336+i*20}" y="222" width="8" height="26" fill="var(--twist)" opacity=".75"/>`;
+  s+=arr(380,292,380,274)+arr(250,212,300,212,"var(--twist)",2);
+  s+=TX(460,72,L[0],'var(--fg)','start',600,12,290)+Tm(460,87,L[1],'start',290);
+  s+=TX(460,206,L[2],'var(--fg)','start',600,12,290)+TW(460,221,L[3],290,'var(--muted)','start');
+  s+=TX(244,204,L[4],'var(--twist)','end',600,11,120)+Tm(380,20,L[5],'middle',720);
+  s+=Tm(30,140,L[6],'start',200)+Tm(670,140,L[7],'middle',160);
+  return s;};
+SV.rauen=L=>{
+  let s=`<g class="rot" style="transform-origin:280px 165px"><circle cx="280" cy="165" r="92" fill="#f1f3f5" stroke="#495057" stroke-width="1.6"/>`;
+  for(let i=0;i<12;i++){const a=i*Math.PI/6,x=280+76*Math.cos(a),y=165+76*Math.sin(a);s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="14" fill="${i%2?'#ffe8cc':'#d0ebff'}" stroke="#495057"/>`;}
+  s+=`</g>`;
+  s+=fab("M20 117 L197.7 117.5 A95 95 0 0 1 362.3 117.5 L520 196 L740 196");
+  s+=`<g class="rot fast" style="transform-origin:575px 166px"><circle cx="575" cy="166" r="26" fill="url(#${MP}steel)" stroke="#495057"/>`;
+  for(let i=-2;i<=2;i++)s+=`<line x1="${563+i*8}" y1="142" x2="${587+i*8}" y2="190" stroke="#495057"/>`;
+  s+=`</g><path d="M548 192 L604 192 L604 200 L548 200 Z" fill="#495057"/><path d="M500 210 L600 196 L600 206 L500 220 Z" fill="#ced4da" stroke="#868e96"/>`;
+  s+=TX(280,282,L[0],'var(--fg)','middle',600,12,400)+TW(280,297,L[1],540);
+  s+=TX(575,110,L[2],'var(--fg)','middle',600,12,320)+Tm(575,125,L[3],'middle',320)+TW(650,232,L[4],200);
+  return s;};
+SV.dekatur=L=>{
+  let s=`<g class="rot rev" style="transform-origin:330px 150px"><circle cx="330" cy="150" r="95" fill="url(#${MP}perf)" stroke="#495057" stroke-width="1.8"/></g><circle cx="330" cy="150" r="95" fill="rgba(255,255,255,.4)" stroke="none"/>`;
+  s+=`<path d="M330 43 A107 107 0 1 0 437 150" fill="none" stroke="#868e96" stroke-width="7"/>`;
+  s+=fab("M20 50 L330 50 A100 100 0 1 0 430 150 L542 190");
+  for(let i=0;i<8;i++){const a=Math.PI*(.55+i*.12),x1=330+30*Math.cos(a),y1=150+30*Math.sin(a),x2=330+80*Math.cos(a),y2=150+80*Math.sin(a);s+=air(`M${x1.toFixed(0)} ${y1.toFixed(0)} L${x2.toFixed(0)} ${y2.toFixed(0)}`);}
+  s+=`<g class="rot" style="transform-origin:600px 190px"><circle cx="600" cy="190" r="55" fill="url(#${MP}perf)" stroke="#495057" stroke-width="1.6"/></g>`;
+  s+=fab("M542 190 A58 58 0 0 1 658 190 L740 190");
+  for(let i=0;i<5;i++){const a=-Math.PI*(.15+i*.15),x1=600+90*Math.cos(a),y1=190+90*Math.sin(a),x2=600+62*Math.cos(a),y2=190+62*Math.sin(a);s+=air(`M${x1.toFixed(0)} ${y1.toFixed(0)} L${x2.toFixed(0)} ${y2.toFixed(0)}`,'c');}
+  s+=TX(330,150,L[0],'var(--heat)','middle',600,12,120)+Tm(330,166,L[1],'middle',150);
+  s+=TX(600,264,L[2],'var(--fg)','middle',600,12,240)+TX(330,282,L[3],'var(--fg)','middle',600,12,420)+Tm(330,297,L[4],'middle',440);
+  return s;};
+SV.tumbler=L=>{
+  let s=`<rect x="140" y="30" width="520" height="250" rx="16" fill="${HEATBG2}" stroke="#495057"/>`;
+  s+=`<path d="M210 250 L560 80" stroke="#ced4da" stroke-width="30" stroke-linecap="round"/>`;
+  s+=`<g stroke="#495057" stroke-width="2">`;for(let i=0;i<7;i++)s+=`<line x1="604" y1="${48+i*14}" x2="618" y2="${48+i*14}"/>`;s+=`<line x1="611" y1="44" x2="611" y2="140"/></g>`;
+  s+=fab("M600 90 Q625 110 600 160 Q560 250 470 255 Q360 262 250 258 Q205 255 210 245 L560 80 Z");
+  s+=`<g class="rot fast" style="transform-origin:180px 248px"><circle cx="180" cy="248" r="18" fill="#fff" stroke="#495057"/><path d="M180 232 L180 264 M164 248 L196 248" stroke="#495057"/></g>`;
+  s+=air("M150 220 L205 238")+air("M160 200 L215 230");
+  s+=TW(300,104,L[0],230,'var(--fg)','middle',600,11,14);
+  s+=TX(646,170,L[1],'var(--fg)','start',600,11,110)+TW(646,184,L[2],110,'var(--muted)','start');
+  s+=Tm(400,300,L[3],'middle',600)+TX(165,196,L[4],'var(--heat)','end',600,11,140);
+  return s;};
+SV.beschicht=L=>{
+  let s=`<g class="rot" style="transform-origin:190px 180px"><circle cx="190" cy="180" r="60" fill="url(#${MP}steel)" stroke="#495057" stroke-width="1.6"/><line x1="190" y1="124" x2="190" y2="236" stroke="#f8f9fa"/></g>`;
+  s+=fab("M20 118 L190 117 L360 118");
+  s+=`<path d="M190 60 L205 60 L194 115 L186 115 Z" fill="#495057"/><path d="M150 112 Q168 96 186 112 Z" fill="var(--twist)" opacity=".8"/>`;
+  s+=`<path d="M194 115 L360 115" stroke="var(--twist)" stroke-width="3"/>`;
+  s+=TX(190,46,L[0],'var(--fg)','middle',600,12,330)+Tm(140,88,L[1],'middle',150)+TW(190,262,L[2],340);
+  s+=`<line x1="380" y1="20" x2="380" y2="300" stroke="var(--line)"/>`;
+  s+=`<g class="rot" style="transform-origin:570px 135px"><circle cx="570" cy="135" r="62" fill="none" stroke="#495057" stroke-width="2" stroke-dasharray="3 3"/></g>`;
+  s+=`<path d="M520 172 Q570 190 620 172 L620 182 Q570 197 520 182 Z" fill="var(--twist)" opacity=".7"/>`;
+  s+=`<g class="rot rev fast" style="transform-origin:570px 186px"><circle cx="570" cy="186" r="9" fill="url(#${MP}steel)" stroke="#495057"/></g>`;
+  s+=fab("M400 199 L740 199");s+=`<path d="M572 196 L740 196" stroke="var(--twist)" stroke-width="3"/>`;
+  s+=`<rect x="520" y="208" width="100" height="16" rx="3" fill="#c92a2a"/>`;
+  for(let i=0;i<4;i++)s+=`<path d="M${535+i*22} 208 Q${540+i*22} 196 ${535+i*22} 186" fill="none" stroke="#c92a2a" stroke-dasharray="2 3" opacity=".6"/>`;
+  s+=TX(570,46,L[3],'var(--fg)','middle',600,12,350)+TW(570,246,L[4],340)+TX(656,140,L[5],'var(--twist)','start',600,11,100);
+  return s;};
+
+// ── 0 finishing line
+function drawLine(){
+  const t=T(),u=t.ui;
+  MP='l';let s=DEFS();const bw=150,gap=31;
+  TOP.forEach((id,i)=>{const x=20+i*(bw+gap),n=t.line[mi(id)];
+    s+=`<g class="node${cur===id?' sel':''}" data-id="${id}"><rect x="${x}" y="40" width="${bw}" height="64" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>${TX(x+bw/2,68,n[0],'var(--fg)','middle',700,14,bw-12)}${Tm(x+bw/2,87,n[1],'middle',bw-12)}</g>`;
+    if(i<TOP.length-1)s+=arr(x+bw+3,72,x+bw+gap-3,72,'var(--muted)',2);});
+  s+=TX(20,26,u.mainLbl,'var(--muted)','start',400,11,1060);
+  BOT.forEach((id,i)=>{const x=110+i*230,w=bw+30,n=t.line[mi(id)];
+    s+=`<g class="node${cur===id?' sel':''}" data-id="${id}"><rect x="${x}" y="164" width="${w}" height="64" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="5 4"/>${TX(x+w/2,192,n[0],'var(--fg)','middle',700,14,w-12)}${Tm(x+w/2,211,n[1],'middle',w-12)}</g>`;});
+  s+=TX(20,150,u.specLbl,'var(--muted)','start',400,11,1060);
+  const svg=$('linesvg');svg.innerHTML=s;svg.setAttribute('aria-label',u.lineAria);
+  svg.querySelectorAll('.node').forEach(g=>g.onclick=()=>{showM(g.dataset.id);go(1)});
+  $('linehint').textContent=u.lineHint;
+}
+
+// ── 1 machines in detail
+function showM(id){
+  if(id!==cur||curV===null){cur=id;const m=T().m[mi(id)];curV=m.v.length?'schuh':null}
+  drawM();drawLine();drawMx();
+}
+function drawM(){
+  const t=T(),u=t.ui,m=t.m[mi(cur)];
+  segBtns($('mtabs'),MID.map((id,i)=>[id,t.m[i].n]),cur,v=>showM(v));
+  $('mname').textContent=m.n;$('mde').textContent=m.d;
+  segBtns($('mvar'),m.v.map((l,i)=>[['schuh','filz'][i],l]),curV,v=>{curV=v;drawM()});
+  $('mvar').style.display=m.v.length?'flex':'none';
+  const svg=$('msvg');MP='m';svg.innerHTML=DEFS()+SV[cur](t.sv[cur],curV);svg.setAttribute('aria-label',u.msvgAria+': '+m.n);
+  $('howlbl').textContent=u.how;$('figlbl').textContent=u.figs;$('mklbl').textContent=u.makers;
+  $('msteps').innerHTML=m.how.map(h=>`<li>${esc(h)}</li>`).join('');
+  $('mfigs').innerHTML=m.figs.map(f=>`<div><b>${esc(f[0])}</b><span>${esc(f[1])}</span></div>`).join('');
+  const st=k=>`<span class="st ${k}">${esc(u.st[k][0])}</span>`;
+  $('stlegend').innerHTML=['h','p','m'].map(k=>`<span>${st(k)} ${esc(u.st[k][1])}</span>`).join('');
+  $('mtab').innerHTML=`<tr>${u.mkHead.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+
+    m.mk.map((r,i)=>`<tr><td><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${st(MKS[cur][i])}</td></tr>`).join('');
+  $('mnote').textContent=m.note;
+  $('pause').textContent=document.body.classList.contains('paused')?u.play:u.pause;
+}
+$('pause').onclick=()=>{document.body.classList.toggle('paused');drawM()};
+
+// ── 2 comparisons
+function drawCmpTabs(){
+  const t=T();
+  segBtns($('ctabs'),['A','B','C','D'].map(k=>[k,t.ui.cmpTabs['ABCD'.indexOf(k)]]),ctab,v=>{ctab=v;drawCmpTabs()});
+  ['A','B','C','D'].forEach(k=>$('cp'+k).classList.toggle('on',k===ctab));
+}
+function drawA(){
+  const t=T(),a=t.a,L=a.sv;
+  $('atitle').textContent=a.title;$('anote').textContent=a.note;$('arlbl').textContent=a.ratio;
+  segBtns($('aseg'),AK,ak,v=>{ak=v;drawA()});
+  const r=+$('aratio').value/100;$('aratiov').textContent=Math.round(r*100)+' %';
+  $('aratio').disabled=ak==='sa';
+  MP='a';let s=DEFS();const top=ak==='sa'?0.3:r,bot=1-top;
+  for(let i=0;i<4;i++){const x=40+i*235,w=225;
+    s+=`<rect x="${x}" y="30" width="${w}" height="210" rx="6" fill="${HEATBG2}" stroke="#495057"/>`;
+    s+=`<rect x="${x+10}" y="70" width="${w-20}" height="24" rx="3" fill="#dee2e6" stroke="#868e96"/><rect x="${x+10}" y="176" width="${w-20}" height="24" rx="3" fill="#dee2e6" stroke="#868e96"/>`;
+    const n=7;
+    for(let j=0;j<n;j++){const xx=x+22+j*(w-44)/(n-1),lt=8+30*top,lb=8+30*bot;
+      s+=`<path d="M${xx} 95 L${xx} ${95+lt}" class="air" stroke-width="${1+3*top}" marker-end="url(#${MP}ah)"/>`;
+      s+=`<path d="M${xx} 175 L${xx} ${175-lb}" class="air" stroke-width="${1+3*bot}" marker-end="url(#${MP}ah)"/>`;}
+    if(ak==='br'){const Lf=i%2===0;s+=`<rect x="${Lf?x+6:x+w-36}" y="38" width="30" height="24" rx="4" fill="url(#${MP}hot)" stroke="#495057"/>`+Tm(x+w/2,228,Lf?L[0]:L[1],'middle',w-16);}
+    if(ak==='mo'){s+=Tm(x+w/2,64,top>bot?L[2]:L[3],'middle',w-16)+`<rect x="${x+w/2-15}" y="206" width="30" height="20" rx="4" fill="url(#${MP}hot)" stroke="#495057" opacity=".8"/><rect x="${x+w/2-15}" y="40" width="30" height="12" rx="3" fill="url(#${MP}hot)" stroke="#495057"/>`;}
+    if(ak==='sa'){s+=`<rect x="${x+w/2-40}" y="36" width="80" height="22" rx="4" fill="url(#${MP}hot)" stroke="#495057"/>`+Tm(x+w/2,228,L[4],'middle',w-16);}
+  }
+  let d='M20 135';const k=ak==='sa'?-14:(bot-top)*60;
+  for(let i=0;i<4;i++){const x=40+i*235,w=225;d+=` L${x+8} 135 Q${x+w/2} ${135-k*1.2} ${x+w-8} 135`;}
+  d+=' L990 135';s+=fab(d);
+  s+=Tm(500,276,ak==='br'?L[5]:ak==='mo'?L[6]:L[7],'middle',940);
+  const svg=$('asvg');svg.innerHTML=s;svg.setAttribute('aria-label',a.title);
+  $('atxt').innerHTML=a.items[ak].map(x=>`<div class="c"><div class="k">${esc(x[0])}</div><p>${esc(x[1])}</p></div>`).join('');
+}
+$('aratio').oninput=drawA;
+function drawB(){
+  const b=T().b;$('btitle').textContent=b.title;
+  $('btxt').innerHTML=b.items.map(x=>`<div class="c"><h4>${esc(x[0])}</h4><div class="k">${esc(x[1])}</div><p>${esc(x[2])}</p></div>`).join('');
+}
+function drawC(){
+  const c=T().c,L=c.sv;
+  $('ctitle2').textContent=c.title;$('cnote').textContent=c.note;$('cplbl').textContent=c.press;
+  const P=+$('cp').value/100;$('cpv').textContent=Math.round(P*100)+' %';
+  const W=270,x0=575,y0=250,H=190,cx=270;
+  const f={zyl:x=>P*(1-0.55*P*(1-x*x)),bomb:x=>P*(1-0.9*(P-0.6)*(1-x*x)),komp:x=>P};
+  const col={zyl:'#868e96',bomb:'var(--heat)',komp:'var(--ok)'};
+  MP='c';let s=DEFS()+`<line x1="${x0}" y1="${y0}" x2="${x0+W}" y2="${y0}" stroke="var(--line)"/><line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y0-H}" stroke="var(--line)"/>`;
+  s+=Tm(x0+W/2,y0+18,L[0],'middle',W+40)+`<text x="${x0-12}" y="${y0-H/2}" font-size="11" fill="var(--muted)" transform="rotate(-90 ${x0-12} ${y0-H/2})" text-anchor="middle">${esc(L[1])}</text>`;
+  Object.keys(f).forEach(k=>{let d='';for(let i=0;i<=60;i++){const x=-1+i/30,v=f[k](x);d+=(i?'L':'M')+(x0+(x+1)/2*W).toFixed(1)+' '+(y0-v*H*0.95).toFixed(1);}s+=`<path d="${d}" fill="none" stroke="${col[k]}" stroke-width="3"/>`;});
+  [['komp',L[2]],['bomb',L[3]],['zyl',L[4]]].forEach((l,i)=>{s+=`<line x1="${x0+W+10}" y1="${74+i*18}" x2="${x0+W+26}" y2="${74+i*18}" stroke="${col[l[0]]}" stroke-width="3"/>`+TX(x0+W+30,78+i*18,l[1],col[l[0]],'start',600,11,1000-(x0+W+32));});
+  const sag=40*P,bsag=40*(P-0.6)*1.5;
+  const rowY=[60,140,220],lab=[[L[5],'#868e96'],[L[6],'var(--heat)'],[L[2],'var(--ok)']];
+  lab.forEach((l,i)=>{const y=rowY[i],g=i===0?sag:i===1?bsag:0;
+    s+=`<path d="M40 ${y-24} Q${cx} ${y-24-g} 500 ${y-24} L500 ${y-4} Q${cx} ${y-4-g} 40 ${y-4} Z" fill="#dee2e6" stroke="#495057"/>`;
+    s+=`<path d="M40 ${y+4} Q${cx} ${y+4+g} 500 ${y+4} L500 ${y+24} Q${cx} ${y+24+g} 40 ${y+24} Z" fill="#dee2e6" stroke="#495057"/>`;
+    s+=TX(cx,y-30-Math.max(0,g)/2,l[0],l[1],'middle',600,11,440);
+    if(Math.abs(g)>3)s+=TX(cx,y+3.5,g>0?L[7]:L[8],'var(--muted)','middle',400,9.5,300);});
+  const svg=$('csvg');svg.innerHTML=s;svg.setAttribute('aria-label',c.title);
+  $('ctxt').innerHTML=c.cards.map(x=>`<div class="c"><h4>${esc(x[0])}</h4><p>${esc(x[1])}</p></div>`).join('');
+}
+$('cp').oninput=drawC;
+function drawD(){
+  const d=T().d;$('dtitle').textContent=d.title;$('dnote').textContent=d.note;
+  $('dtab').innerHTML=`<tr>${d.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+d.rows.map(r=>`<tr><td><b>${esc(r[0])}</b></td>${r.slice(1).map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('');
+}
+
+// ── 3 matrix + module links
+function drawMx(){
+  const t=T(),u=t.ui;
+  $('mx').innerHTML=`<tr><th>${esc(u.mxHead[0])}</th><th>${esc(u.mxHead[1])}</th>${MID.map((id,i)=>`<th class="${id===cur?'hl':''}" data-id="${id}" title="${esc(t.m[i].n)}">${esc(t.mx[i])}</th>`).join('')}</tr>`+
+    MX.map(r=>`<tr><td><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td>${MID.map(id=>{const v=r[2][id];return `<td class="${v===1?'y':v===2?'l':''}${id===cur?' hl':''}">${v===1?'●':v===2?'○':''}</td>`}).join('')}</tr>`).join('');
+  $('mx').querySelectorAll('th[data-id]').forEach(th=>th.onclick=()=>{showM(th.dataset.id);go(1)});
+}
+function drawLinks(){
+  const t=T();
+  $('links').innerHTML=t.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${esc(l[0])} →</b><span>${esc(l[1])}</span><em>${esc(t.ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(EMBED)document.title='scene:'+scene;
+  window.scrollTo(0,0);
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k[0])}</b><span>${esc(k[1])}</span></div>`).join('');
+  showM(cur);drawCmpTabs();drawA();drawB();drawC();drawD();drawLinks();go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+})();
+</script>
+</body>
+</html>

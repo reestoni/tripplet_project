@@ -1,6 +1,6 @@
 window.TEXTS = {
 "de": {
- "ui": {"eyebrow": "Onboarding · Filamentgarnspinnerei", "h1": "Wie aus Granulat POY und FDY werden",
+ "ui": {"eyebrow": "Knowledge Base · Filamentgarnspinnerei", "h1": "Wie aus Granulat POY und FDY werden",
   "lead": "Im Schmelzspinnen wird Polyester aufgeschmolzen, durch feine Düsenlöcher gepresst, abgekühlt und aufgewickelt. Wie schnell und mit welchen Galetten abgezogen wird, entscheidet, ob ein POY oder ein FDY entsteht. Sechs kurze Szenen zeigen den Weg und die Rolle der Heberlein-Düsen.",
   "speed": "Abzugsgeschwindigkeit", "dec": ",", "pause": "⏸ Pause", "play": "▶ Abspielen", "scenes": "Szenen",
   "clickHint": "Auf eine Position in der Anlage klicken - sie wird hier erklärt.",
@@ -55,7 +55,7 @@ window.TEXTS = {
   "table": [["Galetten", "kalt, kein Verstrecken", "beheizt, verstreckt"], ["Aufwicklung", "2800–3500 m/min", "3500–5000 m/min"], ["Orientierung", "teilweise", "hoch, teilkristallin"], ["Bruchdehnung", "120–160 %", "25–40 %"], ["Festigkeit", "2,0–3,0 cN/dtex", "3,5–5,0 cN/dtex"], ["Verwendung", "Vorlage für DTY", "Glattgarn, Mischgarn"]]}
 },
 "en": {
- "ui": {"eyebrow": "Onboarding · Filament yarn spinning", "h1": "How chips become POY and FDY",
+ "ui": {"eyebrow": "Knowledge Base · Filament yarn spinning", "h1": "How chips become POY and FDY",
   "lead": "In melt spinning, polyester is melted, pressed through fine spinneret holes, cooled and wound up. How fast and over which godets it is taken off decides whether POY or FDY is made. Six short scenes show the path and the role of the Heberlein jets.",
   "speed": "Take-up speed", "dec": ".", "pause": "⏸ Pause", "play": "▶ Play", "scenes": "Scenes",
   "clickHint": "Click a position on the plant - it is explained here.",
@@ -110,7 +110,7 @@ window.TEXTS = {
   "table": [["Godets", "cold, no drawing", "heated, drawn"], ["Winding", "2800–3500 m/min", "3500–5000 m/min"], ["Orientation", "partial", "high, partly crystalline"], ["Elongation", "120–160 %", "25–40 %"], ["Tenacity", "2.0–3.0 cN/dtex", "3.5–5.0 cN/dtex"], ["Use", "feed yarn for DTY", "flat yarn, combined yarn"]]}
 },
 "es": {
- "ui": {"eyebrow": "Onboarding · Hilatura de filamento", "h1": "Cómo el granulado se convierte en POY y FDY",
+ "ui": {"eyebrow": "Knowledge Base · Hilatura de filamento", "h1": "Cómo el granulado se convierte en POY y FDY",
   "lead": "En la hilatura por fusión, el poliéster se funde, se presiona a través de los finos orificios de la hilera, se enfría y se bobina. La velocidad de retirada y los godets utilizados deciden si se obtiene POY o FDY. Seis escenas cortas muestran el recorrido y el papel de las toberas Heberlein.",
   "speed": "Velocidad de bobinado", "dec": ",", "pause": "⏸ Pausa", "play": "▶ Reproducir", "scenes": "Escenas",
   "clickHint": "Haz clic en una posición de la instalación: aquí se explica.",
@@ -165,7 +165,7 @@ window.TEXTS = {
   "table": [["Godets", "fríos, sin estirado", "calentados, estirado"], ["Bobinado", "2800–3500 m/min", "3500–5000 m/min"], ["Orientación", "parcial", "alta, parcialmente cristalino"], ["Alargamiento", "120–160 %", "25–40 %"], ["Tenacidad", "2,0–3,0 cN/dtex", "3,5–5,0 cN/dtex"], ["Uso", "alimentación para DTY", "hilo liso, hilo mixto"]]}
 },
 "zh": {
- "ui": {"eyebrow": "入门 · 长丝纺丝", "h1": "切片是如何变成 POY 和 FDY 的",
+ "ui": {"eyebrow": "知识库 · 长丝纺丝", "h1": "切片是如何变成 POY 和 FDY 的",
   "lead": "熔体纺丝时，涤纶被熔融、通过喷丝板的细孔挤出、冷却并卷绕。卷绕速度以及使用哪些导丝辊，决定了生产的是 POY 还是 FDY。六个短场景介绍工艺路线以及 Heberlein 喷嘴的作用。",
   "speed": "卷绕速度", "dec": ".", "pause": "⏸ 暂停", "play": "▶ 播放", "scenes": "场景",
   "clickHint": "点击设备上的某个位置，这里会显示说明。",

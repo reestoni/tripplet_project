@@ -542,6 +542,11 @@ def build_tools_group(
     offline_gated_buttons.append(btn_air_supply)
     _add_if(sidebar, btn_air_supply, "air_supply")
 
+    # Yarn Count Converter (dtex/den/...): ohne Datenbank, geht auch offline - fuer alle
+    btn_yarn_count = icon_btn("Yarn Count Converter", "yarn_count.png", "SidebarItem", trigger_yarn_count,
+                              tab_capable=True, open_in_new_tab=open_in_new_tab)
+    _add_if(sidebar, btn_yarn_count, "yarn_count")
+
     # Dashboards: anschauen, was man selbst gebaut hat oder was einem freigegeben wurde - fuer alle
     btn_dashboards = icon_btn("Dashboards", "dashboards.png", "SidebarItem", trigger_dashboards,
                               tab_capable=True, open_in_new_tab=open_in_new_tab)
@@ -693,6 +698,17 @@ def trigger_dashboards():
         pass
 
 
+def trigger_yarn_count():
+    """Sidebar "Yarn Count Converter" (ui/screen_yarn_count.py) - main.py setzt
+    app_meta.open_yarn_count (gleiches Muster wie Dashboards)."""
+    try:
+        import app_meta
+        if callable(app_meta.open_yarn_count):
+            app_meta.open_yarn_count()
+    except Exception:
+        pass
+
+
 def trigger_help_search():
     """Oeffnet die Hilfe-Suche ueber die globale app_meta-Registrierung
     (main.py setzt app_meta.open_help_search, gleiches Muster wie Quick Search)."""
@@ -812,7 +828,7 @@ def build_pinned_recent(sidebar: SidebarPanel) -> QPushButton:
 def build_pinned_onboarding(sidebar: SidebarPanel) -> QPushButton:
     """Fester Eintrag "Onboarding" (2026-11-06) unter Help: animierte Einfuehrungen
     (ui/screen_onboarding.py), fuer alle, nicht schaltbar - wie die Hilfe."""
-    btn = icon_btn("Onboarding", "onboarding.png", "SidebarItem", trigger_onboarding)
+    btn = icon_btn("Knowledge Base", "onboarding.png", "SidebarItem", trigger_onboarding)
     btn.setToolTip("Short animated introductions to our work (DTY intermingling, …)")
     sidebar.add_item(btn)
     return btn

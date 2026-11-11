@@ -1,7 +1,7 @@
 window.TEXTS = {
  "de": {
   "ui": {
-   "eyebrow": "Onboarding · Labor",
+   "eyebrow": "Knowledge Base · Labor",
    "h1": "Kräuselung und Schrumpf mit dem TEXTURMAT ME",
    "lead": "Das TEXTURMAT ME misst, wie stark und wie dauerhaft ein texturiertes Garn gekräuselt ist und wie viel es unter Hitze schrumpft. Dafür werden Garnstränge thermisch behandelt und dann unter genau festgelegten Lasten gelängt und entlastet. Sechs kurze Szenen zeigen den Ablauf.",
    "note": "Schematische Darstellung. Gerätedaten und Lastfolge aus dem Textechno-Datenblatt zum TEXTURMAT ME+. Die Zuordnung der Längen zu den Laststufen und die Formeln folgen der üblichen Auswertung nach DIN 53840. Garnwerte sind Beispielwerte, keine Messergebnisse.",
@@ -269,7 +269,7 @@ window.TEXTS = {
  },
  "en": {
   "ui": {
-   "eyebrow": "Onboarding · Lab",
+   "eyebrow": "Knowledge Base · Lab",
    "h1": "Crimp and shrinkage with the TEXTURMAT ME",
    "lead": "The TEXTURMAT ME measures how strongly and how permanently a textured yarn is crimped and how much it shrinks under heat. For this, yarn hanks are heat-treated and then elongated and relaxed under exactly defined loads. Six short scenes show the procedure.",
    "note": "Schematic representation. Device data and load sequence from the Textechno data sheet for the TEXTURMAT ME+. The assignment of the lengths to the load steps and the formulas follow the usual evaluation to DIN 53840. Yarn values are example values, not measurement results.",
@@ -537,7 +537,7 @@ window.TEXTS = {
  },
  "es": {
   "ui": {
-   "eyebrow": "Onboarding · Laboratorio",
+   "eyebrow": "Knowledge Base · Laboratorio",
    "h1": "Rizado y contracción con el TEXTURMAT ME",
    "lead": "El TEXTURMAT ME mide lo fuerte y lo duradero que es el rizado de un hilo texturizado y cuánto encoge con el calor. Para ello se tratan térmicamente madejas de hilo y después se alargan y se relajan bajo cargas exactamente definidas. Seis escenas cortas muestran el proceso.",
    "note": "Representación esquemática. Datos del equipo y secuencia de cargas según la hoja técnica de Textechno del TEXTURMAT ME+. La asignación de las longitudes a los escalones de carga y las fórmulas siguen la evaluación habitual según DIN 53840. Los valores del hilo son de ejemplo, no resultados de medición.",
@@ -805,7 +805,7 @@ window.TEXTS = {
  },
  "zh": {
   "ui": {
-   "eyebrow": "入门 · 实验室",
+   "eyebrow": "知识库 · 实验室",
    "h1": "用 TEXTURMAT ME 测卷曲和收缩",
    "lead": "TEXTURMAT ME 测量变形丝卷曲的强弱和持久性，以及受热后的收缩量。为此将丝绞进行热处理，然后在精确规定的负荷下拉长和松弛。六个简短场景展示整个流程。",
    "note": "示意图。设备数据和负荷顺序来自 Textechno TEXTURMAT ME+ 数据表。各长度与负荷级的对应关系及公式按 DIN 53840 的常规评估。纱线数值为示例值，不是测量结果。",

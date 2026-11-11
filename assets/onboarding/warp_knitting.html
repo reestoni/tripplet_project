@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Warp Knitting</title>
+<!-- Onboarding module (ui/screen_onboarding.py), same pattern as air_splicing.html.
+     Texts in warp_knitting_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1 for screenshots. No external resources. Scenes never change automatically.
+     Slider "lapping" (pillar/tricot/cord/satin) in scenes 3 and 4. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --yarn:#6E6556;--air:#2386C8;--heat:#E07B39;--hl:#39A650;
+  --y1:#B8860B;--y2:#3F64B8;--y3:#C2558A;--ok:#2E9C7A;--violet:#7A5BB5;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.langs{display:flex;gap:4px;flex-shrink:0}
+.langs[hidden]{display:none}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+canvas{display:block;width:100%;aspect-ratio:16/9}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.scenes{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.scenes button span{font-family:var(--font-mono);font-size:12px;opacity:.7}
+.right{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.slider{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.slider[hidden]{display:none}
+.slider input{accent-color:var(--hl);width:160px}
+.slider output{min-width:5em;color:var(--fg)}
+.play{min-width:120px;justify-content:center}
+.caption{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;border-top:1px solid var(--line);padding-top:16px}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 8px}
+.caption p{margin:0 0 10px;max-width:70ch}
+.now{font-family:var(--font-mono);font-size:13px;color:var(--hl);min-height:1.5em}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.facts li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.facts b{font-family:var(--font-mono);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:2px;overflow-wrap:anywhere}
+.note{font-size:12px;color:var(--muted);margin:0}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.caption{grid-template-columns:1fr;gap:14px}.facts li{grid-template-columns:96px minmax(0,1fr)}header{flex-direction:column}}
+</style>
+<script src="warp_knitting_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="stage"><canvas id="cv" width="1600" height="900"></canvas></div>
+  <div class="controls">
+    <div class="scenes" id="scenes" role="group"></div>
+    <div class="right">
+      <label class="slider" id="lwrap" hidden><span id="llab"></span>
+        <input id="lg" type="range" min="0" max="3" step="1" value="1"><output id="lout"></output></label>
+      <button class="play" id="play" type="button"></button>
+    </div>
+  </div>
+  <section class="caption" aria-live="polite">
+    <div><h2 id="ctitle"></h2><p class="now" id="cnow"></p><p id="ctext"></p></div>
+    <ul class="facts" id="cfacts"></ul>
+  </section>
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');const W=1600,H=900;
+if(!CanvasRenderingContext2D.prototype.roundRect){CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(r||0,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this}}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/* Light theme: steel parts are light grey fills with a darker outline, needles mid grey */
+const C={bg:css('--panel'),line:css('--line'),fg:css('--fg'),muted:css('--muted'),air:css('--air'),heat:css('--heat'),hl:css('--hl'),
+  ok:css('--ok'),y1:css('--y1'),y2:css('--y2'),y3:css('--y3'),violet:css('--violet'),
+  steel:'#8f9a9d',part:'#E3E8E6',part2:'#C3CBC9',needle:'#7E898C',dot:'#9AA3A0'};
+const MONO=css('--font-mono'),DISP=css('--font-display'),SANS=css('--font-body');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const params=new URLSearchParams(location.search);
+let lang=(params.get('lang')||'de');if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+let fitW=0;function fit(){const w=cv.getBoundingClientRect().width||W;if(w===fitW&&cv.width>0)return;fitW=w;const d=Math.min(devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(w*d));cv.height=Math.max(1,Math.round(w*9/16*d))}
+addEventListener('resize',fit);if(window.ResizeObserver)new ResizeObserver(fit).observe(cv);fit();
+const smooth=(a,b,x)=>{const q=Math.max(0,Math.min(1,(x-a)/(b-a)));return q*q*(3-2*q)},lerp=(a,b,q)=>a+(b-a)*q;
+
+/* Lappings: notation s + gap pairs [from, to] per course; names/descriptions come from TEXTS cv.lappings */
+const LG=[{s:'0-1/1-0',L:[[0,1],[1,0]]},{s:'1-0/1-2',L:[[1,0],[1,2]]},{s:'1-0/2-3',L:[[1,0],[2,3]]},{s:'1-0/3-4',L:[[1,0],[3,4]]}];
+const lgName=i=>T().cv.lappings[i].n,lgDesc=i=>T().cv.lappings[i].d;
+let LI=1;
+const NSC=5,SLIDER_SCENES=[2,3];
+
+/* ---------- UI ---------- */
+const sceneEl=$('scenes'),play=$('play'),lin=$('lg');
+/* auto = motion runs (pause only freezes it). Scenes never change by themselves. */
+let scene=0,sceneT=0,auto=!reduce,t=0,lastSt=null;
+function setPlay(){play.setAttribute('aria-pressed',auto);play.textContent=auto?T().ui.pause:T().ui.play}
+play.onclick=()=>{auto=!auto;setPlay()};
+lin.oninput=()=>{LI=+lin.value;$('lout').textContent=lgName(LI);sceneT=0};
+function go(i){const n=(i+NSC)%NSC;scene=n;sceneT=0;lastSt=null;if(EMBED)document.title='scene:'+scene;
+  [...sceneEl.children].forEach((b,j)=>b.setAttribute('aria-pressed',j===scene));
+  const s=T().scenes[scene];$('ctitle').textContent=`${scene+1}  ·  ${s.title}`;$('ctext').textContent=s.text;
+  $('cfacts').innerHTML='';s.facts.forEach(f=>{const li=document.createElement('li');const b=document.createElement('b');b.textContent=f[0];const sp=document.createElement('span');sp.textContent=f[1];li.append(b,sp);$('cfacts').appendChild(li)});
+  $('cnow').textContent='';$('lwrap').hidden=!SLIDER_SCENES.includes(scene)}
+function applyLang(){const u=T().ui;document.documentElement.lang=lang;
+  ['eyebrow','h1','lead','note'].forEach(k=>$(k).textContent=u[k]);$('llab').textContent=u.lapping;
+  sceneEl.setAttribute('aria-label',u.scenes);sceneEl.innerHTML='';
+  T().scenes.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<span>${i+1}</span>`;b.append(s.k);b.onclick=()=>go(i);sceneEl.appendChild(b)});
+  [...$('langs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  $('lout').textContent=lgName(LI);setPlay();const keep=sceneT;go(scene);sceneT=keep}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')go(scene+1);if(e.key==='ArrowLeft')go(scene-1);if(e.key===' '){e.preventDefault();auto=!auto;setPlay()}});
+
+/* ---------- Helpers ---------- */
+function setFont(o){ctx.font=`${o.w||500} ${o.s||20}px ${o.f||MONO}`}
+function label(s,x,y,o={}){setFont(o);ctx.fillStyle=o.c||C.muted;ctx.textAlign=o.a||'center';ctx.textBaseline='middle';ctx.globalAlpha=o.al??1;ctx.fillText(s,x,y);ctx.globalAlpha=1}
+/* Greedy line wrap; CJK characters may break anywhere, other text at spaces */
+function wrapLines(s,maxW,o){setFont(o);const tok=s.match(/[　-鿿＀-￯]|[^\s　-鿿＀-￯]+|\s+/g)||[];
+  const out=[];let cur='';tok.forEach(k=>{const tryS=cur+k;if(cur.trim()&&ctx.measureText(tryS.trimEnd()).width>maxW){out.push(cur.trim());cur=/^\s+$/.test(k)?'':k}else cur=tryS});
+  if(cur.trim())out.push(cur.trim());return out}
+function wlabel(s,x,y,maxW,lh,o={}){const L=wrapLines(s,maxW,o);L.forEach((l,i)=>label(l,x,y+i*lh,o));return L.length}
+function now(s){if(s!==lastSt){lastSt=s;$('cnow').textContent='▸ '+s}}
+/* Point paper: lapping L, courses R, needles N, origin bottom left */
+function lapping(L,x0,y0,P,R,N,col,o={}){const gx=g=>x0+g*P,nyy=r=>y0-r*P*1.1;
+  ctx.fillStyle=C.dot;for(let r=0;r<R;r++)for(let n=0;n<N;n++){ctx.beginPath();ctx.arc(x0+(n+.5)*P,nyy(r),3.5,0,7);ctx.fill()}
+  const reps=o.reps||[0],upto=o.upto??R;
+  reps.forEach((sh,ri)=>{ctx.strokeStyle=col;ctx.globalAlpha=ri===0?1:.4;ctx.lineWidth=ri===0?3.5:2.5;ctx.beginPath();let first=true;
+    for(let r=0;r<Math.min(R,upto);r++){const [a,b]=L[r%L.length].map(v=>v+sh),y=nyy(r);
+      const xa=gx(a),xb=gx(b);if(first){ctx.moveTo(xa,y+P*.35);first=false}else ctx.lineTo(xa,y+P*.35);
+      // overlap: loop around the needle head
+      ctx.bezierCurveTo(xa,y-P*.5,xb,y-P*.5,xb,y+P*.35);
+      if(a===b){ctx.moveTo(xb,y+P*.35)}}
+    ctx.stroke();ctx.globalAlpha=1})}
+
+/* ---------- 1 Principle ---------- */
+function scene1(){const cvT=T().cv,P=70,n=6;
+  [[150,cvT.knitTitle,false],[880,cvT.warpTitle,true]].forEach(([x0,ti,kw])=>{label(ti,x0,130,{a:'left',s:26,f:DISP,w:700,c:C.fg});
+    for(let i=0;i<n;i++){ctx.fillStyle=C.needle;ctx.fillRect(x0+20+i*P,180,6,120)}
+    const k=Math.floor(sceneT/1.2)%5;
+    if(!kw){for(let r=0;r<4;r++){ctx.strokeStyle=r%2?C.y2:C.y1;ctx.lineWidth=4;ctx.globalAlpha=r<=k?1:.2;ctx.beginPath();for(let i=0;i<=n*20;i++){const s=i/20,x=x0+P*s,y=640-r*70+16*Math.cos(2*Math.PI*s);i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.stroke();ctx.globalAlpha=1}
+      wlabel(cvT.knitSub,x0,720,640,24,{a:'left',s:18})}
+    else{const cols=[C.y1,C.y2,C.y3,C.ok,C.heat,C.violet];for(let j=0;j<n;j++){ctx.strokeStyle=cols[j];ctx.lineWidth=4;ctx.beginPath();for(let r=0;r<5;r++){const x=x0+23+(j+(r%2))*P,y=680-r*70;r?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x0+23+j*P,180);ctx.lineTo(x0+23+j*P,140);ctx.stroke()}
+      wlabel(cvT.warpSub,x0,720,640,24,{a:'left',s:18})}});
+  wlabel(cvT.fromWarp,880+6*70+10,170,260,22,{a:'left',s:16});
+  now(cvT.now1)}
+
+/* ---------- 2 Machine layout ---------- */
+function scene2(){const cvT=T().cv,hl=Math.floor(sceneT/3)%6,HC=i=>i===hl?C.hl:C.steel;
+  [[300,200,C.y1],[300,330,C.y2]].forEach(([x,y,c],k)=>{ctx.fillStyle=C.part;ctx.strokeStyle=HC(0);ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,60,0,7);ctx.fill();ctx.stroke();ctx.fillStyle=c;ctx.globalAlpha=.35;ctx.beginPath();ctx.arc(x,y,52,0,7);ctx.fill();ctx.globalAlpha=1;
+    ctx.strokeStyle=c;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+60,y);ctx.lineTo(560,y-40+k*30);ctx.lineTo(820+k*30,420);ctx.stroke()});
+  ctx.fillStyle=HC(1);[160,320].forEach(y=>{ctx.beginPath();ctx.arc(560,y,8,0,7);ctx.fill()});
+  const sw=Math.sin(t*3)*30;for(let k=0;k<2;k++){ctx.save();ctx.translate(820+k*30,300);ctx.rotate(sw*.004);ctx.fillStyle=C.part;ctx.strokeStyle=HC(2);ctx.lineWidth=2;ctx.fillRect(-10,-10,20,130);ctx.strokeRect(-10,-10,20,130);ctx.restore()}
+  const nb=Math.max(0,Math.sin(t*3+1))*40;ctx.fillStyle=C.needle;ctx.fillRect(895,440-nb,6,180);ctx.fillStyle=C.part;ctx.strokeStyle=HC(3);ctx.lineWidth=2;ctx.fillRect(870,600-nb,60,60);ctx.strokeRect(870,600-nb,60,60);
+  ctx.fillStyle=C.part2;ctx.strokeStyle=HC(4);ctx.beginPath();ctx.moveTo(910,520);ctx.lineTo(1060,520);ctx.lineTo(1060,550);ctx.lineTo(925,550);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.y1;ctx.globalAlpha=.4;ctx.fillRect(880,540,12,200);ctx.globalAlpha=1;ctx.fillStyle=C.part;ctx.strokeStyle=HC(5);ctx.lineWidth=3;[[880,760],[930,760]].forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,20,0,7);ctx.fill();ctx.stroke()});
+  const L=[[300,110],[560,110],[835,250],[960,640],[1080,520],[990,800]];
+  cvT.parts.forEach((p,i)=>label(p,L[i][0],L[i][1],{a:i>2?'left':'center',s:19,c:i===hl?C.fg:C.muted,w:i===hl?700:500}));
+  label(cvT.side,120,840,{a:'left',s:16});
+  now(cvT.partNow[hl])}
+
+/* ---------- 3 Lapping (top view) ---------- */
+function scene3(){const cvT=T().cv,L=LG[LI].L,P=120,x0=300,ny=470,D=4,k=Math.floor(sceneT/D),u=(sceneT%D)/D,[a,b]=L[k%2],nextA=L[(k+1)%2][0];
+  const gx=g=>x0+g*P;
+  // phases: 0-.2 swing in (forward), .2-.4 overlap, .4-.6 swing out, .6-.8 underlap, .8-1 needles draw
+  const yBack=330,yFront=610;let gxp,gy;
+  if(u<.2){gxp=gx(a);gy=lerp(yBack,yFront,smooth(0,.2,u))}else if(u<.4){gxp=lerp(gx(a),gx(b),smooth(.2,.4,u));gy=yFront}else if(u<.6){gxp=gx(b);gy=lerp(yFront,yBack,smooth(.4,.6,u))}else if(u<.8){gxp=lerp(gx(b),gx(nextA),smooth(.6,.8,u));gy=yBack}else{gxp=gx(nextA);gy=yBack}
+  // needles
+  for(let n=-1;n<6;n++){const x=x0+(n+.5)*P,up=u>.8?1-smooth(.8,.95,u):1;ctx.fillStyle=C.needle;ctx.beginPath();ctx.arc(x,ny,14*up+4,0,7);ctx.fill()}
+  wlabel(cvT.needles,x0+6*P+20,ny,250,22,{a:'left',s:18,c:C.fg});label(cvT.back,x0-60,yBack,{a:'right',s:18});label(cvT.front,x0-60,yFront,{a:'right',s:18});
+  // gap numbers below the needle row
+  for(let g=0;g<=5;g++)label(String(g),gx(g),ny+70,{s:17,c:C.muted});
+  // yarn: from the back/top to the guide and around the needle
+  ctx.strokeStyle=C.y1;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(gx(a),180);ctx.lineTo(gxp,gy);ctx.stroke();
+  if(u>.2){const xn=x0+(Math.min(a,b)+.5)*P;ctx.beginPath();ctx.moveTo(gx(a),yFront-20);ctx.quadraticCurveTo(xn,ny+60,gxp,gy);ctx.stroke()}
+  // guide (eye needle)
+  ctx.fillStyle=C.air;ctx.beginPath();ctx.roundRect(gxp-10,gy-22,20,44,6);ctx.fill();ctx.fillStyle=C.bg;ctx.beginPath();ctx.arc(gxp,gy+8,4,0,7);ctx.fill();label(cvT.guide,gxp+22,gy-20,{a:'left',s:17,c:C.air,w:600});
+  const ph=u<.2?cvT.phases[0]:u<.4?fmt(cvT.phases[1],{a,b}):u<.6?cvT.phases[2]:u<.8?fmt(cvT.phases[3],{a:b,b:nextA}):cvT.phases[4];
+  label(`${lgName(LI)}  ${LG[LI].s}`,x0,140,{a:'left',s:30,f:DISP,w:700,c:C.fg});label(fmt(cvT.row,{n:k+1}),x0+5*P,140,{a:'left',s:20,c:C.fg});
+  now(ph)}
+
+/* ---------- 4 Point paper ---------- */
+function scene4(){const cvT=T().cv,g=LG[LI],P=58,x0=180,y0=760,R=10,N=8,upto=Math.min(R,Math.floor(sceneT/1.2)+1);
+  lapping(g.L,x0,y0,P,R,N,C.y1,{reps:[0,2,4],upto});
+  label(`${lgName(LI)}  ${g.s}`,820,200,{a:'left',s:40,f:DISP,w:700,c:C.fg});
+  const dl=wlabel(lgDesc(LI),820,252,720,26,{a:'left',s:19,f:SANS,c:C.fg}),y=252+(dl-1)*26;
+  const [a,b]=g.L[0],[c,d]=g.L[1];
+  label(fmt(cvT.row1,{a,b,c}),820,y+70,{a:'left',s:18});label(fmt(cvT.row2,{a:c,b:d,c:a}),820,y+104,{a:'left',s:18});
+  const nu=Math.abs(b-c);label(nu===0?cvT.under0:nu===1?cvT.under1:fmt(cvT.underN,{n:nu}),820,y+156,{a:'left',s:20,c:C.heat,w:600});
+  for(let gg=0;gg<=N;gg++)label(String(gg),x0+gg*P,y0+36,{s:15});label(cvT.gap,x0-20,y0+36,{a:'right',s:15});
+  wlabel(cvT.legend,x0,130,1300,22,{a:'left',s:16});
+  now(fmt(cvT.nowLap,{n:lgName(LI),d:lgDesc(LI)}))}
+
+/* ---------- 5 Guide bars ---------- */
+function scene5(){const cvT=T().cv,P=58,x0=180,y0=760,R=10,N=8,upto=Math.min(R,Math.floor(sceneT/1)+1);
+  lapping(LG[2].L,x0,y0,P,R,N,C.y2,{reps:[0,3],upto});lapping([[1,2],[1,0]],x0,y0,P,R,N,C.y1,{reps:[0,2],upto});
+  label(cvT.charm,820,200,{a:'left',s:40,f:DISP,w:700,c:C.fg});
+  label(cvT.frontBar,820,262,{a:'left',s:20,c:C.y2,w:600});label(cvT.backBar,820,300,{a:'left',s:20,c:C.y1,w:600});
+  wlabel(cvT.stab,820,350,700,26,{a:'left',s:19,f:SANS,c:C.fg});
+  cvT.cards.forEach(([ti,tx],i)=>{const y=450+i*120;ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(820,y,640,100,10);ctx.stroke();
+    label(ti,844,y+30,{a:'left',s:24,f:DISP,w:700,c:C.fg});const o={a:'left',s:17,f:SANS},Ls=wrapLines(tx,590,o);Ls.forEach((l,j)=>label(l,844,y+(Ls.length>1?60:67)+j*22,o))});
+  now(cvT.now5)}
+
+/* ---------- Loop ---------- */
+applyLang();
+if(params.get('scene'))go((+params.get('scene')||1)-1);
+if(params.get('paused')==='1'){auto=false;setPlay()}
+const DRAWFN=[scene1,scene2,scene3,scene4,scene5];let last=performance.now();
+function frame(nw){const real=Math.min(.05,(nw-last)/1000)*(reduce?.5:1),dt=auto?real:0;last=nw;t+=dt;sceneT+=dt;fit();
+  try{const s=cv.width/W;ctx.setTransform(s,0,0,s,0,0);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(90,100,96,.05)';ctx.lineWidth=1;for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+    ctx.setLineDash([]);ctx.lineCap='round';ctx.lineJoin='round';DRAWFN[scene]();
+    label(`${scene+1}/${NSC}`,1540,50,{a:'right',s:22});label(T().scenes[scene].k.toUpperCase(),60,50,{a:'left',s:30,c:C.fg,f:DISP,w:600});
+  }catch(e){console.error(e)}
+  requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

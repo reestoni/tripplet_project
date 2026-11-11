@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FDY Spinning Plants</title>
+<!-- Knowledge-Base-Modul (ui/screen_onboarding.py), Kategorie Spinnerei.
+     Inhalt aus der Recherche-Seite des Nutzers "FDY-Spinnanlagen - Hersteller, Bauformen & Varianten" (Stand Nov. 2026).
+     Texte in fdy_spinning_plants_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (ohne eigenen Kopf/Kapitel-Knoepfe, meldet das Kapitel per document.title "scene:n"),
+     ?scene=n fuer Screenshots. Keine externen Ressourcen (Quellen und Herstellerseiten nur als Text).
+     Verwirbelungsduese verlinkt filament_spinning: eingebettet per document.title "open:<key>", sonst <key>.html. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--yarn:#B5651D;--twist:#6A4FC8;--soft:#EEF3EC;
+  --cool:#2386C8;--jet:#0C8599;--wind:#495057;--hot:#D9363E;--cn:#C92A2A;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{font-family:var(--font-display);font-size:22px;margin:2px 0 6px}
+.card p{margin:6px 0}
+.card ul{padding-left:18px;margin:6px 0}
+.grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:12px;align-items:start}
+#sc0 .grid2{grid-template-columns:1.8fr 1fr}
+.lbl{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+.seg{display:flex;gap:4px;flex-wrap:wrap}
+.seg button{padding:5px 10px;font-size:13px}
+.controls{display:flex;flex-wrap:wrap;gap:12px 16px;margin-bottom:10px}
+.tag,.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;margin:2px 4px 2px 0;background:var(--soft);border:1px solid var(--line)}
+.tag{font-family:var(--font-mono);font-size:11px}
+.note,.muted{font-size:13px;color:var(--muted)}
+.node{cursor:pointer}
+.node:hover rect,.node:hover circle{stroke:var(--hl);stroke-width:2.5}
+.node.sel rect,.node.sel circle{stroke:var(--hl);stroke-width:3}
+.yarn{fill:none;stroke:var(--yarn);stroke-width:2.6;stroke-dasharray:7 6;animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-26}}
+@media (prefers-reduced-motion: reduce){.yarn{animation:none}}
+.lk{margin-top:8px;border-color:var(--jet);color:var(--jet);font-size:13px;padding:5px 10px}
+.lk:hover{border-color:var(--hl);color:var(--hl)}
+/* tree */
+.tree{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.dim{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.dim h4{margin:0 0 8px;font-size:15px;display:flex;align-items:center;gap:8px}
+.dim h4 .num{font-family:var(--font-mono);font-size:11px;background:var(--fg);color:#fff;border-radius:4px;padding:2px 6px}
+.opt{border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin:6px 0;cursor:pointer;transition:.15s}
+.opt:hover{border-color:var(--hl)}
+.opt b{font-size:14px}
+.opt small{display:block;color:var(--muted);font-size:12.5px}
+.opt.hl{background:#E8F5EA;border-color:var(--hl)}
+/* layouts */
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.tabs button.on{border-color:var(--hl);box-shadow:inset 0 0 0 1px var(--hl);font-weight:600}
+.procon{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.procon ul{padding-left:16px;margin:0}
+/* manufacturers */
+.filters{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end}
+.filters input{font:inherit;font-size:14px;padding:6px 10px;border-radius:4px;border:1px solid var(--line);background:#fff;color:var(--fg);min-width:220px}
+.tf{font-size:13px;color:var(--muted)}
+.tf a{color:var(--air);cursor:pointer;text-decoration:underline}
+.mfr{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.mcard{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
+.mcard .top{padding:12px 14px 8px;display:flex;gap:12px;align-items:flex-start}
+.flag{font-family:var(--font-mono);font-size:11px;padding:3px 7px;border-radius:4px;background:var(--fg);color:#fff;white-space:nowrap}
+.mcard h3{margin:0;font-size:17px;font-family:var(--font-display)}
+.mcard .meta{color:var(--muted);font-size:13px}
+.mcard .thumb{background:var(--bg);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.mcard .thumb svg{height:120px}
+.mnote{padding:10px 14px 0;font-size:13.5px}
+.models{padding:8px 14px 12px}
+.model{border-top:1px dashed var(--line);padding:8px 0}
+.model:first-child{border-top:0}
+.model .mn{font-weight:600;font-size:14px}
+.model .mn span{font-family:var(--font-mono);font-weight:400;color:var(--muted);font-size:12px}
+.model .ms{font-size:13px;color:var(--muted)}
+.chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);margin:2px 3px 0 0;font-family:var(--font-mono)}
+.chip.auto{border-color:var(--hl);color:var(--hl)}
+.chip.man,.chip.lg{border-color:var(--muted);color:var(--muted)}
+.chip.lg{font-style:italic}
+.chip.pa{border-color:var(--twist);color:var(--twist)}
+.chip.pes{border-color:var(--air);color:var(--air)}
+.dom{margin-top:8px;font-size:12.5px;color:var(--muted);font-family:var(--font-mono)}
+.empty{color:var(--muted);padding:20px}
+/* bars */
+.bars .row{display:grid;grid-template-columns:240px 1fr 54px;gap:10px;align-items:center;margin:5px 0;font-size:13.5px}
+.bars .track{height:18px;background:var(--bg);border-radius:4px;overflow:hidden}
+.bars .fill{height:100%;border-radius:4px;transition:width .6s}
+.bars .v{font-family:var(--font-mono);text-align:right}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+/* timeline */
+.timeline{position:relative;padding-left:22px;border-left:2px solid var(--line);margin-left:6px}
+.tev{margin:0 0 14px;position:relative}
+.tev:before{content:"";position:absolute;left:-30px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--hl);border:2px solid #fff}
+.tev b{font-family:var(--font-mono);font-size:13px;color:var(--hl)}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}header{flex-direction:column}details ol{columns:1}.bars .row{grid-template-columns:130px 1fr 44px;font-size:12px}}
+</style>
+<script src="fdy_spinning_plants_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 process -->
+  <div class="sc" id="sc0">
+    <div class="grid2">
+      <div class="stage">
+        <div class="controls" id="pctl"></div>
+        <svg id="procsvg" viewBox="0 0 830 650" role="img"></svg>
+      </div>
+      <div class="card" id="detail"></div>
+    </div>
+  </div>
+  <!-- 1 variant tree -->
+  <div class="sc" id="sc1"><div class="tree" id="tree"></div></div>
+  <!-- 2 layouts -->
+  <div class="sc" id="sc2">
+    <div class="tabs" id="ptabs"></div>
+    <div class="grid2">
+      <div class="stage"><svg id="profsvg" viewBox="0 0 620 420" role="img"></svg></div>
+      <div class="card" id="profdesc"></div>
+    </div>
+  </div>
+  <!-- 3 manufacturers -->
+  <div class="sc" id="sc3">
+    <div class="filters">
+      <div><span class="lbl" id="lsearch"></span><input id="q" type="search"></div>
+      <div><span class="lbl" id="lregion"></span><div class="seg" id="freg"></div></div>
+      <div><span class="lbl" id="lscope"></span><div class="seg" id="fscope"></div></div>
+    </div>
+    <div class="tf" id="treefilter"></div>
+    <div class="mfr" id="mfr"></div>
+  </div>
+  <!-- 4 winder comparison -->
+  <div class="sc" id="sc4">
+    <div class="card">
+      <div class="seg" id="csort" style="margin-bottom:10px"></div>
+      <div class="bars" id="bars"></div>
+      <div class="legend" id="legend"></div>
+      <p class="note" id="barsnote"></p>
+    </div>
+  </div>
+  <!-- 5 market -->
+  <div class="sc" id="sc5">
+    <div class="grid2">
+      <div class="card"><div class="timeline" id="timeline"></div></div>
+      <div class="card"><h3 id="assessT"></h3><ul id="assess"></ul></div>
+    </div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12)=>`<text x="${x}" y="${y}" font-size="${s}" text-anchor="${a}" fill="${c}" font-weight="${w}">${esc(t)}</text>`;
+// multi-line SVG text; Chinese has no spaces: cut into chunks of characters instead of words
+function wrap(text,x,y,max,c,a,w,s,lines){
+  const str=String(text),cjk=!/\s/.test(str)&&/[　-鿿]/.test(str);
+  const words=cjk?(str.match(new RegExp('.{1,'+Math.max(4,Math.floor(max*0.55))+'}','g'))||[]):str.split(' ');
+  let out='',line='',n=0;
+  const flush=()=>{if(line&&n<lines){out+=TX(x,y+n*(s+3),line.trim(),c,a,w,s);n++}line=''};
+  words.forEach(wd=>{if((line+' '+wd).trim().length>max&&line){flush()}line+=' '+wd});flush();return out;
+}
+
+// ── language-neutral data (texts in fdy_spinning_plants_texts.js, same order)
+const LINK_KEYS=['filament_spinning'];
+const MFR=[
+ {id:'barmag',short:'Barmag',reg:'EU',country:'DE',scope:'plant',thumb:'wings',dom:'barmag.com',models:[
+  {ends:32,chuck:null,speed:null,tags:['wings','pes','flex','bico','rpet','rotor']},
+  {ends:null,chuck:null,speed:null,tags:['wings','pes','rotor','cross']},
+  {ends:null,chuck:null,speed:null,tags:['wings','pes']},
+  {ends:24,chuck:null,speed:null,tags:['wings','pa','rotor']},
+  {ends:null,chuck:null,speed:null,tags:['radial','micro','pes','pa']},
+  {ends:null,chuck:1600,speed:null,tags:['duo','legacy']}]},
+ {id:'tmt',short:'TMT',reg:'JP',country:'JP',scope:'plant',thumb:'conv',dom:'tmt-machinery.jp',models:[
+  {ends:32,chuck:1500,speed:null,tags:['multi','radial','pes','cp','rotor']},
+  {ends:null,chuck:1520,speed:null,tags:['rotor','cam']},
+  {ends:6,chuck:1350,speed:null,tags:['idy']}]},
+ {id:'stc',short:'STC Spinnzwirn',reg:'EU',country:'DE',scope:'winder',thumb:'compact',dom:'techtextil-india.german-pavilion.com',models:[
+  {ends:null,chuck:null,speed:null,tags:['compact','multi','idy','retrofit']},
+  {ends:12,chuck:1500,speed:5500,tags:['rotor']},
+  {ends:12,chuck:1200,speed:5500,tags:['rotor','retrofit']}]},
+ {id:'sml',short:'SML',reg:'EU',country:'AT',scope:'plant',thumb:'vertex',dom:'sml.at',models:[
+  {ends:8,chuck:null,speed:4500,tags:['vertical','pes','pp','pa','rotor','cam']},
+  {ends:null,chuck:null,speed:null,tags:['pp','idy','duo']}]},
+ {id:'chonglee',short:'Beijing Chonglee',reg:'CN',country:'CN',scope:'plant',thumb:'conv',dom:'texmachines.com',models:[
+  {ends:null,chuck:null,speed:null,tags:['duo','pes']},
+  {ends:16,chuck:1380,speed:null,tags:['pes']}]},
+ {id:'jwell',short:'Jwell',reg:'CN',country:'CN',scope:'plant',thumb:'conv',dom:'directindustry.com',models:[
+  {ends:null,chuck:null,speed:null,tags:['duo','pes','pa','bico','rpet','chip']},
+  {ends:null,chuck:1800,speed:5000,tags:['rotor']}]},
+ {id:'hitech',short:'Hi-Tech',reg:'CN',country:'CN / IN',scope:'plant',thumb:'conv',dom:'ategroup.com',models:[
+  {ends:null,chuck:null,speed:null,tags:['duo','pes','pa']},
+  {ends:20,chuck:1500,speed:4800,tags:['rotor']}]},
+ {id:'fet',short:'FET',reg:'EU',country:'UK',scope:'plant',thumb:'lab',dom:'wotol.com',models:[
+  {ends:1,chuck:null,speed:2500,tags:['lab','multi','chip']}]},
+ {id:'hills',short:'Hills / Fourné',reg:'US',country:'US / DE',scope:'plant',thumb:'lab',dom:'mtec-sc.org',models:[
+  {ends:null,chuck:null,speed:null,tags:['lab','bico','chip']}]}
+];
+const DIM_KEYS=[['pes','pa','pp','bico','rpet','idy'],['cross','radial','micro'],['wings','duo','multi','compact','vertical'],
+  ['rotor','cam','flex'],['cp','chip'],['retrofit','lab']];
+const PROF_KEYS=['conv','wings','compact','vertex','lab'];
+const TL_YEARS=['2002','2010','2016','2019','2023','2024','2025','2026'];
+const RC={EU:'var(--air)',JP:'var(--heat)',CN:'var(--cn)',US:'var(--hl)'};
+const N=6;
+
+let scene=Math.max(0,Math.min(N-1,parseInt(params.get('scene')||'0',10)||0));
+const st={q:'cross',g:'wings',h:'godet',t:'rotor'};
+let sel='godet',treeSel=null,prof='conv',mode='ends';
+const flt={reg:'all',scope:'all',q:''};
+
+// segmented buttons, rebuilt on language change (state stays in the variables above)
+function seg(el,opts,cur,cb){
+  el.innerHTML=opts.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${v===cur}">${esc(l)}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));cb(b.dataset.v)});
+}
+
+// ── 0 process
+function drawCtl(){
+  const u=T().ui,o=u.opt,box=$('pctl');
+  const groups=[['q',u.lQuench,[['cross',o.cross],['radial',o.radial]]],
+    ['g',u.lDraw,[['wings',o.wings],['duo',o.duo],['multi',o.multi]]],
+    ['h',u.lHeat,[['godet',o.godet],['tube',o.tube]]],
+    ['t',u.lTrav,[['rotor',o.rotor],['cam',o.cam]]]];
+  box.innerHTML=groups.map(g=>`<div><span class="lbl">${esc(g[1])}</span><div class="seg" id="c-${g[0]}"></div></div>`).join('');
+  groups.forEach(g=>seg($('c-'+g[0]),g[2],st[g[0]],v=>{st[g[0]]=v;
+    sel=g[0]==='q'?'quench':g[0]==='g'?'godet':g[0]==='t'?'trav':(v==='tube'?'heat':'godet');drawProc();showDetail()}));
+}
+function duo(x,y,hot){return `<circle cx="${x}" cy="${y}" r="17" fill="${hot?'#FFD6D6':'var(--panel)'}" stroke="${hot?'var(--hot)':'var(--wind)'}" stroke-width="2"/><circle cx="${x}" cy="${y}" r="4" fill="var(--wind)"/><circle cx="${x+28}" cy="${y+12}" r="7" fill="var(--panel)" stroke="var(--wind)" stroke-width="1.5"/>`}
+function drawProc(){
+  const v=T().sv;
+  let s=`<defs><marker id="aq" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8z" fill="var(--cool)"/></marker></defs>`;
+  const fl=(y,t)=>`<line x1="10" y1="${y}" x2="820" y2="${y}" stroke="var(--line)" stroke-width="3"/>`+TX(14,y-6,t,'var(--muted)','start',400,12);
+  s+=fl(30,v.spinFloor)+fl(330,st.g==='wings'?v.chute:v.drawStage)+fl(440,v.windFloor);
+  s+=`<rect x="40" y="58" width="170" height="44" rx="10" fill="#E3F0FA" stroke="var(--air)"/>`+wrap(v.melt,125,76,22,'var(--air)','middle',600,13,2);
+  s+=`<path d="M210 80 L300 80" stroke="var(--heat)" stroke-width="5"/>`;
+  s+=`<g class="node" data-id="beam"><rect x="300" y="50" width="260" height="50" rx="8" fill="#FCE5D3" stroke="var(--heat)" stroke-width="1.5"/><circle cx="338" cy="75" r="12" fill="var(--panel)" stroke="var(--heat)"/>${[380,430,480].map(x=>`<rect x="${x-14}" y="100" width="28" height="14" rx="3" fill="#F8D2B0" stroke="var(--heat)"/>`).join('')}${TX(430,44,v.beam,'var(--heat)','middle',600,13)}</g>`;
+  s+=`<g class="node" data-id="quench"><rect x="340" y="122" width="180" height="170" rx="6" fill="rgba(35,134,200,.07)" stroke="var(--cool)" stroke-width="1.5" stroke-dasharray="${st.q==='radial'?'0':'5 4'}"/>`;
+  if(st.q==='cross')s+=[150,185,220,255].map(y=>`<path d="M560 ${y} L528 ${y}" stroke="var(--cool)" stroke-width="2" marker-end="url(#aq)"/>`).join('')+TX(610,210,v.cross,'var(--cool)');
+  else s+=[150,200,250].map(y=>`<path d="M555 ${y} L528 ${y}" stroke="var(--cool)" stroke-width="2" marker-end="url(#aq)"/><path d="M305 ${y} L332 ${y}" stroke="var(--cool)" stroke-width="2" marker-end="url(#aq)"/>`).join('')+TX(610,210,v.radial,'var(--cool)')+TX(610,226,v.lessAir,'var(--muted)','middle',400,13);
+  s+=`</g>`+TX(334,118,v.quench,'var(--cool)','end',600,13);
+  s+=[380,430,480].map(x=>`<path d="M${x} 114 L430 312" stroke="var(--yarn)" stroke-width="1.2" opacity=".7"/>`).join('');
+  s+=`<g class="node" data-id="oil"><rect x="414" y="304" width="32" height="14" rx="4" fill="#FFF3BF" stroke="#E67700" stroke-width="1.5"/>${TX(454,316,v.oil,'var(--fg)','start',600,13)}</g>`;
+  let G;
+  if(st.g==='wings')G=[[440,488,'GR1'],[580,512,'GR2']];
+  else if(st.g==='duo')G=[[440,362,'GR1'],[580,398,'GR2']];
+  else G=[[400,352,'GR1'],[520,372,'GR2'],[640,392,'GR3']];
+  let d='M430 318 ';
+  G.forEach(g=>{d+=`L${g[0]} ${g[1]-17} L${g[0]+28} ${g[1]+19} `});
+  d+='L452 552 L452 582 L460 608';
+  const W={x:330,y:450,w:330,h:190};
+  s+=`<rect x="${W.x}" y="${W.y}" width="${W.w}" height="${W.h}" rx="12" fill="none" stroke="var(--wind)" stroke-width="1.5" stroke-dasharray="${st.g==='wings'?'0':'5 4'}"/>`+TX(W.x+W.w-8,W.y+16,st.g==='wings'?v.wingsBox:v.winder,'var(--wind)','end',600,13);
+  s+=`<path d="${d}" fill="none" stroke="var(--line)" stroke-width="6" stroke-linejoin="round"/><path d="${d}" class="yarn" stroke-linejoin="round"/>`;
+  if(st.h==='tube'){
+    const a=G[0],b=G[1],mx=(a[0]+28+b[0])/2,my=(a[1]+19+b[1]-17)/2,ang=Math.atan2((b[1]-17)-(a[1]+19),b[0]-(a[0]+28))*180/Math.PI;
+    s+=`<g class="node" data-id="heat"><rect x="${mx-34}" y="${my-8}" width="68" height="16" rx="5" fill="#F8D2B0" stroke="var(--heat)" stroke-width="1.5" transform="rotate(${ang} ${mx} ${my})"/>${TX(mx,my-16,v.heatTube,'var(--heat)','middle',600,13)}</g>`;
+  }
+  s+=`<g class="node" data-id="godet">${G.map(g=>duo(g[0],g[1],true)+TX(g[0]-22,g[1]+5,g[2],'var(--hot)','end',700,11)).join('')}</g>`;
+  const lx=st.g==='wings'?740:750,ly=st.g==='wings'?470:350;
+  s+=wrap(v.duos,lx,ly,20,'var(--hot)','middle',600,13,2)+TX(lx,ly+36,'v(GR2) > v(GR1)','var(--muted)','middle',400,12)+wrap(v.drawRule,lx,ly+52,22,'var(--muted)','middle',400,12,2);
+  s+=`<g class="node" data-id="jet"><rect x="436" y="556" width="32" height="18" rx="5" fill="#D3F2F5" stroke="var(--jet)" stroke-width="1.5"/>${TX(476,569,v.jet,'var(--jet)','start',600,13)}</g>`;
+  s+=`<g class="node" data-id="trav"><rect x="372" y="584" width="170" height="12" rx="4" fill="var(--panel)" stroke="var(--twist)" stroke-width="1.5"/>`;
+  s+=st.t==='rotor'?`<path d="M430 590 l14 -10 M430 590 l-14 10 M484 590 l14 10 M484 590 l-14 -10" stroke="var(--twist)" stroke-width="2"/>`:`<path d="M378 590 q10 -6 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0" stroke="var(--twist)" fill="none"/>`;
+  s+=TX(550,594,st.t==='rotor'?v.rotor:v.cam,'var(--twist)','start',600,13)+`</g>`;
+  s+=`<g class="node" data-id="wind">${[0,1,2,3,4,5,6,7].map(i=>`<rect x="${344+i*20}" y="604" width="18" height="18" rx="4" fill="#E9ECEF" stroke="var(--wind)"/>`).join('')}${TX(420,636,v.bobbins,'var(--fg)','middle',600,12)}</g>`;
+  s+=TX(745,590,v.winding,'var(--muted)','middle',400,13)+TX(745,608,'≈ 4 000–5 000 m/min','var(--fg)','middle',600,13);
+  const svg=$('procsvg');svg.innerHTML=s;
+  svg.querySelectorAll('.node').forEach(n=>{n.classList.toggle('sel',n.dataset.id===sel);n.onclick=()=>{sel=n.dataset.id;drawProc();showDetail()}});
+}
+function showDetail(){
+  const t=T(),c=t.comp[sel];let p=c.p||'';
+  if(sel==='quench')p=c[st.q];if(sel==='godet')p=c[st.g];if(sel==='trav')p=c[st.t];
+  $('detail').innerHTML=`<span class="lbl">${esc(t.ui.component)}</span><h3>${esc(c.t)}</h3>${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}<p>${esc(p)}</p>`+
+    (c.l.length?`<ul>${c.l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'')+
+    (sel==='jet'?`<button type="button" class="lk" data-k="${LINK_KEYS[0]}">${esc(t.ui.openFil)}</button>`:'')+
+    `<p class="note">${esc(t.ui.tip)}</p>`;
+  $('detail').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── 1 tree
+function optOf(k){const t=T();for(let i=0;i<DIM_KEYS.length;i++){const j=DIM_KEYS[i].indexOf(k);if(j>=0)return t.dims[i].o[j]}return['','']}
+function drawTree(){
+  const t=T();
+  $('tree').innerHTML=t.dims.map((d,i)=>`<div class="dim"><h4><span class="num">${String(i+1).padStart(2,'0')}</span>${esc(d.t)}</h4>`+
+    d.o.map((o,j)=>{const k=DIM_KEYS[i][j];return `<div class="opt ${treeSel===k?'hl':''}" data-k="${k}"><b>${esc(o[0])}</b><small>${esc(o[1])}</small></div>`}).join('')+`</div>`).join('');
+  $('tree').querySelectorAll('.opt').forEach(el=>el.onclick=()=>{const k=el.dataset.k;treeSel=treeSel===k?null:k;drawTree();drawMfr();if(treeSel){go(3);window.scrollTo(0,0)}});
+}
+
+// ── 2 layouts
+function profSVG(k){
+  const v=T().sv;
+  let s=`<rect x="0" y="390" width="620" height="6" fill="var(--line)"/>`;
+  const L=(x,y,t,c='var(--fg)',a='middle')=>TX(x,y,t,c,a,600,12);
+  const person=(x,y)=>`<g fill="var(--muted)"><circle cx="${x}" cy="${y-88}" r="9"/><rect x="${x-8}" y="${y-77}" width="16" height="40" rx="5"/><rect x="${x-7}" y="${y-38}" width="6" height="38"/><rect x="${x+1}" y="${y-38}" width="6" height="38"/></g>`;
+  const beam=(x,y,w)=>`<rect x="${x}" y="${y}" width="${w}" height="26" rx="5" fill="#FCE5D3" stroke="var(--heat)"/>`;
+  const quench=(x,y,h)=>`<rect x="${x}" y="${y}" width="70" height="${h}" rx="4" fill="rgba(35,134,200,.1)" stroke="var(--cool)"/>`;
+  const hg=(x,y)=>`<circle cx="${x}" cy="${y}" r="12" fill="#FFD6D6" stroke="var(--hot)" stroke-width="2"/><circle cx="${x+20}" cy="${y+9}" r="5" fill="var(--panel)" stroke="var(--wind)"/>`;
+  const winder=(x,y)=>`<rect x="${x}" y="${y}" width="110" height="70" rx="10" fill="var(--panel)" stroke="var(--wind)"/>${[0,1,2,3].map(i=>`<rect x="${x+10+i*24}" y="${y+40}" width="20" height="20" rx="5" fill="#E9ECEF" stroke="var(--wind)"/>`).join('')}`;
+  const floor=(y,t,x=24)=>`<line x1="20" y1="${y}" x2="600" y2="${y}" stroke="var(--line)" stroke-width="4"/>`+TX(x,y-6,t,'var(--muted)','start',400,11);
+  if(k==='conv'){
+    s+=floor(130,v.pSpinFloor)+floor(260,v.pDrawStage);
+    s+=beam(220,40,180)+L(310,32,v.pBeam,'var(--heat)')+quench(275,66,64);
+    s+=hg(320,205)+hg(390,228)+wrap(v.duos,425,218,16,'var(--hot)','start',600,12,2);
+    s+=winder(260,300)+L(315,292,v.winder);
+    s+=person(585,260)+person(585,390);
+    s+=`<path d="M310 66 L310 193 L340 214 L390 216 L410 237 L320 300 L320 340" class="yarn"/>`;
+  }
+  if(k==='wings'){
+    s+=floor(160,v.pSpinFloor);
+    s+=beam(220,40,180)+L(310,32,v.pBeam,'var(--heat)')+quench(275,66,90);
+    s+=`<rect x="230" y="240" width="170" height="140" rx="12" fill="var(--panel)" stroke="var(--hl)" stroke-width="2"/>`+L(318,232,'WINGS FDY','var(--hl)','start');
+    s+=hg(280,265)+hg(340,282)+`<rect x="300" y="305" width="20" height="10" rx="3" fill="#D3F2F5" stroke="var(--jet)"/>`;
+    s+=[0,1,2,3,4,5].map(i=>`<rect x="${240+i*26}" y="345" width="22" height="22" rx="5" fill="#E9ECEF" stroke="var(--wind)"/>`).join('');
+    s+=wrap(v.wingsHG,415,280,30,'var(--fg)','start',600,12,2)+wrap(v.wingsEye,415,314,30,'var(--muted)','start',600,12,2);
+    s+=person(160,390);
+    s+=`<path d="M310 66 L310 253 L300 274 L340 270 L360 291 L310 305 L310 345" class="yarn"/>`;
+  }
+  if(k==='compact'){
+    s+=floor(170,v.lowFloor,215);
+    s+=beam(80,60,160)+L(160,52,v.pBeam,'var(--heat)')+quench(125,86,70);
+    s+=`<rect x="250" y="210" width="230" height="170" rx="12" fill="var(--panel)" stroke="var(--hl)" stroke-width="2"/>`+L(365,202,v.compact,'var(--hl)');
+    s+=[0,1,2,3,4,5].map(i=>hg(275+(i%3)*70,235+Math.floor(i/3)*40)).join('');
+    s+=[0,1,2,3].map(i=>`<rect x="${300+i*30}" y="335" width="24" height="24" rx="5" fill="#E9ECEF" stroke="var(--wind)"/>`).join('');
+    s+=L(545,260,v.upTo6,'var(--hot)')+L(545,276,'FDY + IDY','var(--muted)');
+    s+=person(560,390);
+    s+=`<path d="M160 86 L160 223 L275 223 L415 223 L415 263 L275 263 L345 263 L345 335" class="yarn"/>`;
+  }
+  if(k==='vertex'){
+    [0,1,2].forEach(i=>{const x=60+i*180;
+      s+=`<rect x="${x}" y="30" width="150" height="350" rx="10" fill="var(--panel)" stroke="var(--line)"/><rect x="${x+20}" y="44" width="110" height="20" rx="4" fill="#FCE5D3" stroke="var(--heat)"/><rect x="${x+45}" y="70" width="60" height="110" rx="4" fill="rgba(35,134,200,.1)" stroke="var(--cool)"/>`;
+      s+=hg(x+55,212)+hg(x+90,240);
+      s+=`<rect x="${x+15}" y="290" width="120" height="70" rx="10" fill="var(--bg)" stroke="var(--wind)"/>${[0,1,2,3].map(j=>`<rect x="${x+22+j*28}" y="330" width="22" height="20" rx="5" fill="#E9ECEF" stroke="var(--wind)"/>`).join('')}`;
+      s+=`<path d="M${x+75} 64 L${x+75} 200 L${x+55} 200 L${x+90} 228 L${x+75} 290 L${x+75} 330" class="yarn"/>`;
+      s+=TX(x+75,22,fmt(v.module,{i:i+1}),'var(--fg)','middle',600,11);
+    });
+    s+=TX(310,410,v.grows,'var(--hl)','middle',600,12);
+  }
+  if(k==='lab'){
+    s+=`<rect x="40" y="260" width="120" height="30" rx="10" fill="#FCE5D3" stroke="var(--heat)"/>`+L(100,250,v.extruder,'var(--heat)');
+    s+=`<path d="M160 275 L196 275 L196 98 L220 98" stroke="var(--heat)" stroke-width="3" fill="none"/>`;
+    s+=beam(220,90,80)+quench(225,118,90);
+    s+=hg(340,240)+hg(400,250)+hg(460,260)+L(420,222,v.zones,'var(--hot)');
+    s+=winder(470,300);
+    s+=`<path d="M260 118 L260 228 L340 228 L400 238 L460 248 L525 340" class="yarn"/>`;
+  }
+  return s;
+}
+function drawProf(){
+  const t=T(),u=t.ui;
+  $('ptabs').innerHTML=PROF_KEYS.map(k=>`<button type="button" data-k="${k}" class="${k===prof?'on':''}" aria-pressed="${k===prof}">${esc(t.prof[k].t)}</button>`).join('');
+  $('ptabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{prof=b.dataset.k;drawProf()});
+  $('profsvg').innerHTML=profSVG(prof);
+  const p=t.prof[prof];
+  $('profdesc').innerHTML=`<h3>${esc(p.t)}</h3><p>${esc(p.d)}</p><span class="lbl">${esc(u.examples)}</span>${p.ex.map(e=>`<span class="pill">${esc(e)}</span>`).join('')}`+
+    `<div class="procon"><div><span class="lbl" style="color:var(--hl)">${esc(u.pro)}</span><ul>${p.pro.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div><span class="lbl" style="color:var(--hot)">${esc(u.con)}</span><ul>${p.con.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`+
+    (prof==='wings'?`<button type="button" class="lk" data-k="${LINK_KEYS[0]}">${esc(u.openFil)}</button>`:'');
+  $('profdesc').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── 3 manufacturers
+function drawFilters(){
+  const u=T().ui;
+  $('lsearch').textContent=u.search;$('q').placeholder=u.searchPh;$('lregion').textContent=u.region;$('lscope').textContent=u.scope;
+  seg($('freg'),[['all',u.all],['EU',u.eu],['JP',u.jp],['CN',u.cn],['US',u.us]],flt.reg,v=>{flt.reg=v;drawMfr()});
+  seg($('fscope'),[['all',u.all],['plant',u.plant],['winder',u.winderScope]],flt.scope,v=>{flt.scope=v;drawMfr()});
+}
+$('q').addEventListener('input',e=>{flt.q=e.target.value.toLowerCase();drawMfr()});
+function chips(tags){
+  const c=T().chips,h=(k,cls,l)=>tags.includes(k)?`<span class="chip ${cls}">${esc(l)}</span>`:'';
+  return h('wings','auto','WINGS')+h('radial','pes',c.radial)+h('legacy','lg',c.legacy)+h('retrofit','man',c.retrofit)+
+    h('pa','pa','PA')+h('pes','pes','PES')+h('pp','','PP')+h('bico','',c.bico)+h('idy','','IDY')+h('lab','',c.lab);
+}
+function drawMfr(){
+  const t=T(),u=t.ui,tf=$('treefilter');
+  if(treeSel){tf.innerHTML=`${esc(u.treeFilter)} <b>${esc(optOf(treeSel)[0])}</b> · <a id="clr">${esc(u.reset)}</a>`;
+    $('clr').onclick=()=>{treeSel=null;drawTree();drawMfr()}}else tf.innerHTML='';
+  const out=[];
+  MFR.forEach((M,i)=>{
+    const tm=t.mfr[i];
+    if(flt.reg!=='all'&&M.reg!==flt.reg)return;
+    if(flt.scope!=='all'&&M.scope!==flt.scope)return;
+    const ms=M.models.map((m,j)=>({m,n:tm.models[j][0],spec:tm.models[j][1]})).filter(o=>{
+      if(treeSel&&!o.m.tags.includes(treeSel))return false;
+      if(flt.q){const h=(tm.name+' '+tm.city+' '+tm.note+' '+o.n+' '+o.spec+' '+M.dom).toLowerCase();if(!h.includes(flt.q))return false}
+      return true});
+    if(!ms.length)return;
+    const mono=x=>` <span>· ${esc(x)}</span>`;
+    out.push(`<div class="mcard"><div class="top"><span class="flag">${esc(M.country)}</span><div><h3>${esc(tm.name)}</h3><div class="meta">${esc(tm.city)} · ${esc(tm.owner)}</div></div></div>`+
+      `<div class="thumb"><svg viewBox="0 0 620 420" preserveAspectRatio="xMidYMid meet">${profSVG(M.thumb)}</svg></div><div class="mnote">${esc(tm.note)}</div>`+
+      `<div class="models">${ms.map(o=>`<div class="model"><div class="mn">${esc(o.n)}${o.m.ends?mono(fmt(u.upTo,{n:o.m.ends})):''}${o.m.chuck?mono(o.m.chuck+' mm'):''}${o.m.speed?mono(o.m.speed+' m/min'):''}</div>`+
+      `<div class="ms">${esc(o.spec)}</div><div>${chips(o.m.tags)}</div></div>`).join('')}`+
+      `<div class="dom">${esc(fmt(u.source,{d:M.dom}))}</div></div></div>`);
+  });
+  $('mfr').innerHTML=out.join('')||`<div class="empty">${esc(u.empty)}</div>`;
+}
+
+// ── 4 bars
+function drawBars(){
+  const t=T(),u=t.ui;
+  seg($('csort'),[['ends',u.sortEnds],['speed',u.sortSpeed],['chuck',u.sortChuck]],mode,v=>{mode=v;drawBars()});
+  const rows=[];
+  MFR.forEach((M,i)=>M.models.forEach((m,j)=>{const v=m[mode];if(v&&v>1&&!m.tags.includes('legacy'))rows.push({l:M.short+' · '+t.mfr[i].models[j][0].split(/ ?[（(]/)[0],v,r:M.reg})}));
+  rows.sort((a,b)=>b.v-a.v);
+  const max={ends:34,speed:6000,chuck:2000}[mode];
+  $('bars').innerHTML=rows.map(r=>`<div class="row"><div>${esc(r.l)}</div><div class="track"><div class="fill" style="width:${r.v/max*100}%;background:${RC[r.r]}"></div></div><div class="v">${r.v}</div></div>`).join('');
+  $('legend').innerHTML=[['EU',u.eu],['JP',u.jp],['CN',u.cn]].map(([k,l])=>`<span><i style="background:${RC[k]}"></i>${esc(l)}</span>`).join('');
+  $('barsnote').textContent=u.barsNote;
+}
+
+// ── 5 market
+function drawMarket(){
+  const t=T();
+  $('timeline').innerHTML=TL_YEARS.map((y,i)=>`<div class="tev"><b>${y}</b><div>${esc(t.timeline[i])}</div></div>`).join('');
+  $('assessT').textContent=t.ui.assess;
+  $('assess').innerHTML=t.assess.map(a=>`<li><b>${esc(a[0])}</b> ${esc(a[1])}</li>`).join('');
+}
+
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+N)%N;
+  for(let k=0;k<N;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=t.src.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  $('procsvg').setAttribute('aria-label',u.procAria);$('profsvg').setAttribute('aria-label',u.profAria);
+  drawCtl();drawProc();showDetail();drawTree();drawProf();drawFilters();drawMfr();drawBars();drawMarket();go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+})();
+</script>
+</body>
+</html>

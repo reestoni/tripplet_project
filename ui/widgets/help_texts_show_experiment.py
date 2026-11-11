@@ -51,6 +51,13 @@ TEXTS = {
                   "Choose the value and the range of trials, then OK.",
                   f"Click {B('Save')}."],
                  "Right-clicking a merged cell offers " + M("Fill row…") + " as well."),
+                ("task", "Find out what a row means (Knowledge Base)",
+                 ["Right-click the row title or a value in <i>Machine Data</i> / <i>R&D Machine Data</i> (DTY machines) "
+                  "or in a lab tab → " + M("Learn more in Knowledge Base…") + ". In the DTY <b>Schema</b>: click a station, "
+                  "then the link below the schema (or right-click the station).",
+                  "The matching page opens in a window at the right place, e.g. the machine with the station selected.",
+                  "Click " + B("Close") + " or press Esc - you are back in your series."],
+                 "Use the tabs at the top of the window to see the other scenes of the page, the flags change the language."),
                 ("task", "Add a note to a value or a trial",
                  ["Right-click the value → " + M("Add note…") + ". For the whole trial, right-click the trial "
                   "number (V1, V2, …) in <i>Machine Data</i>.",
@@ -99,6 +106,19 @@ TEXTS = {
                  "Hidden rows are remembered per user and machine, i.e. for all series on this machine. Only the "
                  "view changes: the values stay saved. Copy and paste skip hidden rows. A red line means a hidden "
                  "row contains a highlighted value."),
+                ("task", "Choose the DTY process and see the machine path",
+                 ["In <i>Machine Data</i> (DTY machines only), set the row <b>DTY Process</b> per trial: Standard, "
+                  "Elastane or a cotton-like variant. Click " + B("Save") + " (Ctrl+S).",
+                  "Click " + B("Schema") + " in the toolbar above the table to show or hide the machine path. It "
+                  "shows the trial of the cell you clicked: every ply on its position, where they run together, "
+                  "elastane from its own source.",
+                  "Click a station (e.g. the heater): its rows light up in the table. Click it again or an empty "
+                  "spot to clear it. A double-click jumps to the first value of the station."],
+                 "Rows of the pre-intermingling jet (LW 0 - LW 1) and of jet 3 (before LW 3) only show up when "
+                 "a trial's process needs them or a value is entered. The schema only shows values - change them "
+                 "in the table. With 2 or more plies, the rows <b>Route</b>, <b>Merge into ply</b> and <b>Merge "
+                 "point</b> decide how the plies run together (e.g. Ply 4 into Ply 3 at LW 1); empty = the usual "
+                 "path. Wrong entries (unknown ply, a circle) are named below the schema. On ATY machines the schema shows the air-texturing path: core and effect with draw zone and feed roll (speed = LW 2 x (1 + OF %)); only the core is wetted, the effect joins it just before the jet; then LW 2, stabilising zone, LW 3 and winder."),
                 ("task", "Import a Statimat or Itemat report",
                  [f"Click {B('Statimat import')} or {B('Itemat import')} in the toolbar (1).",
                   "Choose the PDF report. The values are filled into the matching lab tab.",
@@ -133,6 +153,15 @@ TEXTS = {
                  "the report charts and left out of statistics, Smart Chart, Quick Scan, Athena and the jet data "
                  "export. Right-click the trial number of an existing trial to turn it into a reference sample "
                  "(it keeps its number) or back, or to rename it."),
+                ("task", "Delete trials",
+                 ["One trial: right-click its trial number (4) → " + M("Delete V23…") + ".",
+                  "Several trials: first select cells in their columns (drag, Ctrl+click or Shift+click), then "
+                  "right-click the number of one of them → " + M("Delete n selected trials…") + ".",
+                  "Check what is deleted with them (plies, lab values, notes) and click " + B("Delete") + "."],
+                 "The other trials keep their numbers - nothing moves up. New trials are always added after the "
+                 "highest remaining number, never into a gap. A superuser can restore deleted trials from the Recycle Bin for 90 "
+                 "days. Allowed for whoever may move the series in the Backlog. Trials that yarns were made from "
+                 "(half-finished products) can't be deleted."),
                 ("task", "Change the yarn of a ply, or add / remove plies",
                  [f"Click {B('Yarns…')} on the right of (2) (or right-click the ply row (5)). A table shows every "
                   "ply of the series (rows) and every trial (columns).",
@@ -239,6 +268,13 @@ TEXTS = {
                   "Wert und Versuchsbereich wählen, dann OK.",
                   f"Auf {B('Save')} klicken."],
                  "Ein Rechtsklick auf eine zusammengefasste Zelle bietet ebenfalls " + M("Fill row…") + " an."),
+                ("task", "Nachschlagen, was eine Zeile bedeutet (Knowledge Base)",
+                 ["Rechtsklick auf den Zeilentitel oder einen Wert in <i>Machine Data</i> / <i>R&D Machine Data</i> "
+                  "(DTY-Maschinen) oder in einem Labor-Reiter → " + M("Learn more in Knowledge Base…") + ". Im DTY-<b>Schema</b>: Station "
+                  "anklicken, dann den Link unter dem Schema (oder Rechtsklick auf die Station).",
+                  "Die passende Seite öffnet sich in einem Fenster an der richtigen Stelle, z. B. die Maschine mit gewählter Station.",
+                  B("Close") + " klicken oder Esc drücken - du bist wieder in deiner Serie."],
+                 "Oben im Fenster zeigen die Reiter die anderen Szenen der Seite, die Flaggen wechseln die Sprache."),
                 ("task", "Eine Notiz an einen Wert oder Versuch hängen",
                  ["Rechtsklick auf den Wert → " + M("Add note…") + ". Für den ganzen Versuch: Rechtsklick auf die "
                   "Versuchsnummer (V1, V2, …) in <i>Machine Data</i>.",
@@ -290,6 +326,19 @@ TEXTS = {
                  "Maschine. Es ändert sich nur die Ansicht, die Werte bleiben gespeichert. Kopieren und Einfügen "
                  "überspringen ausgeblendete Zeilen. Eine rote Linie bedeutet, dass eine ausgeblendete Zeile einen "
                  "markierten Wert enthält."),
+                ("task", "DTY-Verfahren wählen und den Maschinenweg sehen",
+                 ["In <i>Machine Data</i> (nur DTY-Maschinen) pro Versuch die Zeile <b>DTY Process</b> setzen: "
+                  "Standard, Elastane oder eine Cotton-like-Variante. " + B("Save") + " klicken (Strg+S).",
+                  B("Schema") + " in der Leiste über der Tabelle blendet den Maschinenweg ein und aus. Er zeigt den "
+                  "Versuch der angeklickten Zelle: jede Ply auf ihrer Position, wo sie zusammenlaufen, Elastan aus "
+                  "der eigenen Quelle.",
+                  "Eine Station anklicken (z.&nbsp;B. den Heizer): ihre Zeilen leuchten in der Tabelle auf. Nochmals "
+                  "klicken oder auf eine leere Stelle klicken hebt es auf. Doppelklick springt zum ersten Wert der Station."],
+                 "Die Zeilen der Vorverwirbelung (LW 0 - LW 1) und der 3. Düse (vor LW 3) erscheinen nur, wenn das "
+                 "Verfahren eines Versuchs sie braucht oder ein Wert eingetragen ist. Das Schema zeigt Werte nur an - "
+                 "geändert werden sie in der Tabelle. Ab 2 Plies legen die Zeilen <b>Route</b>, <b>Merge into ply</b> "
+                 "und <b>Merge point</b> fest, wie die Plies zusammenlaufen (z.&nbsp;B. Ply 4 in Ply 3 an LW 1); leer = "
+                 "der übliche Weg. Fehler (unbekannte Ply, ein Kreis) stehen unter dem Schema. Auf ATY-Maschinen zeigt das Schema den Weg durch die Lufttexturiermaschine: Kern und Effekt mit Verstreckzone und Lieferwerk (Geschwindigkeit = LW 2 x (1 + OF %)); nur der Kern wird benetzt, der Effekt kommt erst vor der Düse dazu; dann LW 2, Stabilisierzone, LW 3 und Aufwicklung."),
                 ("task", "Einen Statimat- oder Itemat-Bericht importieren",
                  [f"In der Werkzeugleiste (1) auf {B('Statimat import')} oder {B('Itemat import')} klicken.",
                   "Den PDF-Bericht wählen. Die Werte werden in den passenden Labor-Tab eingetragen.",
@@ -325,6 +374,15 @@ TEXTS = {
                  "und dem Jet-Datenexport herausgehalten. Per Rechtsklick auf die Versuchsnummer lässt sich ein "
                  "bestehender Versuch zum Referenzmuster machen (er behält seine Nummer) und zurück, oder das "
                  "Referenzmuster umbenennen."),
+                ("task", "Versuche löschen",
+                 ["Ein Versuch: Rechtsklick auf seine Versuchsnummer (4) → " + M("Delete V23…") + ".",
+                  "Mehrere Versuche: zuerst Zellen in ihren Spalten markieren (ziehen, Strg+Klick oder "
+                  "Umschalt+Klick), dann Rechtsklick auf die Nummer eines davon → " + M("Delete n selected trials…") + ".",
+                  "Prüfen, was mitgelöscht wird (Plies, Laborwerte, Notizen), und " + B("Delete") + " klicken."],
+                 "Die übrigen Versuche behalten ihre Nummern - nichts rutscht nach. Neue Versuche kommen immer nach "
+                 "der höchsten verbliebenen Nummer, nie in eine Lücke. Ein Superuser kann gelöschte Versuche 90 "
+                 "Tage lang aus dem Recycle Bin zurückholen. Erlaubt für alle, die die Serie im Backlog verschieben "
+                 "dürfen. Versuche, aus denen Garne gemacht wurden (Halbfabrikate), lassen sich nicht löschen."),
                 ("task", "Das Garn einer Ply ändern oder Plies hinzufügen / entfernen",
                  [f"Rechts in (2) auf {B('Yarns…')} klicken (oder Rechtsklick auf die Ply-Zeile (5)). Eine Tabelle "
                   "zeigt alle Plies der Serie (Zeilen) und alle Versuche (Spalten).",
@@ -433,6 +491,13 @@ TEXTS = {
                   "Elige el valor y el rango de ensayos y haz clic en OK.",
                   f"Haz clic en {B('Save')}."],
                  "El clic derecho en una celda combinada también ofrece " + M("Fill row…") + "."),
+                ("task", "Consultar qué significa una fila (Knowledge Base)",
+                 ["Clic derecho en el título de la fila o en un valor de <i>Machine Data</i> / <i>R&D Machine Data</i> "
+                  "(máquinas DTY) o de una pestaña de laboratorio → " + M("Learn more in Knowledge Base…") + ". En el <b>Schema</b> DTY: "
+                  "clic en una estación y luego en el enlace debajo (o clic derecho en la estación).",
+                  "La página correspondiente se abre en una ventana en el lugar correcto, p. ej. la máquina con la estación seleccionada.",
+                  "Haz clic en " + B("Close") + " o pulsa Esc: vuelves a tu serie."],
+                 "Las pestañas arriba en la ventana muestran las otras escenas de la página, las banderas cambian el idioma."),
                 ("task", "Añadir una nota a un valor o a un ensayo",
                  ["Clic derecho en el valor → " + M("Add note…") + ". Para todo el ensayo: clic derecho en el "
                   "número de ensayo (V1, V2, …) en <i>Machine Data</i>.",
@@ -483,6 +548,19 @@ TEXTS = {
                  "Las filas ocultas se recuerdan por usuario y máquina, es decir, para todas las series de esta "
                  "máquina. Solo cambia la vista: los valores siguen guardados. Copiar y pegar se saltan las filas "
                  "ocultas. Una línea roja indica que una fila oculta contiene un valor marcado."),
+                ("task", "Elegir el proceso DTY y ver el recorrido en la máquina",
+                 ["En <i>Machine Data</i> (solo máquinas DTY), ajuste la fila <b>DTY Process</b> de cada ensayo: "
+                  "Standard, Elastane o una variante cotton-like. Haga clic en " + B("Save") + " (Ctrl+S).",
+                  B("Schema") + " en la barra encima de la tabla muestra u oculta el recorrido. Muestra el ensayo de "
+                  "la celda en la que hizo clic: cada ply en su posición, dónde se juntan, el elastano desde su "
+                  "propia fuente.",
+                  "Haga clic en una estación (p.&nbsp;ej. el calentador): sus filas se resaltan en la tabla. Otro clic "
+                  "o un clic en un sitio vacío lo quita. Un doble clic salta al primer valor de la estación."],
+                 "Las filas del chorro de pre-entrelazado (LW 0 - LW 1) y del 3.er chorro (antes de LW 3) solo "
+                 "aparecen si el proceso de un ensayo las necesita o hay un valor. El esquema solo muestra los "
+                 "valores - se cambian en la tabla. Con 2 o más plies, las filas <b>Route</b>, <b>Merge into ply</b> "
+                 "y <b>Merge point</b> deciden cómo se juntan (p.&nbsp;ej. Ply 4 en Ply 3 en LW 1); vacío = el "
+                 "recorrido habitual. Los errores (ply desconocida, un círculo) aparecen debajo del esquema. En las máquinas ATY el esquema muestra el recorrido de texturizado por aire: alma y efecto con zona de estirado y rodillo de alimentación (velocidad = LW 2 x (1 + OF %)); solo se humedece el alma, el efecto se une justo antes de la tobera; después LW 2, zona de estabilización, LW 3 y bobinado."),
                 ("task", "Importar un informe de Statimat o Itemat",
                  [f"Haz clic en {B('Statimat import')} o {B('Itemat import')} en la barra de herramientas (1).",
                   "Elige el informe en PDF. Los valores se introducen en la pestaña de laboratorio correspondiente.",
@@ -517,6 +595,16 @@ TEXTS = {
                  "horizontal en los gráficos del informe y queda fuera de las estadísticas, Smart Chart, Quick Scan, "
                  "Athena y la exportación de datos de jets. Con clic derecho en el número de un ensayo existente se "
                  "puede convertir en muestra de referencia (conserva su número) y al revés, o cambiarle el nombre."),
+                ("task", "Borrar ensayos",
+                 ["Un ensayo: clic derecho en su número de ensayo (4) → " + M("Delete V23…") + ".",
+                  "Varios ensayos: primero selecciona celdas en sus columnas (arrastrando, Ctrl+clic o Mayús+clic), "
+                  "luego clic derecho en el número de uno de ellos → " + M("Delete n selected trials…") + ".",
+                  "Revisa lo que se borra con ellos (plies, valores de laboratorio, notas) y haz clic en "
+                  + B("Delete") + "."],
+                 "Los demás ensayos conservan su número - nada se desplaza. Los nuevos ensayos siempre van después "
+                 "del número más alto que queda, nunca en un hueco. Un superusuario puede recuperar ensayos borrados "
+                 "desde la Recycle Bin durante 90 días. Permitido a quien puede mover la serie en el Backlog. Los "
+                 "ensayos de los que se hicieron hilos (semielaborados) no se pueden borrar."),
                 ("task", "Cambiar el hilo de un ply, o añadir / quitar plies",
                  [f"Haz clic en {B('Yarns…')} a la derecha de (2) (o clic derecho en la fila de ply (5)). Una tabla "
                   "muestra todos los plies de la serie (filas) y todos los ensayos (columnas).",

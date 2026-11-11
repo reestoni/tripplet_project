@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mechanical Finishing</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category finishing.
+     Content from the user's research page "Mechanische Textilausruestung - Verfahren, Maschinen, Hersteller" (as of Nov 2026).
+     Texts in mechanical_finishing_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n for screenshots. No external resources (sources as plain text only).
+     Links to other modules (LINK_KEYS): embedded via document.title "open:<key>", otherwise <key>.html directly.
+     No canvas - SVG/DOM, because the content is data (atlas cards, tables, bars). -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--yarn:#B5651D;--twist:#6A4FC8;--soft:#EEF3EC;
+  --water:#0C8599;--wind:#495057;--pin:#C62828;--cn:#C2255C;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{font-family:var(--font-display);font-size:22px;margin:2px 0 6px}
+.card p{margin:6px 0}
+.grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:12px;align-items:start}
+.grid2.eq{grid-template-columns:1fr 1fr}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg.sm button{font-size:13px;padding:5px 10px}
+.lbl{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;margin:2px 4px 2px 0;background:var(--soft);border:1px solid var(--line)}
+.note{font-size:12px;color:var(--muted);margin:0}
+.muted{color:var(--muted);font-size:13px}
+.golink{font-size:13px;padding:5px 10px;border-color:var(--hl);color:#1F7A36;font-weight:600}
+.golink:hover{background:#F0F7F2;border-color:var(--hl)}
+.gorow{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+/* moving fabric (dashed overlay) */
+.flow{fill:none;stroke:#fff;stroke-opacity:.75;stroke-width:1.6;stroke-dasharray:6 10;animation:flow 1.2s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-32}}
+@media (prefers-reduced-motion: reduce){.flow{animation:none}}
+/* 0 goals */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.kpi b{display:block;font-family:var(--font-display);font-size:27px;line-height:1.1;color:#1F7A36}
+.kpi span{color:var(--muted);font-size:13px}
+.node{cursor:pointer}
+.node:hover rect{stroke:var(--hl);stroke-width:2}
+/* 1 atlas */
+.fbar{display:flex;flex-wrap:wrap;gap:6px}
+.fbar button{border-radius:999px;font-size:13px;padding:5px 12px;gap:6px}
+.fbar button i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.fbar button[aria-pressed="true"]{border-color:var(--fg);font-weight:600;box-shadow:inset 0 0 0 1px var(--fg)}
+.fx{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
+.fxc{display:block;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:6px;padding:10px 12px;text-align:left}
+.fxc:hover{border-color:var(--c)}
+.fxc.sel{box-shadow:0 0 0 2px var(--c)}
+.fxc b{display:block;font-size:14px;line-height:1.25}
+.fxc span{display:block;font-size:12px;line-height:1.35;margin-top:2px;color:var(--muted)}
+.fxd{position:sticky;top:12px}
+.fxd svg{max-height:210px}
+.fxd .row{margin:8px 0}
+.fxd .row .lbl{margin-bottom:2px}
+.fxd p{margin:2px 0;font-size:14px}
+/* 2 machines */
+.sl{display:flex;align-items:center;gap:12px;margin:10px 0}
+.sl input{flex:1;accent-color:var(--hl)}
+.sl b{font-family:var(--font-mono);min-width:70px;text-align:right}
+/* tables */
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th,table.t td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.t .pill{white-space:nowrap}
+.tw{overflow-x:auto}
+table.t th{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+/* 4 sustainability */
+.reglist{display:grid;gap:8px}
+.rg{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.rg .d{font-family:var(--font-mono);font-size:18px;font-weight:700;line-height:1.2}
+.rg b{display:block}
+.rg span{font-size:13px;color:var(--muted)}
+/* 5 manufacturers */
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.lk{display:block;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px;color:#1F7A36}
+.lk span{font-size:13px;color:var(--muted)}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:860px){.grid2,.grid2.eq{grid-template-columns:1fr}header{flex-direction:column}details ol{columns:1}.fxd{position:static}}
+</style>
+<script src="mechanical_finishing_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 goals -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="stage"><svg id="goalsvg" viewBox="0 0 1100 300" role="img"></svg></div>
+    <div class="gorow"><span class="muted" id="chemhint0"></span><button type="button" class="golink" data-k="chemical_finishing" id="gochem0"></button></div>
+  </div>
+  <!-- 1 atlas -->
+  <div class="sc" id="sc1">
+    <div class="fbar" id="fbar"></div>
+    <div class="grid2">
+      <div class="fx" id="fxgrid"></div>
+      <div class="card fxd" id="fxd"></div>
+    </div>
+  </div>
+  <!-- 2 two machines -->
+  <div class="sc" id="sc2">
+    <div class="grid2 eq">
+      <div class="card">
+        <span class="lbl" id="sanflbl"></span>
+        <svg id="sanfsvg" viewBox="0 0 520 300" role="img"></svg>
+        <div class="sl"><span style="font-size:13px" id="presslbl"></span><input type="range" id="sanfp" min="0" max="100" value="55"><b id="sanfv"></b></div>
+        <p class="note" id="sanft"></p>
+      </div>
+      <div class="card">
+        <span class="lbl" id="kallbl"></span>
+        <div class="seg sm" id="ktabs" style="margin-bottom:8px"></div>
+        <svg id="kalsvg" viewBox="0 0 520 250" role="img"></svg>
+        <p id="kald" style="margin:6px 0 0;font-size:14px"></p>
+      </div>
+    </div>
+  </div>
+  <!-- 3 key figures -->
+  <div class="sc" id="sc3">
+    <div class="grid2">
+      <div class="card">
+        <span class="lbl" id="shrlbl"></span>
+        <svg id="shrsvg" viewBox="0 0 640 220" role="img"></svg>
+        <div class="gorow" style="margin-top:8px"><span class="muted" id="dyehint3"></span><button type="button" class="golink" data-k="textile_dyeing" id="godye3"></button></div>
+      </div>
+      <div class="card tw"><table class="t" id="kz"></table></div>
+    </div>
+  </div>
+  <!-- 4 sustainability -->
+  <div class="sc" id="sc4">
+    <div class="grid2 eq">
+      <div class="card"><span class="lbl" id="prolbl"></span><div class="reglist" id="pro"></div></div>
+      <div class="card"><span class="lbl" id="conlbl"></span><div class="reglist" id="con"></div></div>
+    </div>
+    <div class="gorow"><span class="muted" id="chemhint4"></span><button type="button" class="golink" data-k="chemical_finishing" id="gochem4"></button></div>
+  </div>
+  <!-- 5 manufacturers -->
+  <div class="sc" id="sc5">
+    <div class="fbar" id="abar"></div>
+    <div class="card tw"><table class="t" id="atab"></table></div>
+    <span class="lbl" id="morelbl" style="margin:4px 0 0"></span>
+    <div class="links" id="links"></div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const NSC=6;
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const num=s=>(lang==='de'||lang==='es')?String(s).replace('.',','):String(s);
+// rough text width (CJK = 1 em) - used to shrink/wrap SVG labels that would overflow their slot
+const isCJK=ch=>/[⺀-鿿＀-￯　-〿]/.test(ch);
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=isCJK(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+// greedy line wrap (words; CJK char by char)
+function wrapLines(t,s,w,max){
+  const toks=[];let cur='';
+  for(const ch of String(t)){
+    if(isCJK(ch)){if(cur){toks.push(cur);cur=''}toks.push(ch)}
+    else if(ch===' '){if(cur)toks.push(cur);cur='';toks.push(' ')}
+    else cur+=ch;
+  }
+  if(cur)toks.push(cur);
+  const lines=[];let line='';
+  for(const tk of toks){
+    if(tk===' '){line+=' ';continue}
+    if(line.trim()&&textW((line+tk).trim(),s,w)>max){lines.push(line.trim());line=tk}else line+=tk;
+  }
+  if(line.trim())lines.push(line.trim());
+  return lines;
+}
+// wrapped SVG label, lines centred vertically around y; max n lines (shrinks font, last line squeezed)
+const TW=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=200,n=2)=>{
+  let sz=s,L=wrapLines(t,sz,w,max);
+  while(L.length>n&&sz>s*.8){sz-=.5;L=wrapLines(t,sz,w,max)}
+  if(L.length>n)L=L.slice(0,n-1).concat([L.slice(n-1).join(lang==='zh'?'':' ')]);
+  const lh=sz*1.2,y0=y-(L.length-1)*lh/2;
+  return L.map((l,i)=>TX(x,+(y0+i*lh).toFixed(1),l,c,a,w,sz,max)).join('');
+};
+
+// ── language-neutral data (texts in mechanical_finishing_texts.js, same order)
+const CATK=['ob','gl','ma','gr','dn'];
+const CATC={ob:'#E07B39',gl:'#2386C8',ma:'#39A650',gr:'#6A4FC8',dn:'#C2255C'};
+// k = id, c = category, m = sketch type, lk = linked module (dyeing / chemistry mentioned in the text)
+const FX=[
+ {k:'rau',c:'ob',m:'raise'},{k:'kar',c:'ob',m:'teasel'},{k:'sch',c:'ob',m:'shear'},{k:'smi',c:'ob',m:'sand'},
+ {k:'bue',c:'ob',m:'brush'},{k:'pol',c:'ob',m:'brush'},
+ {k:'kal',c:'gl',m:'cal'},{k:'fri',c:'gl',m:'cal'},{k:'pra',c:'gl',m:'emb'},{k:'moi',c:'gl',m:'beet'},
+ {k:'san',c:'ma',m:'sanf'},{k:'kom',c:'ma',m:'sanf'},{k:'the',c:'ma',m:'heat',lk:'textile_dyeing'},{k:'dek',c:'ma',m:'steam'},{k:'wal',c:'ma',m:'mill'},
+ {k:'air',c:'gr',m:'air'},{k:'fle',c:'gr',m:'air'},
+ {k:'las',c:'dn',m:'laser'},{k:'ozo',c:'dn',m:'laser',lk:'chemical_finishing'}
+];
+const KALK={gl:[['steel',0],['soft',0]],fr:[['steel',1],['soft',0],['steel',0]],pr:[['eng',0],['soft',0]],sr:[['fine',0],['soft',0]]};
+const SHR=[[5,10],[0,1],[7,15],[0,5]];
+// manufacturers: name, location, group (focus text in TEXTS[lang].an, same order)
+const AN=[
+ ['Monforts','Mönchengladbach (DE)','ma'],['Brückner Textile Technologies','Leonberg (DE)','ma'],
+ ['Xetma Vollenweider','Horgen (CH) / Aue (DE)','ob'],['Lafer','Schio (IT)','ob'],['Torres Maquinaria Textil','(ES)','ob'],
+ ['Santex Rimar Group (Santex, Sperotto Rimar)','Tobel (CH) / Trissino (IT)','ma'],['Ferraro','(IT)','ma'],['Tubetex','(US)','ma'],
+ ['Andritz Küsters / ramisch','Krefeld (DE)','gl'],['Biancalani','Prato (IT)','gr'],['Jeanologia','Valencia (ES)','dn']
+];
+const LINKS=[['chem','chemical_finishing'],['dty','dty_machines'],['aty','aty_machines']];
+const LINK_KEYS=['textile_dyeing','chemical_finishing','dty_machines','aty_machines'];
+const SOURCES=['Monforts – Monfortex/Toptex compressive shrinking ranges (monforts.de)','Monforts – rubber-belt shrinking ranges, cooling water −40 % (monforts.de)',
+  'texdata – Monfortex at Kettelhack (texdata.com)','Textile World – Monforts: denim finishing, shrinkage values (textileworld.com)',
+  'Innovation in Textiles – Toptex at Pincroft (innovationintextiles.com)','Textile Learner – principle of sanforizing (textilelearner.net)',
+  'texdata – Xetma Vollenweider, Gessner 1853 (texdata.com)','NCM – Xetma Vollenweider AG, Horgen (newclothmarketonline.com)',
+  'texdata – Xetma product lines (texdata.com)','texdata – Xetma: oldest shearing machine builder (texdata.com)',
+  'Indian Textile Journal – carpet shearing machine up to 6 m (indiantextilejournal.com)','Lenze – raising machine for Trigema (lenze.com)',
+  'Lafer – shearing machines (directindustry.com)','Batliboi – double-drum raising machine (batliboi.com)',
+  'Adkins History – teasels in woollen cloth (blog.adkinshistory.com)','Firgelli – teasel vs. wire raising, Abraham Moon (firgelliauto.com)',
+  'Furness History – raising before mechanisation (furnesshistory.blogspot.com)','Encyclopaedia Britannica 1911 – fulling, raising, shearing (wikisource)',
+  'Wikipedia – Fulling (en.wikipedia.org)','CSIRO/Woolwise – wet finishing of wool (woolwise.com)',
+  'Britannica – calender, friction 1805, Schreiner ~1895 (britannica.com)','Andritz – textile calenders (ramisch, Küsters) (andritz.com)',
+  'PTJ – Andritz teXcal Raconip (issuu.com)','iFactory – friction, Schreiner, beetling (ifactoryapp.com)',
+  'Chapter calendering – speed difference in friction calendering (scribd.com)','iFactory – heat setting polyester (ifactoryapp.com)',
+  'Textile Learner – heat setting, KD finish (textilelearner.net)','Textile World – Brückner at Cedro Têxtil (Oct. 2026) (textileworld.com)',
+  '360iResearch – market for heat-setting stenters (marketresearch.com)','Textile World – Santex Santashrink/Santacompact (textileworld.com)',
+  'texdata – Santex Group, headquarters Tobel (texdata.com)','texdata – Decofast 3.5, ~140 machines (texdata.com)',
+  'Textile World – Sperotto Rimar Compas (textileworld.com)','Textile Learner – tubular compactor (textilelearner.net)',
+  'Compactor – Ferraro specifications (scribd.com)','Indian Textile Magazine – Biancalani AIRO (indiantextilemagazine.in)',
+  'Kohan Textile Journal – AIRO 24 interview 2026 (kohantextilejournal.com)','texdata – Green Label for AIRO 24 (texdata.com)',
+  'Textination – Jeanologia, PP spray phase-out (textination.de)','Texfash – potassium permanganate on the ZDHC watchlist (texfash.com)',
+  'Texfash – Jeanologia: 5000 machines in 70 countries (texfash.com)','Première Vision – fibre fragments, raised fabrics (premierevision.com)',
+  'Klinkhammer et al. 2024 – microfibres from polyester functional clothing (doaj.org)','ACS Omega 2025 – microfibres from polyester fleece (pmc.ncbi.nlm.nih.gov)',
+  'bluesign – Microfiber shedding (July 2026) (bluesign.com)','Modaes – Jeanologia turnover 2025 (modaes.com)',
+  'Indian Textile Magazine – Monforts founded 1884 (indiantextilemagazine.in)','Karl Mayer / Hohenstein – fleece vs. 4D knit (karlmayer.com)'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+let fxCat='all',fxSel='san',kt='fr',ag='all';
+
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-k].golink,[data-k].lk');if(b)openModule(b.dataset.k)});
+
+function catBar(el,cur,cb){
+  const t=T();
+  el.innerHTML=`<button type="button" data-c="all" aria-pressed="${cur==='all'}">${esc(t.ui.all)}</button>`+
+    CATK.map(k=>`<button type="button" data-c="${k}" aria-pressed="${cur===k}"><i style="background:${CATC[k]}"></i>${esc(t.cat[k])}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.c));
+}
+
+// ── 0 goals
+function drawGoals(){
+  const t=T();
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k.v)}</b><span>${esc(k.l)}</span></div>`).join('');
+  let s='';const w=206,g=12;
+  CATK.forEach((c,i)=>{const x=10+i*(w+g),col=CATC[c];
+    s+=`<rect x="${x}" y="10" width="${w}" height="280" rx="8" fill="${col}" fill-opacity=".07" stroke="${col}" stroke-width="1.5"/>`+TX(x+w/2,36,t.cat[c],col,'middle',700,15,w-16);
+    s+=TX(x+w/2,55,t.catSub[c],'var(--muted)','middle',400,11.5,w-16);
+    FX.forEach((f,fi)=>{if(f.c!==c)return;const j=FX.filter((g2,gi)=>g2.c===c&&gi<fi).length,y=70+j*36;
+      s+=`<g class="node" data-k="${f.k}"><rect x="${x+10}" y="${y}" width="${w-20}" height="29" rx="5" fill="var(--panel)" stroke="var(--line)"/>`+TW(x+w/2,y+18.5,t.fx[fi].n,'var(--fg)','middle',600,12,w-30,2)+`</g>`;
+    });
+  });
+  const el=$('goalsvg');el.innerHTML=s;el.setAttribute('aria-label',t.ui.ariaGoals);
+  el.querySelectorAll('.node').forEach(n=>n.onclick=()=>{fxSel=n.dataset.k;fxCat='all';drawFx();go(1)});
+  $('chemhint0').textContent=t.ui.chemHint;$('gochem0').textContent=t.ui.openChem;
+}
+
+// ── 1 atlas: working-principle sketches (viewBox 320 x 240)
+function mech(m,col){
+  const v=T().mech;
+  let s='';
+  const fab=d=>`<path d="${d}" fill="none" stroke="var(--yarn)" stroke-width="4"/><path d="${d}" class="flow"/>`;
+  const cap=(t,y=218)=>TW(160,y,t,'var(--muted)','middle',400,12,300,2);
+  if(m==='raise'){s+=`<circle cx="160" cy="130" r="70" fill="var(--bg)" stroke="var(--wind)" stroke-width="2"/>`;for(let i=0;i<10;i++){const a=i/10*6.283,x=160+58*Math.cos(a),y=130+58*Math.sin(a);s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="11" fill="var(--panel)" stroke="${col}" stroke-width="2"/>`}s+=fab('M20 52 Q160 45 300 52');for(let i=0;i<22;i++)s+=`<line x1="${30+i*12}" y1="48" x2="${33+i*12}" y2="${36-(i%3)*3}" stroke="${col}" stroke-width="1.5"/>`;s+=cap(v.raise,222)}
+  if(m==='teasel'){for(let i=0;i<3;i++){const x=80+i*80;s+=`<ellipse cx="${x}" cy="140" rx="22" ry="40" fill="#e9d8a6" stroke="#b08850" stroke-width="2"/>`;for(let j=0;j<12;j++)s+=`<path d="M${x-20+(j%4)*13} ${110+Math.floor(j/4)*22} q4 -8 8 0" fill="none" stroke="#8a6a2f" stroke-width="1.5"/>`}s+=fab('M20 82 L300 82');s+=cap(v.teasel)}
+  if(m==='shear'){s+=fab('M20 160 L300 160');for(let i=0;i<20;i++)s+=`<line x1="${30+i*13}" y1="158" x2="${30+i*13}" y2="${i>9?146:128}" stroke="${col}" stroke-width="1.5"/>`;s+=`<circle cx="160" cy="110" r="34" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/>`;for(let i=0;i<6;i++){const a=i/6*6.283;s+=`<path d="M${(160+10*Math.cos(a)).toFixed(1)} ${(110+10*Math.sin(a)).toFixed(1)} L${(160+33*Math.cos(a+.5)).toFixed(1)} ${(110+33*Math.sin(a+.5)).toFixed(1)}" stroke="var(--wind)" stroke-width="2.5"/>`}s+=`<rect x="120" y="144" width="80" height="6" fill="#343a40"/>`+cap(v.shear,205)}
+  if(m==='sand'||m==='brush'){s+=fab('M20 150 L300 150');s+=`<circle cx="160" cy="105" r="42" fill="${m==='sand'?'#ced4da':'var(--panel)'}" stroke="var(--wind)" stroke-width="2"/>`;if(m==='sand'){for(let i=0;i<40;i++)s+=`<circle cx="${(160+38*Math.cos(i)).toFixed(1)}" cy="${(105+38*Math.sin(i)).toFixed(1)}" r="1.6" fill="#495057"/>`}else{for(let i=0;i<24;i++){const a=i/24*6.283;s+=`<line x1="${(160+30*Math.cos(a)).toFixed(1)}" y1="${(105+30*Math.sin(a)).toFixed(1)}" x2="${(160+46*Math.cos(a)).toFixed(1)}" y2="${(105+46*Math.sin(a)).toFixed(1)}" stroke="${col}" stroke-width="1.5"/>`}}for(let i=0;i<28;i++)s+=`<line x1="${25+i*10}" y1="152" x2="${27+i*10}" y2="158" stroke="${col}" stroke-width="1.2"/>`;s+=cap(m==='sand'?v.sand:v.brush,205)}
+  if(m==='cal'||m==='emb'){s+=`<circle cx="150" cy="70" r="48" fill="#dee2e6" stroke="var(--wind)" stroke-width="2"/><circle cx="150" cy="168" r="48" fill="#f1e3c8" stroke="#b08850" stroke-width="2"/>`;if(m==='emb')for(let i=0;i<14;i++){const a=i/14*6.283;s+=`<rect x="${(150+44*Math.cos(a)-3).toFixed(1)}" y="${(70+44*Math.sin(a)-3).toFixed(1)}" width="6" height="6" fill="#495057"/>`}s+=fab('M10 119 L310 119');s+=TW(206,66,m==='emb'?v.eng:v.steel,'var(--fg)','start',500,12,110,2)+TW(206,172,v.soft,'var(--fg)','start',500,12,110,2)}
+  if(m==='beet'){s+=fab('M20 170 L300 170');for(let i=0;i<5;i++){const x=50+i*55,h=i%2?40:60;s+=`<rect x="${x-10}" y="${170-h-30}" width="20" height="30" rx="3" fill="#b08850"/><line x1="${x}" y1="${170-h-30}" x2="${x}" y2="40" stroke="#8a6a2f" stroke-width="3"/>`}s+=cap(v.beet)}
+  if(m==='sanf'){s+=`<circle cx="160" cy="90" r="60" fill="#dee2e6" stroke="var(--wind)" stroke-width="2"/><path d="M20 200 L95 130 A72 72 0 0 0 225 130 L300 200" fill="none" stroke="#343a40" stroke-width="12" stroke-linejoin="round" opacity=".85"/><path d="M40 122 L103 122 A62 62 0 0 0 217 122 L290 122" fill="none" stroke="var(--yarn)" stroke-width="3"/><path d="M40 122 L103 122 A62 62 0 0 0 217 122 L290 122" class="flow"/>`+TX(160,94,v.heatCyl,'var(--fg)','middle',500,12,108)+TX(70,228,v.belt,'#343a40','middle',600,12,130)+TX(268,108,v.comp,col,'middle',700,12,96)}
+  if(m==='heat'){s+=`<rect x="30" y="70" width="260" height="110" rx="10" fill="#fff4e6" stroke="var(--heat)" stroke-width="2"/>`;for(let i=0;i<8;i++)s+=`<path d="M${50+i*32} 95 q6 -10 0 -18" stroke="var(--heat)" fill="none" stroke-width="2"/>`;s+=fab('M10 140 L310 140');for(let i=0;i<9;i++)s+=`<circle cx="${40+i*30}" cy="180" r="4" fill="var(--wind)"/>`;s+=cap(v.heat)}
+  if(m==='steam'){s+=`<circle cx="160" cy="112" r="60" fill="#f1e3c8" stroke="#b08850" stroke-width="2"/><circle cx="160" cy="112" r="22" fill="#dee2e6" stroke="var(--wind)"/>`;for(let i=0;i<10;i++){const a=i/10*6.283;s+=`<path d="M${(160+24*Math.cos(a)).toFixed(1)} ${(112+24*Math.sin(a)).toFixed(1)} L${(160+78*Math.cos(a)).toFixed(1)} ${(112+78*Math.sin(a)).toFixed(1)}" stroke="var(--air)" stroke-dasharray="3 3"/>`}s+=cap(v.steam,220)}
+  if(m==='mill'){s+=`<circle cx="120" cy="120" r="30" fill="#dee2e6" stroke="var(--wind)" stroke-width="2"/><circle cx="200" cy="120" r="30" fill="#dee2e6" stroke="var(--wind)" stroke-width="2"/><path d="M40 60 C80 60 90 92 120 90 C150 88 170 150 200 150 C240 150 250 60 290 60" stroke="#b08850" stroke-width="10" fill="none" opacity=".8"/>`+cap(v.mill,205)}
+  if(m==='air'){s+=`<rect x="40" y="40" width="240" height="150" rx="14" fill="#f3f0ff" stroke="var(--twist)" stroke-width="2"/>`;for(let i=0;i<5;i++)s+=`<path d="M60 ${70+i*22} L230 ${70+i*22}" stroke="var(--air)" stroke-dasharray="6 5" stroke-width="2"/>`;s+=fab('M70 150 q30 -60 60 -10 q30 50 60 -10 q20 -40 40 -20');for(let i=0;i<8;i++)s+=`<line x1="262" y1="${55+i*16}" x2="276" y2="${55+i*16}" stroke="#495057" stroke-width="3"/>`;s+=cap(v.air)}
+  if(m==='laser'){s+=`<path d="M70 200 L90 60 L140 60 L160 200 Z M160 200 L180 60 L230 60 L250 200" fill="#a5c8ec" stroke="#1864ab" stroke-width="2"/><rect x="130" y="10" width="60" height="24" rx="5" fill="var(--panel)" stroke="${col}" stroke-width="2"/><line x1="160" y1="34" x2="115" y2="120" stroke="#e03131" stroke-width="2"/>`;for(let i=0;i<4;i++)s+=`<path d="M${95+i*4} ${115+i*12} q15 -4 30 0" stroke="#e7f5ff" stroke-width="3" fill="none"/>`;s+=cap(v.laser,224)}
+  return s;
+}
+function drawFx(){
+  const t=T(),u=t.ui;
+  catBar($('fbar'),fxCat,c=>{fxCat=c;const l=FX.filter(f=>fxCat==='all'||f.c===fxCat);if(!l.find(f=>f.k===fxSel))fxSel=l[0].k;drawFx()});
+  $('fxgrid').innerHTML=FX.map((f,i)=>(fxCat==='all'||f.c===fxCat)?`<button type="button" class="fxc ${f.k===fxSel?'sel':''}" style="--c:${CATC[f.c]}" data-x="${f.k}"><b>${esc(t.fx[i].n)}</b><span>${esc(t.fx[i].sub)}</span></button>`:'').join('');
+  $('fxgrid').querySelectorAll('.fxc').forEach(b=>b.onclick=()=>{fxSel=b.dataset.x;drawFx()});
+  const i=FX.findIndex(x=>x.k===fxSel),f=FX[i],d=t.fx[i],col=CATC[f.c];
+  const row=(l,x)=>`<div class="row"><span class="lbl">${esc(l)}</span><p>${esc(x)}</p></div>`;
+  let lk='';
+  if(f.lk==='textile_dyeing')lk=`<p class="muted" style="margin-top:8px">${esc(u.dyeHint)}</p><button type="button" class="golink" data-k="textile_dyeing">${esc(u.openDye)}</button>`;
+  if(f.lk==='chemical_finishing')lk=`<p class="muted" style="margin-top:8px">${esc(u.chemHint)}</p><button type="button" class="golink" data-k="chemical_finishing">${esc(u.openChem)}</button>`;
+  $('fxd').innerHTML=`<span class="pill" style="border-color:${col};color:${col}">${esc(t.cat[f.c])}</span><h3>${esc(d.n)}</h3>`+
+    `<svg viewBox="0 0 320 240" aria-hidden="true">${mech(f.m,col)}</svg>`+
+    row(u.principle,d.wie)+row(u.use,d.ein)+row(u.machines,d.mas)+row(u.figure,d.kz)+row(u.risks,d.ris)+lk;
+}
+
+// ── 2 sanforizing (interactive) + calender types
+const th0=p=>10+p*10;
+function drawSanf(){
+  const t=T(),v=t.sanf,mv=t.mech;
+  const p=+$('sanfp').value/100;
+  $('sanfv').textContent=num((p*12).toFixed(1))+' %';
+  const sp0=14,sp1=sp0*(1-p*0.12);
+  let s='';
+  const cx=300,cy=105,R=72,RB=R+6+th0(p)/2;
+  const P=(r,a)=>[cx+r*Math.cos(a*Math.PI/180),cy+r*Math.sin(a*Math.PI/180)];
+  const e1=P(RB,155),e2=P(RB,25),f1=P(R+2,155),f2=P(R+2,25);
+  const f=n=>n.toFixed(1);
+  s+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="#dee2e6" stroke="var(--wind)" stroke-width="2"/>`+TX(cx,cy+4,mv.heatCyl,'var(--fg)','middle',600,13,130);
+  s+=`<path d="M30 250 L${f(e1[0]-20)} ${f(e1[1]+12)} L${f(e1[0])} ${f(e1[1])} A${f(RB)} ${f(RB)} 0 0 0 ${f(e2[0])} ${f(e2[1])} L${f(e2[0]+20)} ${f(e2[1]+12)} L500 250" fill="none" stroke="#343a40" stroke-width="${th0(p)}" stroke-linejoin="round" opacity=".85"/>`;
+  const fabD=`M150 ${f(f1[1])} L${f(f1[0])} ${f(f1[1])} A${R+2} ${R+2} 0 0 0 ${f(f2[0])} ${f(f2[1])} L455 ${f(f2[1])}`;
+  s+=`<path d="${fabD}" fill="none" stroke="var(--yarn)" stroke-width="3"/><path d="${fabD}" class="flow" style="stroke-width:1.2"/>`;
+  const pr=P(RB+th0(p)/2+20,152);
+  s+=`<circle cx="${f(pr[0]-6)}" cy="${f(pr[1]+4)}" r="20" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/>`+TX(f(pr[0]-6),f(pr[1]+8),v.press,'var(--muted)','middle',500,11,34);
+  s+=TX(30,288,v.beltNote,'#343a40','start',500,12,470);
+  const y=f1[1];
+  for(let i=0;i<9;i++)s+=`<line x1="${20+i*sp0}" y1="${f(y-8)}" x2="${20+i*sp0}" y2="${f(y+8)}" stroke="var(--yarn)" stroke-width="2.5"/>`;
+  s+=`<line x1="15" y1="${f(y)}" x2="${20+8*sp0+5}" y2="${f(y)}" stroke="var(--yarn)" stroke-width="1.5"/>`+TX(75,f(y-16),v.in,'var(--fg)','middle',500,12,140);
+  for(let i=0;i<9;i++)s+=`<line x1="${f(400+i*sp1)}" y1="${f(y-8)}" x2="${f(400+i*sp1)}" y2="${f(y+8)}" stroke="var(--yarn)" stroke-width="2.5"/>`;
+  s+=`<line x1="395" y1="${f(y)}" x2="${f(400+8*sp1+5)}" y2="${f(y)}" stroke="var(--yarn)" stroke-width="1.5"/>`+TX(458,f(y-16),v.out,'var(--fg)','middle',500,12,120);
+  s+=TX(300,20,v.title,'#B5521A','middle',600,13,420);
+  const el=$('sanfsvg');el.innerHTML=s;el.setAttribute('aria-label',t.ui.ariaSanf);
+  $('sanft').textContent=t.ui.sanfNote;
+}
+$('sanfp').addEventListener('input',drawSanf);
+function drawKal(){
+  const t=T(),k=t.kal;
+  $('ktabs').innerHTML=Object.keys(KALK).map(x=>`<button type="button" data-v="${x}" aria-pressed="${x===kt}">${esc(k.tabs[x].t)}</button>`).join('');
+  $('ktabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{kt=b.dataset.v;drawKal()});
+  const rolls=KALK[kt],n=rolls.length;let s='';const r=n===3?38:55,y0=n===3?44:70,cx=230;
+  rolls.forEach((rr,i)=>{const y=y0+i*(2*r+2),fill=rr[0]==='soft'?'#f1e3c8':'#ced4da';
+    s+=`<circle cx="${cx}" cy="${y}" r="${r}" fill="${fill}" stroke="var(--wind)" stroke-width="2"/>`;
+    if(rr[0]==='eng')for(let j=0;j<16;j++){const a=j/16*6.283;s+=`<rect x="${(cx+(r-6)*Math.cos(a)-3).toFixed(1)}" y="${(y+(r-6)*Math.sin(a)-3).toFixed(1)}" width="6" height="6" fill="#495057"/>`}
+    if(rr[0]==='fine'){s+=`<clipPath id="kc${i}"><circle cx="${cx}" cy="${y}" r="${r-2}"/></clipPath><g clip-path="url(#kc${i})">`;for(let j=-5;j<=5;j++)s+=`<line x1="${cx+j*10-8}" y1="${(y-r).toFixed(1)}" x2="${cx+j*10+8}" y2="${(y+r).toFixed(1)}" stroke="#868e96" stroke-width="1"/>`;s+='</g>'}
+    s+=TW(cx+r+14,y+4,k[rr[0]],'var(--fg)','start',500,12.5,510-(cx+r+14),2);
+    if(rr[1])s+=TX(cx,y+5,k.faster,'#B5521A','middle',700,13,2*r-12);
+  });
+  const ny=y0+r+1;s+=`<line x1="20" y1="${ny}" x2="500" y2="${ny}" stroke="var(--yarn)" stroke-width="4"/><line x1="20" y1="${ny}" x2="500" y2="${ny}" class="flow"/>`+TX(22,ny-8,k.fabric,'var(--yarn)','start',600,12,cx-r-30);
+  const el=$('kalsvg');el.innerHTML=s;el.setAttribute('aria-label',t.ui.ariaKal);
+  $('kald').textContent=k.tabs[kt].d;
+}
+
+// ── 3 key figures
+function drawShr(){
+  const t=T(),u=t.ui;
+  let s='';const x0=196,sc=26;
+  [0,5,10,15].forEach(v=>{s+=`<line x1="${x0+v*sc}" y1="10" x2="${x0+v*sc}" y2="170" stroke="var(--line)"/>`+TX(x0+v*sc,188,v+' %','var(--muted)','middle',400,11.5)});
+  SHR.forEach((d,i)=>{const y=22+i*38,after=i%2;
+    s+=TX(x0-10,y+15,t.shr[i],'var(--fg)','end',after?700:500,13,x0-14)+
+      `<rect x="${x0+d[0]*sc}" y="${y}" width="${Math.max(6,(d[1]-d[0])*sc)}" height="20" rx="5" fill="${after?'var(--hl)':'#ced4da'}"/>`+
+      TX(x0+d[1]*sc+8,y+15,(d[0]?d[0]+'–':'< ')+d[1]+' %','var(--muted)','start',500,12);
+  });
+  s+=TX(320,212,u.shrNote,'var(--muted)','middle',400,11.5,620);
+  const el=$('shrsvg');el.innerHTML=s;el.setAttribute('aria-label',u.ariaShr);
+  $('shrlbl').textContent=u.shrLbl;$('dyehint3').textContent=u.dyeHint;$('godye3').textContent=u.openDye;
+  $('kz').innerHTML=`<tr><th>${esc(u.kzHead[0])}</th><th>${esc(u.kzHead[1])}</th></tr>`+t.kz.map(k=>`<tr><td><b>${esc(k[0])}</b></td><td>${esc(k[1])}</td></tr>`).join('');
+}
+
+// ── 4 sustainability
+function drawSus(){
+  const t=T(),u=t.ui;
+  $('prolbl').textContent=u.proLbl;$('conlbl').textContent=u.conLbl;
+  $('pro').innerHTML=t.pro.map(p=>`<div class="rg"><div class="d" style="color:#1F7A36">+</div><div><b>${esc(p[0])}</b><span>${esc(p[1])}</span></div></div>`).join('');
+  $('con').innerHTML=t.con.map(p=>`<div class="rg"><div class="d" style="color:var(--pin)">!</div><div><b>${esc(p[0])}</b><span>${esc(p[1])}</span></div></div>`).join('');
+  $('chemhint4').textContent=u.chemHint;$('gochem4').textContent=u.openChem;
+}
+
+// ── 5 manufacturers
+function drawAn(){
+  const t=T(),u=t.ui;
+  catBar($('abar'),ag,c=>{ag=c;drawAn()});
+  $('atab').innerHTML=`<tr>${u.anHead.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+
+    AN.map((a,i)=>(ag==='all'||a[2]===ag)?`<tr><td><b>${esc(a[0])}</b></td><td>${esc(a[1])}</td><td><span class="pill" style="border-color:${CATC[a[2]]}">${esc(t.cat[a[2]])}</span></td><td>${esc(t.an[i])}</td></tr>`:'').join('');
+  $('morelbl').textContent=u.moreLbl;
+  $('links').innerHTML=LINKS.map(([id,key])=>`<button type="button" class="lk" data-k="${key}"><b>${esc(t.links[id].b)}</b><span>${esc(t.links[id].d)}</span></button>`).join('');
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  $('sanflbl').textContent=u.sanfLbl;$('presslbl').textContent=u.pressure;$('kallbl').textContent=u.kalLbl;
+  drawGoals();drawFx();drawSanf();drawKal();drawShr();drawSus();drawAn();go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+})();
+</script>
+</body>
+</html>

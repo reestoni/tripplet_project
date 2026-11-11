@@ -114,6 +114,8 @@ def apply(screen) -> None:
     cg = _custom_group_row(screen)
     if cg is not None and 0 <= cg < n_rows and not getattr(screen, "_custom_group_visible", False):
         other_hidden.add(cg)
+    # DTY process: pre-jet / jet 3 rows no trial needs (ui/dty_schema_panel.py)
+    other_hidden |= {r for r in getattr(screen, "_process_hidden_rows", set()) if 0 <= r < n_rows}
     all_hidden = user_hidden | other_hidden
     for dr in range(n_rows):
         tbl.left.setRowHidden(n_hdr + dr, dr in all_hidden)

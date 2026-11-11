@@ -1,7 +1,7 @@
 window.TEXTS = {
  "de": {
   "ui": {
-   "eyebrow": "Onboarding · DTY · Spezialwissen",
+   "eyebrow": "Knowledge Base · DTY · Spezialwissen",
    "h1": "Wege zum cotton-like DTY",
    "lead": "Sieben Varianten, wie ein DTY Volumen, Bögen oder Haarigkeit wie gesponnenes Garn bekommt. Die ersten fünf kombinieren zwei Komponenten mit Luft, die letzten beiden arbeiten mit einer einzigen Komponente.",
    "note": "Schematische Skizzen. Die Varianten lassen sich kombinieren, und Anlagen und Artikel unterscheiden sich in Führung, Düsentyp und Einstellungen. Bei den Varianten mit einer Komponente ist die Mechanik vereinfacht dargestellt.",
@@ -331,7 +331,7 @@ window.TEXTS = {
  },
  "en": {
   "ui": {
-   "eyebrow": "Onboarding · DTY · Specialist knowledge",
+   "eyebrow": "Knowledge Base · DTY · Specialist knowledge",
    "h1": "Routes to a cotton-like DTY",
    "lead": "Seven ways a DTY gets the bulk, loops or hairiness of a spun yarn. The first five combine two components with air, the last two work with a single component.",
    "note": "Schematic sketches. The variants can be combined, and machines and articles differ in threadline, jet type and settings. For the single-component variants the mechanics are simplified.",
@@ -661,7 +661,7 @@ window.TEXTS = {
  },
  "es": {
   "ui": {
-   "eyebrow": "Onboarding · DTY · Conocimiento especializado",
+   "eyebrow": "Knowledge Base · DTY · Conocimiento especializado",
    "h1": "Caminos hacia un DTY tipo algodón",
    "lead": "Siete maneras de dar a un DTY el volumen, los arcos o la vellosidad de un hilo hilado. Las cinco primeras combinan dos componentes con aire, las dos últimas trabajan con un solo componente.",
    "note": "Esquemas simplificados. Las variantes se pueden combinar, y las máquinas y artículos difieren en el recorrido del hilo, el tipo de tobera y los ajustes. En las variantes de un componente la mecánica está simplificada.",
@@ -993,7 +993,7 @@ window.TEXTS = {
  },
  "zh": {
   "ui": {
-   "eyebrow": "入门 · DTY · 专业知识",
+   "eyebrow": "知识库 · DTY · 专业知识",
    "h1": "实现仿棉 DTY 的途径",
    "lead": "七种让 DTY 获得短纤纱般蓬松、丝弧或毛羽的方法。前五种用空气组合两种组分，后两种只用一种组分。",
    "note": "示意图。各种方法可以组合使用，设备和品种在走丝路线、喷嘴类型和设定上各不相同。单组分方法的机理作了简化。",

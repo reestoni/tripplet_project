@@ -178,8 +178,10 @@ def build_machine_tab_impl(self) -> None:
             self.tbl_machine.setModel(PivotEditModel([], self._trial_labels))
             return
 
-    # Felder aufteilen: RDSetting=0 -> Machine Data, RDSetting=1 -> R&D Machine Data
-    fields_normal = [f for f in fields if int(f.get("RDSetting") or 0) == 0]
+    # Felder aufteilen: RDSetting=0 -> Machine Data, RDSetting=1 -> R&D Machine Data,
+    # RDSetting=2 -> Machine Data, aber nur ab dieser Version: aeltere exe zeigen
+    # nur 0/1 und uebergehen diese Felder (DTY-Verfahren, Merge, Vor-/3. Duese)
+    fields_normal = [f for f in fields if int(f.get("RDSetting") or 0) in (0, 2)]
     fields_rd = [f for f in fields if int(f.get("RDSetting") or 0) == 1]
 
     # Trial-Spalten (für exakte Groß/Kleinschreibung)
@@ -286,6 +288,16 @@ def build_machine_tab_impl(self) -> None:
     row_titles = titles_fixed + [f["Title"] for f in field_map]
     # CustomGroup immer am Ende anhängen (Sichtbarkeit via hideRow gesteuert)
     row_titles = row_titles + ["Custom Group"]
+    # Row keys for the DTY process schema (ui/dty_stations.py): fixed rows by
+    # name, machine fields by DB column, aligned with row_titles.
+    _fixed_keys = {FIX_HOUSING: "housing", FIX_JET: "jet", FIX_PLATE: "jetplate",
+                   FIX_AIR: "airpressure", FIX_PLIES: "plies", FIX_YARN_USE: "yarnuse",
+                   FIX_SPOOL: "spool"}
+    self._machine_row_keys = (
+        [_fixed_keys.get(t) for t in titles_fixed]
+        + ["dyratio" if f.get("StorageTable") == _DY_RATIO_STORAGE
+           else str(f.get("ColName") or "").lower() for f in field_map]
+        + ["customgroup"])
     readonly_rows = set()
     if use_yarn_use_grouping or compact_mode:
         readonly_rows.add(titles_fixed.index(FIX_PLIES))  # Plies-Zeile immer read-only
@@ -952,6 +964,8 @@ def build_machine_tab_impl(self) -> None:
 
     # Custom-Group-Zeile + vom Nutzer ausgeblendete Zeilen (pro Maschine gemerkt)
     from ui import machine_row_visibility as _mrv
+    from ui import dty_schema_panel as _dsp
+    _dsp.update_process_rows(self)  # pre-jet / jet 3 rows only where needed
     _mrv.install(self)
     _mrv.apply(self)
 
@@ -1026,9 +1040,13 @@ def build_machine_tab_impl(self) -> None:
 
     # LookupComboDelegate für generische dropdown-Zeilen (z.B. DiscID)
     self._lookup_delegates = []
+    from db.dty_process import LOOKUP_NAME as _DTY_LOOKUP
+    _keep_order = {len(titles_fixed) + i for i, f in enumerate(field_map)
+                   if str(f.get("LookupTable") or "").lower() == _DTY_LOOKUP.lower()}
     for row_idx, lk_map in dropdown_rows.items():
         lk_list = [(k, v) for k, v in lk_map.items() if isinstance(k, int)]
-        lk_list.sort(key=lambda x: x[1])
+        if row_idx not in _keep_order:  # DTY process: keep SortOrder from the cache
+            lk_list.sort(key=lambda x: x[1])
         d = LookupComboDelegate(row_idx, lk_list, self.tbl_machine.right)
         self.tbl_machine.right.setItemDelegateForRow(n_hdr + row_idx, d)
         self._lookup_delegates.append(d)
@@ -1110,6 +1128,7 @@ def build_machine_tab_impl(self) -> None:
         settings_cols_map=settings_cols_map,
         trial_rows=trial_rows,
     )
+    _dsp.refresh(self)  # DTY process schema above the table
 
 
 def build_rd_machine_tab_impl(
@@ -1228,6 +1247,9 @@ def build_rd_machine_tab_impl(
         seen_norm_titles.add(disp_norm)
 
     row_titles = titles_fixed + [f["Title"] for f in field_map]
+    # row keys (DB column, lower case) for the Knowledge Base links (ui/kb_links.py)
+    self._rd_machine_row_keys = (["housing", "jet", "jetplate", "airpressure"]
+                                 + [str(f.get("ColName") or "").lower() for f in field_map])
     row_validators: List[Optional[str]] = [None] * len(row_titles)
     row_validators[2] = reserved_validators.get(FIX_PLATE)
     row_validators[3] = reserved_validators.get(FIX_AIR)

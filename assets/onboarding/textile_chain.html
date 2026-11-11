@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Textile Chain</title>
+<!-- Knowledge Base START page (ui/screen_onboarding.py, catalog START_MODULE).
+     Content from the user's hub page "Textilkette - Startseite: Von der Faser zum fertigen Stoff" (as of Nov 2026),
+     adapted: links point to Knowledge Base modules instead of web pages.
+     Texts in textile_chain_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1&station=<id> for screenshots. No external resources (sources as plain text only).
+     Links: modules embedded via document.title "open:<key>" (otherwise <key>.html directly),
+     the Yarn Count Converter via document.title "tool:yarn_count"; the title is reset to "scene:n" right after,
+     so the same link can be clicked again.
+     LINK_KEYS must contain every Knowledge Base module except this page (tests/test_onboarding.py). -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--ok:#1F7A36;--soft:#EEF3EC;--selbg:#E6F2E9;--fab:#1864AB;--dash:#C3CBC5;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button,select,input{font:inherit;color:var(--fg)}
+button{background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:95ch}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+svg{display:block}
+svg text{font-family:var(--font-body)}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.note{font-size:12px;color:var(--muted);margin:0}
+.muted{color:var(--muted);font-size:13px;margin:0}
+/* dots instead of glyphs */
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--ok);vertical-align:-1px}
+.dot.o{background:transparent;border:1.6px solid var(--muted)}
+.dot.h{background:var(--hl);width:9px;height:9px}
+/* 0 map */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.kpi b{display:block;font-family:var(--font-display);font-size:28px;line-height:1.1;color:var(--ok)}
+.kpi span{color:var(--muted);font-size:13px}
+#band{width:100%;height:50px;cursor:pointer}
+#msvg{width:100%;height:auto}
+.node{cursor:pointer}
+.node:hover rect.box{stroke:var(--hl);stroke-width:2.4}
+.legendrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--muted);align-items:center;margin:6px 2px 0}
+.legendrow i{display:inline-block;width:22px;height:12px;border-radius:3px;border:1.4px solid #868E96;vertical-align:-2px;margin-right:6px;background:#fff}
+.legendrow i.d{border-style:dashed;border-color:var(--dash);background:var(--bg)}
+.sthead{display:flex;align-items:center;gap:8px;margin:4px 0 0}
+.sthead h3{font-family:var(--font-display);font-size:22px;margin:0}
+.sthead .cnt{font-family:var(--font-mono);font-size:11.5px;color:var(--muted)}
+/* page cards */
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:10px}
+.pc{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:11px 13px}
+.pc:hover{border-color:var(--hl);background:#fff}
+.pc .tgs{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.pc b{display:block;font-size:15px;line-height:1.3;color:var(--fg)}
+.pc span.d{font-size:12.5px;color:var(--muted);line-height:1.45}
+.pc em{font-style:normal;font-size:11.5px;color:var(--ok);margin-top:5px;font-family:var(--font-mono)}
+.tg{display:inline-block;font-family:var(--font-mono);font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid var(--line);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.tg.o{border-color:var(--fab);color:var(--fab)}.tg.a{border-color:var(--air);color:var(--air)}.tg.w{border-color:var(--ok);color:var(--ok)}
+.tg.hb{border-color:var(--hl);background:var(--hl);color:#fff}
+.grp{margin:0}
+.grp .sthead h3{font-size:20px}
+/* 2 matrix */
+.mfil{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
+.mfil input,.mfil select{padding:6px 10px;border-radius:4px;border:1px solid var(--line);background:#fff}
+.mfil input{min-width:220px}
+.ins{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.tblwrap{overflow-x:auto}
+table.mx{border-collapse:collapse;width:100%;font-size:13px}
+table.mx th,table.mx td{border-bottom:1px solid var(--line);padding:6px 5px;text-align:center}
+table.mx th{font-family:var(--font-body);font-size:11.5px;color:var(--muted);font-weight:600;vertical-align:bottom;cursor:pointer}
+table.mx th:hover{color:var(--ok)}
+table.mx th .v{display:inline-block;writing-mode:vertical-rl;transform:rotate(180deg);white-space:normal;max-height:160px;text-align:left;line-height:1.2}
+table.mx.cjk th .v{transform:none}
+table.mx th.f{cursor:default;text-align:left;font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:500}
+table.mx td.f{text-align:left;white-space:nowrap}
+table.mx tr:hover td{background:#F0F7F2}
+table.mx th.sel,table.mx td.sel{background:var(--selbg)}
+table.mx .dot.k{cursor:pointer}
+table.mx .dot.k:hover{box-shadow:0 0 0 3px #CFE8D5}
+/* 3 gaps */
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.cmp .c{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;border-top:4px dashed var(--dash)}
+.cmp .c h4{margin:0 0 4px;font-size:15px;display:flex;align-items:center;gap:6px}
+.cmp .c p{margin:4px 0;font-size:13.5px;color:var(--muted)}
+details{font-size:12px;color:var(--muted)}
+details p{margin:8px 0 0}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:820px){header{flex-direction:column}details ol{columns:1}}
+</style>
+<script src="textile_chain_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 process map -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <svg id="band" aria-hidden="true"></svg>
+    <div class="stage">
+      <svg id="msvg" viewBox="0 0 1160 470" role="img"></svg>
+      <div class="legendrow" id="mlegend"></div>
+    </div>
+    <div class="card" id="mpanel"></div>
+  </div>
+  <!-- 1 all pages -->
+  <div class="sc" id="sc1"><div id="allp" style="display:flex;flex-direction:column;gap:12px"></div></div>
+  <!-- 2 manufacturer matrix -->
+  <div class="sc" id="sc2">
+    <div class="card">
+      <div class="mfil">
+        <input id="q" type="search">
+        <select id="land"></select>
+        <select id="stg"></select>
+        <button type="button" id="reset"></button>
+        <span class="ins" id="cnt"></span>
+      </div>
+      <div class="tblwrap"><table class="mx" id="mx"></table></div>
+      <p class="note" id="mxnote" style="margin-top:8px"></p>
+    </div>
+  </div>
+  <!-- 3 open topics -->
+  <div class="sc" id="sc3"><div class="cmp" id="gaps"></div></div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><p id="srcintro"></p><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const NSC=4;
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>k in o?o[k]:'{'+k+'}');
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink / wrap SVG labels that would overflow their box
+const CJK=/[⺀-鿿＀-￯　-〿]/;
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=CJK.test(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+const wrap=(t,s,max,w)=>{
+  const tok=String(t).match(/[⺀-鿿＀-￯　-〿]|[^\s⺀-鿿＀-￯　-〿]+|\s+/g)||[];
+  const out=[];let cur='';
+  tok.forEach(k=>{if(cur.trim()&&textW((cur+k).trim(),s,w)>max){out.push(cur.trim());cur=k.trimStart()}else cur+=k});
+  if(cur.trim())out.push(cur.trim());return out;
+};
+
+// ── language-neutral data (texts in textile_chain_texts.js)
+// every Knowledge Base module except this start page, each exactly once
+const LINK_KEYS=['natural_fibres','man_made_fibres','staple_spinning','yarn_twisting','air_jet_spinning','filament_spinning','bcf_spinning','poy_spinning_plants','fdy_spinning_plants',
+  'dty_intermingling','cotton_like_dty','knot_stability','dty_machines','aty_air_texturing','aty_machines','air_covering','ac_machines',
+  'air_splicing','lufan_suction_gun','weaving_preparation','weaving_machines','shaft_weaving','jacquard_weaving','wilton_weaving',
+  'weave_structures','circular_knitting','warp_knitting','fabric_formation','nonwovens','textile_pretreatment','textile_dyeing','textile_printing','chemical_finishing','mechanical_finishing','coating','finishing_machines','making_up','fabric_testing',
+  'statimat_tensile','texturmat_crimp','rapid_knot_test','itemat_knot_measurement','heberlein_history'];
+// card tag: o overview (machines / manufacturers), a animation, w tool / model
+const TAG={natural_fibres:'o',man_made_fibres:'o',poy_spinning_plants:'o',fdy_spinning_plants:'o',dty_machines:'o',aty_machines:'o',ac_machines:'o',weaving_machines:'o',
+  chemical_finishing:'o',mechanical_finishing:'o',finishing_machines:'o',heberlein_history:'o',knot_stability:'w'};
+// pages about Heberlein's own technology (jets, Lufan, splicing)
+const HEB=new Set(['filament_spinning','bcf_spinning','dty_intermingling','cotton_like_dty','aty_air_texturing','air_covering','air_splicing','lufan_suction_gun']);
+const TOOL='@yarn_count';
+// stations: id, x, y, items (module keys, TOOL = Yarn Count Converter)
+const N=[
+ ['faser',90,80,['natural_fibres','man_made_fibres']],['poly',90,250,['man_made_fibres']],
+ ['spin',290,80,['staple_spinning','yarn_twisting','air_jet_spinning']],
+ ['mf',290,250,['filament_spinning','bcf_spinning','poy_spinning_plants','fdy_spinning_plants']],
+ ['tex',490,250,['dty_intermingling','cotton_like_dty','knot_stability','dty_machines','aty_air_texturing','aty_machines','air_covering','ac_machines','air_splicing','lufan_suction_gun']],
+ ['prep',700,60,['weaving_preparation']],
+ ['web',700,150,['weaving_machines','shaft_weaving','jacquard_weaving','wilton_weaving','weave_structures']],
+ ['masche',700,240,['circular_knitting','warp_knitting','fabric_formation']],
+ ['vlies',700,330,['nonwovens']],
+ ['farb',900,70,['textile_pretreatment','textile_dyeing','textile_printing']],
+ ['chem',900,160,['chemical_finishing','coating']],
+ ['mech',900,250,['mechanical_finishing','finishing_machines']],
+ ['stoff',1085,160,['making_up']],
+ ['pruef',290,410,['fabric_testing','statimat_tensile','texturmat_crimp','rapid_knot_test','itemat_knot_measurement','knot_stability']],
+ ['tools',560,410,[TOOL]],
+ ['hist',830,410,['heberlein_history']]
+];
+const NOT_OPEN=['faser','poly','stoff'];   // start / end of the chain, never an "open station"
+const E=[['faser','spin'],['poly','mf'],['mf','tex'],['mf','web'],['spin','prep'],['spin','masche'],['tex','prep'],['tex','masche'],['prep','web'],['poly','vlies'],['faser','vlies'],['web','farb'],['web','chem'],['web','mech'],['masche','chem'],['masche','mech'],['vlies','chem'],['farb','chem'],['chem','mech'],['chem','stoff'],['mech','stoff'],['farb','stoff']];
+const COLS=[90,290,490,700,900,1085];
+const GAP_ICONS=['spin','masche','spin','prep'];
+// matrix: stage -> module opened by a filled dot
+const ST=[['sp','staple_spinning'],['wi','weaving_preparation'],['mf','poy_spinning_plants'],['dt','dty_machines'],['at','aty_machines'],['ac','ac_machines'],
+  ['wp','weaving_preparation'],['wm','weaving_machines'],['fb','weaving_machines'],['tp','weaving_machines'],['au','finishing_machines'],['be','finishing_machines'],
+  ['ko','heberlein_history'],['pr','statimat_tensile'],['ch','chemical_finishing']];
+// 1 = documented (dot opens the stage's page), 3 = documented (no page), 2 = market / used-machine lists only
+const M=[
+ ["Rieter (inkl. Autoconer)","CH",{sp:1,wi:1}],["Trützschler","DE",{sp:1}],["Murata Machinery","JP",{sp:1}],["Toyota Industries","JP",{sp:1,wm:1,fb:1}],
+ ["Oerlikon Barmag","DE",{mf:1,dt:1,ac:1}],["TMT Machinery","JP",{mf:1,dt:1,at:1}],["SSM (Rieter-Gruppe, inkl. Giudici)","CH",{dt:1,at:1,ac:1}],
+ ["Himson Engineering","IN",{dt:1,at:1}],["Aalidhra Textile Engineering","IN",{dt:1,at:1,ac:1}],["AIKI Riotech","JP",{at:1,ac:1}],["Fadis","IT",{at:1,ac:1}],
+ ["Shanxi Jingwei Chemical Fiber Machinery","CN",{dt:1,at:1}],["Zhejiang Yuejian","CN",{dt:1,ac:1}],["Zhejiang Kaicheng","CN",{at:1,ac:1}],["Zhejiang Jinggong","CN",{dt:1,ac:1}],["Wuxi Hongyuan","CN",{dt:1}],["Hemaks","TR",{ac:1}],
+ ["Beijing Chonglee","CN",{mf:1}],["Jwell Fiber Machinery","CN",{mf:1}],["Jiangsu TITA","CN",{mf:1}],["Hi-Tech Heavy Industry","CN",{mf:1}],["SML","AT",{mf:1}],["STC Spinnzwirn","DE",{mf:1}],["Fourné / Hills","DE/US",{mf:1}],["FET (Fibre Extrusion Technology)","GB",{mf:1}],
+ ["Heberlein","CH",{ko:1}],["Uster Technologies","CH",{pr:3}],["Textechno","DE",{pr:1}],
+ ["Karl Mayer","DE",{wp:1}],["Benninger","CH",{wp:1}],["Prashant (Gamatex, West Point)","IN",{wp:1}],["Groz-Beckert","DE",{wp:1,ko:1}],["Titan Textile Machines","ES",{wp:1}],
+ ["Stäubli (inkl. Schönherr)","CH",{wp:1,fb:1,tp:1}],["Picanol","BE",{wm:1,fb:1}],["Itema","IT",{wm:1}],["Lindauer Dornier","DE",{wm:1}],["Tsudakoma","JP",{wm:1}],["SMIT (Santex Rimar)","IT",{wm:1}],
+ ["Vandewiele / Bonas","BE",{fb:1,tp:1}],["GITEC Grosse","DE/CN",{fb:1}],["RIFA · Jingwei Textile · Tongda u. a.","CN",{wm:2}],
+ ["Brückner","DE",{au:1,be:1}],["Monforts","DE",{au:1,be:1}],["Santex Rimar (inkl. Sperotto Rimar)","CH/IT",{au:1}],["Andritz (Küsters, ramisch)","AT/DE",{au:1}],["Navis TubeTex","US",{au:1}],
+ ["Ferraro","IT",{au:1}],["Lafer","IT",{au:1}],["Xetma Vollenweider","CH/DE",{au:1}],["Biancalani","IT",{au:1}],["Suchy","DE",{au:1}],["Jeanologia","ES",{au:1}],["Zimmer Austria","AT",{be:1}],
+ ["Archroma (inkl. Huntsman Textile Effects)","CH",{ch:1}],["CHT Group","DE",{ch:1}],["Rudolf Group","DE",{ch:1}],["Tanatex","NL",{ch:1}],["Sanitized","CH",{ch:1}],["Schill+Seilacher","DE",{ch:1}],["Takemoto Oil & Fat","JP",{ch:1}]
+];
+const CC=[...new Set(M.flatMap(r=>r[1].split('/')))].sort();
+const SOURCES=['Rieter – Autoconer X6 (rieter.com)','Rieter – VARIOline blowroom brochure (rieter.com)',
+  'Textile World – Rieter and Murata in air-jet spinning (textileworld.com)','Course material – bale openers Rieter, Trützschler (scribd.com)',
+  'texdata – Toyota ring spinning machine RX300 (texdata.com)','Karl Mayer – ISOWARP sectional warping (karlmayer.com)',
+  'Textile World – Benninger Ben-Direct (textileworld.com)','Indian Textile Journal – Prashant Gamatex (indiantextilejournal.com)',
+  'Stäubli – drawing-in machines (staubli.com)','Groz-Beckert – Weaving: drawing-in, tying-in, accessories (groz-beckert.com)',
+  'Textile World – Titan Textile Machines (textileworld.com)'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+let selN=N.some(n=>n[0]===params.get('station'))?params.get('station'):'tex';
+let selS=null;
+if(params.get('paused')==='1')document.body.classList.add('paused');
+
+// ── links: module -> "open:<key>", Yarn Count Converter -> "tool:yarn_count"; title back to "scene:n" right after
+let resetTimer=0;
+function signal(t){
+  document.title=t;
+  clearTimeout(resetTimer);resetTimer=setTimeout(()=>{document.title='scene:'+scene},150);
+}
+function openModule(key){
+  if(EMBED){signal('open:'+key);return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+function openItem(k){
+  if(k===TOOL){signal('tool:yarn_count');return}
+  openModule(k);
+}
+
+// ── icons (stroke paths, 24 x 24)
+const ICO={faser:`<circle cx="8" cy="11" r="4.5"/><circle cx="16" cy="11" r="4.5"/><circle cx="12" cy="6.5" r="4.5"/><path d="M12 15.5V22M8.5 18.5l3.5 1.5 3.5-1.5"/>`,poly:`<ellipse cx="6" cy="8" rx="3" ry="2.2"/><ellipse cx="15" cy="6" rx="3" ry="2.2"/><ellipse cx="10" cy="14" rx="3" ry="2.2"/><ellipse cx="18" cy="13" rx="3" ry="2.2"/><ellipse cx="7" cy="20" rx="3" ry="2.2"/><ellipse cx="16" cy="20" rx="3" ry="2.2"/>`,spin:`<path d="M12 1v22M8 4h8M6.5 7.5h11M6 11h12M6.5 14.5h11M8 18h8M10 21h4"/>`,mf:`<path d="M3 3h18l-3.5 5h-11z"/><path d="M8 8v14M10.7 8v14M13.3 8v14M16 8v14"/>`,tex:`<path d="M2 8q2.5-5 5 0t5 0 5 0 5 0"/><path d="M2 16q2.5-5 5 0t5 0 5 0 5 0"/>`,prep:`<ellipse cx="5" cy="12" rx="2.2" ry="8.5"/><ellipse cx="19" cy="12" rx="2.2" ry="8.5"/><path d="M5 6.5h14M5 9.5h14M5 12.5h14M5 15.5h14M5 18.5h14"/>`,web:`<path d="M6 2V3.5M6 8.5V15.5M6 20.5V22M12 2V9.5M12 14.5V22M18 2V3.5M18 8.5V15.5M18 20.5V22M2 6H9.5M14.5 6H22M2 12H3.5M8.5 12H15.5M20.5 12H22M2 18H9.5M14.5 18H22"/>`,masche:`<path d="M2 11c0-7 6-7 6 0M8 11c0-7 6-7 6 0M14 11c0-7 6-7 6 0M2 20c0-7 6-7 6 0M8 20c0-7 6-7 6 0M14 20c0-7 6-7 6 0"/>`,vlies:`<path d="M2 6c6 2 10-3 20 2M3 14c5-6 9 4 18-2M2 19c7-1 9-9 19-5M6 3c1 6-2 12 3 19M15 2c-2 7 4 12 1 20"/>`,farb:`<path d="M12 2.5c4 5.5 6.5 9 6.5 12.5a6.5 6.5 0 0 1-13 0c0-3.5 2.5-7 6.5-12.5z"/><path d="M9 15.5a3 3 0 0 0 3 3"/>`,chem:`<path d="M8.5 2.5h7M10 2.5v6.5L4.5 19.5A1.6 1.6 0 0 0 6 22h12a1.6 1.6 0 0 0 1.5-2.5L14 9V2.5"/><path d="M7 15h10"/>`,mech:`<circle cx="12" cy="6.5" r="4.5"/><circle cx="12" cy="17.5" r="4.5"/><path d="M1 12h22"/>`,stoff:`<circle cx="7" cy="9" r="5.5"/><circle cx="7" cy="9" r="1.6"/><path d="M7 14.5h15v7H9"/>`,pruef:`<circle cx="10" cy="10" r="7"/><path d="M15 15l6.5 6.5"/><path d="M5.5 10q1.5-3 3 0t3 0 3 0"/>`,tools:`<rect x="4.5" y="2.5" width="15" height="19" rx="2"/><path d="M8 7h8M8 12h1.5M11.3 12h1.5M14.5 12h1.5M8 16.5h1.5M11.3 16.5h1.5M14.5 16.5h1.5"/>`,hist:`<circle cx="12" cy="12" r="9.5"/><path d="M12 6.5V12l3.5 3"/>`};
+const ic=(id,x,y,sz=24,c='var(--ok)')=>`<g transform="translate(${x} ${y}) scale(${sz/24})" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${ICO[id]}</g>`;
+const icS=(id,sz=26)=>`<svg width="${sz}" height="${sz}" viewBox="-1 -1 26 26" style="flex:none">${ic(id,0,0,24)}</svg>`;
+
+// ── page cards
+function itemInfo(k){
+  const t=T();
+  if(k===TOOL)return {tag:'w',title:t.tool.t,desc:t.tool.d,heb:false,act:t.ui.openTool};
+  const m=t.mods[k]||{t:k,d:''};
+  return {tag:TAG[k]||'a',title:m.t,desc:m.d,heb:HEB.has(k),act:t.ui.open};
+}
+function card(k){
+  const t=T(),i=itemInfo(k);
+  return `<button type="button" class="pc" data-k="${k}"><span class="tgs"><span class="tg ${i.tag}">${esc(t.tags[i.tag])}</span>${i.heb?`<span class="tg hb">Heberlein</span>`:''}</span>`+
+    `<b>${esc(i.title)}</b><span class="d">${esc(i.desc)}</span><em>${esc(i.act)} →</em></button>`;
+}
+function wireCards(el){el.querySelectorAll('.pc').forEach(b=>b.onclick=()=>openItem(b.dataset.k))}
+
+// ── 0 KPIs + weave band
+function kpis(){
+  const t=T(),k=t.kpis;
+  const vals=[LINK_KEYS.length,N.filter(n=>n[3].length).length,M.length,ST.length,
+    N.filter(n=>!n[3].length&&!NOT_OPEN.includes(n[0])).length];
+  $('kpis').innerHTML=vals.map((v,i)=>`<div class="kpi"><b>${v}</b><span>${esc(k[i])}</span></div>`).join('');
+}
+function drawBand(){
+  const svg=$('band'),wid=svg.getBoundingClientRect().width;if(!wid)return;
+  const c=9,n=Math.floor(wid/c),L=[(r,k)=>(r+k)%2,(r,k)=>((k-r)%4+4)%4<2,(r,k)=>(k*2+r)%5===0?0:1];
+  let s='';
+  for(let k=0;k<n;k++){const f=L[Math.min(2,Math.floor(k/(n/3)))];
+    for(let r=0;r<3;r++){const up=f(r,k);s+=`<rect x="${k*c}" y="${r*c+4}" width="${c-1}" height="${c-1}" rx="1.5" fill="${up?'var(--air)':'var(--hl)'}" opacity="${up?0.75:0.6}"/>`}}
+  T().ui.band.forEach((l,i)=>s+=`<text x="${Math.round(i*n/3)*c}" y="46" font-size="11" fill="var(--muted)" font-family="Consolas,'Microsoft YaHei',monospace">${esc(l)}</text>`);
+  svg.innerHTML=s+`<title>${esc(T().ui.bandTip)}</title>`;
+}
+$('band').onclick=()=>openModule('weave_structures');
+window.addEventListener('resize',()=>{if(scene===0)drawBand()});
+
+// ── 0 process map
+const BW=id=>id==='stoff'?140:['mech','tex','pruef','mf'].includes(id)?186:174;
+// node label: up to 2 lines (3 when nothing else fits), shrinking the font first
+function nodeLabel(t,cx,cy,max,col,w){
+  let s=12.5,L=wrap(t,s,max,w);
+  while(L.length>2&&s>10.5){s-=.5;L=wrap(t,s,max,w)}
+  const lh=L.length>2?11.5:s+2;const y0=cy+4-(L.length-1)*lh/2;
+  return L.map((l,i)=>TX(cx,y0+i*lh,l,col,'middle',w,L.length>2?Math.min(s,10.5):s,max)).join('');
+}
+function drawMap(){
+  const t=T(),u=t.ui,pos=Object.fromEntries(N.map(n=>[n[0],[n[1],n[2]]]));
+  let s=`<defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ADB5BD"/></marker>`+
+    `<marker id="arh" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#39A650"/></marker></defs>`;
+  COLS.forEach((x,i)=>s+=TX(x,22,u.cols[i].toLocaleUpperCase(lang),'var(--muted)','middle',500,11,186));
+  s+=`<line x1="20" y1="372" x2="1140" y2="372" stroke="var(--line)" stroke-dasharray="4 4"/>`+TX(20,392,u.cross.toLocaleUpperCase(lang),'var(--muted)','start',500,11,170);
+  E.forEach(([a,b])=>{const [x1,y1]=pos[a],[x2,y2]=pos[b],hl=a===selN||b===selN;
+    const a1=x1+BW(a)/2,a2=x2-BW(b)/2-4;
+    s+=`<path d="M${a1} ${y1} C ${a1+40} ${y1}, ${a2-40} ${y2}, ${a2} ${y2}" fill="none" stroke="${hl?'var(--hl)':'#CED4DA'}" stroke-width="${hl?2.5:1.6}" marker-end="url(#${hl?'arh':'ar'})"/>`});
+  N.forEach(([id,x,y,items])=>{
+    const has=items.length>0,sel=id===selN,w=BW(id),heb=items.some(k=>HEB.has(k));
+    s+=`<g class="node" data-id="${id}"><title>${esc(t.st[id].n)}</title><rect class="box" x="${x-w/2}" y="${y-26}" width="${w}" height="52" rx="10" fill="${sel?'var(--selbg)':has?'var(--panel)':'var(--bg)'}" stroke="${sel?'var(--hl)':has?'#868E96':'var(--dash)'}" stroke-width="${sel?2.6:1.4}"${has?'':' stroke-dasharray="5 4"'}/>`;
+    s+=ic(id,x-w/2+9,y-12,24,has?(sel?'var(--hl)':'var(--ok)'):'#ADB5BD');
+    s+=nodeLabel(t.st[id].n,x+14,y,w-48,has?'var(--fg)':'var(--muted)',has?700:500);
+    if(has)s+=`<circle cx="${x+w/2-6}" cy="${y-24}" r="11" fill="var(--ok)"/>`+TX(x+w/2-6,y-20,items.length,'#fff','middle',700,11);
+    if(heb)s+=`<circle cx="${x-w/2+6}" cy="${y+20}" r="4.5" fill="var(--hl)" stroke="#fff" stroke-width="1.5"/>`;
+    s+=`</g>`});
+  const svg=$('msvg');svg.innerHTML=s;svg.setAttribute('aria-label',u.mapAria);
+  svg.querySelectorAll('.node').forEach(g=>g.onclick=()=>{selN=g.dataset.id;drawMap()});
+  $('mlegend').innerHTML=`<span><i></i>${esc(u.lgHas)}</span><span><i class="d"></i>${esc(u.lgNone)}</span><span><span class="dot h"></span> ${esc(u.heb)}</span>`;
+  const st=t.st[selN],items=N.find(n=>n[0]===selN)[3];
+  $('mpanel').innerHTML=`<div class="sthead">${icS(selN)}<h3>${esc(st.n)}</h3>${items.length?`<span class="cnt">${esc(fmt(u.pages,{n:items.length}))}</span>`:''}</div>`+
+    (items.length?`<div class="plist">${items.map(card).join('')}</div>`:`<p class="muted" style="margin-top:6px">${st.d?esc(st.d)+' – ':''}${esc(u.noPage)}</p>`);
+  wireCards($('mpanel'));
+}
+
+// ── 1 all pages
+function drawAll(){
+  const t=T(),u=t.ui;
+  $('allp').innerHTML=N.filter(n=>n[3].length).map(n=>`<div class="card grp"><div class="sthead">${icS(n[0],24)}<h3>${esc(t.st[n[0]].n)}</h3><span class="cnt">${esc(fmt(u.pages,{n:n[3].length}))}</span></div><div class="plist">${n[3].map(card).join('')}</div></div>`).join('');
+  wireCards($('allp'));
+}
+
+// ── 2 matrix
+function drawMx(){
+  const t=T(),u=t.ui,q=$('q').value.trim().toLowerCase(),ld=$('land').value;
+  const rows=M.filter(r=>(!q||r[0].toLowerCase().includes(q))&&(!ld||r[1].split('/').includes(ld))&&(!selS||r[2][selS]));
+  $('cnt').textContent=selS?fmt(u.cntStage,{n:rows.length,m:M.length,s:t.stages[selS]}):fmt(u.cnt,{n:rows.length,m:M.length});
+  $('stg').value=selS||'';
+  const mt=k=>(t.mods[k]||{t:k}).t;
+  const tb=$('mx');tb.classList.toggle('cjk',lang==='zh');
+  tb.innerHTML=`<tr><th class="f">${esc(u.mxHead[0])}</th><th class="f">${esc(u.mxHead[1])}</th>${ST.map(([s,k])=>`<th data-s="${s}" class="${s===selS?'sel':''}" title="${esc(u.filterTip+' · '+mt(k))}"><span class="v">${esc(t.stages[s])}</span></th>`).join('')}</tr>`+
+    rows.map(r=>`<tr><td class="f"><b>${esc(r[0])}</b></td><td class="f">${esc(r[1])}</td>${ST.map(([s,k])=>{const v=r[2][s],c=s===selS?' sel':'';
+      return v===1?`<td class="y${c}"><span class="dot k" role="link" tabindex="0" data-k="${k}" title="${esc(mt(k))}"></span></td>`:
+        v===3?`<td class="y${c}"><span class="dot"></span></td>`:v===2?`<td class="l${c}"><span class="dot o"></span></td>`:`<td class="${c.trim()}"></td>`}).join('')}</tr>`).join('');
+  tb.querySelectorAll('th[data-s]').forEach(th=>th.onclick=()=>{selS=selS===th.dataset.s?null:th.dataset.s;drawMx()});
+  tb.querySelectorAll('.dot.k').forEach(d=>{d.onclick=()=>openModule(d.dataset.k);d.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openModule(d.dataset.k)}}});
+}
+function mxControls(){
+  const t=T(),u=t.ui,ld=$('land').value;
+  $('q').placeholder=u.search;$('reset').textContent=u.reset;
+  $('land').innerHTML=`<option value="">${esc(u.allCountries)}</option>`+CC.map(c=>`<option>${c}</option>`).join('');$('land').value=ld;
+  $('stg').innerHTML=`<option value="">${esc(u.allStages)}</option>`+ST.map(([s])=>`<option value="${s}">${esc(t.stages[s])}</option>`).join('');
+  $('mxnote').textContent=u.mxNote;
+}
+$('q').oninput=drawMx;$('land').onchange=drawMx;
+$('stg').onchange=()=>{selS=$('stg').value||null;drawMx()};
+$('reset').onclick=()=>{$('q').value='';$('land').value='';selS=null;drawMx()};
+
+// ── 3 open topics
+function drawGaps(){
+  $('gaps').innerHTML=T().gaps.map((g,i)=>`<div class="c"><h4>${icS(GAP_ICONS[i],22)}${esc(g[0])}</h4><p>${esc(g[1])}</p></div>`).join('');
+}
+
+// ── scenes / language
+function captionHtml(s){
+  const t=T();
+  return fmt(esc(s),{o:`<span class="tg o">${esc(t.tags.o)}</span>`,a:`<span class="tg a">${esc(t.tags.a)}</span>`,w:`<span class="tg w">${esc(t.tags.w)}</span>`,
+    full:`<span class="dot"></span>`,hollow:`<span class="dot o"></span>`});
+}
+function go(i){
+  scene=(i+NSC)%NSC;
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').innerHTML=captionHtml(sc.text);
+  if(scene===0)drawBand();
+  clearTimeout(resetTimer);
+  if(EMBED)document.title='scene:'+scene;
+  window.scrollTo(0,0);
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srcintro').textContent=u.srcIntro;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  kpis();drawMap();drawAll();mxControls();drawMx();drawGaps();go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+})();
+</script>
+</body>
+</html>

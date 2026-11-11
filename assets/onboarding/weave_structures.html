@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weave Structures</title>
+<!-- Onboarding module (ui/screen_onboarding.py), same pattern as air_splicing.html.
+     Texts in weave_structures_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1 for screenshots. No external resources. Scenes never change automatically;
+     inside scenes 2-4 the variants step on while playing until the user moves a slider.
+     Scene 6: weave editor, click a square of the draft to toggle a warp point. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --air:#2386C8;--heat:#E07B39;--hl:#39A650;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.langs{display:flex;gap:4px;flex-shrink:0}
+.langs[hidden]{display:none}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+canvas{display:block;width:100%;aspect-ratio:16/9}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.scenes{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button[hidden]{display:none}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.scenes button span{font-family:var(--font-mono);font-size:12px;opacity:.7}
+.right{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.slider{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.slider[hidden]{display:none}
+.slider input{accent-color:var(--hl);width:150px}
+.slider output{min-width:2em;color:var(--fg)}
+.play{min-width:120px;justify-content:center}
+.caption{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;border-top:1px solid var(--line);padding-top:16px}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 8px}
+.caption p{margin:0 0 10px;max-width:70ch}
+.now{font-family:var(--font-mono);font-size:13px;color:var(--hl);min-height:1.5em}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.facts li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.facts b{font-family:var(--font-mono);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:2px;overflow-wrap:anywhere}
+.note{font-size:12px;color:var(--muted);margin:0}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.caption{grid-template-columns:1fr;gap:14px}.facts li{grid-template-columns:96px minmax(0,1fr)}header{flex-direction:column}}
+</style>
+<script src="weave_structures_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="stage"><canvas id="cv" width="1600" height="900"></canvas></div>
+  <div class="controls">
+    <div class="scenes" id="scenes" role="group"></div>
+    <div class="right">
+      <label class="slider" id="w1" for="s1" hidden><span id="l1"></span>
+        <input id="s1" type="range" min="0" max="3" step="1" value="0"><output id="o1"></output></label>
+      <label class="slider" id="w2" for="s2" hidden><span id="l2"></span>
+        <input id="s2" type="range" min="1" max="4" step="1" value="2"><output id="o2"></output></label>
+      <button class="play" id="clr" type="button" hidden></button>
+      <button class="play" id="play" type="button"></button>
+    </div>
+  </div>
+  <section class="caption" aria-live="polite">
+    <div><h2 id="ctitle"></h2><p class="now" id="cnow"></p><p id="ctext"></p></div>
+    <ul class="facts" id="cfacts"></ul>
+  </section>
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');const W=1600,H=900;
+if(!CanvasRenderingContext2D.prototype.roundRect){CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(r||0,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this}}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/* light theme: warp blue / weft yellow tuned for contrast on white */
+const C={bg:css('--panel'),line:css('--line'),fg:css('--fg'),muted:css('--muted'),air:css('--air'),heat:css('--heat'),hl:css('--hl'),
+  ok:'#2E8B45',warp:'#2F64A8',warpL:'#6E9CDA',weft:'#EBC24F',weftD:'#B88B1C',weftT:'#9A7410',red:'#D6453D',
+  empty:'#F0F2EE',grid:'#B4BCB1',gap:'#D6DBD3',track:'#E4E8E2',edge:'rgba(28,35,33,.28)'};
+const MONO=css('--font-mono'),DISP=css('--font-display'),SANS=css('--font-body');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const params=new URLSearchParams(location.search);
+let lang=(params.get('lang')||'de');if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+let fitW=0;function fit(){const w=cv.getBoundingClientRect().width||W;if(w===fitW&&cv.width>0)return;fitW=w;const d=Math.min(devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(w*d));cv.height=Math.max(1,Math.round(w*9/16*d))}
+addEventListener('resize',fit);if(window.ResizeObserver)new ResizeObserver(fit).observe(cv);fit();
+const smooth=(a,b,x)=>{const q=Math.max(0,Math.min(1,(x-a)/(b-a)));return q*q*(3-2*q)};
+const md=(a,n)=>((a%n)+n)%n,gcd=(a,b)=>b?gcd(b,a%b):a;
+
+/* weaves as {n: warp ends, m: picks, f(p,c)} - f true = warp on top */
+const LW=[{n:2,m:2,f:(p,c)=>md(c+p,2)===0},{n:2,m:4,f:(p,c)=>md(c+Math.floor(p/2),2)===0},{n:4,m:2,f:(p,c)=>md(Math.floor(c/2)+p,2)===0},{n:4,m:4,f:(p,c)=>md(Math.floor(c/2)+Math.floor(p/2),2)===0}];
+const tw=(a,b,dir=1)=>({n:a+b,m:a+b,f:(p,c)=>md(c-dir*p,a+b)<a});
+const KO=[tw(2,1),tw(1,2),tw(2,2),tw(2,2,-1),tw(3,1),{n:8,m:4,f:(p,c)=>md(c,8)<4?md(c-p,4)<2:md(c+p+1,4)<2}];
+const atlas=(n,s,kett)=>({n,m:n,f:(p,c)=>(md(p*s,n)===md(c,n))!==!!kett});
+const lwName=i=>T().cv.lw[i],koName=i=>T().cv.ko[i];
+
+/* per-scene controls (texts come from TEXTS[lang].ui) */
+const NSC=6;
+const SC=[{},{s1:[0,3],l1:'sWeave'},{s1:[0,5],l1:'sTwill'},{s1:[5,8],l1:'sRepeat',s2:true,l2:'sStep'},{},{editor:true}];
+
+/* ---------- UI ---------- */
+const sceneEl=$('scenes'),play=$('play'),clr=$('clr'),s1=$('s1'),s2=$('s2');
+/* auto = motion runs (pause freezes it). Scenes never change by themselves.
+   manual = user moved a slider in this scene -> no more auto-stepping of variants. */
+let scene=0,sceneT=0,auto=!reduce,t=0,S1=0,S2=2,manual=false,lastSt=null,hoverCell=false;
+function setPlay(){play.setAttribute('aria-pressed',auto);play.textContent=auto?T().ui.pause:T().ui.play}
+play.onclick=()=>{auto=!auto;setPlay()};
+function out(){if(scene===1)$('o1').textContent=lwName(S1);if(scene===2)$('o1').textContent=koName(S1);if(scene===3){$('o1').textContent=S1;$('o2').textContent=S2}}
+s1.oninput=()=>{manual=true;S1=+s1.value;if(scene===3){s2.max=S1-1;S2=Math.min(S2,S1-1);s2.value=S2}out()};
+s2.oninput=()=>{manual=true;S2=+s2.value;out()};
+/* keep=true: only re-render texts (language switch), keep scene time, sliders and auto-step state */
+function go(i,keep){scene=(i+NSC)%NSC;lastSt=null;if(!keep){sceneT=0;manual=false}if(EMBED)document.title='scene:'+scene;
+  [...sceneEl.children].forEach((b,j)=>b.setAttribute('aria-pressed',j===scene));
+  const s=T().scenes[scene],d=SC[scene],u=T().ui;$('ctitle').textContent=`${scene+1}  ·  ${s.title}`;$('ctext').textContent=s.text;
+  $('cfacts').innerHTML='';s.facts.forEach(f=>{const li=document.createElement('li');const b=document.createElement('b');b.textContent=f[0];const sp=document.createElement('span');sp.textContent=f[1];li.append(b,sp);$('cfacts').appendChild(li)});
+  $('cnow').textContent='';
+  $('w1').hidden=!d.s1;$('w2').hidden=!d.s2;clr.hidden=!d.editor;
+  if(d.s1){$('l1').textContent=u[d.l1];if(!keep){s1.min=d.s1[0];s1.max=d.s1[1];S1=scene===3?5:0;s1.value=S1}}
+  if(d.s2){$('l2').textContent=u[d.l2];if(!keep){s2.min=1;s2.max=S1-1;S2=2;s2.value=S2}}
+  out()}
+function applyLang(){const u=T().ui;document.documentElement.lang=lang;
+  ['eyebrow','h1','lead','note'].forEach(k=>$(k).textContent=u[k]);clr.textContent=u.clear;cv.setAttribute('aria-label',u.aria);
+  sceneEl.setAttribute('aria-label',u.scenes);sceneEl.innerHTML='';
+  T().scenes.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<span>${i+1}</span>`;b.append(s.k);b.onclick=()=>go(i);sceneEl.appendChild(b)});
+  [...$('langs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  setPlay();go(scene,true)}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')go(scene+1);if(e.key==='ArrowLeft')go(scene-1);if(e.key===' '){e.preventDefault();auto=!auto;setPlay()}});
+
+/* ---------- helpers ---------- */
+function label(s,x,y,o={}){ctx.font=`${o.w||500} ${o.s||20}px ${o.f||MONO}`;ctx.fillStyle=o.c||C.muted;ctx.textAlign=o.a||'center';ctx.textBaseline='middle';ctx.globalAlpha=o.al??1;
+  if(o.mw)ctx.fillText(s,x,y,o.mw);else ctx.fillText(s,x,y);ctx.globalAlpha=1}
+/* left-aligned text wrapped to maxW; returns the number of lines drawn */
+function wrap(s,x,y,maxW,lh,o={}){if(!s)return 0;ctx.font=`${o.w||500} ${o.s||16}px ${o.f||SANS}`;
+  const toks=lang==='zh'?[...s]:s.split(/(\s+)/),lines=[];let cur='';
+  toks.forEach(tk=>{const tryS=cur+tk;if(cur&&ctx.measureText(tryS).width>maxW){lines.push(cur.trimEnd());cur=tk.trimStart()}else cur=tryS});
+  if(cur.trim())lines.push(cur.trimEnd());
+  lines.forEach((l,i)=>label(l,x,y+i*lh,{...o,a:'left',f:o.f||SANS,s:o.s||16,mw:maxW}));return lines.length}
+function now(s){if(s!==lastSt){lastSt=s;$('cnow').textContent='▸ '+s}}
+/* weave draft (point paper) */
+function patrone(x0,y0,cs,n,m,f,o={}){const rows=o.rows||m,cols=o.cols||n;
+  for(let p=0;p<rows;p++)for(let c=0;c<cols;c++){const x=x0+c*cs,y=y0+(rows-1-p)*cs;ctx.fillStyle=f(p,c)?C.warp:C.empty;ctx.fillRect(x,y,cs,cs)}
+  ctx.strokeStyle=C.grid;ctx.lineWidth=1;for(let c=0;c<=cols;c++){ctx.beginPath();ctx.moveTo(x0+c*cs,y0);ctx.lineTo(x0+c*cs,y0+rows*cs);ctx.stroke()}for(let p=0;p<=rows;p++){ctx.beginPath();ctx.moveTo(x0,y0+p*cs);ctx.lineTo(x0+cols*cs,y0+p*cs);ctx.stroke()}
+  if(o.rap!==false){ctx.strokeStyle=C.red;ctx.lineWidth=2.5;ctx.strokeRect(x0,y0+(rows-m)*cs,n*cs,m*cs)}}
+/* fabric view */
+function fabric(x0,y0,cs,cols,rows,f){ctx.fillStyle=C.gap;ctx.fillRect(x0,y0,cols*cs,rows*cs);ctx.lineWidth=1;ctx.strokeStyle=C.edge;
+  for(let p=0;p<rows;p++)for(let c=0;c<cols;c++){const x=x0+c*cs,y=y0+(rows-1-p)*cs,up=f(p,c),g=cs*.12;
+    if(up){const gr=ctx.createLinearGradient(x,0,x+cs,0);gr.addColorStop(0,C.warp);gr.addColorStop(.45,C.warpL);gr.addColorStop(1,C.warp);ctx.fillStyle=gr;ctx.beginPath();ctx.roundRect(x+g,y-g*.4,cs-2*g,cs+g*.8,cs*.3);ctx.fill();ctx.stroke()}
+    else{const gr=ctx.createLinearGradient(0,y,0,y+cs);gr.addColorStop(0,C.weftD);gr.addColorStop(.45,C.weft);gr.addColorStop(1,C.weftD);ctx.fillStyle=gr;ctx.beginPath();ctx.roundRect(x-g*.4,y+g,cs+g*.8,cs-2*g,cs*.3);ctx.fill();ctx.stroke()}}
+  ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.strokeRect(x0,y0,cols*cs,rows*cs)}
+function stats(n,m,f){let cross=0,kf=0,sf=0;for(let c=0;c<n;c++){let run=0,best=0;for(let p=0;p<2*m;p++){if(f(md(p,m),c)){run++;best=Math.max(best,run)}else run=0}kf=Math.max(kf,Math.min(best,m))}
+  for(let p=0;p<m;p++){let run=0,best=0;for(let c=0;c<2*n;c++){if(!f(p,md(c,n))){run++;best=Math.max(best,run)}else run=0}sf=Math.max(sf,Math.min(best,n));for(let c=0;c<n;c++)if(f(p,c)!==f(p,md(c+1,n)))cross++}
+  return{cross,kf,sf}}
+
+/* ---------- 1 weave draft ---------- */
+function scene1(){const cvT=T().cv,B=KO[0],cs=64,cols=6,rows=6;fabric(140,170,cs,cols,rows,B.f);label(cvT.fabricView,140,140,{a:'left',s:16,c:C.fg});
+  const px=800,ps=64;patrone(px,170,ps,B.n,B.m,B.f,{cols,rows});label(cvT.draft,px,140,{a:'left',s:16,c:C.fg});
+  const k=Math.floor(sceneT/1.1)%(cols*rows),c=k%cols,p=Math.floor(k/cols),up=B.f(p,c);
+  ctx.strokeStyle=C.heat;ctx.lineWidth=4;ctx.strokeRect(140+c*cs,170+(rows-1-p)*cs,cs,cs);ctx.strokeRect(px+c*ps,170+(rows-1-p)*ps,ps,ps);
+  label(cvT.warpArrow,px,170+rows*ps+30,{a:'left',s:14});label(cvT.weftArrow,px-16,170+rows*ps,{a:'right',s:14});
+  label(cvT.repFrame,px,170+rows*ps+64,{a:'left',s:15,c:C.red,mw:720});
+  label(cvT.example,140,170+rows*cs+30,{a:'left',s:15,mw:380});
+  now(fmt(cvT.cellNow,{c:c+1,p:p+1,state:up?cvT.warpUp:cvT.weftUp}))}
+/* ---------- 2 plain weave / 3 twill: common layout ---------- */
+function showB(B,name,txt){const cvT=T().cv,cs=48;fabric(140,170,cs,8,8,B.f);patrone(700,170,40,B.n,B.m,B.f,{cols:8,rows:8});
+  const st=stats(B.n,B.m,B.f),x=1080,mw=480;label(name,x,190,{a:'left',s:40,f:DISP,w:700,c:C.fg,mw});label(fmt(cvT.repeat,{n:B.n,m:B.m}),x,250,{a:'left',s:16,mw});
+  label(fmt(cvT.warpFloat,{v:st.kf}),x,290,{a:'left',s:16,c:C.warp,mw});label(fmt(cvT.weftFloat,{v:st.sf}),x,320,{a:'left',s:16,c:C.weftT,mw});
+  let y=380;if(txt)txt.forEach(l=>{y+=30*wrap(l,x,y,mw,26,{s:16,c:C.fg})+6});
+  label(cvT.fabric,140,140,{a:'left',s:16,c:C.fg});label(cvT.draft,700,140,{a:'left',s:16,c:C.fg})}
+function scene2(){const cvT=T().cv;if(auto&&!manual&&sceneT>4*(S1+1)&&S1<3){S1++;s1.value=S1;out()}
+  showB(LW[S1],lwName(S1),cvT.lwTxt[S1]);now(lwName(S1))}
+function scene3(){const cvT=T().cv;if(auto&&!manual&&sceneT>3.2*(S1+1)&&S1<5){S1++;s1.value=S1;out()}
+  showB(KO[S1],koName(S1),cvT.koTxt[S1]);
+  /* twill line */
+  if(S1!==5){ctx.strokeStyle=C.heat;ctx.setLineDash([8,6]);ctx.lineWidth=3;ctx.beginPath();const d=S1===3?-1:1;ctx.moveTo(d>0?140:140+8*48,170+8*48);ctx.lineTo(d>0?140+8*48:140,170);ctx.stroke();ctx.setLineDash([]);label(d>0?cvT.zLine:cvT.sLine,140+4*48,150,{s:15,c:C.heat})}
+  now(koName(S1))}
+/* ---------- 4 satin ---------- */
+const SEQ=[[5,2],[5,3],[5,1],[8,3],[8,2],[7,3]];
+function scene4(){const cvT=T().cv;
+  if(auto&&!manual){const k=Math.min(SEQ.length-1,Math.floor(sceneT/3.5));if(S1!==SEQ[k][0]||S2!==SEQ[k][1]){S1=SEQ[k][0];S2=SEQ[k][1];s1.value=S1;s2.max=S1-1;s2.value=S2;out()}}
+  const n=S1,s=S2,ok=s>1&&s<n-1&&gcd(n,s)===1;
+  const A=atlas(n,s,false),K=atlas(n,s,true),cs=30;
+  label(cvT.weftSatinT,140,140,{a:'left',s:16,c:C.fg});patrone(140,165,cs,n,n,A.f,{cols:2*n,rows:2*n});
+  label(cvT.warpSatinT,140+2*n*cs+60,140,{a:'left',s:16,c:C.fg});patrone(140+2*n*cs+60,165,cs,n,n,K.f,{cols:2*n,rows:2*n});
+  fabric(140,165+2*n*cs+40,22,Math.floor(1100/22),Math.max(4,Math.floor((830-(165+2*n*cs+40))/22)),A.f);
+  const x=1180,mw=380;label(fmt(cvT.satin,{n,s}),x,190,{a:'left',s:40,f:DISP,w:700,c:ok?C.fg:C.red,mw});
+  label(fmt(cvT.nIs,{n}),x,250,{a:'left',s:16,mw});label(fmt(cvT.sIs,{s}),x,280,{a:'left',s:16,mw});
+  const chk=[[s>1,'s > 1'],[s<n-1,fmt(cvT.chkLess,{v:n-1})],[gcd(n,s)===1,fmt(cvT.chkGcd,{n,s,g:gcd(n,s)})]];
+  chk.forEach(([v,l],i)=>label(`${v?'✓':'✗'}  ${l}`,x,330+i*32,{a:'left',s:16,c:v?C.ok:C.red,mw}));
+  label(ok?cvT.valid:cvT.invalid,x,450,{a:'left',s:24,f:DISP,w:700,c:ok?C.ok:C.red,mw});
+  if(!ok)wrap(s===1||s===n-1?cvT.touch:cvT.overlap,x,485,mw,22,{s:15,c:C.fg});
+  now(fmt(cvT.satinNow,{n,s,state:ok?cvT.okWord:cvT.badWord}))}
+/* ---------- 5 properties ---------- */
+function scene5(){const cvT=T().cv,B=[[LW[0],lwName(0)],[KO[2],koName(2)],[atlas(5,2,false),fmt(cvT.satin,{n:5,s:2})]],cs=34;
+  B.forEach(([b,name],i)=>{const x=140+i*480;label(name,x,130,{a:'left',s:28,f:DISP,w:700,c:C.fg,mw:420});fabric(x,160,cs,10,6,b.f);const st=stats(b.n,b.m,b.f),cpr=st.cross/(b.n*b.m);
+    const bars=[[cvT.barCross,cpr,1,C.air],[cvT.barFloat,Math.max(st.kf,st.sf),4,C.heat]];
+    bars.forEach(([l,v,mx,col],j)=>{const y=420+j*80,g=!auto&&sceneT===0?1:smooth(.5,2,sceneT);label(l,x,y,{a:'left',s:14,mw:400});ctx.fillStyle=C.track;ctx.fillRect(x,y+16,340,18);ctx.fillStyle=col;ctx.fillRect(x,y+16,340*Math.min(1,v/mx)*g,18);label(j?String(v):v.toFixed(2).replace('.',cvT.dec),x+350,y+25,{a:'left',s:14,c:C.fg})});
+    let y=620;cvT.props[i].forEach((p,j)=>{y+=30*wrap(p,x,y,420,24,{s:16,c:j?C.muted:C.fg})})});
+  label(cvT.moreCross,140,770,{a:'left',s:15,c:C.air,mw:1320});label(cvT.longerFloat,140,800,{a:'left',s:15,c:C.heat,mw:1320})}
+/* ---------- 6 editor ---------- */
+const N=8,G=[...Array(N)].map((_,p)=>[...Array(N)].map((_,c)=>md(c-p,4)<2));const EX=140,EY=150,ES=50;
+clr.onclick=()=>{G.forEach(r=>r.fill(false));lastSt=null};
+function cellAt(e){const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*W,y=(e.clientY-r.top)/r.height*H;const c=Math.floor((x-EX)/ES),p=N-1-Math.floor((y-EY)/ES);
+  return(x>=EX&&y>=EY&&c>=0&&c<N&&p>=0&&p<N)?[p,c]:null}
+cv.addEventListener('click',e=>{if(scene!==5)return;const h=cellAt(e);if(h){G[h[0]][h[1]]=!G[h[0]][h[1]];lastSt=null}});
+cv.addEventListener('mousemove',e=>{hoverCell=scene===5&&!!cellAt(e);cv.style.cursor=hoverCell?'pointer':''});
+cv.addEventListener('mouseleave',()=>{cv.style.cursor=''});
+/* known weaves for recognition (repeat fits into 8 x 8); names are built in the current language */
+const KNOWN=(()=>{const L=[[()=>lwName(0),LW[0].f],[()=>lwName(1),LW[1].f],[()=>lwName(2),LW[2].f],[()=>lwName(3),LW[3].f],[()=>koName(5),KO[5].f]];
+  for(const n of[4,8])for(let a=1;a<n;a++){L.push([()=>fmt(T().cv.twill,{a,b:n-a,d:'Z'}),tw(a,n-a,1).f]);L.push([()=>fmt(T().cv.twill,{a,b:n-a,d:'S'}),tw(a,n-a,-1).f])}
+  for(const sx of[3,5]){L.push([()=>fmt(T().cv.weftSatin,{n:8,s:sx}),atlas(8,sx,false).f]);L.push([()=>fmt(T().cv.warpSatin,{n:8,s:sx}),atlas(8,sx,true).f])}
+  return L})();
+function recognize(f){for(const[k,g]of KNOWN)for(let dp=0;dp<8;dp++)for(let dc=0;dc<8;dc++){let ok=true;for(let p=0;p<8&&ok;p++)for(let c=0;c<8;c++)if(f(p,c)!==g(p+dp,c+dc)){ok=false;break}if(ok)return k()}return null}
+function verdict(f){const cvT=T().cv,st=stats(N,N,f);let badW=0,badS=0,up=0;
+  for(let c=0;c<N;c++){let u=0;for(let p=0;p<N;p++)u+=f(p,c);if(u===0||u===N)badW++}
+  for(let p=0;p<N;p++){let u=0;for(let c=0;c<N;c++)u+=f(p,c);up+=u;if(u===0||u===N)badS++}
+  const cols=new Set();for(let c=0;c<N;c++){let k='';for(let p=0;p<N;p++)k+=f(p,c)?1:0;cols.add(k)}
+  const fl=Math.max(st.kf,st.sf),share=up/(N*N),dens=st.cross/(N*N),L=[],bad=badW||badS,pc=Math.round(share*100);let lvl=0;
+  if(bad){lvl=2;L.push([fmt(badW&&badS?cvT.looseWS:badW?cvT.looseW:cvT.looseS,{w:badW,s:badS}),C.red])}
+  if(fl>=6&&!bad){lvl=Math.max(lvl,1);L.push([fmt(cvT.floatLong,{f:fl}),C.heat])}
+  else if(fl>=4&&!bad)L.push([fmt(cvT.floatMid,{f:fl}),C.fg]);
+  else if(!bad)L.push([fmt(cvT.floatShort,{f:fl}),C.ok]);
+  if(!bad){if(dens<.3){lvl=Math.max(lvl,1);L.push([cvT.fewCross,C.heat])}
+    L.push([fmt(share>.62?cvT.warpFaced:share<.38?cvT.weftFaced:cvT.balanced,{p:pc}),C.muted]);
+    L.push([fmt(cols.size<=2?cvT.shaftsFew:cvT.shafts,{n:cols.size}),C.muted])}
+  return{lvl,L,st,name:bad?null:recognize(f)}}
+function scene6(){const cvT=T().cv,f=(p,c)=>G[md(p,N)][md(c,N)];patrone(EX,EY,ES,N,N,f,{rap:false});label(cvT.editor,EX,EY-26,{a:'left',s:16,c:C.fg,mw:400});
+  const FX=620,FS=26;fabric(FX,EY,FS,24,12,f);label(cvT.fabricRep,FX,EY-26,{a:'left',s:16,c:C.fg,mw:800});
+  const v=verdict(f),y0=EY+12*FS+46,head=[['✓',C.ok],['⚠',C.heat],['✗',C.red]][v.lvl],headTxt=cvT.heads[v.lvl];
+  label(`${head[0]} ${headTxt}`,FX,y0,{a:'left',s:30,f:DISP,w:700,c:head[1],mw:900});
+  let y=y0+40;if(v.name){label(fmt(cvT.recognized,{name:v.name}),FX,y,{a:'left',s:17,c:C.air,mw:900});y+=36}
+  v.L.forEach(([l,c])=>{y+=28*wrap(l,FX,y,900,24,{s:15,c})+4});
+  const by=EY+N*ES;label(fmt(cvT.maxFloats,{k:v.st.kf,s:v.st.sf}),EX,by+30,{a:'left',s:14,mw:420});
+  label(cvT.rule1,EX,by+58,{a:'left',s:13,mw:420});label(cvT.rule2,EX,by+80,{a:'left',s:13,mw:420});
+  now(v.name?fmt(cvT.nowName,{head:headTxt,name:v.name}):headTxt)}
+
+/* ---------- loop ---------- */
+applyLang();
+if(params.get('scene'))go((+params.get('scene')||1)-1);
+if(params.get('paused')==='1'){auto=false;setPlay()}
+const DRAW=[scene1,scene2,scene3,scene4,scene5,scene6];let last=performance.now();
+function frame(nw){const real=Math.min(.05,(nw-last)/1000)*(reduce?.5:1),dt=auto?real:0;last=nw;t+=dt;sceneT+=dt;fit();
+  try{const s=cv.width/W;ctx.setTransform(s,0,0,s,0,0);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(90,100,96,.05)';ctx.lineWidth=1;for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+    ctx.lineCap='round';ctx.setLineDash([]);DRAW[scene]();
+    label(`${scene+1}/${NSC}`,1540,50,{a:'right',s:22});label(T().scenes[scene].k.toUpperCase(),60,50,{a:'left',s:30,c:C.fg,f:DISP,w:600});
+  }catch(e){console.error(e)}
+  requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

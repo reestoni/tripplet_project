@@ -101,6 +101,8 @@ open_help_search = None    # callable or None
 
 # Dashboards zum Anschauen (Sidebar "Dashboards", ui/screen_dashboards.py) - von MainWindow gesetzt.
 open_dashboards = None     # callable or None
+# Yarn Count Converter (Sidebar Tools, ui/screen_yarn_count.py) - von MainWindow gesetzt.
+open_yarn_count = None     # callable or None
 
 # Onboarding (Sidebar "Onboarding" unter Help, ui/screen_onboarding.py) - von MainWindow gesetzt.
 open_onboarding = None     # callable or None

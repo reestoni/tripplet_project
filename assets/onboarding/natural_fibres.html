@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Natural Fibres</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category fibres (sibling of man_made_fibres).
+     Content from the user's research page "Naturfasern – Eigenschaften, Märkte, Anwendungen".
+     Texts in natural_fibres_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1&fibre=<id> for screenshots. No external resources (sources as plain text only).
+     Scene 3 links other modules (LINK_KEYS): embedded via document.title "open:<key>", otherwise <key>.html.
+     SVG/DOM: market bar, log chart of the small fibres and application ranges (scene 0), animated
+     fibre view (length + cross-section) + property radar per fibre (scene 1), sortable property bars
+     incl. fineness of animal fibres (scene 2), application matrix + module links (scene 3).
+     Scenes never change automatically. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--soft:#EEF3EC;
+  --acc:#E07B39;--acc2:#2386C8;--ok:#2F8F45;--bad:#C92A2A;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"],.mtabs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+svg.bg{background:var(--bg);border-radius:6px}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{margin:0 0 6px;font-size:16px}
+.seg,.mtabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.seg button,.mtabs button{font-size:13.5px;padding:6px 11px}
+.mtabs .fg{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center;margin-right:10px}
+.mtabs .grp{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 2px 0 0}
+.lbl{display:block;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font-family:var(--font-display);font-size:26px;line-height:1.1;color:var(--hl);font-variant-numeric:tabular-nums}
+.kpi span{color:var(--muted);font-size:13px}
+.grid2{display:grid;grid-template-columns:1.25fr 1fr;gap:14px}
+.grid2h{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid2e{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mhead h3{margin:0;font-size:21px;font-family:var(--font-display)}
+.mhead .de{color:var(--muted);font-size:13.5px}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0 4px}
+.figs div{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.figs b{display:block;font-size:17px;color:#1F7A36}
+.figs span{font-size:12px;color:var(--muted)}
+.pcc{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg)}
+.pcc ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
+.pcc li{margin:3px 0}
+.pcc.pro{border-left:5px solid var(--ok)}
+.pcc.con{border-left:5px solid var(--bad)}
+.pcc.tex{border-left:5px solid var(--acc2)}
+.pcc.tech{border-left:5px solid var(--acc)}
+.tblwrap{overflow-x:auto}
+table.mx{border-collapse:collapse;width:100%;font-size:13px}
+table.mx th,table.mx td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:center}
+table.mx th{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.03em;vertical-align:bottom;line-height:1.25}
+table.mx td:first-child,table.mx th:first-child{text-align:left;white-space:nowrap}
+table.mx th.hl,table.mx td.hl{background:#FBF3EB}
+table.mx tr:hover td{background:var(--soft)}
+table.mx tr.grp td{background:none;border-bottom:1px solid var(--line);padding-top:12px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px}
+.dot.m{background:var(--ok)}
+.dot.s{border:2px solid #868E96;background:#fff}
+.mxleg{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px;align-items:center}
+.mxleg span{display:inline-flex;gap:6px;align-items:center}
+.mxleg i{display:inline-block;width:14px;height:12px;background:#FBF3EB;border:1px solid var(--line)}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.lk{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:860px){.grid2,.grid2h,.grid2e{grid-template-columns:1fr}}
+@media (max-width:760px){header{flex-direction:column}details ol{columns:1}}
+</style>
+<script src="natural_fibres_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 market shares -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <svg id="msvg" viewBox="0 0 1000 170" role="img"></svg>
+      <p class="note" id="mtxt"></p>
+      <p class="note" id="mnote"></p>
+    </div>
+    <div class="grid2h">
+      <div class="card"><h3 id="ltitle"></h3><svg id="lsvg" viewBox="0 0 480 316" role="img"></svg><p class="note" id="lnote"></p></div>
+      <div class="card"><h3 id="atitle"></h3><svg id="asvg" viewBox="0 0 480 290" role="img"></svg><p class="note" id="anote"></p></div>
+    </div>
+  </div>
+  <!-- 1 fibre portraits -->
+  <div class="sc" id="sc1">
+    <div class="mtabs" id="ftabs"></div>
+    <div class="card">
+      <div class="mhead"><h3 id="fname"></h3><div class="de" id="fde"></div></div>
+      <div class="grid2" style="margin-top:10px">
+        <div><svg class="bg" id="molsvg" viewBox="0 0 440 240" role="img"></svg><p class="note" id="molcap"></p></div>
+        <div><svg id="radsvg" viewBox="0 0 440 280" role="img"></svg></div>
+      </div>
+      <div class="figs" id="ffigs"></div>
+      <div class="grid2e" style="margin-top:8px">
+        <div class="pcc pro"><span class="lbl" id="lpro"></span><ul id="fpro"></ul></div>
+        <div class="pcc con"><span class="lbl" id="lcon"></span><ul id="fcon"></ul></div>
+        <div class="pcc tex"><span class="lbl" id="ltex"></span><ul id="ftex"></ul></div>
+        <div class="pcc tech"><span class="lbl" id="ltech"></span><ul id="ftech"></ul></div>
+      </div>
+    </div>
+  </div>
+  <!-- 2 properties compared -->
+  <div class="sc" id="sc2">
+    <div class="card">
+      <div class="seg" id="kseg"></div>
+      <svg id="ksvg" viewBox="0 0 1000 368" role="img" style="margin-top:10px"></svg>
+      <p class="note" id="knote"></p>
+    </div>
+  </div>
+  <!-- 3 application matrix + module links -->
+  <div class="sc" id="sc3">
+    <div class="card tblwrap"><table class="mx" id="emx"></table><div class="mxleg" id="mxleg"></div></div>
+    <span class="lbl" id="lkL" style="margin-top:6px"></span>
+    <div class="links" id="links"></div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const PAUSED=params.get('paused')==='1'||matchMedia('(prefers-reduced-motion: reduce)').matches&&params.get('paused')!=='0';
+const T=()=>TEXTS[lang];
+const NSC=4;
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink SVG labels that would overflow their slot
+const isCJK=ch=>/[⺀-鿿＀-￯　-〿]/.test(ch);
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=isCJK(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+const Tm=(x,y,t,a='middle',max=0)=>TX(x,y,t,'var(--muted)',a,400,11,max);
+// number in the page language (decimal sign / digit grouping from TEXTS.ui)
+const num=(v,d=0)=>{const u=T().ui;const [i,f]=Math.abs(v).toFixed(d).split('.');
+  const g=i.length>4||(i.length===4&&u.grp4)?i.replace(/\B(?=(\d{3})+(?!\d))/g,u.grp):i;
+  return (v<0?'-':'')+g+(f?u.dec+f:'')};
+const ease=u=>1-Math.pow(1-Math.max(0,Math.min(1,u)),3);
+const C={sam:'#2B8A3E',bast:'#5C940D',hart:'#A87B2C',tier:'#C2410C',oth:'#868E96'};
+const GROUPS=['sam','bast','hart','tier'];
+
+// ── language-neutral data (texts in natural_fibres_texts.js, same order)
+// market 2024 (DNFI), Mt: cotton, jute & kenaf, coir, wool, other (mixed: bast, hard, silk, speciality hair -> neutral grey)
+const MK=[[25.6,'sam'],[2.8,'bast'],[1.1,'hart'],[1.0,'tier'],[1.7,'oth']];
+// small fibres, t (log scale)
+const LG=[[25600000,C.sam],[2800000,C.bast],[1100000,C.hart],[1000000,C.tier],[335000,C.bast],[300000,C.bast],[90000,C.tier],[61000,C.hart],[25611,C.tier],[6200,C.tier],[4748,C.tier]];
+// application ranges %: [lo, hi, colour]
+const AR=[[60,70,C.sam],[20,30,'#69DB7C'],[10,10,'#8CE99A'],[60,70,C.tier],[30,40,'#FF922B']];
+const FIDS=['bw','fl','hf','ju','ra','si','ko','wo','se','eh'];
+const FG=['sam','bast','bast','bast','bast','hart','hart','tier','tier','tier'];
+// radar 1-5: tenacity, elongation, moisture, heat, UV, fineness, price
+const FSC=[[3,2,4,4,3,4,4],[4,1,4,4,4,2,2],[4,1,4,3,3,1,3],[3,1,3,3,2,1,5],[5,1,4,3,3,3,2],[3,1,3,3,3,1,5],[1,4,3,3,4,1,5],
+  [1,4,5,4,2,3,3],[3,3,4,3,1,5,1],[1,4,5,3,2,5,1]];
+// properties: name index -> [density g/cm³, moisture %, tenacity cN/tex, elongation %]
+// each value = middle of the range shown in that fibre's portrait (texts fib.list[i].figs), rounded half up
+const KV=[[1.54,8.5,35,7.5],[1.5,11,53,2.5],[1.48,null,49,1.6],[1.44,null,41,1.7],[1.5,null,56,2.5],[1.48,null,39,2.3],[1.2,null,15,24.5],[1.31,14.5,12,30],[1.31,11,38,20]];
+const KG=['sam','bast','bast','bast','bast','hart','hart','tier','tier'];
+// fineness of animal fibres, µm = middle of the span (span as text in kenn.fds)
+const FD=[13,16.5,11.5,21,23,28.5,32.5,28.5];
+const KK=['d','m','t','e','f'];
+const KU=['g/cm³','%','cN/tex','%','µm'];
+const KD=[2,1,0,1,0];
+// application matrix (rows = fib order): 2 main, 1 secondary
+const EM=[[2,2,1,0,2,0,1,1,1],[2,2,2,0,1,0,0,0,2],[1,1,2,1,0,0,0,0,2],[0,1,1,2,0,0,2,0,1],[1,1,0,0,0,0,0,0,1],[0,1,1,1,0,0,2,0,1],[0,1,0,2,0,0,1,0,0],
+  [2,2,1,1,1,1,0,2,0],[2,1,0,0,1,0,0,0,0],[2,1,0,0,0,0,0,0,0]];
+const LINK_KEYS=['man_made_fibres','staple_spinning','weaving_preparation','nonwovens','textile_dyeing','chemical_finishing'];
+const SOURCES=['DNFI – Steering Committee 2025: production 2024 (dnfi.org)','DNFI – World Natural Fibre Update January 2025 (dnfi.org)','DNFI – 40 million households; 28 % share in 2023 (dnfi.org)',
+ 'DNFI – Update June 2025: coir, ramie (dnfi.org)','DNFI – Steering Committee 2026: production 2025 (dnfi.org)','Textile Exchange – Materials Market Report 2025: 132 Mt of fibre in 2024 (PDF, textileexchange.org)',
+ 'Apparel Resources – jute 54 %, wool 0.9 % (apparelresources.com)','Polymers 2022 – properties of plant fibres (pmc.ncbi.nlm.nih.gov)','Polymer Bulletin 2022 – coir compared (pmc.ncbi.nlm.nih.gov)',
+ 'Frontiers in Chemistry 2014 – bast fibres (pmc.ncbi.nlm.nih.gov)','Composites A 2015 – natural fibre composites, pros and cons (researchcommons.waikato.ac.nz)',
+ 'University of Plymouth – natural fibres for composites (plymouth.ac.uk)','Materials 2024 – natural fibres, costs (strathprints.strath.ac.uk)','Fibre2Fashion – natural fibres in cars (fibre2fashion.com)',
+ 'nova-Institut – natural fibres in German car making (renewable-carbon.eu)','nova-Institut – flax and hemp in cars (druglibrary.org)','Bio Based Press – biocomposites, CO₂ compared with glass (biobasedpress.eu)',
+ 'Course notes – properties of cotton (slideshare.net)','Textile & Fashion Technology – cotton (sites.google.com)','Barnhardt – cotton stronger when wet (barnhardt.net)',
+ 'Biology Insights – cotton, water, pesticides (biologyinsights.com)','Cotton – pros and cons (design-and-technology-a-level.readthedocs.io)','Textile School – linen (textileschool.com)',
+ 'Textile Learner – linen (textilelearner.net)','Textile Value Chain – ramie, 5.3–7.4 g/den (textilevaluechain.in)','CAMEO – linen (cameo.mfa.org)','US patent 11313074 – jute and coir geotextiles (uspto.gov)','ICAR – jute geotextiles, degradation 1–2 years (epubs.icar.org.in)',
+ 'IJFTR – coir geotextiles (or.niscpr.res.in)','Geosynthetics Society – jute, coir, sisal (geosyntheticssociety.org)','Textile Learner – wool (textilelearner.net)','Textile School – wool (textileschool.com)',
+ 'Wool Growers – properties of wool (alberta.wool.ca)','IEEE – wool in technical textiles (technav.ieee.org)','Sheep wool insulation – LOI 25.2 (sheepwoolinsulation.com)',
+ 'CSIRO – wool as a technical fibre (woolwise.com)','CAMEO – silk (cameo.mfa.org)','Textile Learner – silk (textilelearner.net)','New World Encyclopedia – silk (newworldencyclopedia.org)',
+ 'Silk – suture material (scribd.com)','16 CFR § 300.19 – definition of cashmere (law.cornell.edu)','Gobi Cashmere – fineness (gobicashmere.com)','Wild Fibres – mohair, cashmere (wildfibres.co.uk)',
+ 'Cornell – cashmere, mohair, alpaca (cornell.edu)','allude – cashmere, mislabelling (allude-cashmere.com)'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+const t0=performance.now();
+let start=t0;                     // start of the build-up animation of the current scene
+const prog=(delay,dur)=>PAUSED?1:ease((performance.now()-start-delay)/dur);
+const busy=(ms)=>!PAUSED&&performance.now()-start<ms;
+
+function segBtns(el,keys,labels,cur,cb){
+  el.innerHTML=keys.map((k,i)=>`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${esc(labels[i])}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.k));
+}
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+const mt=()=>T().ui.mt;
+
+// ── 0 market
+let mSel=-1;
+function drawM(){
+  const t=T().mk,G=T().fib.groups,u=prog(0,1600),W=960,tot=MK.reduce((a,m)=>a+m[0],0);let x=20,s='',row=0;
+  s+=TX(20,24,t.total.replace('{n}',num(tot*u,1)+' '+mt()),'var(--fg)','start',700,13,940);
+  MK.forEach(([v,g],i)=>{const w=W*v/tot*u,sel=i===mSel;
+    s+=`<rect data-i="${i}" x="${x}" y="40" width="${Math.max(0,w-2)}" height="70" rx="4" fill="${C[g]}" opacity="${sel?1:.86}" stroke="${sel?'#000':'none'}" stroke-width="2" style="cursor:pointer"/>`;
+    if(w>58){const nm=textW(t.names[i],12,700)<w-10?t.names[i]:t.short[i];
+      s+=`<g style="pointer-events:none">`+TX(x+w/2,72,nm,'#fff','middle',700,12,w-8)+TX(x+w/2,92,num(v,1)+' '+mt(),'#fff','middle',500,11,w-8)+`</g>`}
+    else if(u>=1){s+=TX(x+w/2,row?140:126,t.short[i],C[g],'middle',600,10.5,48);row=1-row}
+    x+=w});
+  let lx=20;[...G,t.names[4]].forEach((l,i)=>{s+=`<rect x="${lx}" y="${152}" width="14" height="14" rx="3" fill="${C[GROUPS[i]||'oth']}"/>`+TX(lx+20,164,l,'var(--fg)','start',500,12);lx+=20+textW(l,12,500)+34});
+  $('msvg').innerHTML=s;
+  $('msvg').querySelectorAll('rect[data-i]').forEach(r=>r.onclick=()=>{mSel=+r.dataset.i;drawM();mText()});
+}
+function mText(){
+  const t=T().mk;if(mSel<0){$('mtxt').textContent=t.click;return}
+  $('mtxt').innerHTML=`<b>${esc(t.names[mSel])} – ${num(MK[mSel][0],1)} ${esc(mt())}.</b> ${esc(t.det[mSel])}`;
+}
+function drawL(){
+  const t=T().mk,u=prog(400,1800);let s='';
+  const X=v=>132+(Math.log10(v)-3)/5*300,yb=20+LG.length*26;
+  [3,4,5,6,7,8].forEach((e,i)=>{const x=X(Math.pow(10,e));s+=`<line x1="${x}" y1="16" x2="${x}" y2="${yb}" stroke="var(--line)" stroke-dasharray="3 3"/>`+Tm(x,12,t.lticks[i])});
+  LG.forEach(([v,c],i)=>{const y=22+i*26,w=(X(v)-X(1000))*u;
+    const lab=v>=1e6?num(v/1e6,1)+' '+mt():num(v/1000,v<1e4?1:0)+' '+T().ui.kt;
+    s+=TX(126,y+13,t.lnames[i],'var(--fg)','end',600,11.5,124)+`<rect x="${X(1000)}" y="${y}" width="${Math.max(0,w).toFixed(1)}" height="17" rx="4" fill="${c}" opacity=".85"/>`+TX((X(1000)+w+5).toFixed(1),y+13,lab,'var(--fg)','start',500,10.5,Math.max(40,476-X(1000)-w))});
+  $('lsvg').innerHTML=s;
+}
+function drawA(){
+  const t=T().mk,u=prog(800,1500);let s='';
+  const X=p=>156+p*2.6,yb=30+AR.length*46;
+  [0,25,50,75,100].forEach(p=>s+=Tm(X(p),18,num(p)+' %')+`<line x1="${X(p)}" y1="24" x2="${X(p)}" y2="${yb}" stroke="var(--line)" stroke-dasharray="3 3"/>`);
+  AR.forEach(([lo,hi,c],i)=>{const y=46+i*46,[fa,ap]=t.arows[i];
+    s+=TX(146,y+3,fa,'var(--fg)','end',700,12,140)+Tm(146,y+18,ap,'end',140);
+    const w=Math.max(10,X(hi)-X(lo))*u;
+    s+=`<rect x="${X(lo)-(hi===lo?5:0)}" y="${y-8}" width="${w.toFixed(1)}" height="18" rx="9" fill="${c}" opacity=".85"/>`+
+      TX(X(hi)+8,y+5,hi===lo?`≈ ${num(lo)} %`:`${num(lo)}–${num(hi)} %`,'var(--fg)','start',600,11)});
+  $('asvg').innerHTML=s;
+}
+
+// ── 1 fibre portraits
+let cur=FIDS.includes(params.get('fibre'))?params.get('fibre'):'bw',radCur=FSC[FIDS.indexOf(cur)].slice();
+const FI=()=>FIDS.indexOf(cur);
+function showF(id){
+  cur=id;const i=FI(),f=T().fib.list[i],u=T().fib;
+  $('ftabs').innerHTML=GROUPS.map((g,gi)=>`<span class="fg"><span class="grp">${esc(u.groups[gi])}</span>`+
+    FIDS.map((k,j)=>FG[j]===g?`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${esc(T().fib.list[j].tab)}</button>`:'').join('')+'</span>').join('');
+  $('ftabs').querySelectorAll('button').forEach(b=>b.onclick=()=>showF(b.dataset.k));
+  $('fname').textContent=f.n;$('fde').textContent=f.de;$('molcap').textContent=f.cap;
+  $('ffigs').innerHTML=f.figs.map(x=>`<div><b>${esc(x[0])}</b><span>${esc(x[1])}</span></div>`).join('');
+  const li=a=>a.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('fpro').innerHTML=li(f.pro);$('fcon').innerHTML=li(f.con);$('ftex').innerHTML=li(f.tex);$('ftech').innerHTML=li(f.tech);
+  $('lpro').textContent=u.pro;$('lcon').textContent=u.con;$('ltex').textContent=u.tex;$('ltech').textContent=u.tech;
+  $('molsvg').setAttribute('aria-label',u.molAria+' – '+f.n);$('radsvg').setAttribute('aria-label',u.radAria+' – '+f.n);
+  if(PAUSED)radCur=FSC[i].slice();
+  drawMol();drawRad();
+}
+// pseudo-random 0..1 (stable per index) and an irregular polygon (cell cross-sections)
+const R=i=>{const x=Math.sin(i*12.9898+78.233)*43758.5453;return x-Math.floor(x)};
+function poly(cx,cy,r,n,rot,c,fill='none',w=1.4){const p=[];for(let i=0;i<n;i++){const a=rot+i*2*Math.PI/n,rr=r*(0.85+0.3*R(i+cx));p.push(`${(cx+rr*Math.cos(a)).toFixed(1)},${(cy+rr*Math.sin(a)).toFixed(1)}`)}
+  return `<polygon points="${p.join(' ')}" fill="${fill}" stroke="${c}" stroke-width="${w}"/>`}
+// fibre view: left length view, right cross-section
+function fibre(id,t){
+  const ph=t*Math.PI*2,d=T().fib.draw,col=C[FG[FIDS.indexOf(id)]];let s='';
+  s+=Tm(140,18,d.len,'middle',250)+Tm(350,18,d.cross,'middle',160)+`<line x1="275" y1="26" x2="275" y2="225" stroke="var(--line)"/>`;
+  if(id==='bw'){let top='',bot='';for(let x=20;x<=260;x+=4){const w=14*Math.abs(Math.cos(x/18+ph))+4;top+=(x===20?'M':'L')+x+' '+(120-w).toFixed(1)+' ';bot=`L${x} ${(120+w).toFixed(1)} `+bot}
+    s+=`<path d="${top}${bot}Z" fill="${col}" fill-opacity=".25" stroke="${col}" stroke-width="1.6"/>`;
+    for(let x=20;x<=260;x+=4){const c=Math.cos(x/18+ph);if(Math.abs(c)<0.12)s+=`<line x1="${x}" y1="104" x2="${x+6}" y2="136" stroke="${col}" stroke-width="1.6"/>`}
+    s+=`<path d="M300 125 C 300 85, 400 85, 400 120 C 400 150, 370 140, 350 130 C 330 140, 300 160, 300 125 Z" fill="${col}" fill-opacity=".25" stroke="${col}" stroke-width="2"/><path d="M330 120 C 345 112, 365 112, 378 118" fill="none" stroke="${col}" stroke-width="2"/>`+Tm(350,175,d.lumen,'middle',160)}
+  if(id==='fl'||id==='hf'||id==='ra'){const n=id==='ra'?2:id==='hf'?6:4,thick=id==='ra'?7:5;
+    for(let k=0;k<n;k++){const y=70+k*(110/n)+Math.sin(ph+k)*2;s+=`<rect x="20" y="${y.toFixed(1)}" width="240" height="${thick*2}" rx="${thick}" fill="${col}" fill-opacity=".25" stroke="${col}" stroke-width="1.4"/>`;
+      for(let j=0;j<5;j++){const x=40+((j*50+k*17+t*60)%220);s+=`<path d="M${x.toFixed(1)} ${y.toFixed(1)} l 4 ${thick} l -4 ${thick}" fill="none" stroke="${col}" stroke-width="1.4"/>`}}
+    const cells=id==='ra'?5:id==='hf'?16:12;
+    for(let k=0;k<cells;k++){const a=k*2.4,r=8+Math.sqrt(k)*13,cx=350+Math.cos(a)*r,cy=125+Math.sin(a)*r;s+=poly(cx,cy,id==='ra'?16:10,6,k,col,`${col}33`)+`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="1.5" fill="${col}"/>`}
+    if(id==='hf')s+=Tm(350,215,d.hemp,'middle',160)}
+  if(id==='ju'||id==='si'){for(let k=0;k<8;k++){const y=70+k*13+Math.sin(ph+k)*1.5;s+=`<line x1="20" y1="${y.toFixed(1)}" x2="260" y2="${(y+(R(k)-.5)*6).toFixed(1)}" stroke="${col}" stroke-width="${id==='si'?3.5:2.5}" opacity=".85"/>`}
+    s+=`<rect x="20" y="62" width="240" height="110" rx="10" fill="none" stroke="${col}" stroke-dasharray="4 4"/>`+Tm(140,190,id==='si'?d.sisal:d.jute,'middle',250);
+    for(let k=0;k<26;k++){const a=k*2.4,r=6+Math.sqrt(k)*9;s+=poly(350+Math.cos(a)*r,125+Math.sin(a)*r,7,5+(k%2),k,col,`${col}44`,1)}
+    s+=`<circle cx="350" cy="125" r="56" fill="none" stroke="#868E96" stroke-dasharray="3 3"/>`}
+  if(id==='ko'){const w=26;s+=`<rect x="20" y="${120-w}" width="240" height="${w*2}" rx="${w}" fill="${col}" fill-opacity=".3" stroke="${col}" stroke-width="2"/>`;
+    for(let j=0;j<10;j++){const x=34+((j*24+t*40)%220);s+=`<ellipse cx="${x.toFixed(1)}" cy="120" rx="8" ry="${(12+4*Math.sin(ph+j)).toFixed(1)}" fill="var(--bg)" stroke="${col}" stroke-width="1"/>`}
+    for(let k=0;k<20;k++){const a=k*2.4,r=8+Math.sqrt(k)*13,cx=(350+Math.cos(a)*r).toFixed(1),cy=(125+Math.sin(a)*r).toFixed(1);s+=`<circle cx="${cx}" cy="${cy}" r="9" fill="${col}" fill-opacity=".35" stroke="${col}"/><circle cx="${cx}" cy="${cy}" r="4" fill="var(--bg)"/>`}
+    s+=`<circle cx="350" cy="125" r="11" fill="var(--bg)" stroke="${col}"/>`+Tm(350,215,d.coir,'middle',160)}
+  if(id==='wo'||id==='eh'){const amp=id==='wo'?16:7,w=id==='wo'?11:7;let top='',bot='';const mid=[];
+    for(let x=20;x<=260;x+=4){const y=120+Math.sin(x/22+ph)*amp;top+=(x===20?'M':'L')+x+' '+(y-w).toFixed(1)+' ';bot=`L${x} ${(y+w).toFixed(1)} `+bot;mid.push([x,y])}
+    s+=`<path d="${top}${bot}Z" fill="${col}" fill-opacity=".22" stroke="${col}" stroke-width="1.6"/>`;
+    mid.forEach(([x,y],i)=>{if(i%(id==='wo'?3:5)===0)s+=`<path d="M${x} ${(y-w).toFixed(1)} q 4 ${w} 0 ${w*2}" fill="none" stroke="${col}" stroke-width="1.2"/>`});
+    const r=id==='wo'?48:28,qx=id==='eh'?320:350;
+    s+=`<circle cx="${qx}" cy="125" r="${r}" fill="none" stroke="${col}" stroke-width="3"/><path d="M${qx} ${125-r+3} A ${r-3} ${r-3} 0 0 1 ${qx} ${125+r-3} Z" fill="${col}" fill-opacity=".35"/><path d="M${qx} ${125-r+3} A ${r-3} ${r-3} 0 0 0 ${qx} ${125+r-3} Z" fill="#FFA94D" fill-opacity=".35"/>`;
+    s+=Tm(qx,125+r+18,id==='wo'?d.wool:d.hair,'middle',id==='wo'?160:110);
+    if(id==='eh')s+=`<circle cx="395" cy="60" r="16" fill="none" stroke="#ADB5BD" stroke-width="2"/>`+TX(395,88,d.woolUm,'var(--muted)','middle',400,10,86)+
+      `<circle cx="395" cy="185" r="8" fill="none" stroke="${col}" stroke-width="2"/>`+TX(395,207,d.cashUm,'var(--muted)','middle',400,10,86)}
+  if(id==='se'){for(let k=0;k<2;k++){const y=110+k*20;s+=`<line x1="20" y1="${y}" x2="260" y2="${y}" stroke="${col}" stroke-width="7" stroke-linecap="round"/>`}
+    const sg=0.5+0.5*Math.sin(ph);s+=`<rect x="20" y="96" width="240" height="48" rx="24" fill="#FFE8CC" fill-opacity="${(0.35+0.4*sg).toFixed(2)}" stroke="#F59F00" stroke-dasharray="5 4"/>`+Tm(140,165,d.sericin,'middle',250);
+    s+=`<rect x="300" y="80" width="100" height="90" rx="40" fill="#FFE8CC" stroke="#F59F00" stroke-dasharray="4 3"/>`;
+    [[330,125,0],[372,125,Math.PI]].forEach(([cx,cy,r0])=>{s+=poly(cx,cy,20,3,r0+ph*0.05,col,`${col}55`,2)});
+    s+=Tm(350,190,d.fibroin,'middle',160)}
+  return s;
+}
+const molT=()=>PAUSED?0.15:((performance.now()-t0)/5000)%1;
+function drawMol(){$('molsvg').innerHTML=`<svg x="0" y="0" width="440" height="240" overflow="hidden">`+fibre(cur,molT())+`</svg>`}
+function radar(sc){
+  const cx=220,cy=140,R=86,ax=T().fib.ax,n=ax.length;let s='';
+  const P=(i,v)=>{const a=-Math.PI/2+i*2*Math.PI/n;return [cx+Math.cos(a)*R*v/5,cy+Math.sin(a)*R*v/5]};
+  for(let l=1;l<=5;l++)s+=`<polygon points="${ax.map((_,i)=>P(i,l).map(v=>v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--line)" stroke-width="1"/>`;
+  ax.forEach((a,i)=>{const [x,y]=P(i,5),[lx,ly]=P(i,6.0);const mid=Math.abs(lx-cx)<10,anc=mid?'middle':(lx>cx?'start':'end');
+    const max=mid?200:(lx>cx?434-lx:lx-6);
+    s+=`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)"/>`+TX(lx.toFixed(1),(ly+4+(mid&&ly<cy?-4:0)).toFixed(1),a,'var(--fg)',anc,500,11.5,max)});
+  const col=C[FG[FI()]];
+  s+=`<polygon points="${sc.map((v,i)=>P(i,v).map(q=>q.toFixed(1)).join(',')).join(' ')}" fill="${col}" fill-opacity=".25" stroke="${col}" stroke-width="2.5"/>`;
+  sc.forEach((v,i)=>{const [x,y]=P(i,v);s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${col}"/>`});
+  s+=Tm(220,272,T().fib.radNote,'middle',430);
+  return s;
+}
+function drawRad(){$('radsvg').innerHTML=radar(radCur)}
+
+// ── 2 properties compared
+let kk='d',kAnim=0,kFrom={};
+function kRows(k){const t=T().kenn;
+  if(k==='f')return FD.map((v,i)=>({i:'f'+i,n:t.fdn[i],v,g:'tier',x:t.fds[i]})).sort((a,b)=>a.v-b.v);
+  const ix=KK.indexOf(k);
+  return KV.map((r,i)=>({i,n:t.names[i],v:r[ix],g:KG[i]})).filter(r=>r.v!==null&&r.v!==undefined).sort((a,b)=>b.v-a.v)}
+function kSeg(){segBtns($('kseg'),KK,T().kenn.seg,kk,k=>{const old=kRows(kk);kFrom={};old.forEach((r,j)=>kFrom[r.i]=40+j*36);kk=k;kAnim=performance.now();kSeg();drawK()})}
+function drawK(){
+  const t=T().kenn,ix=KK.indexOf(kk),unit=KU[ix],dec=KD[ix],rows=kRows(kk);
+  const mx=Math.max(...rows.map(r=>r.v));
+  const u=PAUSED?1:ease((performance.now()-kAnim)/700);
+  let s=TX(20,22,t.lab[ix]+' ('+unit+')','var(--fg)','start',700,13,960),vals='';
+  rows.forEach((r,j)=>{const yT=40+j*36,yF=kFrom[r.i]!==undefined?kFrom[r.i]:yT,y=yF+(yT-yF)*u,w=560*r.v/mx*u;
+    const val=(r.x?r.x:num(r.v,dec))+' '+unit;
+    s+=TX(200,(y+19).toFixed(1),r.n,'var(--fg)','end',600,12.5,190)+`<rect x="210" y="${(y+3).toFixed(1)}" width="${Math.max(2,w).toFixed(1)}" height="22" rx="5" fill="${C[r.g]}" opacity=".86"/>`;
+    vals+=TX((218+w).toFixed(1),(y+19).toFixed(1),val,'var(--fg)','start',500,11.5,Math.max(120,990-218-w)).replace('<text ','<text stroke="#fff" stroke-width="3" paint-order="stroke" ')});
+  s+=vals;
+  const nr=u<1?Math.max(rows.length,Object.keys(kFrom).length):rows.length;$('ksvg').setAttribute('viewBox',`0 0 1000 ${44+nr*36}`);
+  $('ksvg').innerHTML=s;$('ksvg').setAttribute('aria-label',t.lab[ix]);$('knote').textContent=t.notes[ix];
+}
+
+// ── 3 application matrix + links
+function drawMx(){
+  const t=T().mx,G=T().fib.groups;
+  const dot=x=>x===2?`<span class="dot m" title="${esc(t.main)}"></span>`:x===1?`<span class="dot s" title="${esc(t.side)}"></span>`:'';
+  let h=`<tr><th>${esc(t.head)}</th>${t.cols.map((c,i)=>`<th class="${i<2?'':'hl'}">${esc(c)}</th>`).join('')}</tr>`;
+  EM.forEach((v,j)=>{if(j===0||FG[j]!==FG[j-1])h+=`<tr class="grp"><td colspan="${v.length+1}">${esc(G[GROUPS.indexOf(FG[j])])}</td></tr>`;
+    h+=`<tr><td><b>${esc(t.rows[j])}</b></td>${v.map((x,i)=>`<td class="${i<2?'':'hl'}">${dot(x)}</td>`).join('')}</tr>`});
+  $('emx').innerHTML=h;
+  $('mxleg').innerHTML=`<span><span class="dot m"></span>${esc(t.main)}</span><span><span class="dot s"></span>${esc(t.side)}</span><span><i></i>${esc(t.techCols)}</span>`;
+}
+function drawLinks(){
+  const t=T();
+  $('lkL').textContent=t.ui.lkL;
+  $('links').innerHTML=t.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${esc(l[0])} →</b><span>${esc(l[1])}</span><em>${esc(t.ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── loop: only the visible scene is redrawn, and only while something moves
+function drawScene(){
+  if(scene===0){drawM();drawL();drawA()}
+  if(scene===1){drawMol();drawRad()}
+  if(scene===2)drawK();
+}
+function loop(now){
+  if(scene===0&&busy(2700)){drawM();drawL();drawA()}
+  if(scene===1){if(!PAUSED)drawMol();const tgt=FSC[FI()];if(radCur.some((v,i)=>Math.abs(v-tgt[i])>0.003)){radCur=radCur.map((v,i)=>v+(tgt[i]-v)*0.12);drawRad()}}
+  if(scene===2&&!PAUSED&&performance.now()-kAnim<760)drawK();
+  requestAnimationFrame(loop);
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;start=performance.now();
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  drawScene();
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k[0])}</b><span>${esc(k[1])}</span></div>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  const m=t.mk;$('mnote').textContent=m.note;$('ltitle').textContent=m.ltitle;$('lnote').textContent=m.lnote;$('atitle').textContent=m.atitle;$('anote').textContent=m.anote;
+  $('msvg').setAttribute('aria-label',m.total.replace('{n}',num(32.2,1)+' '+mt()));$('lsvg').setAttribute('aria-label',m.ltitle);$('asvg').setAttribute('aria-label',m.atitle);
+  mText();showF(cur);kSeg();drawMx();drawLinks();
+  drawM();drawL();drawA();drawK();
+  const keep=start;go(scene);start=keep;
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

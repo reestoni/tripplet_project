@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Circular Knitting</title>
+<!-- Onboarding module (ui/screen_onboarding.py), same pattern as air_splicing.html.
+     Texts in circular_knitting_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1 for screenshots. No external resources. Scenes never change automatically.
+     Scene 3 (cam track): slider switches system 2 between knit / tuck / miss. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --yarn:#6E6556;--air:#2386C8;--heat:#E07B39;--hl:#39A650;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+.langs{display:flex;gap:4px;flex-shrink:0}
+.langs[hidden]{display:none}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+canvas{display:block;width:100%;aspect-ratio:16/9}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.scenes{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.scenes button span{font-family:var(--font-mono);font-size:12px;opacity:.7}
+.right{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.slider{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.slider[hidden]{display:none}
+.slider input{accent-color:var(--hl);width:160px}
+.slider output{min-width:5em;color:var(--fg)}
+.play{min-width:120px;justify-content:center}
+.caption{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;border-top:1px solid var(--line);padding-top:16px}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 8px}
+.caption p{margin:0 0 10px;max-width:70ch}
+.now{font-family:var(--font-mono);font-size:13px;color:var(--hl);min-height:1.5em}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.facts li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:12px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.facts b{font-family:var(--font-mono);font-weight:500;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+.note{font-size:12px;color:var(--muted);margin:0}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:760px){.caption{grid-template-columns:1fr;gap:14px}.facts li{grid-template-columns:96px minmax(0,1fr)}header{flex-direction:column}}
+</style>
+<script src="circular_knitting_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="stage"><canvas id="cv" width="1600" height="900"></canvas></div>
+  <div class="controls">
+    <div class="scenes" id="scenes" role="group"></div>
+    <div class="right">
+      <label class="slider" id="ewrap" hidden><span id="elab"></span>
+        <input id="el" type="range" min="0" max="2" step="1" value="0"><output id="eout"></output></label>
+      <button class="play" id="play" type="button"></button>
+    </div>
+  </div>
+  <section class="caption" aria-live="polite">
+    <div><h2 id="ctitle"></h2><p class="now" id="cnow"></p><p id="ctext"></p></div>
+    <ul class="facts" id="cfacts"></ul>
+  </section>
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');const W=1600,H=900;
+if(!CanvasRenderingContext2D.prototype.roundRect){CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(r||0,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this}}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/* light-theme palette: steel parts light grey with darker outline, needles mid grey, yarns darkened for white panel */
+const C={bg:css('--panel'),line:css('--line'),fg:css('--fg'),muted:css('--muted'),air:css('--air'),heat:css('--heat'),hl:css('--hl'),
+  steel:'#7E898C',part:'#D5DBDA',sinker:'#B4BDBC',needle:'#76828A',cam:'#E3E8E6',dash:'rgba(90,100,96,.4)',y1:'#C08A1E',y2:'#4F66B8'};
+const MONO=css('--font-mono'),DISP=css('--font-display'),SANS=css('--font-body');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const params=new URLSearchParams(location.search);
+let lang=(params.get('lang')||'de');if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+let fitW=0;function fit(){const w=cv.getBoundingClientRect().width||W;if(w===fitW&&cv.width>0)return;fitW=w;const d=Math.min(devicePixelRatio||1,2);cv.width=Math.max(1,Math.round(w*d));cv.height=Math.max(1,Math.round(w*9/16*d))}
+addEventListener('resize',fit);if(window.ResizeObserver)new ResizeObserver(fit).observe(cv);fit();
+const smooth=(a,b,x)=>{const q=Math.max(0,Math.min(1,(x-a)/(b-a)));return q*q*(3-2*q)},lerp=(a,b,q)=>a+(b-a)*q;
+
+const NSC=5;
+/* ---------- UI ---------- */
+const sceneEl=$('scenes'),play=$('play'),ein=$('el');
+/* auto = motion runs (pause freezes it). Scenes never change by themselves. */
+let scene=0,sceneT=0,auto=!reduce,t=0,EL=0,lastSt=null;
+function setPlay(){play.setAttribute('aria-pressed',auto);play.textContent=auto?T().ui.pause:T().ui.play}
+play.onclick=()=>{auto=!auto;setPlay()};
+ein.oninput=()=>{EL=+ein.value;$('eout').textContent=T().ui.el[EL]};
+function go(i){const n=(i+NSC)%NSC;scene=n;sceneT=0;lastSt=null;if(EMBED)document.title='scene:'+scene;
+  [...sceneEl.children].forEach((b,j)=>b.setAttribute('aria-pressed',j===scene));
+  const s=T().scenes[scene];$('ctitle').textContent=`${scene+1}  ·  ${s.title}`;$('ctext').textContent=s.text;
+  $('cfacts').innerHTML='';s.facts.forEach(f=>{const li=document.createElement('li');const b=document.createElement('b');b.textContent=f[0];const sp=document.createElement('span');sp.textContent=f[1];li.append(b,sp);$('cfacts').appendChild(li)});
+  $('cnow').textContent='';$('ewrap').hidden=scene!==2}
+function applyLang(){const u=T().ui;document.documentElement.lang=lang;
+  ['eyebrow','h1','lead','note'].forEach(k=>$(k).textContent=u[k]);$('elab').textContent=u.slider;cv.setAttribute('aria-label',u.canvas);
+  sceneEl.setAttribute('aria-label',u.scenes);sceneEl.innerHTML='';
+  T().scenes.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<span>${i+1}</span>`;b.append(s.k);b.onclick=()=>go(i);sceneEl.appendChild(b)});
+  [...$('langs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  ein.oninput();setPlay();const keep=sceneT;go(scene);sceneT=keep}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')go(scene+1);if(e.key==='ArrowLeft')go(scene-1);if(e.key===' '){e.preventDefault();auto=!auto;setPlay()}});
+
+/* ---------- Helpers ---------- */
+/* o.max = maximum width in px: font size shrinks until the text fits (long de/es strings) */
+function label(s,x,y,o={}){let sz=o.s||20;const setF=()=>ctx.font=`${o.w||500} ${sz}px ${o.f||MONO}`;setF();
+  if(o.max)while(sz>9&&ctx.measureText(s).width>o.max){sz-=.5;setF()}
+  ctx.fillStyle=o.c||C.muted;ctx.textAlign=o.a||'center';ctx.textBaseline='middle';ctx.globalAlpha=o.al??1;ctx.fillText(s,x,y);ctx.globalAlpha=1}
+function leader(x1,y1,x2,y2,c){ctx.strokeStyle=c||C.line;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+function now(s){if(s!==lastSt){lastSt=s;$('cnow').textContent='▸ '+s}}
+/* one course of plain jersey loops */
+function course(x0,y,P,n,h,col,lw=4){ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(x0,y);
+  for(let i=0;i<n;i++){const xs=x0+i*P,X=f=>xs+f*P;
+    ctx.bezierCurveTo(X(.18),y,X(.34),y-.45*h,X(.32),y-.95*h);ctx.bezierCurveTo(X(.3),y-1.4*h,X(.02),y-1.9*h,X(.22),y-2.15*h);ctx.bezierCurveTo(X(.34),y-2.3*h,X(.66),y-2.3*h,X(.78),y-2.15*h);
+    ctx.bezierCurveTo(X(.98),y-1.9*h,X(.7),y-1.4*h,X(.68),y-.95*h);ctx.bezierCurveTo(X(.66),y-.45*h,X(.82),y,X(1),y)}ctx.stroke()}
+
+/* ---------- Scene 1: loop formation ---------- */
+function scene1(){const cvT=T().cv;const D=4.2,u=(sceneT%D)/D,cyc=Math.floor(sceneT/D),nx=760,ys=520;
+  // needle tip
+  const rest=ys-30,top=300,low=ys+40;
+  const tip=u<.35?lerp(rest,top,smooth(0,.35,u)):u<.45?top:u<.8?lerp(top,low,smooth(.45,.8,u)):lerp(low,rest,smooth(.8,1,u));
+  const piv=tip+60,latchOpen=smooth(ys+10,ys-20,piv);
+  // fabric below
+  for(let k=3;k>=0;k--){const y=ys+110+k*44+(u>.75?smooth(.75,1,u)*44:0);ctx.globalAlpha=1-k*.2;course(nx-212,y,85,5,24,cyc%2===k%2?C.y1:C.y2,3.5);ctx.globalAlpha=1}
+  // sinker
+  const sk=u<.4?1:u<.7?1-smooth(.4,.6,u):smooth(.85,1,u);const sx=nx+18+(1-sk)*60;
+  ctx.fillStyle=C.sinker;ctx.strokeStyle=C.steel;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(sx,ys-14);ctx.lineTo(sx+30,ys-14);ctx.lineTo(sx+40,ys-4);ctx.lineTo(sx+300,ys-4);ctx.lineTo(sx+300,ys+30);ctx.lineTo(sx,ys+30);ctx.closePath();ctx.fill();ctx.stroke();
+  label(cvT.sinker,sx+312,ys+12,{a:'left',s:15,c:C.fg,max:Math.max(120,W-30-(sx+312))});
+  // needle
+  ctx.fillStyle=C.needle;ctx.fillRect(nx-5,tip+10,10,780-tip);ctx.strokeStyle=C.needle;ctx.lineWidth=5;ctx.beginPath();ctx.arc(nx-10,tip+12,10,-Math.PI,0);ctx.stroke();ctx.beginPath();ctx.moveTo(nx-20,tip+12);ctx.lineTo(nx-20,tip+26);ctx.stroke();
+  // latch
+  ctx.strokeStyle=C.air;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(nx-6,piv);ctx.lineTo(lerp(nx-18,nx-16,latchOpen),lerp(piv-44,piv+42,latchOpen));ctx.stroke();
+  ctx.fillStyle=C.air;ctx.beginPath();ctx.arc(nx-6,piv,4,0,7);ctx.fill();
+  // yarn feeder + new yarn
+  const fx=560,fy=330;ctx.fillStyle=C.part;ctx.strokeStyle=C.steel;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(fx-40,fy-14,80,28,6);ctx.fill();ctx.stroke();label(cvT.feeder,fx,fy-34,{s:15,c:C.fg,max:260});
+  const caught=u>.4;ctx.strokeStyle=cyc%2?C.y2:C.y1;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(fx-200,fy-60);ctx.lineTo(fx,fy);
+  if(caught){ctx.lineTo(nx-14,tip+16);ctx.stroke();ctx.beginPath();ctx.ellipse(nx-6,tip+16,22,7,0,0,7);ctx.stroke()}else{ctx.lineTo(fx+60,fy+30);ctx.stroke()}
+  // old loop
+  const knocked=tip>ys+4;const oy=knocked?ys+smooth(.6,.8,u)*50:ys-2;ctx.strokeStyle=cyc%2?C.y1:C.y2;ctx.globalAlpha=knocked?1-smooth(.7,.85,u):1;ctx.lineWidth=4;
+  ctx.beginPath();ctx.ellipse(nx-4,oy,26,8,0,0,7);ctx.stroke();ctx.globalAlpha=1;
+  // labels
+  label(cvT.needle,nx+20,800,{a:'left',s:15,c:C.fg});label(cvT.hook,nx+16,tip+8,{a:'left',s:13});label(cvT.latch,nx+16,piv+30,{a:'left',s:13,c:C.air});
+  label(cvT.oldLoop,nx-40,ys-22,{a:'right',s:13,c:cyc%2?C.y1:C.y2,al:knocked?0:1});label(cvT.knockEdge,sx+60,ys-32,{a:'left',s:13,max:260});
+  label(cvT.fabric,nx-230,ys+150,{a:'right',s:15,c:C.fg});
+  const lim=[[0,.35],[.35,.45],[.45,.62],[.62,.8],[.8,1.01]];
+  cvT.steps.forEach((s,i)=>{const [a,b]=lim[i],act=u>=a&&u<b;label(`${i+1}  ${s}`,1020,180+i*40,{a:'left',s:15,c:act?C.fg:C.muted,w:act?600:500,max:550});if(act)now(s)})}
+
+/* ---------- Scene 2: machine layout ---------- */
+function scene2(){const cvT=T().cv;
+  // side view
+  const cx=420,lx=cx+300,lm=180;label(cvT.side,120,110,{a:'left',s:15,c:C.fg});
+  for(let k=0;k<6;k++){ctx.fillStyle=C.y1;ctx.globalAlpha=.85;ctx.beginPath();ctx.roundRect(cx-260+k*90,130,40,60,6);ctx.fill();ctx.globalAlpha=1}label(cvT.creel,lx,160,{a:'left',s:14,max:lm});
+  ctx.strokeStyle=C.steel;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(cx,260,220,20,0,0,7);ctx.stroke();label(cvT.feederRing,lx,260,{a:'left',s:14,max:lm});
+  for(let k=0;k<6;k++){ctx.strokeStyle=C.y1;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(cx-240+k*90,190);ctx.lineTo(cx-200+k*80,260);ctx.lineTo(cx-150+k*60,350);ctx.stroke()}
+  ctx.fillStyle=C.part;ctx.strokeStyle=C.air;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(cx-160,350,320,70,8);ctx.fill();ctx.stroke();label(cvT.cylNeedles,lx,385,{a:'left',s:14,c:C.air,max:lm});
+  for(let i=0;i<30;i++){const x=cx-150+((i*11+t*40)%300);ctx.strokeStyle=C.needle;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,340);ctx.lineTo(x,360);ctx.stroke()}
+  ctx.fillStyle=C.y1;ctx.globalAlpha=.25;ctx.beginPath();ctx.moveTo(cx-150,420);ctx.lineTo(cx+150,420);ctx.lineTo(cx+110,620);ctx.lineTo(cx-110,620);ctx.fill();ctx.globalAlpha=1;
+  for(let k=0;k<8;k++){ctx.strokeStyle=C.y1;ctx.globalAlpha=.6;ctx.lineWidth=1;const y=430+((k*25+t*15)%190);ctx.beginPath();ctx.moveTo(cx-150+(y-420)*.2,y);ctx.lineTo(cx+150-(y-420)*.2,y);ctx.stroke();ctx.globalAlpha=1}
+  label(cvT.tube,lx,520,{a:'left',s:14,max:lm});
+  ctx.fillStyle=C.part;ctx.strokeStyle=C.steel;[cx-30,cx+30].forEach(x=>{ctx.beginPath();ctx.arc(x,650,24,0,7);ctx.fill();ctx.stroke()});label(cvT.takedown,lx,650,{a:'left',s:14,max:lm});
+  ctx.fillStyle=C.part;ctx.beginPath();ctx.arc(cx,770,50,0,7);ctx.fill();ctx.stroke();ctx.fillStyle=C.y1;ctx.globalAlpha=.4;ctx.beginPath();ctx.arc(cx,770,46,0,7);ctx.fill();ctx.globalAlpha=1;label(cvT.roll,lx,770,{a:'left',s:14,max:lm});
+  // top view
+  const ox=1180,oy=470,R=230,a=t*.4;label(cvT.top,ox-R,110,{a:'left',s:15,c:C.fg,max:600});
+  ctx.strokeStyle=C.air;ctx.lineWidth=2;ctx.beginPath();ctx.arc(ox,oy,R,0,7);ctx.stroke();
+  for(let i=0;i<180;i++){const th=i/180*6.283+a;ctx.strokeStyle=C.needle;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(ox+Math.cos(th)*(R-14),oy+Math.sin(th)*(R-14));ctx.lineTo(ox+Math.cos(th)*R,oy+Math.sin(th)*R);ctx.stroke()}
+  const NS=12;for(let k=0;k<NS;k++){const th=k/NS*6.283,x=ox+Math.cos(th)*(R+40),y=oy+Math.sin(th)*(R+40);ctx.fillStyle=C.heat;ctx.beginPath();ctx.arc(x,y,9,0,7);ctx.fill();ctx.strokeStyle=C.y1;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(ox+Math.cos(th)*(R-4),oy+Math.sin(th)*(R-4));ctx.stroke()}
+  label(cvT.systems,ox,oy+R+80,{s:14,c:C.heat,max:620});label(cvT.rotation,ox,oy,{s:15,c:C.fg,max:2*R-40});label(cvT.systemsNote,ox,oy+R+108,{s:13,max:620});
+  now(cvT.now2)}
+
+/* ---------- Scene 3: cam track ---------- */
+function scene3(){const cvT=T().cv,ELN=T().ui.el;const x0=100,x1=1260,base=660,sys=[320,680,1040],hi=[200,EL===0?200:EL===1?100:0,200];
+  const cam=x=>{let y=0;sys.forEach((sx,k)=>{const d=x-sx;y=Math.max(y,hi[k]*Math.exp(-(d*d)/(2*70*70)))});return y};
+  // cam track
+  ctx.fillStyle=C.cam;ctx.beginPath();ctx.moveTo(x0,base+40);for(let x=x0;x<=x1;x+=4)ctx.lineTo(x,base-cam(x)+12);ctx.lineTo(x1,base+40);ctx.fill();
+  ctx.strokeStyle=C.steel;ctx.lineWidth=2;ctx.beginPath();for(let x=x0;x<=x1;x+=4)ctx.lineTo(x,base-cam(x)-12);ctx.stroke();ctx.beginPath();for(let x=x0;x<=x1;x+=4)ctx.lineTo(x,base-cam(x)+12);ctx.stroke();
+  label(cvT.cam,x0,base+70,{a:'left',s:15,c:C.fg,max:440});label(cvT.camMove,x1,base+70,{a:'right',s:15,c:C.air,max:620});
+  // needles
+  const sp=40,off=(t*60)%sp;for(let x=x0-sp+off;x<=x1;x+=sp){if(x<x0)continue;const y=base-cam(x);ctx.fillStyle=C.needle;ctx.fillRect(x-3,y-230,6,230);ctx.fillStyle=C.air;ctx.fillRect(x-7,y-8,14,16);ctx.strokeStyle=C.needle;ctx.lineWidth=3;ctx.beginPath();ctx.arc(x-5,y-230,5,-Math.PI,0);ctx.stroke()}
+  ctx.setLineDash([6,6]);[200,100,0].forEach((h,i)=>{leader(x0,base-h-230,x1,base-h-230,C.dash);label(cvT.levels[i],x1+16,base-h-230,{a:'left',s:14,c:C.fg,max:W-x1-30})});ctx.setLineDash([]);
+  sys.forEach((sx,k)=>{label(fmt(cvT.system,{n:k+1}),sx,150,{s:16,c:k===1?C.heat:C.fg});label(k===1?ELN[EL]:ELN[0],sx,176,{s:14,c:k===1?C.heat:C.muted})});
+  label(cvT.butt,x0+20,base+12-cam(x0+20)+40,{a:'left',s:13,c:C.air});
+  now(fmt(cvT.now3,{el:ELN[EL],d:cvT.now3d[EL]}))}
+
+/* ---------- Scene 4: loop structure ---------- */
+function scene4(){const cvT=T().cv;const x0=160,P=90,n=8,h=40,dy=56,rows=7,y0=260;
+  for(let r=rows-1;r>=0;r--)course(x0,y0+r*dy,P,n,h,r%2?C.y2:C.y1,5);
+  const k=Math.floor(sceneT/4)%2;
+  if(k===0){ctx.strokeStyle=C.heat;ctx.lineWidth=3;ctx.strokeRect(x0-14,y0+3*dy-2*h-10,n*P+28,2*h+20);label(cvT.course,x0+n*P+30,y0+3*dy-h,{a:'left',s:18,c:C.heat,max:W-(x0+n*P+60)})}
+  else{ctx.strokeStyle=C.heat;ctx.lineWidth=3;ctx.strokeRect(x0+3*P,y0-2*h-14,P,(rows-1)*dy+2*h+28);label(cvT.wale,x0+3.5*P,y0+(rows-1)*dy+44,{s:18,c:C.heat})}
+  label(cvT.pattern,x0,140,{a:'left',s:15,c:C.fg});
+  const bx=1100;label(cvT.stretch,bx,515,{a:'left',s:18,c:C.fg,max:W-bx-30});const st=(Math.sin(t*1.5)+1)/2;course(bx,660,lerp(50,72,st),5,lerp(30,20,st),C.y2,4);course(bx,660-lerp(42,28,st),lerp(50,72,st),5,lerp(30,20,st),C.y1,4);
+  label(cvT.stretchNote,bx,700,{a:'left',s:14,max:W-bx-30});
+  now(k===0?cvT.nowCourse:cvT.nowWale)}
+
+/* ---------- Scene 5: single / double jersey ---------- */
+function scene5(){const cvT=T().cv;const a=(t*1.4)%1;
+  [[300,cvT.single,false],[1000,cvT.double,true]].forEach(([cx,ti,dbl])=>{label(ti,cx-180,130,{a:'left',s:28,f:DISP,w:700,c:C.fg});
+    // cylinder (vertical)
+    ctx.fillStyle=C.part;ctx.strokeStyle=C.steel;ctx.lineWidth=2;ctx.fillRect(cx-40,300,80,300);ctx.strokeRect(cx-40,300,80,300);label(cvT.cylinder,cx-60,450,{a:'right',s:14});
+    for(let k=0;k<3;k++){const up=Math.sin((a+k/3)*6.283)*30;ctx.fillStyle=C.needle;ctx.fillRect(cx-28+k*24,250-up,6,150)}
+    if(dbl){ctx.fillStyle=C.part;ctx.fillRect(cx+60,200,300,60);ctx.strokeRect(cx+60,200,300,60);label(cvT.dial,cx+210,180,{s:14});for(let k=0;k<3;k++){const o=Math.cos((a+k/3)*6.283)*30;ctx.fillStyle=C.needle;ctx.fillRect(cx+40-o,214+k*14,150,5)}}
+    // fabric symbol
+    const fy=700;if(!dbl){course(cx-180,fy,60,6,18,C.y1,4);label(cvT.singleNote,cx-180,fy+60,{a:'left',s:14,max:620})}
+    else{course(cx-180,fy,60,6,18,C.y1,4);ctx.globalAlpha=.5;course(cx-150,fy+12,60,6,18,C.y2,4);ctx.globalAlpha=1;label(cvT.doubleNote,cx-180,fy+60,{a:'left',s:14,max:720})}});
+  const bx=1000;label(cvT.formula,bx-180,820,{a:'left',s:15,c:C.fg,max:740});label(cvT.example,bx-180,848,{a:'left',s:15,c:C.hl,w:600,max:740});
+  now(cvT.now5)}
+
+/* ---------- Loop ---------- */
+applyLang();
+if(params.get('scene'))go((+params.get('scene')||1)-1);
+if(params.get('paused')==='1'){auto=false;setPlay()}
+const DRAWFN=[scene1,scene2,scene3,scene4,scene5];let last=performance.now();
+function frame(nw){const real=Math.min(.05,(nw-last)/1000)*(reduce?.5:1),dt=auto?real:0;last=nw;t+=dt;sceneT+=dt;fit();
+  try{const s=cv.width/W;ctx.setTransform(s,0,0,s,0,0);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(90,100,96,.05)';ctx.lineWidth=1;for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+    ctx.lineCap='round';ctx.lineJoin='round';ctx.setLineDash([]);DRAWFN[scene]();
+    label(`${scene+1}/${NSC}`,1540,50,{a:'right',s:22});label(T().scenes[scene].k.toUpperCase(),60,50,{a:'left',s:30,c:C.fg,f:DISP,w:600});
+  }catch(e){console.error(e)}
+  requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

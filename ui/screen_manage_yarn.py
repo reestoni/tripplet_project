@@ -1031,6 +1031,8 @@ class ManageYarnScreen(QWidget):
             .replace("#B5D7B5", accent_gridline())
             .replace("#E9F6E9", accent_tint()))
         self.table.doubleClicked.connect(self._on_row_double_clicked)
+        from ui import kb_links
+        kb_links.install_table_menu(self.table, self, "manage_yarn")
         # 'clicked' (QModelIndex only, no pixel position) reicht nicht mehr aus,
         # seit eine TrialSeries-Zeile Dreieck (aufklappen) und restliche Zeile
         # (navigieren) unterschiedlich behandelt - siehe eventFilter/_handle_table_click.

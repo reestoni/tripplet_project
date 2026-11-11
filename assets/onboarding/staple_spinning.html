@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Staple Fibre Spinning</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category Staple fibre spinning.
+     Content from the user's research page "Stapelfaserspinnerei: von der Faserflocke zum Garn".
+     Texts in staple_spinning_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1 for screenshots. No external resources (sources as plain text only).
+     Scene 4 links other modules: embedded via document.title "open:<key>", otherwise <key>.html.
+     SVG/DOM: process lines (scene 0, click a stage = scene 1), 8 animated process diagrams with
+     step control (scene 1), yarn structures (scene 2), twist/speed calculator (scene 3).
+     Scenes never change automatically. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--twist:#6A4FC8;--soft:#EEF3EC;
+  --acc:#E07B39;--acc2:#2386C8;--ok:#2F8F45;--bad:#C92A2A;--cool:#1C7ED6;--wind:#495057;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"],.mtabs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+svg.bg{background:var(--bg);border-radius:6px}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.seg,.mtabs{display:flex;gap:6px;flex-wrap:wrap}
+.seg button,.mtabs button{font-size:13.5px;padding:6px 11px}
+.lbl{display:block;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font-family:var(--font-display);font-size:26px;line-height:1.1;color:var(--hl)}
+.kpi span{color:var(--muted);font-size:13px}
+.stepbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.pbtn{font-size:13px;padding:5px 11px}
+.ins{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.cmp .c{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;border-top:4px solid var(--acc)}
+.cmp .c h4{margin:0 0 4px;font-size:15px}
+.cmp .c p{margin:4px 0;font-size:13.5px}
+.mhead h3{margin:0;font-size:21px;font-family:var(--font-display)}
+.mhead .de{color:var(--muted);font-size:13.5px}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:12px}
+.steps{counter-reset:s;list-style:none;padding:0;margin:4px 0}
+.steps li{counter-increment:s;position:relative;padding:4px 0 4px 30px;font-size:14px}
+.steps li:before{content:counter(s);position:absolute;left:0;top:5px;width:20px;height:20px;border-radius:50%;background:var(--fg);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:4px 0}
+.figs div{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.figs b{display:block;font-size:17px;color:#1F7A36}
+.figs span{font-size:12px;color:var(--muted)}
+.pc{display:grid;grid-template-columns:1fr 1fr .8fr;gap:12px;margin:12px 0 4px}
+.pcc{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg)}
+.pcc ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
+.pcc li{margin:3px 0}
+.pcc p{margin:4px 0 0;font-size:13.5px}
+.pcc.pro{border-left:5px solid var(--ok)}
+.pcc.con{border-left:5px solid var(--bad)}
+.pcc.when{border-left:5px solid var(--acc2)}
+.tblwrap{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th,table.t td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.t th{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+table.t tr:last-child td{border-bottom:0}
+.ctl{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;margin:2px 0 8px}
+.ctl label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.ctl label b{color:var(--fg);font-weight:600;min-width:92px;font-variant-numeric:tabular-nums}
+.ctl input[type=range]{width:170px;accent-color:var(--hl)}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.lk{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:860px){.grid2,.pc{grid-template-columns:1fr}}
+@media (max-width:760px){header{flex-direction:column}details ol{columns:1}}
+</style>
+<script src="staple_spinning_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 process lines -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <div class="seg" id="rseg"></div>
+      <svg id="rsvg" viewBox="0 0 1100 250" role="img" style="margin-top:10px"></svg>
+      <p class="note" id="rtxt"></p>
+    </div>
+  </div>
+  <!-- 1 processes in detail -->
+  <div class="sc" id="sc1">
+    <div class="mtabs" id="ptabs"></div>
+    <div class="card">
+      <div class="mhead"><h3 id="pname"></h3><div class="de" id="pde"></div></div>
+      <div class="mtabs" id="pvar" style="margin-top:10px"></div>
+      <svg class="bg" id="psvg" viewBox="0 0 900 320" role="img" style="margin-top:8px"></svg>
+      <div class="stepbar" id="pbar"></div>
+      <div class="grid2">
+        <div><span class="lbl" id="lhow"></span><ol class="steps" id="psteps"></ol></div>
+        <div><span class="lbl" id="lfigs"></span><div class="figs" id="pfigs"></div></div>
+      </div>
+      <div class="pc" id="ppc"></div>
+    </div>
+  </div>
+  <!-- 2 spinning systems compared -->
+  <div class="sc" id="sc2">
+    <div class="card"><svg id="ysvg" viewBox="0 0 1000 200" role="img"></svg></div>
+    <div class="card tblwrap"><table class="t" id="vtab"></table><p class="note" id="vnote"></p></div>
+  </div>
+  <!-- 3 twist and speed -->
+  <div class="sc" id="sc3">
+    <div class="card">
+      <div class="ctl">
+        <label><span id="twL"></span> <input type="range" id="tw" min="400" max="1200" step="20" value="800"><b id="twv"></b></label>
+        <label><span id="spL"></span> <input type="range" id="sp" min="8000" max="25000" step="500" value="18000"><b id="spv"></b></label>
+        <label><span id="roL"></span> <input type="range" id="ro" min="60000" max="150000" step="5000" value="120000"><b id="rov"></b></label>
+      </div>
+      <svg id="dsvg" viewBox="0 0 1000 170" role="img"></svg>
+      <p class="note" id="dnote"></p>
+    </div>
+  </div>
+  <!-- 4 wool + module links -->
+  <div class="sc" id="sc4">
+    <div class="cmp" id="wcards"></div>
+    <span class="lbl" id="lkL" style="margin-top:6px"></span>
+    <div class="links" id="links"></div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const PAUSED=params.get('paused')==='1'||matchMedia('(prefers-reduced-motion: reduce)').matches&&params.get('paused')!=='0';
+const T=()=>TEXTS[lang];
+const NSC=5;
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink SVG labels that would overflow their slot
+const isCJK=ch=>/[⺀-鿿＀-￯　-〿]/.test(ch);
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=isCJK(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+const Tm=(x,y,t,a='middle',max=0)=>TX(x,y,t,'var(--muted)',a,400,11,max);
+// muted label on a background plate (centred), e.g. where a line runs through
+const Tb=(x,y,t,max=0)=>{const w=Math.min(max||1e9,textW(t,11,400))+10;return `<rect x="${x-w/2}" y="${y-12}" width="${w}" height="17" rx="4" fill="var(--bg)" opacity=".94"/>`+Tm(x,y,t,'middle',max)};
+// split a text into lines of at most max px (words; CJK per character)
+function wrapT(t,s,w,max){
+  const parts=/\s/.test(t)?t.split(/\s+/):Array.from(t);const sep=/\s/.test(t)?' ':'';
+  const out=[];let cur='';
+  parts.forEach(p=>{const n=cur?cur+sep+p:p;if(cur&&textW(n,s,w)>max){out.push(cur);cur=p}else cur=n});
+  if(cur)out.push(cur);return out;
+}
+const num=(v,d=0)=>T().ui.loc==='none'?v.toFixed(d):v.toLocaleString(T().ui.loc,{minimumFractionDigits:d,maximumFractionDigits:d}).replace(/[’'  ]/g,' ');
+const FIB='#1864AB',HL='var(--acc)',HLF='#FBEBDD',HLR='#F6D9C2';
+
+// ── language-neutral data (texts in staple_spinning_texts.js, same order)
+const PIDS=['putzerei','karde','strecke','kaemmen','flyer','ring','rotor','luft'];
+const STT={putzerei:[0,.22,.42,.62,.82],karde:[0,.18,.36,.62,.8],strecke:[0,.2,.4,.62,.82],kaemmen:[0,.25,.5,.7,.9],
+  flyer:[0,.25,.5,.75],ring:[0,.25,.5,.75],rotor:[0,.2,.4,.6,.8],luft:[0,.3,.55,.8]};
+const VARS=['konv','kompakt'];
+const NODES={putzerei:[70,130],karde:[225,130],strecke1:[380,80],kvor:[380,195],kaemmen:[535,195],strecke:[690,80],flyer:[845,40],ring:[1020,40],rotor:[1020,135],luft:[1020,220]};
+const NLINK={putzerei:'putzerei',karde:'karde',strecke1:'strecke',strecke:'strecke',kvor:'kaemmen',kaemmen:'kaemmen',flyer:'flyer',ring:'ring',rotor:'rotor',luft:'luft'};
+const RK=['kard','gek','rotor','luft'];
+const ROUTES={kard:[['putzerei','karde'],['karde','strecke1'],['strecke1','strecke'],['strecke','flyer'],['flyer','ring']],
+  gek:[['putzerei','karde'],['karde','kvor'],['kvor','kaemmen'],['kaemmen','strecke'],['strecke','flyer'],['flyer','ring']],
+  rotor:[['putzerei','karde'],['karde','strecke1'],['strecke1','rotor']],
+  luft:[['putzerei','karde'],['karde','strecke1'],['strecke1','strecke'],['strecke','luft']]};
+const EDGES=[['putzerei','karde'],['karde','strecke1'],['karde','kvor'],['kvor','kaemmen'],['kaemmen','strecke'],['strecke1','strecke'],['strecke1','rotor'],['strecke','flyer'],['strecke','luft'],['flyer','ring']];
+const LINK_KEYS=['air_jet_spinning','filament_spinning','weaving_preparation','circular_knitting','textile_dyeing'];
+const SOURCES=['Textiles Committee (India) – process sequence carded, combed, open-end','Teaching material blow room – opening, cleaning, fibre loss','Teaching material – tuft sizes in the blow room',
+ 'Teaching material – bale plucking, 200 kg → 10 g','Textile Details – blow-room line, cleaning principle','Lecture carding – 40,000 fibres, 1 % short fibres',
+ 'Carding machine – operating principle, point against point','Fibre2Fashion – the carding process, flats','Teaching material – licker-in, stripping action',
+ 'Lecture – cleaning efficiency of blow room + card 95–99 %','Teaching material draw frame – 4–8 slivers, draft 4–8','Teaching material draw frame – 350–800 m/min, autolevelling',
+ 'Teaching material – autolevelling CV 4–6 % → 1–2 %','NPTEL – introduction to combing, noil','Teaching material – combing cycle, noil 8–25 %',
+ 'US patent 7845054 – nipper, circular comb, top comb','Teaching material roving frame – draft, twist','Teaching material – protective twist 25–70 T/m',
+ 'US patent 7661259 – roving frame 20–25 m/min, protective twist','Principles of Short Staple Spinning – ring spinning, spinning triangle','Rings and travellers – friction rises with speed',
+ 'FTEE 2019 – compact spinning, spinning triangle','Teaching material compact spinning – 10 % less twist','FTEE – compact yarn: 20 % less twist',
+ 'Textile Learner – rotor spinning, wrapper fibres','Textile Learner – rotor 32.5–54 mm, Ne 5–40','Open-end rotor spinning – twist = rotor speed ÷ delivery speed',
+ 'Teaching material – ring Ne 6–200, rotor Ne 3–60','Textile World – spinning with an air jet, speeds','Textile Learner – vortex spinning, core-sheath',
+ 'Fibre2Fashion – air-jet spinning not coarser than Ne 12','Teaching material wool spinning – wool on the short-staple line','Woolwise – worsted, woollen, semi-worsted',
+ 'Woolmark – worsted top making'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+
+// ── helpers
+const bars=[];
+function mkBar(id,o){
+  const el=$(id);
+  el.innerHTML=`<button type="button" class="pbtn" data-a="p"></button><button type="button" class="pbtn" data-a="t"></button><button type="button" class="pbtn" data-a="n"></button><span class="ins" data-a="l"></span>`;
+  const q=a=>el.querySelector(`[data-a=${a}]`);
+  let last={};
+  const set=(a,v)=>{if(last[a]!==v){last[a]=v;q(a).textContent=v}};
+  const upd=()=>{const u=T().ui;set('p',u.prev);set('n',u.next);set('t',o.isPlay()?u.pause:u.play);set('l',o.label())};
+  q('p').onclick=()=>{o.prev();upd()};q('n').onclick=()=>{o.next();upd()};q('t').onclick=()=>{o.toggle();upd()};
+  bars.push(upd);upd();return upd;
+}
+function segBtns(el,keys,labels,cur,cb){
+  el.innerHTML=keys.map((k,i)=>`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${esc(labels[i])}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.k));
+}
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+const lerp=(a,b,u)=>a+(b-a)*Math.max(0,Math.min(1,u));
+const seg=(t,a,b)=>Math.max(0,Math.min(1,(t-a)/(b-a)));
+const tri=u=>1-Math.abs((u%1)*2-1);
+function roll(x,y,r,ang,o={}){let s=`<circle cx="${x}" cy="${y}" r="${r}" fill="${o.f||'#e9ecef'}" stroke="${o.s||'#495057'}" stroke-width="${o.w||1.5}"/>`;
+  const n=o.n||2;for(let i=0;i<n;i++){const a=ang+i*Math.PI/n;s+=`<line x1="${x-Math.cos(a)*(r-3)}" y1="${y-Math.sin(a)*(r-3)}" x2="${x+Math.cos(a)*(r-3)}" y2="${y+Math.sin(a)*(r-3)}" stroke="#868e96" stroke-width="1"/>`}
+  if(o.teeth){for(let i=0;i<o.teeth;i++){const a=ang+i*2*Math.PI/o.teeth;s+=`<line x1="${x+Math.cos(a)*r}" y1="${y+Math.sin(a)*r}" x2="${x+Math.cos(a)*(r+5)}" y2="${y+Math.sin(a)*(r+5)}" stroke="#495057" stroke-width="1.2"/>`}}
+  return s;}
+const box=(x,y,w,h,on,lab,max=0)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${on?HLF:'var(--panel)'}" stroke="${on?HL:'#495057'}" stroke-width="${on?2:1.3}"/>`+(lab?Tm(x+w/2,y+h+15,lab,'middle',max):'');
+const zoneOf=(st,t)=>{let k=0;st.forEach((a,i)=>{if(t>=a-0.004)k=i});return k};
+const cap=(y,txt)=>TX(450,y,txt,HL,'middle',600,14,860);
+const PR=id=>T().proc[PIDS.indexOf(id)];
+const prof=(x0,y,len,amp,seed,off,col,w)=>{let d=`M${x0} ${y}`;for(let i=0;i<=len;i+=6){const v=Math.sin((i+off)*0.05+seed)*amp+Math.sin((i+off)*0.13+seed*2)*amp*0.6;d+=` L${x0+i} ${y+v}`}return `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`};
+
+// ── 1 process diagrams (t = 0..1 cycle, z = step index)
+const D={};
+D.putzerei=(t,z)=>{
+  const P=PR('putzerei'),L=P.lab;let s='';
+  for(let i=0;i<5;i++){const h=50+((i*37)%25);s+=`<rect x="${30+i*62}" y="${290-h}" width="54" height="${h}" fill="#fff4e6" stroke="#868e96"/>`}
+  s+=Tm(185,310,L.bales,'middle',320);
+  const px=40+tri(t*2)*250;
+  s+=box(px-10,175,70,40,z===0,'')+roll(px+25,222,10,t*60,{teeth:10});
+  s+=`<path d="M${px+25} 175 L${px+25} 60 L430 60 L430 100" fill="none" stroke="${z===1?HL:'#adb5bd'}" stroke-width="10" opacity=".55" stroke-linejoin="round"/>`;
+  for(let k=0;k<6;k++){const u=(t*3+k/6)%1;const h1=115,h2=430-px-25,tot=h1+h2+40;const d=u*tot;let p;
+    if(d<h1)p=[px+25,175-d];else if(d<h1+h2)p=[px+25+(d-h1),60];else p=[430,60+(d-h1-h2)];
+    s+=`<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="#fff" stroke="#868e96"/>`}
+  s+=box(380,100,140,120,z===2,L.clean,190);
+  s+=roll(450,150,32,t*40,{teeth:16});
+  for(let i=0;i<9;i++)s+=`<line x1="${410+i*10}" y1="196" x2="${414+i*10}" y2="204" stroke="#495057" stroke-width="2"/>`;
+  if(z===2)for(let k=0;k<5;k++){const y=205+((t*600+k*17)%15);s+=`<circle cx="${415+k*16}" cy="${y}" r="2.2" fill="#8d6e63"/>`}
+  s+=`<path d="M520 160 L560 160 L560 60 L620 60" fill="none" stroke="#adb5bd" stroke-width="10" opacity=".55"/>`;
+  s+=box(590,70,140,160,z===3,L.mix,160);
+  for(let c=0;c<6;c++){const lv=40+((c*23+t*300)%100);s+=`<rect x="${598+c*22}" y="${222-lv}" width="18" height="${lv}" fill="#FAB005" fill-opacity="${(0.2+c*0.08).toFixed(2)}" stroke="#adb5bd"/>`}
+  s+=`<path d="M730 200 L770 200 L770 90" fill="none" stroke="#adb5bd" stroke-width="10" opacity=".55"/>`;
+  s+=box(760,80,90,170,z===4,'')+Tm(805,268,L.chute,'middle',150);
+  s+=`<rect x="775" y="100" width="60" height="120" fill="#fff4e6" stroke="#adb5bd"/>`;
+  s+=Tb(px+25,166,L.pluck,130);
+  s+=cap(30,P.cap[z]);
+  return s};
+D.karde=(t,z)=>{
+  const P=PR('karde'),L=P.lab;let s='';
+  s+=box(30,40,60,150,z===0,L.chute,80);s+=`<rect x="40" y="50" width="40" height="130" fill="#fff4e6"/>`;
+  s+=roll(115,205,12,-t*20,{});
+  s+=roll(175,215,34,t*80,{teeth:14,f:z===1?HLR:'#e9ecef'});
+  const cx=390,cy=175,R=110;
+  s+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="${z===2?'#F8E6D8':'#f1f3f5'}" stroke="#495057" stroke-width="2"/>`;
+  for(let k=0;k<40;k++){const a=t*30+k*Math.PI*2/40;s+=`<line x1="${cx+Math.cos(a)*(R-6)}" y1="${cy+Math.sin(a)*(R-6)}" x2="${cx+Math.cos(a)*(R-14)}" y2="${cy+Math.sin(a)*(R-14)}" stroke="${FIB}" stroke-width="1.6" opacity=".7"/>`}
+  for(let k=0;k<16;k++){const a=Math.PI*(1.1+k*0.05)+((t*0.3)%0.05)*Math.PI,fx=cx+Math.cos(a)*(R+10),fy=cy+Math.sin(a)*(R+10);
+    s+=`<rect x="${fx-7}" y="${fy-4}" width="14" height="8" rx="2" fill="${z===2?HL:'#868e96'}" transform="rotate(${a*180/Math.PI+90} ${fx} ${fy})"/>`}
+  s+=TX(cx+R+16,cy-R+8,P.lab.flats,'var(--fg)','start',600,12,130);
+  s+=Tm(cx,cy+4,L.cyl,'middle',180);
+  s+=roll(585,235,50,-t*12,{f:z===3?HLR:'#e9ecef',n:3})+Tm(585,300,L.doffer,'middle',120);
+  s+=`<path d="M630 220 L700 200 L700 230 L630 250 Z" fill="${FIB}" opacity=".25"/>`;
+  s+=`<path d="M700 200 L725 212 L725 218 L700 230 Z" fill="#adb5bd" stroke="#495057"/>`;
+  s+=`<path d="M725 215 L800 215 L800 230" stroke="${FIB}" stroke-width="5" fill="none"/>`;
+  s+=box(770,230,70,70,z===4,L.can,100);
+  for(let i=0;i<4;i++)s+=`<ellipse cx="805" cy="${245+i*12}" rx="${24-i*3}" ry="5" fill="none" stroke="${FIB}" opacity=".6"/>`;
+  s+=Tm(175,272,L.licker,'middle',110)+Tm(88,250,L.feed,'middle',100);
+  s+=cap(26,P.cap[z]);
+  return s};
+D.strecke=(t,z)=>{
+  const P=PR('strecke'),L=P.lab;let s='';
+  for(let i=0;i<6;i++){s+=`<rect x="${20+i*45}" y="250" width="38" height="50" rx="4" fill="#fff" stroke="#868e96"/>`;
+    s+=`<path d="M${39+i*45} 250 Q ${39+i*45} 150 200 ${130+i*6}" fill="none" stroke="${FIB}" stroke-width="4" opacity=".7"/>`}
+  s+=Tm(150,315,L.cans,'middle',290);
+  for(let i=0;i<6;i++)s+=prof(200,110+i*8,180,2.5,i*1.7,t*400,FIB,3);
+  s+=box(260,90,50,70,z===1,'')+TX(285,82,L.meas,'var(--fg)','middle',600,11,90);
+  [[420,'v1'],[500,'v2'],[600,L.v3]].forEach(([x,l],i)=>{s+=roll(x,112,15,t*(10+i*10),{f:z===2?HLR:'#e9ecef'})+roll(x,148,15,-t*(10+i*10),{});s+=Tm(x,180,l,'middle',110)});
+  s+=`<path d="M380 108 L420 125 L600 128 L650 130" fill="none" stroke="${FIB}" stroke-width="10" opacity=".25"/>`;
+  for(let i=0;i<14;i++){const x=430+((i*12+t*200)%170),y=126+((i*7)%9)-4;s+=`<line x1="${x}" y1="${y}" x2="${x+20}" y2="${y}" stroke="${FIB}" stroke-width="1.6"/>`}
+  s+=`<path d="M650 120 L690 128 L690 132 L650 140 Z" fill="#adb5bd" stroke="#495057"/>`;
+  s+=prof(690,130,120,0.7,3,t*600,FIB,5);
+  s+=box(790,200,70,90,z===4,L.can,100);
+  s+=`<path d="M810 130 L825 130 L825 200" stroke="${FIB}" stroke-width="5" fill="none"/>`;
+  s+=Tm(400,240,L.thickA,'middle',210)+prof(330,262,140,6,1,t*300,'#c92a2a',1.5);
+  s+=Tm(630,240,L.thickB,'middle',210)+prof(560,262,140,1.2,2,t*300,'var(--ok)',1.5);
+  s+=cap(30,P.cap[z]);
+  return s};
+D.kaemmen=(t,z)=>{
+  const P=PR('kaemmen'),L=P.lab;let s='';
+  const nf=t<0.5?0:t<0.7?seg(t,0.5,0.7):t<0.9?1:1-seg(t,0.9,1);
+  const nx=lerp(260,350,nf),open=t>=0.5&&t<0.92,nc=z===0||z===2?HL:'#495057';
+  s+=`<circle cx="70" cy="140" r="45" fill="#fff4e6" stroke="#868e96"/>`+Tm(70,200,L.lap,'middle',110);
+  s+=`<path d="M110 140 L${nx} 140" stroke="${FIB}" stroke-width="10" opacity=".35"/>`;
+  s+=roll(200,150,10,t*10,{});
+  s+=`<path d="M${nx-60} ${open?118:130} L${nx} ${open?118:136}" stroke="${nc}" stroke-width="7" stroke-linecap="round"/><path d="M${nx-60} 150 L${nx} 144" stroke="${nc}" stroke-width="7" stroke-linecap="round"/>`;
+  s+=Tm(nx-30,105,open?L.open:L.closed,'middle',150);
+  for(let i=0;i<10;i++){const y=134+i*1.4,len=i%3===0?18:40;s+=`<line x1="${nx}" y1="${y}" x2="${nx+len}" y2="${y+(z===1?6:0)}" stroke="${i%3===0&&z>=1?'#c92a2a':FIB}" stroke-width="1.6"/>`}
+  const ca=t*Math.PI*2-Math.PI/2;
+  s+=`<circle cx="300" cy="235" r="60" fill="#f1f3f5" stroke="#495057"/>`;
+  for(let k=0;k<14;k++){const a=ca+k*0.09;s+=`<line x1="${300+Math.cos(a)*60}" y1="${235+Math.sin(a)*60}" x2="${300+Math.cos(a)*72}" y2="${235+Math.sin(a)*72}" stroke="${z===1?HL:'#495057'}" stroke-width="2"/>`}
+  s+=Tm(300,314,L.circ,'middle',150);
+  if(z===1)for(let k=0;k<5;k++){const y=200+((t*500+k*9)%30);s+=`<line x1="${270+k*10}" y1="${y}" x2="${282+k*10}" y2="${y}" stroke="#c92a2a" stroke-width="1.6"/>`}
+  const fy=t>=0.7&&t<0.9?110:80,fc=z===3?HL:'#495057';
+  s+=`<rect x="415" y="${fy-30}" width="6" height="40" fill="${fc}"/>`;for(let i=0;i<5;i++)s+=`<line x1="416" y1="${fy+10}" x2="416" y2="${fy+22}" stroke="${fc}"/>`;
+  s+=Tm(432,fy-14,L.top,'start',100);
+  const dr=t>=0.5&&t<0.7?-1:1;
+  s+=roll(470,125,15,t*20*dr,{f:z>=2&&z<=3?HLR:'#e9ecef'})+roll(470,157,15,-t*20*dr,{});
+  s+=Tm(470,190,L.detach,'middle',130);
+  s+=`<path d="M485 140 L720 140" stroke="${FIB}" stroke-width="7" opacity=".45"/>`;
+  for(let i=0;i<10;i++){const x=500+((i*24+t*100)%210),y=137+(i%3)*2;s+=`<line x1="${x}" y1="${y}" x2="${x+26}" y2="${y}" stroke="${FIB}" stroke-width="1.6"/>`}
+  s+=`<path d="M720 140 L760 150 L760 160 L720 170 Z" fill="#adb5bd"/>`+Tm(760,190,L.sliver,'middle',150);
+  s+=box(600,230,120,60,false,L.noil,190);
+  s+=cap(30,P.cap[z]);
+  return s};
+D.flyer=(t,z)=>{
+  const P=PR('flyer'),L=P.lab;let s='';
+  s+=`<rect x="20" y="230" width="60" height="70" rx="4" fill="#fff" stroke="#868e96"/>`+Tm(50,315,L.can,'middle',96);
+  s+=`<path d="M50 230 Q50 80 150 80" fill="none" stroke="${FIB}" stroke-width="7" opacity=".5"/>`;
+  [150,205,270].forEach((x,i)=>{s+=roll(x,70,11,t*(8+i*8),{f:z===1?HLR:'#e9ecef'})+roll(x,92,11,-t*(8+i*8),{})});
+  s+=Tm(210,122,L.draft,'middle',220);
+  s+=`<path d="M281 81 L450 60" stroke="${FIB}" stroke-width="3"/>`;
+  for(let i=0;i<9;i++){const u=((i/9)+t*4)%1;const x=lerp(290,445,u),y=lerp(80,61,u);s+=`<line x1="${x-3}" y1="${y-3}" x2="${x+3}" y2="${y+3}" stroke="${z===2?HL:'#495057'}" stroke-width="1.4"/>`}
+  const ang=t*Math.PI*16,w=Math.cos(ang)*55;
+  s+=`<path d="M450 60 L450 50 M450 60 L${450+w} 90 L${450+w} 260 M450 60 L${450-w} 90 L${450-w} 260" fill="none" stroke="${z===2?HL:'#495057'}" stroke-width="4"/>`;
+  s+=Tm(560,70,L.flyer,'start',300);
+  const rail=lerp(0,30,tri(t*2));
+  s+=`<rect x="430" y="${110+rail}" width="40" height="160" fill="#e9ecef" stroke="#495057"/>`;
+  for(let i=0;i<14;i++)s+=`<line x1="${426-i*0.6}" y1="${118+rail+i*10}" x2="${474+i*0.6}" y2="${123+rail+i*10}" stroke="${FIB}" stroke-width="2.5" opacity="${z===3?1:.6}"/>`;
+  s+=`<rect x="380" y="${272+rail}" width="140" height="10" fill="${z===3?HL:'#868e96'}"/>`+Tm(560,280+rail,L.rail,'start',300);
+  s+=cap(30,P.cap[z]);
+  return s};
+D.ring=(t,z,v)=>{
+  const P=PR('ring'),L=P.lab;let s='';const comp=v==='kompakt';
+  s+=`<rect x="30" y="30" width="50" height="110" rx="6" fill="#fff4e6" stroke="#868e96"/>`+Tm(55,156,L.bobbin,'middle',100);
+  s+=`<path d="M80 70 L160 70" stroke="${FIB}" stroke-width="5" opacity=".6"/>`;
+  [160,230,310].forEach((x,i)=>{s+=roll(x,60,11,t*(10+i*12),{f:z===0?HLR:'#e9ecef'})+roll(x,82,11,-t*(10+i*12),{})});
+  s+=Tm(235,112,L.draft,'middle',230);
+  if(comp){s+=`<rect x="322" y="62" width="60" height="18" rx="4" fill="${z===1?'#CFE8D4':'#e9ecef'}" stroke="${z===1?'var(--ok)':'#868e96'}"/>`;
+    for(let i=0;i<6;i++)s+=`<line x1="${326+i*9}" y1="66" x2="${326+i*9}" y2="76" stroke="#868e96" stroke-dasharray="1 2"/>`;
+    s+=Tm(390,56,L.cond,'start',210);
+    s+=`<path d="M322 66 L382 70 L382 72 L322 78 Z" fill="${FIB}" opacity=".5"/><line x1="382" y1="71" x2="390" y2="142" stroke="${FIB}" stroke-width="2"/>`}
+  else{s+=`<path d="M322 64 L330 80 L360 140 L334 80 Z" fill="${FIB}" opacity="${z===1?.85:.45}"/>`;
+    for(let i=0;i<5;i++)s+=`<line x1="${324+i*2}" y1="${78+i*2}" x2="${312-i*2}" y2="${92+i*4}" stroke="${FIB}" stroke-width="1"/>`;
+    s+=Tm(305,136,L.tri,'end',140)}
+  const gx=comp?390:360;
+  s+=`<path d="M${gx-8} 150 a8 8 0 1 0 16 0" fill="none" stroke="#495057" stroke-width="2"/>`;
+  s+=`<path d="M${gx} 140 L${gx} 150" stroke="${FIB}" stroke-width="2"/>`;
+  const ang=t*Math.PI*24,bx=Math.sin(ang)*42,rx=400,ry=255;
+  s+=`<path d="M${gx} 152 Q ${rx+bx*1.6} 205 ${rx+Math.sin(ang)*55} ${ry+Math.cos(ang)*10}" fill="none" stroke="${FIB}" stroke-width="2"/>`;
+  s+=`<ellipse cx="${rx}" cy="${ry}" rx="55" ry="10" fill="none" stroke="${z===2?HL:'#495057'}" stroke-width="3"/>`;
+  s+=`<circle cx="${rx+Math.sin(ang)*55}" cy="${ry+Math.cos(ang)*10}" r="5" fill="${z===2?HL:'#c92a2a'}"/>`;
+  s+=TX(rx+98,ry+4,L.ring,'var(--fg)','start',600,11,170)+TX(rx+98,185,L.balloon,'var(--fg)','start',600,11,170);
+  const rail=lerp(0,22,tri(t*2));
+  s+=`<rect x="${rx-12}" y="200" width="24" height="110" fill="#e9ecef" stroke="#495057"/>`;
+  s+=`<path d="M${rx-12} 300 L${rx-26} 300 L${rx-18} 240 L${rx-12} 230 Z M${rx+12} 300 L${rx+26} 300 L${rx+18} 240 L${rx+12} 230 Z" fill="${FIB}" opacity="${z===3?.8:.45}"/>`;
+  s+=`<rect x="${rx-90}" y="${258+rail}" width="180" height="6" fill="${z===3?HL:'#adb5bd'}"/>`+Tm(rx-96,263+rail,L.rail,'end',190);
+  s+=`<rect x="620" y="60" width="250" height="110" rx="8" fill="#fff" stroke="var(--line)"/>`+Tm(745,52,comp?L.lupeC:L.lupeK,'middle',270);
+  for(let i=0;i<14;i++)s+=`<line x1="${630+i*17}" y1="125" x2="${645+i*17}" y2="105" stroke="${FIB}" stroke-width="3"/>`;
+  const hairs=comp?4:16;for(let i=0;i<hairs;i++){const x=635+((i*53)%225),up=i%2;s+=`<path d="M${x} ${up?104:126} q 6 ${up?-14:14} 16 ${up?-18:18}" fill="none" stroke="${FIB}" stroke-width="1"/>`}
+  s+=Tm(745,162,comp?L.hairC:L.hairK,'middle',240);
+  s+=TX(560,25,(comp?P.capC:P.cap)[z],HL,'middle',600,14,620);
+  return s};
+D.rotor=(t,z)=>{
+  const P=PR('rotor'),L=P.lab;let s='';
+  s+=`<rect x="20" y="230" width="60" height="70" rx="4" fill="#fff" stroke="#868e96"/>`+Tm(50,315,L.sliver,'middle',96);
+  s+=`<path d="M50 230 Q 50 170 110 170" fill="none" stroke="${FIB}" stroke-width="7" opacity=".5"/>`;
+  s+=roll(120,160,10,t*5,{f:z===0?HLR:'#e9ecef'});
+  s+=roll(200,175,42,t*120,{teeth:28,f:z===1?HLR:'#e9ecef'});
+  s+=Tm(200,240,L.opener,'middle',120);
+  if(z===1)for(let k=0;k<4;k++)s+=`<circle cx="${190+k*8}" cy="${228+((t*800+k*7)%20)}" r="2" fill="#8d6e63"/>`;
+  s+=`<path d="M238 160 L440 135 L440 145 L240 190 Z" fill="${z===2?'#D3E5F8':'#f8f9fa'}" stroke="#495057"/>`;
+  for(let k=0;k<6;k++){const u=(t*6+k/6)%1;const x=lerp(250,440,u),y=lerp(175,140,u);s+=`<line x1="${x}" y1="${y}" x2="${x+10*(0.5+u)}" y2="${y-1.5}" stroke="${FIB}" stroke-width="1.6"/>`}
+  s+=Tm(345,206,L.channel,'middle',170);
+  const cx=560,cy=160,R=80;
+  s+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="#f1f3f5" stroke="#495057" stroke-width="2"/><circle cx="${cx}" cy="${cy}" r="${R-10}" fill="none" stroke="${z===3?HL:'#868e96'}" stroke-width="6" opacity=".6"/>`;
+  const a0=t*Math.PI*30;
+  for(let k=0;k<26;k++){const a=a0+k*0.22;s+=`<line x1="${cx+Math.cos(a)*(R-12)}" y1="${cy+Math.sin(a)*(R-12)}" x2="${cx+Math.cos(a+0.15)*(R-9)}" y2="${cy+Math.sin(a+0.15)*(R-9)}" stroke="${FIB}" stroke-width="2"/>`}
+  const ya=a0+0.3;s+=`<path d="M${cx+Math.cos(ya)*(R-10)} ${cy+Math.sin(ya)*(R-10)} Q ${cx+Math.cos(ya+0.6)*30} ${cy+Math.sin(ya+0.6)*30} ${cx} ${cy}" fill="none" stroke="${z===4?HL:FIB}" stroke-width="3"/>`;
+  s+=`<circle cx="${cx}" cy="${cy}" r="9" fill="#495057"/>`+Tm(cx,cy+R+20,L.rotor,'middle',330);
+  s+=`<path d="M${cx+9} ${cy} L760 ${cy}" stroke="${FIB}" stroke-width="2.5" stroke-dasharray="${z===4?'0':'6 3'}"/>`;
+  s+=roll(770,150,9,t*30,{})+roll(770,170,9,-t*30,{});
+  s+=`<rect x="800" y="120" width="70" height="80" rx="10" fill="#d0ebff" stroke="${FIB}"/>`+Tm(835,216,L.pkg,'middle',120);
+  s+=cap(30,P.cap[z]);
+  return s};
+D.luft=(t,z)=>{
+  const P=PR('luft'),L=P.lab;let s='';
+  s+=`<rect x="20" y="230" width="60" height="70" rx="4" fill="#fff" stroke="#868e96"/>`+Tm(50,315,L.sliver,'middle',96);
+  s+=`<path d="M50 230 Q 50 160 110 160" fill="none" stroke="${FIB}" stroke-width="7" opacity=".5"/>`;
+  [120,175,235,300].forEach((x,i)=>{s+=roll(x,150,11,t*(8+i*12),{f:z===0?HLR:'#e9ecef'})+roll(x,172,11,-t*(8+i*12),{})});
+  s+=Tm(210,202,L.draft,'middle',240);
+  s+=`<path d="M311 161 L420 161" stroke="${FIB}" stroke-width="4" opacity=".7"/>`;
+  s+=`<rect x="420" y="100" width="220" height="122" rx="10" fill="${z>=1&&z<=2?'#E3EFFB':'#fff'}" stroke="#495057" stroke-width="2"/>`+Tm(530,240,L.nozzle,'middle',200);
+  s+=`<path d="M520 135 L640 135 L640 187 L520 187 L500 161 Z" fill="#e9ecef" stroke="#495057"/>`;
+  s+=Tm(580,128,L.spindle,'middle',110);
+  const ph=t*Math.PI*20;
+  for(let k=0;k<3;k++){const x=470+k*12;s+=`<ellipse cx="${x}" cy="161" rx="9" ry="26" fill="none" stroke="var(--cool)" stroke-width="1.5" stroke-dasharray="${z===2?'4 3':'2 6'}" stroke-dashoffset="${-ph*4}"/>`}
+  s+=`<path d="M435 110 L455 135 M435 212 L455 187" stroke="var(--cool)" stroke-width="2"/>`+Tm(425,92,L.air,'start',200);
+  s+=`<path d="M420 161 L700 161" stroke="${FIB}" stroke-width="5"/>`;
+  for(let i=0;i<16;i++){const x=505+i*12-((t*80)%12);if(x>505&&x<700)s+=`<line x1="${x}" y1="155" x2="${x+8}" y2="167" stroke="${z>=2?HL:FIB}" stroke-width="1.6"/>`}
+  s+=roll(720,150,9,t*30,{})+roll(720,172,9,-t*30,{});
+  s+=`<rect x="760" y="120" width="70" height="80" rx="10" fill="#d0ebff" stroke="${FIB}"/>`+Tm(795,216,L.pkg,'middle',120);
+  s+=`<rect x="650" y="252" width="220" height="50" rx="8" fill="#fff" stroke="var(--line)"/>`;
+  for(let i=0;i<6;i++)s+=`<line x1="660" y1="${265+i*4}" x2="860" y2="${265+i*4}" stroke="${FIB}" stroke-width="1.6"/>`;
+  for(let i=0;i<13;i++)s+=`<line x1="${662+i*15}" y1="260" x2="${672+i*15}" y2="292" stroke="${HL}" stroke-width="1.6"/>`;
+  s+=Tm(760,246,L.struct,'middle',230);
+  s+=cap(30,P.cap[z]);
+  return s};
+
+// ── 1 controller
+let cur='putzerei',curV=null,play=!PAUSED,tt=0,last=performance.now();const SPD=6500;
+const STEP0=id=>STT[id][Math.min(2,STT[id].length-1)]+0.03;
+function showP(id){
+  cur=id;const P=PR(id),u=T().ui;
+  if(PAUSED&&!play)tt=STEP0(id);else tt=0;
+  if(!P.v)curV=null;else if(!curV)curV=VARS[0];
+  segBtns($('ptabs'),PIDS,T().proc.map(p=>p.n),cur,k=>showP(k));
+  $('pname').textContent=P.n;$('pde').textContent=P.de;
+  if(P.v)segBtns($('pvar'),VARS,P.v,curV,k=>{curV=k;showP(cur)});else $('pvar').innerHTML='';
+  $('pvar').style.display=P.v?'flex':'none';
+  $('lhow').textContent=u.how;$('lfigs').textContent=u.figs;
+  $('psteps').innerHTML=P.how.map(h=>`<li>${esc(h)}</li>`).join('');
+  $('pfigs').innerHTML=P.figs.map(f=>`<div><b>${esc(f[0])}</b><span>${esc(f[1])}</span></div>`).join('');
+  $('ppc').innerHTML=`<div class="pcc pro"><span class="lbl">${esc(u.pro)}</span><ul>${P.pro.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="pcc con"><span class="lbl">${esc(u.con)}</span><ul>${P.con.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="pcc when"><span class="lbl">${esc(u.when)}</span><p>${esc(P.when)}</p></div>`;
+  $('psvg').setAttribute('aria-label',P.n);
+  drawP();drawRoute();
+}
+function drawP(){$('psvg').innerHTML=D[cur](tt,zoneOf(STT[cur],tt),curV);pUpd&&pUpd()}
+let pUpd=null;
+pUpd=mkBar('pbar',{isPlay:()=>play,toggle:()=>{play=!play},
+  prev:()=>{play=false;const S=STT[cur],k=zoneOf(S,tt);tt=Math.abs(tt-S[k])>0.01?S[k]:S[(k-1+S.length)%S.length];drawP()},
+  next:()=>{play=false;const S=STT[cur],k=zoneOf(S,tt);tt=S[(k+1)%S.length];drawP()},
+  label:()=>PR(cur).st[zoneOf(STT[cur],tt)]});
+function loop(now){
+  const dt=Math.min(100,now-last);last=now;
+  if(play){tt=(tt+dt/SPD)%1;if(scene===1)drawP()}
+  requestAnimationFrame(loop);
+}
+
+// ── 0 process lines
+let rk='kard';
+function drawRoute(){
+  const t=T().route,E=ROUTES[rk],on=new Set(E.flat());
+  segBtns($('rseg'),RK,t.seg,rk,k=>{rk=k;drawRoute()});
+  let s=`<defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#E07B39"/></marker></defs>`;
+  EDGES.forEach(([a,b])=>{const A=NODES[a],B=NODES[b],o=E.some(e=>e[0]===a&&e[1]===b);
+    s+=`<path d="M${A[0]+66} ${A[1]} C ${A[0]+100} ${A[1]}, ${B[0]-100} ${B[1]}, ${B[0]-70} ${B[1]}" fill="none" stroke="${o?HL:'#DDE2DB'}" stroke-width="${o?3:2}" ${o?'marker-end="url(#ar)"':''}/>`});
+  Object.entries(NODES).forEach(([id,[x,y]])=>{const o=on.has(id),sel=NLINK[id]===cur;
+    s+=`<g class="node" data-id="${id}" style="cursor:pointer"><rect x="${x-66}" y="${y-21}" width="132" height="42" rx="8" fill="${o?'var(--panel)':'var(--bg)'}" stroke="${sel&&o?'#000':o?HL:'var(--line)'}" stroke-width="${sel&&o?2.6:o?2:1}" opacity="${o?1:.65}"/>`+
+      TX(x,y+5,t.nodes[id],o?'var(--fg)':'var(--muted)','middle',o?700:500,13,120)+`</g>`});
+  $('rsvg').innerHTML=s;$('rsvg').setAttribute('aria-label',T().scenes[0].k);$('rtxt').textContent=t.txt[RK.indexOf(rk)];
+  $('rsvg').querySelectorAll('.node').forEach(g=>g.onclick=()=>{showP(NLINK[g.dataset.id]);go(1)});
+}
+
+// ── 2 comparison
+function drawCmp(){
+  const t=T().cmp;let s='';
+  t.struct.forEach((p,k)=>{const x0=20+k*245,y=90;
+    s+=TX(x0+110,25,p[0],'var(--fg)','middle',700,14,230);
+    wrapT(p[1],11,400,225).slice(0,3).forEach((ln,i)=>{s+=Tm(x0+110,162+i*16,ln,'middle',230)});
+    if(k<3)for(let i=0;i<16;i++)s+=`<line x1="${x0+i*13}" y1="${y+18}" x2="${x0+14+i*13}" y2="${y-18}" stroke="${FIB}" stroke-width="3"/>`;
+    if(k===0)for(let i=0;i<14;i++){const xx=x0+8+i*15,up=i%2;s+=`<path d="M${xx} ${up?y-18:y+18} q 5 ${up?-14:14} 14 ${up?-20:20}" fill="none" stroke="${FIB}" stroke-width="1.2"/>`}
+    if(k===1)for(let i=0;i<3;i++){const xx=x0+30+i*70;s+=`<path d="M${xx} ${y-18} q 4 -6 10 -9" fill="none" stroke="${FIB}" stroke-width="1.2"/>`}
+    if(k===2)for(let i=0;i<4;i++){const xx=x0+20+i*55;s+=`<rect x="${xx}" y="${y-22}" width="10" height="44" rx="3" fill="${HL}" opacity=".85"/>`}
+    if(k===3){for(let i=0;i<7;i++)s+=`<line x1="${x0}" y1="${y-15+i*5}" x2="${x0+215}" y2="${y-15+i*5}" stroke="${FIB}" stroke-width="2"/>`;
+      for(let i=0;i<10;i++)s+=`<line x1="${x0+5+i*21}" y1="${y+20}" x2="${x0+17+i*21}" y2="${y-20}" stroke="${HL}" stroke-width="2.2"/>`}});
+  $('ysvg').innerHTML=s;$('ysvg').setAttribute('aria-label',T().scenes[2].k);
+  $('vtab').innerHTML=`<tr>${t.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+t.rows.map(r=>`<tr><td><b>${esc(r[0])}</b></td>${r.slice(1).map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+  $('vnote').textContent=t.note;
+}
+
+// ── 3 twist and speed
+function calc(){
+  const t=T().twist,tw=+$('tw').value,sp=+$('sp').value,ro=+$('ro').value;
+  $('twL').textContent=t.tw;$('spL').textContent=t.sp;$('roL').textContent=t.ro;
+  $('twv').textContent=num(tw)+' '+t.tpm;$('spv').textContent=num(sp)+' '+t.rpm;$('rov').textContent=num(ro)+' '+t.rpm;
+  const vr=sp/tw,vo=ro/tw,mx=Math.max(vo,450);
+  const bar=(y,l,v,c,why)=>{const w=Math.max(2,v/mx*420);
+    return TX(220,y+18,l,'var(--fg)','end',600,13,210)+`<rect x="230" y="${y}" width="${w}" height="26" rx="4" fill="${c}"/>`+
+      TX(238+w,y+18,`${num(v,v<100?1:0)} m/min`,'var(--fg)','start',700,12)+Tm(238+w+textW(`${num(v,v<100?1:0)} m/min`,12,700)+8,y+18,why,'start',Math.max(80,990-(246+w+textW(`${num(v,v<100?1:0)} m/min`,12,700))))};
+  $('dsvg').innerHTML=bar(15,t.bars[0],vr,'var(--acc2)',t.why[0])+bar(65,t.bars[1],vo,'var(--acc)',t.why[1])+bar(115,t.bars[2],450,'var(--ok)',t.why[2]);
+  $('dsvg').setAttribute('aria-label',T().scenes[3].k);$('dnote').textContent=t.note;
+}
+['tw','sp','ro'].forEach(i=>$(i).oninput=calc);
+
+// ── 4 wool + links
+function drawWool(){
+  const t=T();
+  $('wcards').innerHTML=t.wool.map(c=>`<div class="c"><h4>${esc(c[0])}</h4><p>${esc(c[1])}</p></div>`).join('');
+  $('lkL').textContent=t.ui.lkL;
+  $('links').innerHTML=t.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${esc(l[0])} →</b><span>${esc(l[1])}</span><em>${esc(t.ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(scene===1)drawP();
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k[0])}</b><span>${esc(k[1])}</span></div>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  const keepT=tt;showP(cur);tt=keepT;drawP();
+  drawCmp();calc();drawWool();
+  bars.forEach(f=>f());go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+if(PAUSED)tt=STEP0(cur);
+applyLang();
+requestAnimationFrame(now=>{last=now;loop(now)});
+})();
+</script>
+</body>
+</html>

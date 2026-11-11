@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nonwovens</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category Nonwovens.
+     Content from the user's research page "Vliesstoffe: vom Faservlies zum fertigen Stoff".
+     Texts in nonwovens_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1 for screenshots. No external resources (sources as plain text only).
+     The links area at the bottom opens other modules: embedded via document.title "open:<key>", otherwise <key>.html.
+     SVG/DOM: process lines (scene 0, click a station = scene 1), ten animated process diagrams with
+     step control (scene 1), web structures + tables (scene 2), crosslapper and punch density calculator (scene 3).
+     Scenes never change automatically. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--soft:#EEF3EC;
+  --acc:#E07B39;--acc2:#2386C8;--ok:#2F8F45;--bad:#C92A2A;--cool:#1C7ED6;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"],.mtabs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+svg.bg{background:var(--bg);border-radius:6px}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{font-family:var(--font-display);font-size:19px;margin:0 0 6px}
+.seg,.mtabs{display:flex;gap:6px;flex-wrap:wrap}
+.seg button,.mtabs button{font-size:13.5px;padding:6px 11px}
+.mtabs .grp{align-self:center;margin-right:2px}
+.mtabs .grp.g2{margin-left:12px}
+.lbl{display:block;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font-family:var(--font-display);font-size:26px;line-height:1.1;color:var(--hl)}
+.kpi span{color:var(--muted);font-size:13px}
+.stepbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.pbtn{font-size:13px;padding:5px 11px}
+.ins{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.mhead h3{margin:0;font-size:21px;font-family:var(--font-display)}
+.mhead .de{color:var(--muted);font-size:13.5px}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:12px}
+.steps{counter-reset:s;list-style:none;padding:0;margin:4px 0}
+.steps li{counter-increment:s;position:relative;padding:4px 0 4px 30px;font-size:14px}
+.steps li:before{content:counter(s);position:absolute;left:0;top:5px;width:20px;height:20px;border-radius:50%;background:var(--fg);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:4px 0}
+.figs div{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.figs b{display:block;font-size:17px;color:#1F7A36;font-variant-numeric:tabular-nums}
+.figs span{font-size:12px;color:var(--muted)}
+.pc{display:grid;grid-template-columns:1fr 1fr .8fr;gap:12px;margin:12px 0 0}
+.pcc{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg)}
+.pcc ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
+.pcc li{margin:3px 0}
+.pcc p{margin:4px 0 0;font-size:13.5px}
+.pcc.pro{border-left:5px solid var(--ok)}
+.pcc.con{border-left:5px solid var(--bad)}
+.pcc.when{border-left:5px solid var(--acc2)}
+.tblwrap{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th,table.t td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.t th{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+table.t tr:last-child td{border-bottom:0}
+.calc{grid-template-columns:1fr 1fr;margin-top:0}
+.ctl{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}
+.ctl label{font-size:13px;color:var(--muted);display:grid;grid-template-columns:minmax(110px,1fr) 160px minmax(84px,auto);gap:10px;align-items:center}
+.ctl input[type=range]{width:160px;accent-color:#39A650}
+.ctl b{color:var(--fg);font-family:var(--font-mono);font-weight:600;white-space:nowrap}
+.node{cursor:pointer}
+.node:hover rect{stroke:var(--acc);stroke-width:2.5}
+.node.raw{cursor:default}
+.node.raw:hover rect{stroke:var(--line);stroke-width:1}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.lk{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:980px){.calc{grid-template-columns:1fr}}
+@media (max-width:860px){.grid2,.pc{grid-template-columns:1fr}}
+@media (max-width:760px){header{flex-direction:column}details ol{columns:1}.ctl label{grid-template-columns:1fr}}
+</style>
+<script src="nonwovens_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 process lines -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <div class="seg" id="rseg"></div>
+      <svg id="rsvg" viewBox="0 0 1000 330" role="img" style="margin-top:10px"></svg>
+      <p class="note" id="rtxt"></p>
+    </div>
+  </div>
+  <!-- 1 processes in detail -->
+  <div class="sc" id="sc1">
+    <div class="mtabs" id="ptabs"></div>
+    <div class="card">
+      <div class="mhead"><h3 id="pname"></h3><div class="de" id="pde"></div></div>
+      <div class="mtabs" id="pvar" style="margin-top:10px"></div>
+      <svg class="bg" id="psvg" viewBox="0 0 900 320" role="img" style="margin-top:8px"></svg>
+      <div class="stepbar" id="pbar"></div>
+      <div class="grid2">
+        <div><span class="lbl" id="lhow"></span><ol class="steps" id="psteps"></ol></div>
+        <div><span class="lbl" id="lfigs"></span><div class="figs" id="pfigs"></div></div>
+      </div>
+      <div class="pc" id="ppc"></div>
+    </div>
+  </div>
+  <!-- 2 comparison -->
+  <div class="sc" id="sc2">
+    <div class="card"><svg id="ysvg" viewBox="0 0 1000 200" role="img"></svg></div>
+    <div class="card"><h3 id="t1"></h3><div class="tblwrap"><table class="t" id="vtab1"></table></div></div>
+    <div class="card"><h3 id="t2"></h3><div class="tblwrap"><table class="t" id="vtab2"></table></div><p class="note" id="vnote"></p></div>
+  </div>
+  <!-- 3 calculator -->
+  <div class="sc" id="sc3">
+    <div class="grid2 calc">
+      <div class="card">
+        <h3 id="kT"></h3>
+        <div class="ctl">
+          <label><span id="giL"></span><input type="range" id="gi" min="5" max="60" step="1" value="20"><b id="giv"></b></label>
+          <label><span id="wiL"></span><input type="range" id="wi" min="1" max="3.5" step="0.1" value="2.5"><b id="wiv"></b></label>
+          <label><span id="viL"></span><input type="range" id="vi" min="20" max="250" step="5" value="100"><b id="viv"></b></label>
+          <label><span id="woL"></span><input type="range" id="wo" min="1" max="8" step="0.1" value="4"><b id="wov"></b></label>
+          <label><span id="voL"></span><input type="range" id="vo" min="1" max="30" step="0.5" value="5"><b id="vov"></b></label>
+        </div>
+        <div class="figs" id="kres"></div>
+        <p class="note" id="knote"></p>
+      </div>
+      <div class="card">
+        <h3 id="nT"></h3>
+        <div class="ctl">
+          <label><span id="nnL"></span><input type="range" id="nn" min="1000" max="20000" step="500" value="5000"><b id="nnv"></b></label>
+          <label><span id="nbL"></span><input type="range" id="nb" min="1" max="4" step="1" value="2"><b id="nbv"></b></label>
+          <label><span id="hfL"></span><input type="range" id="hf" min="400" max="2500" step="50" value="1000"><b id="hfv"></b></label>
+          <label><span id="nvL"></span><input type="range" id="nv" min="1" max="40" step="0.5" value="24"><b id="nvv"></b></label>
+        </div>
+        <div class="figs" id="nres"></div>
+        <p class="note" id="nnote"></p>
+      </div>
+    </div>
+  </div>
+
+  <span class="lbl" id="lkL" style="margin-top:6px"></span>
+  <div class="links" id="links"></div>
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const PAUSED=params.get('paused')==='1'||matchMedia('(prefers-reduced-motion: reduce)').matches&&params.get('paused')!=='0';
+const T=()=>TEXTS[lang];
+const NSC=4;
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink SVG labels that would overflow their slot
+const isCJK=ch=>/[⺀-鿿＀-￯　-〿]/.test(ch);
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=isCJK(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+const Tm=(x,y,t,a='middle',max=0)=>TX(x,y,t,'var(--muted)',a,400,11,max);
+// muted label on a background plate (centred), e.g. where a line runs through
+const Tb=(x,y,t,max=0,bg='var(--bg)')=>{const w=Math.min(max||1e9,textW(t,11,400))+10;return `<rect x="${x-w/2}" y="${y-12}" width="${w}" height="17" rx="4" fill="${bg}" opacity=".94"/>`+Tm(x,y,t,'middle',max)};
+// split a text into lines of at most max px (words; CJK per character)
+function wrapT(t,s,w,max){
+  const parts=/\s/.test(t)?t.split(/\s+/):Array.from(t);const sep=/\s/.test(t)?' ':'';
+  const out=[];let cur='';
+  parts.forEach(p=>{const n=cur?cur+sep+p:p;if(cur&&textW(n,s,w)>max){out.push(cur);cur=p}else cur=n});
+  if(cur)out.push(cur);return out;
+}
+const num=(v,d=0)=>T().ui.loc==='none'?v.toFixed(d):v.toLocaleString(T().ui.loc,{minimumFractionDigits:d,maximumFractionDigits:d}).replace(/[’'\u00a0\u202f]/g,' ');
+const FIB='#1864AB',HL='var(--acc)',HLS='#E07B39',HLF='#FBEBDD',HLR='#F6D9C2',HOT='#E8590C',WAT='#4DABF7',BIN='#82C91E';
+
+// ── language-neutral data (texts in nonwovens_texts.js, same order)
+const PIDS=['krempel','airlaid','nass','spunbond','meltblown','nadel','wasser','naeh','thermo','chemisch'];
+const FORM=PIDS.slice(0,5),BOND=PIDS.slice(5);
+const STT={krempel:[0,.2,.4,.6,.82],airlaid:[0,.2,.4,.6,.8],nass:[0,.25,.5,.75],spunbond:[0,.2,.4,.6,.8],meltblown:[0,.25,.5,.75],
+  nadel:[0,.25,.5,.75],wasser:[0,.25,.5,.75],naeh:[0,.25,.5,.75],thermo:[0,.33,.66],chemisch:[0,.25,.5,.75]};
+const VK={meltblown:['k','g'],naeh:['watt','vlies'],thermo:['kal','dur'],chemisch:['impr','spr']};
+const NODES={fasern:[90,70],zell:[90,165],poly:[90,260],
+ krempel:[400,40],airlaid:[400,105],nass:[400,170],spunbond:[400,235],meltblown:[400,300],
+ nadel:[720,40],wasser:[720,105],naeh:[720,170],thermo:[720,235],chemisch:[720,300]};
+const RAW=['fasern','zell','poly'];
+const ALL=[['fasern','krempel'],['zell','airlaid'],['zell','nass'],['poly','spunbond'],['poly','meltblown'],['krempel','nadel'],['krempel','wasser'],['krempel','naeh'],['krempel','thermo'],['airlaid','thermo'],['airlaid','chemisch'],['nass','wasser'],['nass','chemisch'],['nass','thermo'],['spunbond','thermo'],['spunbond','nadel'],['meltblown','thermo']];
+const RK=['nadel','spunlace','naeh','spunbond','sms','airlaid','nass'];
+const ROUTES={nadel:[['fasern','krempel'],['krempel','nadel']],spunlace:[['fasern','krempel'],['krempel','wasser']],
+ naeh:[['fasern','krempel'],['krempel','naeh']],spunbond:[['poly','spunbond'],['spunbond','thermo']],
+ sms:[['poly','spunbond'],['poly','meltblown'],['spunbond','thermo'],['meltblown','thermo']],
+ airlaid:[['zell','airlaid'],['airlaid','thermo'],['airlaid','chemisch']],nass:[['zell','nass'],['nass','chemisch'],['nass','thermo']]};
+const LINK_KEYS=['staple_spinning','filament_spinning','warp_knitting','chemical_finishing','mechanical_finishing'];
+const SOURCES=['EDANA – How are nonwovens made?','Nonwovens Industry – types of nonwovens (wetlaid vs. paper)','Nonwovens Industry – airlaid, wetlaid fibres up to 12 mm',
+ 'Andritz – airlaid: TBAL, LBAL, HBAL','Duckett – wet-laid nonwovens, consistency 0.01–0.05 %','Teaching material – inclined wire ≈ 20°',
+ 'US patent 9194084 – inclined wire forming, suction boxes','Teaching material – cross-lapping and parallel lapping','Trützschler – crosslapper line, 30–400 g/m², MD/CD ≈ 1:1',
+ 'Autefa – crosslapper, edge profile','Andritz – crosslapper up to 250 m/min','NC State Nonwovens Institute – pilot line (layers, fibre lengths)',
+ 'J. Text. Eng. Fashion Technol. 2017 – spunbond overview','US patent 5298097 – slot vs. tube drawing','US patent 10030322 – calender and through-air bonding',
+ 'Univ. Ljubljana – spunlaid web formation','Meltblown overview – attenuation, air velocity','Hassan et al. 2013 – meltblown 0.5–10 µm, DCD and pore size',
+ 'Meltblown parameters – DCD: stiff/dense to soft/bulky','Univ. Ljubljana – needle punching, punch density','Duckett – needle punched nonwovens',
+ 'Barnhardt – needle punching: 800–2,500 strokes, 70–1,200 g/m²','US patent 4451314 – needles per m, punch density example','Groz-Beckert – hydroentanglement: pressure, nozzles, water volume',
+ 'Andritz – injector technology, spunlace properties','Univ. Ljubljana – stitch bonding, Maliwatt, Malivlies','US patent 12059873 – Maliwatt vs. Malivlies',
+ 'US patent 5931823 – point bonding pattern, through-air bonding','US patent 7943701 – calender temperature 100–130 °C'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+
+// ── helpers
+const bars=[];
+function mkBar(id,o){
+  const el=$(id);
+  el.innerHTML=`<button type="button" class="pbtn" data-a="p"></button><button type="button" class="pbtn" data-a="t"></button><button type="button" class="pbtn" data-a="n"></button><span class="ins" data-a="l"></span>`;
+  const q=a=>el.querySelector(`[data-a=${a}]`);
+  let last={};
+  const set=(a,v)=>{if(last[a]!==v){last[a]=v;q(a).textContent=v}};
+  const upd=()=>{const u=T().ui;set('p',u.prev);set('n',u.next);set('t',o.isPlay()?u.pause:u.play);set('l',o.label())};
+  q('p').onclick=()=>{o.prev();upd()};q('n').onclick=()=>{o.next();upd()};q('t').onclick=()=>{o.toggle();upd()};
+  bars.push(upd);upd();return upd;
+}
+function segBtns(el,keys,labels,cur,cb){
+  el.innerHTML=keys.map((k,i)=>`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${esc(labels[i])}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.k));
+}
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+const tri=u=>1-Math.abs(((u%1)+1)%1*2-1);
+const R=i=>{const x=Math.sin(i*12.9898+78.233)*43758.5453;return x-Math.floor(x)};
+const zoneOf=(st,t)=>{let k=0;st.forEach((a,i)=>{if(t>=a-0.004)k=i});return k};
+function roll(x,y,r,ang,o={}){let s=`<circle cx="${x}" cy="${y}" r="${r}" fill="${o.f||'#e9ecef'}" stroke="${o.s||'#495057'}" stroke-width="${o.w||1.5}"/>`;
+  const n=o.n||2;for(let i=0;i<n;i++){const a=ang+i*Math.PI/n;s+=`<line x1="${x-Math.cos(a)*(r-3)}" y1="${y-Math.sin(a)*(r-3)}" x2="${x+Math.cos(a)*(r-3)}" y2="${y+Math.sin(a)*(r-3)}" stroke="#868e96" stroke-width="1"/>`}
+  if(o.teeth){for(let i=0;i<o.teeth;i++){const a=ang+i*2*Math.PI/o.teeth;s+=`<line x1="${x+Math.cos(a)*r}" y1="${y+Math.sin(a)*r}" x2="${x+Math.cos(a)*(r+(o.tl||5))}" y2="${y+Math.sin(a)*(r+(o.tl||5))}" stroke="${o.tc||'#495057'}" stroke-width="1.2"/>`}}
+  return s;}
+const rc=(x,y,w,h,on,f='var(--panel)')=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${on?HLF:f}" stroke="${on?HL:'#495057'}" stroke-width="${on?2:1.3}"/>`;
+const DEF=`<defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#868e96"/></marker></defs>`;
+const belt=(x1,x2,y,t,sp=60)=>`<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#495057" stroke-width="3" stroke-dasharray="10 6" stroke-dashoffset="${-t*sp}"/>`;
+// loose fibre layer as a band between x1..x2, height h above y
+function fluff(x1,x2,y,h,seed,t,sp,c=FIB,curl=4){let s='';const n=Math.floor((x2-x1)/7);
+  for(let i=0;i<n;i++){const xx=x1+((i*7+t*sp)%(x2-x1));const yy=y-R(seed+i)*h;const a=(R(seed+i*3)-0.5)*16;
+    s+=`<path d="M${xx-a} ${yy} q ${a/2} ${-curl} ${a+8} ${(R(i+seed*2)-.5)*curl*2}" fill="none" stroke="${c}" stroke-width="1.1" opacity=".8"/>`}return s;}
+const PR=id=>T().proc[PIDS.indexOf(id)];
+const cap=(id,z,max=620)=>TX(450,22,PR(id).st[z],HL,'middle',600,13.5,max);
+
+// ── 1 process diagrams (t = 0..1 cycle, z = step index, v = variant)
+const D={};
+D.krempel=(t,z)=>{const L=PR('krempel').lab;let s=DEF+cap('krempel',z);
+  s+=rc(30,70,60,130,z===0)+Tm(60,215,L.feed,'middle',84);
+  for(let i=0;i<10;i++){const y=80+((i*13+t*400)%110);s+=`<circle cx="${45+R(i)*30}" cy="${y}" r="5" fill="${FIB}" opacity=".45"/>`}
+  const a=t*Math.PI*2*6;
+  s+=roll(220,170,78,a,{teeth:40,f:z===1?HLR:'#e9ecef',s:z===1?HL:'#495057',w:z===1?2.5:1.5});
+  [-150,-115,-80,-45].forEach(d=>{const r=d*Math.PI/180;s+=roll(220+Math.cos(r)*104,170+Math.sin(r)*104,14,-a*2,{teeth:12,tl:3})});
+  s+=Tb(220,175,L.cyl,120,'#f8f9fa')+Tm(220,40,L.workers,'middle',300);
+  s+=`<line x1="90" y1="160" x2="140" y2="165" stroke="${FIB}" stroke-width="4" opacity=".5"/>`;
+  s+=roll(345,222,36,-a*0.4,{teeth:22,f:z===2?HLR:'#e9ecef',s:z===2?HL:'#495057'})+Tm(345,280,L.doffer,'middle',100);
+  s+=`<path d="M381 222 L440 222 L560 70" fill="none" stroke="${FIB}" stroke-width="3" opacity=".55" stroke-dasharray="4 3" stroke-dashoffset="${-t*120}"/>`;
+  s+=Tm(470,250,L.web,'middle',140)+Tm(492,128,L.belt,'end',110);
+  s+=TX(600,58,L.top,'var(--fg)','start',600,12,290);
+  s+=`<rect x="600" y="70" width="290" height="225" rx="4" fill="var(--panel)" stroke="${z>=3?HL:'#495057'}" stroke-width="${z>=3?2:1.2}"/>`;
+  let pts=[];for(let k=0;k<140;k++){const x=615+260*tri(3*(t-k*0.0045));pts.push(`${x.toFixed(1)},${80+k*1.5}`)}
+  s+=`<polyline points="${pts.join(' ')}" fill="none" stroke="${FIB}" stroke-width="10" opacity=".22" stroke-linejoin="round"/>`;
+  const cx=615+260*tri(3*t);s+=`<rect x="${cx-22}" y="62" width="44" height="16" rx="4" fill="${z===3?HLS:'#495057'}"/>`+Tb(cx,96,L.carriage,96,'#fff');
+  s+=`<line x1="895" y1="110" x2="895" y2="270" stroke="#868e96" stroke-width="1.6" marker-end="url(#ah)"/>`;
+  s+=Tm(745,312,z===4?L.outB:L.outA,'middle',300);
+  return s};
+D.airlaid=(t,z)=>{const L=PR('airlaid').lab;let s=DEF+cap('airlaid',z);
+  s+=roll(55,95,30,-t*8,{f:'#fff3bf'})+Tm(55,140,L.pulp,'middle',90);
+  s+=`<line x1="80" y1="80" x2="130" y2="100" stroke="#e0c068" stroke-width="5"/>`;
+  s+=`<circle cx="170" cy="110" r="45" fill="${z===0?HLF:'var(--panel)'}" stroke="${z===0?HL:'#495057'}" stroke-width="${z===0?2:1.3}"/>`;
+  for(let i=0;i<6;i++){const a=t*Math.PI*2*10+i*Math.PI/3;s+=`<line x1="170" y1="110" x2="${170+Math.cos(a)*38}" y2="${110+Math.sin(a)*38}" stroke="#495057" stroke-width="4" stroke-linecap="round"/>`}
+  s+=Tm(170,172,L.mill,'middle',120);
+  s+=`<path d="M215 110 C 300 110, 330 60, 420 75" fill="none" stroke="${z===1?HLS:'#adb5bd'}" stroke-width="22" opacity=".35" stroke-linecap="round"/>`;
+  for(let i=0;i<14;i++){const u=((t*3+i/14)%1);const x=215+u*205,y=110-50*Math.sin(u*Math.PI*0.9)+(R(i)-.5)*10;s+=`<line x1="${x}" y1="${y}" x2="${x+6}" y2="${y-3}" stroke="${FIB}" stroke-width="1.5"/>`}
+  s+=Tm(300,54,L.air,'middle',190);
+  s+=`<path d="M600 34 L600 58" stroke="#f59f00" stroke-width="10" opacity=".35"/>`+Tm(612,48,L.sap,'start',160);
+  for(let i=0;i<4;i++){const y=34+((t*200+i*10)%24);s+=`<circle cx="600" cy="${y}" r="2.5" fill="#f59f00"/>`}
+  s+=rc(420,60,200,70,z===2)+roll(475,95,22,t*12,{n:3})+roll(565,95,22,-t*12,{n:3})+Tb(520,148,L.head,190);
+  for(let i=0;i<26;i++){const u=((t*4+R(i))%1);const x=430+R(i+50)*180,y=150+u*70;s+=`<line x1="${x}" y1="${y}" x2="${x+5}" y2="${y+3}" stroke="${R(i)>.85?'#f59f00':FIB}" stroke-width="1.5"/>`}
+  s+=belt(300,880,228,t,80);
+  s+=rc(430,236,180,30,z===3,'#f1f3f5')+Tm(520,284,L.suction,'middle',180);
+  for(let i=0;i<5;i++){const y=238+((t*120+i*7)%24);s+=`<line x1="${450+i*36}" y1="${y}" x2="${450+i*36}" y2="${y+6}" stroke="#868e96" stroke-width="1.5"/>`}
+  s+=`<path d="M430 226 L610 214 L880 214 L880 226 Z" fill="${FIB}" opacity=".18"/>`+fluff(430,880,226,11,7,t,80);
+  s+=roll(700,201,13,t*20,{f:z===4?'#ffd8a8':'#e9ecef',s:z===4?HL:'#495057'})+roll(700,242,13,-t*20)+Tm(700,180,L.compact,'middle',100);
+  s+=rc(770,170,105,34,z===4)+TX(822,192,L.bond,'var(--fg)','middle',600,11.5,96);
+  return s};
+D.nass=(t,z)=>{const L=PR('nass').lab;let s=DEF+cap('nass',z);
+  s+=`<rect x="30" y="110" width="130" height="130" rx="6" fill="${WAT}" fill-opacity=".18" stroke="${z===0?HL:'#495057'}" stroke-width="${z===0?2:1.3}"/>`;
+  for(let i=0;i<14;i++){const a=t*Math.PI*2+i;const x=95+Math.cos(a+R(i)*6)*45*R(i+3),y=180+Math.sin(a*1.3+i)*40*R(i+9);s+=`<line x1="${x}" y1="${y}" x2="${x+9*Math.cos(a+i)}" y2="${y+9*Math.sin(a+i)}" stroke="${FIB}" stroke-width="1.5"/>`}
+  s+=`<line x1="95" y1="95" x2="95" y2="200" stroke="#495057" stroke-width="2"/>`;const ra=t*Math.PI*8;s+=`<line x1="${95-Math.cos(ra)*30}" y1="200" x2="${95+Math.cos(ra)*30}" y2="200" stroke="#495057" stroke-width="4"/>`;
+  s+=Tm(95,258,L.vat,'middle',150)+Tm(95,272,L.conc,'middle',150);
+  s+=`<path d="M160 200 L205 200" stroke="${WAT}" stroke-width="10" opacity=".4"/>`;
+  s+=rc(205,130,55,95,z===1,'#e7f5ff')+Tm(232,120,L.headbox,'middle',120);
+  s+=`<polygon points="260,140 260,225 470,155 420,140" fill="${WAT}" opacity=".22"/>`;
+  for(let i=0;i<12;i++){const u=((t*1.5+i/12)%1);const x=268+u*190,y=150+R(i)*50*(1-u);s+=`<line x1="${x}" y1="${y}" x2="${x+8}" y2="${y+2}" stroke="${FIB}" stroke-width="1.5"/>`}
+  s+=`<line x1="260" y1="230" x2="520" y2="140" stroke="${z===2?HLS:'#495057'}" stroke-width="3" stroke-dasharray="10 6" stroke-dashoffset="${-t*80}"/>`;
+  s+=`<line x1="520" y1="140" x2="880" y2="140" stroke="#495057" stroke-width="3" stroke-dasharray="10 6" stroke-dashoffset="${-t*80}"/>`;
+  s+=Tm(228,292,L.wire,'middle',130);
+  [[300,212],[370,188],[440,164]].forEach(([x,y],i)=>{s+=`<rect x="${x-25}" y="${y+12}" width="50" height="22" rx="3" fill="#f1f3f5" stroke="${z===2?HL:'#868e96'}"/>`;
+    for(let k=0;k<3;k++){const yy=y+38+((t*160+k*12+i*5)%40);s+=`<circle cx="${x-12+k*12}" cy="${yy}" r="2.2" fill="${WAT}"/>`}});
+  s+=Tm(470,250,L.suction,'start',170);
+  s+=`<polygon points="300,216 520,138 880,138 880,133 520,133" fill="${FIB}" opacity=".35"/>`;
+  s+=rc(640,60,200,50,z===3,'#fff4e6')+TX(740,90,L.dryer,'var(--fg)','middle',600,12,190);
+  for(let i=0;i<5;i++){const y=118-((t*60+i*6)%12);s+=`<path d="M${665+i*38} ${y+12} q 4 -6 0 -12" fill="none" stroke="${HOT}" stroke-width="1.5"/>`}
+  s+=Tm(740,172,L.foot,'middle',290);
+  return s};
+D.spunbond=(t,z)=>{const L=PR('spunbond').lab;let s=DEF+cap('spunbond',z,560);
+  s+=`<polygon points="55,30 105,30 92,48 68,48" fill="#e9ecef" stroke="#495057"/>`+Tm(80,24,L.gran,'middle',100);
+  s+=rc(30,48,190,34,z===0);for(let i=0;i<9;i++){const x=40+((i*20+t*120)%170);s+=`<line x1="${x}" y1="52" x2="${x+10}" y2="78" stroke="#868e96" stroke-width="2"/>`}
+  s+=Tm(125,98,L.extr,'middle',200);
+  s+=`<path d="M220 65 L300 65" stroke="${HOT}" stroke-width="6" opacity=".6"/>`;
+  s+=rc(300,48,300,18,z===0,'#ffe8cc')+Tm(450,42,L.die,'middle',220);
+  for(let i=0;i<4;i++){const y=85+i*22;const off=(t*80)%20;s+=`<line x1="${230+off}" y1="${y}" x2="${275+off}" y2="${y}" stroke="${WAT}" stroke-width="2" marker-end="url(#ah)"/>`}
+  s+=TX(250,190,L.quench,z===1?HL:'var(--muted)','middle',z===1?700:400,11,110);
+  for(let i=0;i<16;i++){const x0=310+i*18.6;const x1=436+i*1.8;
+    s+=`<line x1="${x0}" y1="66" x2="${x1}" y2="200" stroke="${FIB}" stroke-width="1.3" stroke-dasharray="6 4" stroke-dashoffset="${-t*300}"/>`;
+    s+=`<line x1="${x1}" y1="200" x2="${x1}" y2="236" stroke="${FIB}" stroke-width="1" stroke-dasharray="8 3" stroke-dashoffset="${-t*900}"/>`}
+  s+=`<path d="M410 190 L430 236 M490 190 L470 236" stroke="${z===2?HLS:'#495057'}" stroke-width="5"/>`;
+  for(let i=0;i<3;i++){const off=(t*120+i*10)%30;s+=`<line x1="${380+off*0.6}" y1="${180+off}" x2="${398+off*0.6}" y2="${200+off}" stroke="#868e96" stroke-width="1.4" marker-end="url(#ah)"/><line x1="${520-off*0.6}" y1="${180+off}" x2="${502-off*0.6}" y2="${200+off}" stroke="#868e96" stroke-width="1.4" marker-end="url(#ah)"/>`}
+  s+=TX(560,215,L.draw,z===2?HL:'var(--muted)','start',z===2?700:400,11,170);
+  for(let i=0;i<10;i++){const ph=t*Math.PI*2*3+i;const x=450+Math.sin(ph)*40*R(i);s+=`<path d="M${450+(R(i)-.5)*30} 238 Q ${x} 260 ${450+(R(i+5)-.5)*90} 284" fill="none" stroke="${FIB}" stroke-width="1.2"/>`}
+  s+=belt(150,880,290,t,60);s+=`<rect x="385" y="296" width="130" height="18" rx="3" fill="#f1f3f5" stroke="${z===3?HL:'#868e96'}"/>`+Tm(450,309,L.suction,'middle',120);
+  s+=`<rect x="390" y="280" width="490" height="8" fill="${FIB}" opacity=".25"/>`;
+  for(let i=0;i<40;i++){const x=390+((i*13+t*60)%490);s+=`<path d="M${x} 286 q 4 -8 9 -2" fill="none" stroke="${FIB}" stroke-width="1"/>`}
+  s+=roll(760,262,15,t*15,{teeth:14,tl:3,f:'#ffd8a8',s:z===4?HL:'#495057'})+roll(760,305,13,-t*15,{f:'#ffd8a8'});
+  s+=TX(760,236,L.cal,z===4?HL:'var(--muted)','middle',z===4?700:400,11,150);
+  return s};
+D.meltblown=(t,z,v)=>{const L=PR('meltblown').lab;let s=DEF+cap('meltblown',z,560);const Y=v==='g'?285:200;
+  s+=`<polygon points="380,40 520,40 520,62 450,100 380,62" fill="${z===0?'#ffd8a8':'#ffe8cc'}" stroke="${z===0?HL:'#495057'}" stroke-width="${z===0?2:1.3}"/>`;
+  s+=Tm(372,120,L.die1,'end',200)+Tm(372,134,L.die2,'end',200);
+  [[330,52,440,98],[570,52,460,98]].forEach(([x1,y1,x2,y2])=>{s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${HOT}" stroke-width="${z===1?5:3}" opacity=".7" stroke-dasharray="12 6" stroke-dashoffset="${-t*400}"/>`});
+  s+=TX(300,48,L.hot,z===1?HL:HOT,'middle',600,11.5,100)+TX(600,48,L.hot,z===1?HL:HOT,'middle',600,11.5,100);
+  for(let k=0;k<6;k++){let d='M450 100';const Ln=Y-100;for(let j=1;j<=24;j++){const u=j/24;const amp=(4+u*70)*(0.6+R(k)*0.6);const x=450+Math.sin(u*9+t*Math.PI*2*3+k*1.7)*amp;d+=` L${x.toFixed(1)} ${(100+u*Ln).toFixed(1)}`}
+    s+=`<path d="${d}" fill="none" stroke="${FIB}" stroke-width="${k<2?1.3:0.8}" opacity="${(0.5+R(k)*0.5).toFixed(2)}"/>`}
+  if(z>=1)s+=`<rect x="420" y="100" width="60" height="16" fill="none" stroke="${HLS}" stroke-dasharray="3 3"/>`+TX(490,114,L.zone,HL,'start',600,10.5,235);
+  s+=belt(200,800,Y,t,50)+`<rect x="330" y="${Y-8}" width="470" height="7" fill="${FIB}" opacity="${v==='g'?0.18:0.35}"/>`;
+  s+=`<rect x="370" y="${Y+6}" width="160" height="16" rx="3" fill="#f1f3f5" stroke="${z===3?HL:'#868e96'}"/>`+(v==='g'?Tm(540,Y+18,L.suction,'start',150):Tm(450,Y+36,L.suction,'middle',160));
+  s+=`<line x1="740" y1="100" x2="740" y2="${Y-4}" stroke="${z===3?HLS:'#495057'}" stroke-width="1.5" marker-end="url(#ah)" marker-start="url(#ah)"/>`+TX(730,(100+Y)/2,L.dcd,z===3?HL:'var(--fg)','end',700,13,80);
+  s+=Tm(730,(100+Y)/2+16,v==='g'?L.gA:L.kA,'end',180)+Tm(730,(100+Y)/2+30,v==='g'?L.gB:L.kB,'end',180);
+  s+=Tm(160,150,L.cool,'middle',170);for(let i=0;i<3;i++){const off=(t*60+i*12)%36;s+=`<line x1="${180+off}" y1="${165+i*12}" x2="${200+off}" y2="${165+i*12}" stroke="${WAT}" stroke-width="1.6" marker-end="url(#ah)"/>`}
+  return s};
+D.nadel=(t,z)=>{const L=PR('nadel').lab;let s=DEF+cap('nadel',z,560);
+  const p=(1-Math.cos(2*Math.PI*((t*2)%1)))/2; // 0 up, 1 down
+  const by=50+60*p;
+  s+=`<rect x="300" y="${by-22}" width="300" height="22" rx="4" fill="${z===0?'#F2CBB0':'#dee2e6'}" stroke="${z===0?HL:'#495057'}"/>`+Tm(292,by-6,L.board,'end',140);
+  for(let i=0;i<14;i++){const x=315+i*20.5;s+=`<line x1="${x}" y1="${by}" x2="${x}" y2="${by+130}" stroke="#495057" stroke-width="1.6"/>`;
+    for(let b=0;b<3;b++)s+=`<line x1="${x}" y1="${by+105+b*8}" x2="${x+3}" y2="${by+101+b*8}" stroke="#495057" stroke-width="1"/>`}
+  s+=`<rect x="200" y="128" width="500" height="8" fill="#adb5bd"/>`+Tm(190,136,L.stripper,'end',175);
+  s+=`<rect x="200" y="205" width="500" height="10" fill="#adb5bd"/>`+Tm(190,214,L.bed,'end',175);
+  s+=`<path d="M30 145 L300 145 L600 168 L880 168 L880 203 L30 203 Z" fill="${FIB}" opacity=".12"/>`;
+  s+=fluff(30,300,203,55,3,t,30)+fluff(600,880,203,32,9,t,30);
+  for(let i=0;i<20;i++){const x=600+((i*14+t*30)%280);s+=`<line x1="${x}" y1="170" x2="${x}" y2="202" stroke="${HLS}" stroke-width="1.6" opacity="${z===2?1:.7}"/>`}
+  s+=Tm(160,240,L.loose,'middle',240)+Tm(740,240,L.dense,'middle',280);
+  for(let i=0;i<3;i++){const off=(t*30+i*20)%60;s+=`<line x1="${720+off}" y1="285" x2="${745+off}" y2="285" stroke="#868e96" stroke-width="1.6" marker-end="url(#ah)"/>`}
+  s+=Tm(760,302,L.feed,'middle',270);
+  const lx=800,ly=82;s+=`<circle cx="${lx}" cy="${ly}" r="54" fill="var(--panel)" stroke="${z===1||z===2?HL:'#495057'}" stroke-width="2"/>`+Tm(lx,152,L.lupe,'middle',150);
+  s+=`<clipPath id="lupeC"><circle cx="${lx}" cy="${ly}" r="53"/></clipPath><g clip-path="url(#lupeC)">`;
+  s+=`<rect x="${lx-52}" y="${ly-18}" width="104" height="40" fill="${FIB}" opacity=".12"/>`;for(let i=0;i<6;i++)s+=`<path d="M${lx-51} ${ly-12+i*6} q 30 ${(R(i)-.5)*8} 102 ${(R(i+3)-.5)*6}" fill="none" stroke="${FIB}" stroke-width="1"/>`;
+  const ny=ly-46+66*p;s+=`<line x1="${lx}" y1="${ly-54}" x2="${lx}" y2="${ny}" stroke="#495057" stroke-width="3"/>`;
+  s+=`<path d="M${lx} ${ny-14} l 6 -6 M${lx} ${ny-4} l 6 -6" stroke="#495057" stroke-width="2"/>`;
+  const fy=Math.max(ly-10,ny-6);s+=`<path d="M${lx-51} ${ly-10} Q ${lx-15} ${ly-10} ${lx} ${fy} Q ${lx+15} ${ly-10} ${lx+51} ${ly-10}" fill="none" stroke="${HLS}" stroke-width="2"/></g>`;
+  return s};
+D.wasser=(t,z)=>{const L=PR('wasser').lab;let s=DEF+cap('wasser',z);
+  s+=belt(30,880,222,t,70);
+  [260,420,580].forEach((x,i)=>{const on=z===0||z===1;s+=rc(x-40,50,80,40,on,'#e7f5ff')+Tm(x,44,fmt(L.inj,{n:i+1}),'middle',140);
+    for(let k=0;k<7;k++){const xx=x-30+k*10;s+=`<line x1="${xx}" y1="90" x2="${xx}" y2="${210-i*3}" stroke="${WAT}" stroke-width="1.6" stroke-dasharray="6 5" stroke-dashoffset="${-t*900}"/>`}
+    s+=`<rect x="${x-40}" y="230" width="80" height="20" rx="3" fill="#f1f3f5" stroke="${z===2?HL:'#868e96'}"/>`;
+    for(let k=0;k<3;k++){const yy=252+((t*200+k*9)%30);s+=`<circle cx="${x-20+k*20}" cy="${yy}" r="2.3" fill="${WAT}"/>`}});
+  [[30,220,26,2],[220,380,20,6],[380,540,15,9],[540,700,11,12],[700,880,10,12]].forEach(([a,b,h,c],i)=>{s+=fluff(a,b,220,h,i*11+1,t,70,FIB,c)});
+  s+=Tm(120,180,L.loose,'middle',170)+Tm(790,196,L.dense,'middle',170);
+  s+=`<path d="M220 290 L640 290 L640 305 L200 305 L200 70 L215 70" fill="none" stroke="${z===2?HLS:WAT}" stroke-width="2" stroke-dasharray="6 4" stroke-dashoffset="${t*80}" marker-end="url(#ah)"/>`;
+  s+=TX(420,301,L.loop,z===2?HL:'var(--muted)','middle',z===2?700:400,11,400);
+  s+=rc(730,110,140,40,z===3,'#fff4e6')+TX(800,135,L.dry,'var(--fg)','middle',600,12,128);
+  for(let i=0;i<4;i++){const y=160-((t*60+i*5)%10);s+=`<path d="M${750+i*30} ${y+10} q 4 -5 0 -10" fill="none" stroke="${HOT}" stroke-width="1.5"/>`}
+  return s};
+D.naeh=(t,z,v)=>{const L=PR('naeh').lab;let s=DEF+cap('naeh',z);
+  const p=(1-Math.cos(2*Math.PI*((t*2)%1)))/2;
+  s+=`<rect x="410" y="30" width="44" height="280" fill="${FIB}" opacity=".12"/>`;
+  for(let i=0;i<34;i++){const y=30+((i*8.5+t*60)%280);const xx=412+R(i)*36;s+=`<path d="M${xx} ${y} q 4 ${3+R(i+2)*4} ${(R(i+5)-.5)*14} 8" fill="none" stroke="${FIB}" stroke-width="1"/>`}
+  s+=Tm(470,52,L.web,'start',220);
+  const tip=530-150*p;
+  for(let k=0;k<3;k++){const y=120+k*40;s+=`<line x1="${tip}" y1="${y}" x2="${tip+260}" y2="${y}" stroke="#495057" stroke-width="2.5"/>`;
+    s+=`<path d="M${tip} ${y} q -6 0 -6 6" fill="none" stroke="#495057" stroke-width="2"/>`;
+    s+=`<line x1="${tip+30+40*(1-p)}" y1="${y-3}" x2="${tip+260}" y2="${y-3}" stroke="#adb5bd" stroke-width="1.5"/>`}
+  s+=TX(700,102,L.needles,z===0?HL:'var(--muted)','middle',z===0?700:400,11,320);
+  s+=`<rect x="456" y="90" width="8" height="140" fill="#adb5bd"/>`;
+  if(v==='watt'){
+    const gx=330+20*Math.sin(t*Math.PI*4);s+=`<rect x="${gx-8}" y="70" width="16" height="190" rx="3" fill="${z===1?HLS:'#ced4da'}"/>`+TX(gx,62,L.guide,z===1?HL:'var(--muted)','middle',z===1?700:400,11,130);
+    for(let k=0;k<3;k++){const y=120+k*40;s+=`<path d="M${gx} ${y-30} Q ${(gx+Math.min(tip,410))/2} ${y-10} ${Math.min(tip,410)-6} ${y+3}" fill="none" stroke="${HLS}" stroke-width="1.8"/>`}
+    s+=`<line x1="${gx}" y1="30" x2="${gx}" y2="70" stroke="${HLS}" stroke-width="1.8"/>`+Tm(gx,280,L.threads,'middle',120);
+    for(let i=0;i<14;i++){const y=30+((i*20+t*60)%280);if(y>230)s+=`<ellipse cx="456" cy="${y}" rx="6" ry="9" fill="none" stroke="${HLS}" stroke-width="1.6"/>`}
+    s+=Tm(560,280,L.chains,'start',330);
+  }else{
+    for(let k=0;k<3;k++){const y=120+k*40;if(tip<450)s+=`<path d="M${Math.max(tip,412)} ${y} q 10 -8 ${450-Math.max(tip,412)} -2" fill="none" stroke="${HLS}" stroke-width="2"/>`}
+    for(let i=0;i<14;i++){const y=30+((i*20+t*60)%280);if(y>230)s+=`<ellipse cx="456" cy="${y}" rx="6" ry="9" fill="none" stroke="${HLS}" stroke-width="1.6" stroke-dasharray="3 2"/>`}
+    s+=Tm(560,280,L.own,'start',330)+Tm(300,160,L.nothread,'middle',170)}
+  s+=`<line x1="432" y1="292" x2="432" y2="315" stroke="#868e96" stroke-width="1.6" marker-end="url(#ah)"/>`+Tm(470,312,L.pull,'start',200);
+  return s};
+D.thermo=(t,z,v)=>{const L=PR('thermo').lab;let s=DEF+cap('thermo',z);
+  if(v!=='dur'){
+    s+=`<rect x="30" y="148" width="370" height="14" fill="${FIB}" opacity=".15"/>`+fluff(30,400,162,14,4,t,60);
+    s+=roll(450,98,50,t*6,{teeth:28,tl:6,tc:HOT,f:'#ffd8a8',s:z===1?HL:'#495057',w:z===1?2.5:1.5})+roll(450,220,50,-t*6,{f:'#ffe8cc',s:z===1?HL:'#495057'});
+    s+=Tm(388,74,L.engr,'end',250)+Tm(450,290,L.smooth,'middle',250);
+    s+=`<rect x="500" y="152" width="380" height="8" fill="${FIB}" opacity=".2"/>`+fluff(500,880,160,8,8,t,60);
+    for(let i=0;i<14;i++){const x=500+((i*28+t*60)%380);s+=`<rect x="${x}" y="151" width="6" height="10" fill="${HLS}"/>`}
+    s+=Tm(700,186,L.points,'middle',300);
+    s+=`<rect x="620" y="210" width="250" height="90" rx="4" fill="var(--panel)" stroke="${z===2?HL:'#495057'}"/>`+Tm(745,204,L.top,'middle',200);
+    for(let i=0;i<30;i++){const x=630+R(i)*230,y=220+R(i+40)*70;s+=`<path d="M${x} ${y} q 10 ${(R(i+2)-.5)*20} 25 ${(R(i+3)-.5)*14}" fill="none" stroke="${FIB}" stroke-width="1"/>`}
+    for(let r=0;r<4;r++)for(let c=0;c<10;c++){const x=630+((c*24+r*12+t*60)%235);s+=`<rect x="${x}" y="${222+r*20}" width="7" height="7" fill="${HLS}" opacity=".85"/>`}
+  }else{
+    s+=`<circle cx="400" cy="190" r="100" fill="#f8f9fa" stroke="#495057" stroke-width="2" stroke-dasharray="4 4" stroke-dashoffset="${t*100}"/>`+Tm(400,200,L.drum,'middle',170);
+    s+=`<path d="M40 136 L306 136 A 108 108 0 0 1 494 136 L 600 136" fill="none" stroke="${FIB}" stroke-width="9" opacity=".3"/>`;
+    s+=`<path d="M306 136 A 108 108 0 0 1 494 136" fill="none" stroke="${FIB}" stroke-width="2" stroke-dasharray="5 4" stroke-dashoffset="${-t*60}"/>`;
+    s+=rc(300,32,200,24,z===1,'#fff4e6')+TX(400,49,L.hot,HOT,'middle',700,12,190);
+    for(let i=0;i<6;i++){const x=320+i*32;const off=(t*120+i*7)%40;s+=`<line x1="${x}" y1="${60+off*0.8}" x2="${x+(400-x)*0.15}" y2="${76+off*0.8}" stroke="${HOT}" stroke-width="1.8" marker-end="url(#ah)"/>`}
+    s+=Tm(400,222,L.thr1,'middle',172)+Tm(400,236,L.thr2,'middle',172);
+    const lx=720,ly=210;s+=`<circle cx="${lx}" cy="${ly}" r="75" fill="var(--panel)" stroke="${z===2?HL:'#495057'}" stroke-width="2"/>`+Tm(lx,300,L.lupe,'middle',240);
+    s+=`<line x1="${lx-65}" y1="${ly-30}" x2="${lx+65}" y2="${ly+30}" stroke="#ffc078" stroke-width="12" stroke-linecap="round"/><line x1="${lx-65}" y1="${ly-30}" x2="${lx+65}" y2="${ly+30}" stroke="${FIB}" stroke-width="5" stroke-linecap="round"/>`;
+    s+=`<line x1="${lx-65}" y1="${ly+30}" x2="${lx+65}" y2="${ly-30}" stroke="#ffc078" stroke-width="12" stroke-linecap="round"/><line x1="${lx-65}" y1="${ly+30}" x2="${lx+65}" y2="${ly-30}" stroke="${FIB}" stroke-width="5" stroke-linecap="round"/>`;
+    const r=4+14*Math.min(1,Math.max(0,(t-0.3)/0.4));s+=`<circle cx="${lx}" cy="${ly}" r="${r}" fill="${HOT}" opacity=".8"/>`;
+    s+=Tm(lx,124,L.melt,'middle',230)}
+  return s};
+D.chemisch=(t,z,v)=>{const L=PR('chemisch').lab;let s=DEF+cap('chemisch',z);
+  if(v!=='spr'){
+    s+=`<path d="M30 70 L180 70 L240 220 L300 70 L380 110" fill="none" stroke="${FIB}" stroke-width="8" opacity=".3"/>`;
+    s+=`<path d="M30 70 L180 70 L240 220 L300 70 L380 110" fill="none" stroke="${FIB}" stroke-width="2" stroke-dasharray="6 4" stroke-dashoffset="${-t*90}"/>`;
+    s+=`<path d="M165 165 L165 250 L315 250 L315 165" fill="${BIN}" fill-opacity=".25" stroke="${z===0?HL:'#495057'}" stroke-width="${z===0?2:1.3}"/>`;
+    s+=`<rect x="167" y="180" width="146" height="68" fill="${BIN}" opacity=".3"/>`+roll(240,210,14,t*10)+Tm(240,270,L.bath,'middle',170);
+    s+=roll(330,80,16,t*10,{s:z===1?HL:'#495057'})+roll(358,118,16,-t*10,{s:z===1?HL:'#495057'})+TX(384,62,L.squeeze,z===1?HL:'var(--muted)','start',z===1?700:400,11,150);
+  }else{
+    s+=`<line x1="30" y1="200" x2="380" y2="200" stroke="${FIB}" stroke-width="10" opacity=".3"/>`+fluff(30,380,205,10,5,t,80);
+    [120,220,320].forEach(x=>{s+=`<rect x="${x-10}" y="70" width="20" height="26" rx="3" fill="#dee2e6" stroke="${z===0?HL:'#495057'}"/>`;
+      for(let i=0;i<10;i++){const u=((t*3+R(i+x))%1);const xx=x+(R(i*7+x)-.5)*70*u,yy=98+u*95;s+=`<circle cx="${xx}" cy="${yy}" r="2" fill="${BIN}"/>`}});
+    s+=Tm(220,60,L.nozzles,'middle',240)+Tm(220,240,L.pen,'middle',340)}
+  s+=`<path d="M380 ${v!=='spr'?110:200} L440 140 L860 140" fill="none" stroke="${FIB}" stroke-width="8" opacity=".3"/>`;
+  s+=rc(470,100,300,80,z===2,'#fff4e6')+TX(620,128,L.dry,'var(--fg)','middle',600,13,280);
+  for(let i=0;i<8;i++){const y=172-((t*60+i*5)%14);s+=`<path d="M${490+i*36} ${y} q 4 -5 0 -10" fill="none" stroke="${HOT}" stroke-width="1.5"/>`}
+  const lx=760,ly=255;s+=`<circle cx="${lx}" cy="${ly}" r="55" fill="var(--panel)" stroke="${z===3?HL:'#495057'}" stroke-width="2"/>`;
+  s+=`<line x1="${lx-48}" y1="${ly-20}" x2="${lx+48}" y2="${ly+20}" stroke="${FIB}" stroke-width="4"/><line x1="${lx-48}" y1="${ly+22}" x2="${lx+48}" y2="${ly-22}" stroke="${FIB}" stroke-width="4"/>`;
+  s+=`<circle cx="${lx}" cy="${ly}" r="${z===3?10:7}" fill="${BIN}" opacity=".85"/>`+Tm(692,255,L.cross1,'end',200)+Tm(692,269,L.cross2,'end',200);
+  return s};
+
+// ── 1 controller
+let cur='krempel',curV=null,play=!PAUSED,tt=0,last=performance.now();const SPD=7000;
+const STEP0=id=>STT[id][Math.min(2,STT[id].length-1)]+0.03;
+function showP(id){
+  if(id!==cur)curV=null;
+  cur=id;const P=PR(id),t=T(),u=t.ui;
+  if(PAUSED&&!play)tt=STEP0(id);else tt=0;
+  if(VK[id]&&!curV)curV=VK[id][0];
+  const btn=k=>`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${esc(PR(k).n)}</button>`;
+  $('ptabs').innerHTML=`<span class="ins grp">${esc(u.form)}</span>`+FORM.map(btn).join('')+`<span class="ins grp g2">${esc(u.bond)}</span>`+BOND.map(btn).join('');
+  $('ptabs').querySelectorAll('button').forEach(b=>b.onclick=()=>showP(b.dataset.k));
+  $('pname').textContent=P.n;$('pde').textContent=P.de;
+  const pickV=k=>{curV=k;segBtns($('pvar'),VK[cur],PR(cur).v,curV,pickV);drawP()};
+  if(P.v)segBtns($('pvar'),VK[id],P.v,curV,pickV);
+  else $('pvar').innerHTML='';
+  $('pvar').style.display=P.v?'flex':'none';
+  $('lhow').textContent=u.how;$('lfigs').textContent=u.figs;
+  $('psteps').innerHTML=P.how.map(h=>`<li>${esc(h)}</li>`).join('');
+  $('pfigs').innerHTML=P.figs.map(f=>`<div><b>${esc(f[0])}</b><span>${esc(f[1])}</span></div>`).join('');
+  $('ppc').innerHTML=`<div class="pcc pro"><span class="lbl">${esc(u.pro)}</span><ul>${P.pro.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="pcc con"><span class="lbl">${esc(u.con)}</span><ul>${P.con.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="pcc when"><span class="lbl">${esc(u.when)}</span><p>${esc(P.when)}</p></div>`;
+  $('psvg').setAttribute('aria-label',u.procAria+': '+P.n);
+  drawP();drawRoute();
+}
+let pUpd=null;
+function drawP(){$('psvg').innerHTML=D[cur](tt,zoneOf(STT[cur],tt),curV);pUpd&&pUpd()}
+pUpd=mkBar('pbar',{isPlay:()=>play,toggle:()=>{play=!play},
+  prev:()=>{play=false;const S=STT[cur],k=zoneOf(S,tt);tt=Math.abs(tt-S[k])>0.01?S[k]:S[(k-1+S.length)%S.length];drawP()},
+  next:()=>{play=false;const S=STT[cur],k=zoneOf(S,tt);tt=S[(k+1)%S.length];drawP()},
+  label:()=>PR(cur).st[zoneOf(STT[cur],tt)]});
+function loop(now){
+  const dt=Math.min(100,now-last);last=now;
+  if(play){tt=(tt+dt/SPD)%1;if(scene===1)drawP()}
+  requestAnimationFrame(loop);
+}
+
+// ── 0 process lines
+let rk='nadel';
+function drawRoute(){
+  const t=T().route,E=ROUTES[rk],on=new Set(E.flat());
+  segBtns($('rseg'),RK,t.seg,rk,k=>{rk=k;drawRoute()});
+  let s=`<defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="${HLS}"/></marker></defs>`;
+  [90,400,720,916].forEach((x,i)=>{s+=TX(x,14,t.cols[i].toUpperCase(),'var(--muted)','middle',500,10.5,150)});
+  ALL.forEach(([a,b])=>{const A=NODES[a],B=NODES[b],o=E.some(e=>e[0]===a&&e[1]===b);
+    s+=`<path d="M${A[0]+78} ${A[1]} C ${A[0]+140} ${A[1]}, ${B[0]-140} ${B[1]}, ${B[0]-82} ${B[1]}" fill="none" stroke="${o?HLS:'#E3E7E1'}" stroke-width="${o?3:1.6}" ${o?'marker-end="url(#ar)"':''}/>`});
+  Object.entries(NODES).forEach(([id,[x,y]])=>{const o=on.has(id),sel=id===cur,raw=RAW.includes(id);
+    s+=`<g class="node${raw?' raw':''}" data-id="${id}"><rect x="${x-78}" y="${y-21}" width="156" height="42" rx="10" fill="${o?'var(--panel)':'var(--bg)'}" stroke="${sel?'#000':o?HLS:'var(--line)'}" stroke-width="${sel?2.6:o?2:1}" opacity="${o?1:.65}"/>`+
+      TX(x,y+5,t.nodes[id],o?'var(--fg)':'var(--muted)','middle',o?700:500,12.5,144)+`</g>`});
+  const ends=[...on].filter(id=>!E.some(e=>e[0]===id));const ym=Math.max(64,ends.reduce((a,id)=>a+NODES[id][1],0)/ends.length);
+  ends.forEach(id=>{const [x,y]=NODES[id];s+=`<path d="M${x+78} ${y} C ${x+110} ${y}, 830 ${ym}, 842 ${ym}" fill="none" stroke="${HLS}" stroke-width="3" marker-end="url(#ar)"/>`});
+  s+=`<rect x="846" y="${ym-28}" width="140" height="56" rx="10" fill="${HLF}" stroke="${HLS}" stroke-width="2"/>`;
+  const w=t.prod[RK.indexOf(rk)];s+=w.map((x,i)=>TX(916,ym+4+(i-(w.length-1)/2)*15,x,'var(--fg)','middle',600,11.5,128)).join('');
+  $('rsvg').innerHTML=s;$('rsvg').setAttribute('aria-label',t.aria);$('rtxt').textContent=t.txt[RK.indexOf(rk)];
+  $('rsvg').querySelectorAll('.node').forEach(g=>{if(PIDS.includes(g.dataset.id))g.onclick=()=>{showP(g.dataset.id);go(1)}});
+}
+
+// ── 2 comparison
+function drawCmp(){
+  const t=T().cmp;let s='';
+  t.struct.forEach((p,k)=>{const x0=15+k*197,y0=40,w=175,h=110;
+    s+=`<rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="8" fill="var(--panel)" stroke="var(--line)"/>`+TX(x0+w/2,28,p[0],'var(--fg)','middle',700,13.5,172);
+    wrapT(p[1],11,400,172).slice(0,2).forEach((ln,i)=>{s+=Tm(x0+w/2,170+i*15,ln,'middle',175)});
+    let g='';
+    if(k===0)for(let i=0;i<8;i++){const yy=y0+8+i*11;g+=`<polyline points="${x0+8},${yy} ${x0+w-8},${yy+9} ${x0+8},${yy+18}" fill="none" stroke="${FIB}" stroke-width="6" opacity=".18"/>`}
+    if(k===0)for(let i=0;i<40;i++){const xx=x0+10+R(i)*150,yy=y0+10+R(i+9)*90;g+=`<line x1="${xx}" y1="${yy}" x2="${xx+18}" y2="${yy+3}" stroke="${FIB}" stroke-width="1"/>`}
+    if(k===1)for(let i=0;i<70;i++){const xx=x0+8+R(i+3)*155,yy=y0+8+R(i+30)*92,a=R(i+60)*Math.PI;g+=`<line x1="${xx}" y1="${yy}" x2="${xx+Math.cos(a)*9}" y2="${yy+Math.sin(a)*9}" stroke="${FIB}" stroke-width="1.2"/>`}
+    if(k===2)for(let i=0;i<9;i++){let d=`M${x0+5} ${y0+15+i*10}`;for(let j=1;j<=8;j++)d+=` Q ${x0+j*21-10} ${y0+15+i*10+(R(i*8+j)-.5)*50} ${x0+j*21} ${y0+15+i*10+(R(i+j)-.5)*14}`;g+=`<path d="${d}" fill="none" stroke="${FIB}" stroke-width="1.4"/>`}
+    if(k===3)for(let i=0;i<22;i++){let d=`M${x0+5+R(i)*20} ${y0+5+R(i+4)*100}`;for(let j=1;j<=6;j++)d+=` L${x0+5+j*27} ${y0+5+R(i*6+j)*100}`;g+=`<path d="${d}" fill="none" stroke="${FIB}" stroke-width=".6" opacity=".8"/>`}
+    if(k===4){for(let i=0;i<50;i++){const xx=x0+8+R(i+3)*150,yy=y0+8+R(i+30)*92;g+=`<line x1="${xx}" y1="${yy}" x2="${xx+16}" y2="${yy+2}" stroke="${FIB}" stroke-width="1"/>`}
+      for(let i=0;i<8;i++)g+=`<line x1="${x0+15+i*20}" y1="${y0+8}" x2="${x0+15+i*20}" y2="${y0+h-8}" stroke="${HLS}" stroke-width="2.5"/>`}
+    s+=`<g clip-path="url(#yc${k})">${g}</g>`});
+  // keep the drawing inside the panels (some generated paths overshoot the panel edge)
+  $('ysvg').innerHTML=`<defs>${t.struct.map((_,k)=>`<clipPath id="yc${k}"><rect x="${15+k*197}" y="40" width="175" height="110" rx="8"/></clipPath>`).join('')}</defs>`+s;
+  $('ysvg').setAttribute('aria-label',t.aria);
+  const tbl=(head,rows)=>`<tr>${head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+rows.map(r=>`<tr><td><b>${esc(r[0])}</b></td>${r.slice(1).map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+  $('t1').textContent=t.t1;$('vtab1').innerHTML=tbl(t.head1,t.rows1);
+  $('t2').textContent=t.t2;$('vtab2').innerHTML=tbl(t.head2,t.rows2);
+  $('vnote').textContent=t.note;
+}
+
+// ── 3 calculator
+const fig=(v,l)=>`<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
+function calcK(){
+  const L=T().calc,gi=+$('gi').value,wi=+$('wi').value,vi=+$('vi').value,wo=+$('wo').value,vo=+$('vo').value;
+  $('kT').textContent=L.kT;['gi','wi','vi','wo','vo'].forEach(k=>$(k+'L').textContent=L[k]);$('knote').textContent=L.knote;
+  $('giv').textContent=num(gi)+' g/m²';$('wiv').textContent=num(wi,1)+' m';$('viv').textContent=num(vi)+' m/min';$('wov').textContent=num(wo,1)+' m';$('vov').textContent=num(vo,1)+' m/min';
+  const go=gi*wi*vi/(wo*vo),n=go/gi,kg=gi*wi*vi*60/1000;
+  $('kres').innerHTML=fig(num(go)+' g/m²',L.kres[0])+fig(num(n,1),L.kres[1])+fig(num(kg)+' kg/h',L.kres[2]);
+}
+function calcN(){
+  const L=T().calc,nn=+$('nn').value,nb=+$('nb').value,hf=+$('hf').value,nv=+$('nv').value;
+  $('nT').textContent=L.nT;['nn','nb','hf','nv'].forEach(k=>$(k+'L').textContent=L[k]);$('nnote').textContent=L.nnote;
+  $('nnv').textContent=num(nn);$('nbv').textContent=num(nb);$('hfv').textContent=num(hf)+' /min';$('nvv').textContent=num(nv,1)+' m/min';
+  const E=nn*nb*hf/(nv*1e4),adv=nv*1000/hf;
+  $('nres').innerHTML=fig(num(E,1),L.nres[0])+fig(num(adv,1)+' mm',L.nres[1])+fig(num(E*6.4516,0),L.nres[2]);
+}
+['gi','wi','vi','wo','vo'].forEach(i=>$(i).oninput=calcK);['nn','nb','hf','nv'].forEach(i=>$(i).oninput=calcN);
+
+// ── links
+function drawLinks(){
+  const t=T();
+  $('lkL').textContent=t.ui.lkL;
+  $('links').innerHTML=t.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${esc(l[0])} →</b><span>${esc(l[1])}</span><em>${esc(t.ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(scene===1)drawP();
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k[0])}</b><span>${esc(k[1])}</span></div>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  const keepT=tt;showP(cur);tt=keepT;drawP();
+  drawCmp();calcK();calcN();drawLinks();
+  bars.forEach(f=>f());go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+if(PAUSED)tt=STEP0(cur);
+applyLang();
+requestAnimationFrame(now=>{last=now;loop(now)});
+})();
+</script>
+</body>
+</html>

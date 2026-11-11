@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weaving Machines</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category Weaving, group "Machines & manufacturers".
+     Content from the user's research page "Schaft-, Jacquard- und Wilton-Weben: Maschinen, Hersteller, Schusseintrag".
+     Texts in weaving_machines_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n&paused=1 for screenshots. No external resources (sources as plain text only).
+     Scene 6 links the other weaving modules: embedded via document.title "open:<key>", otherwise <key>.html.
+     SVG/DOM, animations: shed formation (scene 0), weft insertion + rapier transfer zoom (scene 1), carpet (scene 4).
+     Scenes never change automatically. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--twist:#6A4FC8;--soft:#EEF3EC;
+  --acc:#E07B39;--acc2:#2386C8;--ok:#2F8F45;--bad:#C92A2A;--cool:#1C7ED6;--wind:#495057;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"],.mtabs button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+svg.bg{background:var(--bg);border-radius:6px}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{font-family:var(--font-display);font-size:19px;margin:0 0 6px}
+.seg,.mtabs{display:flex;gap:6px;flex-wrap:wrap}
+.seg button,.mtabs button{font-size:13.5px;padding:6px 11px}
+.lbl{display:block;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+.muted{color:var(--muted);font-size:13px;margin:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font-family:var(--font-display);font-size:26px;line-height:1.1;color:var(--hl)}
+.kpi span{color:var(--muted);font-size:13px}
+.stepbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.pbtn{font-size:13px;padding:5px 11px}
+.ins{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.cmp .c{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;border-top:4px solid var(--acc)}
+.cmp .c h4{margin:0 0 4px;font-size:15px}
+.cmp .c p{margin:4px 0;font-size:13.5px}
+.cmp .c .k{font-family:var(--font-mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.mhead h3{margin:0;font-size:21px;font-family:var(--font-display)}
+.mhead .de{color:var(--muted);font-size:13.5px}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:12px}
+.steps{counter-reset:s;list-style:none;padding:0;margin:4px 0}
+.steps li{counter-increment:s;position:relative;padding:4px 0 4px 30px;font-size:14px}
+.steps li:before{content:counter(s);position:absolute;left:0;top:5px;width:20px;height:20px;border-radius:50%;background:var(--fg);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:4px 0}
+.figs div{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.figs b{display:block;font-size:17px;color:#1F7A36}
+.figs span{font-size:12px;color:var(--muted)}
+.pc{display:grid;grid-template-columns:1fr 1fr .8fr;gap:12px;margin:12px 0 14px}
+.pcc{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--bg)}
+.pcc ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
+.pcc li{margin:3px 0}
+.pcc p{margin:4px 0 0;font-size:13.5px}
+.pcc.pro{border-left:5px solid var(--ok)}
+.pcc.con{border-left:5px solid var(--bad)}
+.pcc.when{border-left:5px solid var(--acc2)}
+.st{font-family:var(--font-mono);font-size:10.5px;padding:1px 6px;border-radius:4px;border:1px solid var(--line);white-space:nowrap}
+.st.h{border-color:var(--ok);color:var(--ok)}
+.st.p{border-color:var(--acc2);color:var(--acc2)}
+.st.m{border-color:var(--muted);color:var(--muted)}
+.tblwrap{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th,table.t td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.t th{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+table.t tr:last-child td{border-bottom:0}
+table.mx{border-collapse:collapse;width:100%;font-size:13px}
+table.mx th,table.mx td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:center}
+table.mx th{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);font-weight:500;text-transform:uppercase;vertical-align:bottom}
+table.mx td:first-child,table.mx th:first-child{text-align:left}
+table.mx tr:hover td{background:#E07B390F}
+table.mx tr.clk{cursor:pointer}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:middle}
+.dot.y{background:var(--ok)}
+.dot.l{border:2px solid var(--muted)}
+.big3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.opt{border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:6px 0}
+.opt b{font-size:14px}
+.opt small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.legendrow{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted);align-items:center}
+.links{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.lk{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:16px;margin-bottom:2px}
+.lk span{font-size:13px;color:var(--muted)}
+.lk em{display:block;font-style:normal;font-size:12px;color:var(--hl);margin-top:6px;font-family:var(--font-mono)}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:860px){.grid2,.pc,.big3{grid-template-columns:1fr}}
+@media (max-width:760px){header{flex-direction:column}details ol{columns:1}}
+</style>
+<script src="weaving_machines_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 shed formation -->
+  <div class="sc" id="sc0">
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <div class="seg" id="fseg"></div>
+      <svg class="bg" id="fsvg" viewBox="0 0 1000 330" role="img" style="margin-top:10px"></svg>
+      <div class="stepbar" id="fbar"></div>
+      <div class="cmp" id="ftxt" style="margin-top:10px"></div>
+    </div>
+  </div>
+  <!-- 1 weft insertion -->
+  <div class="sc" id="sc1">
+    <div class="mtabs" id="itabs"></div>
+    <div class="card">
+      <div class="mhead"><h3 id="iname"></h3><div class="de" id="ide"></div></div>
+      <div class="mtabs" id="ivar" style="margin-top:10px"></div>
+      <svg class="bg" id="isvg" viewBox="0 0 760 292" role="img" style="margin-top:8px"></svg>
+      <div class="stepbar" id="ibar"></div>
+      <div id="zoomwrap" style="display:none;margin-top:12px">
+        <span class="lbl" id="zlbl"></span>
+        <svg class="bg" id="zsvg" viewBox="0 0 760 210" role="img"></svg>
+        <div class="stepbar" id="zbar"></div>
+        <p class="note" id="ztxt"></p>
+      </div>
+      <div class="grid2">
+        <div><span class="lbl" id="lhow"></span><ol class="steps" id="isteps"></ol></div>
+        <div><span class="lbl" id="lfigs"></span><div class="figs" id="ifigs"></div></div>
+      </div>
+      <div class="pc" id="ipc"></div>
+      <span class="lbl" id="lmk"></span>
+      <div class="tblwrap"><table class="t" id="itab"></table></div>
+      <p class="note" id="inote"></p>
+      <p class="note" id="stleg1"></p>
+    </div>
+    <div class="card">
+      <h3 id="cmpT"></h3>
+      <p class="note" id="cmpN" style="margin:0 0 8px"></p>
+      <div class="tblwrap"><table class="mx" id="heat"></table></div>
+      <span class="lbl" id="ituL" style="margin-top:14px"></span>
+      <div class="tblwrap"><table class="t" id="itu"></table></div>
+      <p class="note" id="ituN"></p>
+    </div>
+    <div class="card">
+      <span class="lbl" id="spL"></span>
+      <svg id="spsvg" viewBox="0 0 1000 240" role="img"></svg>
+      <p class="note" id="spN"></p>
+    </div>
+  </div>
+  <!-- 2 shaft weaving -->
+  <div class="sc" id="sc2">
+    <div class="big3">
+      <div class="card"><h3 id="scht0"></h3><div id="sch0"></div></div>
+      <div class="card"><h3 id="scht1"></h3><div id="sch1"></div></div>
+      <div class="card"><h3 id="scht2"></h3><div id="sch2"></div></div>
+    </div>
+    <p class="note" id="stleg2"></p>
+  </div>
+  <!-- 3 jacquard -->
+  <div class="sc" id="sc3">
+    <div class="card"><span class="lbl" id="hkL"></span><svg id="hsvg" viewBox="0 0 1000 300" role="img"></svg></div>
+    <div class="card tblwrap"><table class="t" id="jtab"></table><p class="note" id="jnote"></p></div>
+    <p class="note" id="stleg3"></p>
+  </div>
+  <!-- 4 wilton -->
+  <div class="sc" id="sc4">
+    <div class="card">
+      <div class="seg" id="wseg"></div>
+      <svg class="bg" id="wsvg" viewBox="0 0 1000 300" role="img" style="margin-top:10px"></svg>
+      <div class="stepbar" id="wbar"></div>
+      <div class="cmp" id="wtxt" style="margin-top:10px"></div>
+    </div>
+    <div class="card tblwrap"><table class="t" id="wtab"></table><p class="note" id="wnote"></p></div>
+    <p class="note" id="stleg4"></p>
+  </div>
+  <!-- 5 differences -->
+  <div class="sc" id="sc5">
+    <div class="cmp" id="dcards"></div>
+  </div>
+  <!-- 6 manufacturer matrix + module links -->
+  <div class="sc" id="sc6">
+    <div class="legendrow" id="mxleg"></div>
+    <div class="card tblwrap"><table class="mx" id="mx"></table></div>
+    <span class="lbl" id="lkL" style="margin-top:6px"></span>
+    <div class="links" id="links"></div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const PAUSED=params.get('paused')==='1'||matchMedia('(prefers-reduced-motion: reduce)').matches&&params.get('paused')!=='0';
+const T=()=>TEXTS[lang];
+const NSC=7;
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink SVG labels that would overflow their slot
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=/[⺀-鿿＀-￯　-〿]/.test(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+const Tm=(x,y,t,a='middle',max=0)=>TX(x,y,t,'var(--muted)',a,400,11,max);
+const Tb=(x,y,t,a='middle')=>{const w=textW(t,11,400)+10,x0=a==='middle'?x-w/2:a==='end'?x-w:x;
+  return `<rect x="${x0-2}" y="${y-12}" width="${w}" height="17" rx="4" fill="var(--bg)" opacity=".92"/>`+Tm(a==='start'?x+3:a==='end'?x-5:x,y,t,a);};
+const num=v=>T().ui.loc==='none'?String(v):v.toLocaleString(T().ui.loc).replace(/[’'  ]/g,' ');
+const ST=k=>`<span class="st ${k}">${esc(T().ui.st[k])}</span>`;
+const WARP='#2386C8',WEFT='#E07B39';
+
+// ── language-neutral data (texts in weaving_machines_texts.js, same order)
+const FK=['ex','sch','jac'];
+const INS=['schuetzen','projektil','greifer','luft','wasser'];
+const INS_ST={schuetzen:['p'],projektil:['p'],greifer:['h','h','h','h','m'],luft:['h','h','p','h','h','m'],wasser:['p','p','m']};
+const VARS=['neg','pos','ein'];            // rapier variants (texts in ins.sys[2].v)
+const HV={schuetzen:[1,2,4,2,3,5],projektil:[3,5,4,3,4,3],greifer:[3,4,5,5,3,3],luft:[5,3,3,3,1,3],wasser:[5,2,1,1,4,3]};
+const SPD=[[140,'#A07D50'],[403,'#495057'],[800,'#E07B39'],[1200,'#1C7ED6'],[1350,'#2386C8']];
+const SCH_ST=[['h','p','h','h'],['h','h','p'],['h','h','p','p']];
+const HK=[[1,96,'#868E96'],[1344,12000,'#6A4FC8'],[1920,17280,'#2386C8'],[2304,31104,'#E07B39'],[2688,2688,'#2F8F45']];
+const J_ST=['h','h','p','h'];
+const WK=['rute','f2f','axm'];
+const W_ST=['h','h','h','h','h','h','h','h','p'];
+const MXC=['g','l','w','p','s','j','f','r','a'];
+const MXR=[['BE',{g:1,l:1,s:1}],['IT',{g:1,l:1,p:1}],['DE',{g:1,l:1}],['JP',{l:1,w:1,s:1}],['JP',{l:1,w:1}],['IT',{g:1,l:1}],['CH/DE',{s:1,j:1,f:1}],['BE',{j:1,f:1,r:1,a:1}],['DE/CN',{j:1}],['CN',{g:2,l:2}],['CN',{g:2,l:2,w:2}]];
+const LINK_KEYS=['shaft_weaving','weave_structures','jacquard_weaving','wilton_weaving'];
+const SOURCES=['Textile World – Picanol 400,000th weaving machine, speeds','Picanol – OmniPlus-i Connect, EcoBoost, 1,350 rpm','Picanol – AirStream, +100 rpm','Picanol – OmniPlus-i Connect brochure',
+ 'Indian Textile Magazine – Picanol > 130,000 rapier machines, Ultimax','Indian Textile Magazine – Supermax, Ultimax ~410 rpm','Picanol – shedding options','Lenze – Picanol SmartShed, 8–16 servo axes',
+ 'Techtextil – Itema: rapier, air, projectile','TEXtalks – projectile production moved to Colzate, 655 cm','Itema – P7300HP, 1,570 m/min','Textile World – Sulzer: > 150,000 projectile machines',
+ 'Itema – R9500², market launch 2012','Itema – Hercules, convertible positive/negative','Textile World – ITMA 2015: Dornier P2, Panter Hercules','Textile World – Dornier: founded 1950, P2, A2',
+ 'Textile World – Dornier P2 sailcloth, 320 picks/min','Textile World – Dornier SyncroDrive','texdata – Toyota JAT910','Toyota Industries – JAT910, LWT810, water jet for synthetics only',
+ 'Toyota – JAT910 catalogue, E-shed since 2000','Textilegence – Tsudakoma ZAX001neo, ZW8200','Student presentation – Toyota LWT810 vs Tsudakoma ZW8100','texdata – SMIT GS980, free-flight rapier',
+ 'SMIT ONE – single rapier','Textile World – SMIT since 1938, 2FAST','ITU – lecture rapier weaving (Gabler, Dewas, positive/negative)','Wikipedia – Rapier loom (Gabler 1922)',
+ 'IJCST – relay nozzles up to 80 % of compressed air','Annals Hunedoara – profile reed as market standard','Stäubli – rotary dobby S3200','Stäubli – S3000/S3200 for water-jet, air-jet, rapier machines',
+ 'Textile World – > 20,000 S3000/S3200','texdata – Stäubli ALPHA 560, S3292','PTJ – Stäubli CX 860 (1987)','Stäubli – LXL PRO','Stäubli – UNIVALETTE, own drive',
+ 'Indian Textile Journal – Stäubli SX 2,688 hooks','Bonas – about us (1983, 31,104 hooks)','Bonas – Si, 12 to 36 knives','Vandewiele – Bonas Ji, 1,920–17,280 hooks',
+ 'Indian Textile Journal – Bonas Ji 1,920–5,760','Vandewiele – Bonas H3D','Textile World – GITEC Grosse, UniShed','Textiles in Depth – UniShed leaf springs',
+ 'Vandewiele – carpet weaving machines','Vandewiele – RCF, 250 rpm','Textile World – Van de Wiele UCL83, three rapiers','Textile World – Van de Wiele CRX, MAX63',
+ 'texdata – Schönherr ALPHA 500, Bayreuth/Chemnitz','Indian Textile Journal – ALPHA 500, 5.3 m','Stäubli – ALPHA 500 SINGLELOOP','Stäubli – ALPHA 500 LEANTEC',
+ 'Britannica – Wilton, Axminster, colour selection','Britannica – Brussels, Wilton, spool/gripper Axminster','Brintons – Wilton construction','ITMF via Textile Excellence – shipments 2025',
+ 'Market study – manufacturers of shuttleless looms','ITU – productivity of insertion systems (1980s)','UPTTI – limits of the shuttle loom','Fibre2Fashion – projectile: tuck-in selvedge, small shed',
+ 'Blog – projectile: yarn range, energy','Teaching material – rapier pros and cons','Govt. Polytechnic Bhadrak – air jet pros and cons','Teaching material – jet weaving, width limit',
+ 'SVITS – shuttle vs. shuttleless comparison','Wikipedia – Water-jet loom','Textile Learner – water jet pros and cons','Teaching material – water jet, two weft colours',
+ 'University of Arizona – dobby vs. Jacquard'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+
+// ── step bars (back / play-pause / forward + label)
+const bars=[];
+function mkBar(id,o){
+  const el=$(id);
+  el.innerHTML=`<button type="button" class="pbtn" data-a="p"></button><button type="button" class="pbtn" data-a="t"></button><button type="button" class="pbtn" data-a="n"></button><span class="ins" data-a="l"></span>`;
+  const q=a=>el.querySelector(`[data-a=${a}]`);
+  let last={};
+  const set=(a,v)=>{if(last[a]!==v){last[a]=v;q(a).textContent=v}};
+  const upd=()=>{const u=T().ui;set('p',u.prev);set('n',u.next);set('t',o.isPlay()?u.pause:u.play);set('l',o.label())};
+  q('p').onclick=()=>{o.prev();upd()};q('n').onclick=()=>{o.next();upd()};q('t').onclick=()=>{o.toggle();upd()};
+  bars.push(upd);upd();return upd;
+}
+function segBtns(el,keys,labels,cur,cb){
+  el.innerHTML=keys.map((k,i)=>`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${esc(labels[i])}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.k));
+}
+const cmpCards=a=>a.map(x=>`<div class="c"><div class="k">${esc(x[0])}</div><p>${esc(x[1])}</p></div>`).join('');
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+
+// ── 0 shed formation
+let fk='sch',fpick=PAUSED?15:0,fPlay=!PAUSED;
+const NE=40,NP=24,CS=10;
+function motif(e,p){const cx=19.5,cy=11.5,dx=Math.abs(e-cx),dy=Math.abs(p-cy);
+  const d=dx/1.6+dy;if(d<9&&d>6)return 1;if(d<=3)return (e+p)%2;if(d<=6)return 0;
+  return ((e+2*p)%6<3)?1:0}
+function lift(k,e,p){
+  if(k==='ex')return ((e%4)-(p%4)+4)%4<2?1:0;              // 2/2 twill
+  if(k==='sch'){const s=[0,3,6,1,4,7,2,5];return (e%8)===s[p%8]?0:((e%8+p)%8<3?1:0)} // broken effect
+  return motif(e,p)}
+function drawF(){
+  const L=T().fach.svg;let s='';const ox=560,oy=24;
+  for(let p=0;p<NP;p++)for(let e=0;e<NE;e++){
+    if(p>fpick)continue;
+    const up=lift(fk,e,p);
+    s+=`<rect x="${ox+e*CS*0.95}" y="${oy+(NP-1-p)*CS*1.15}" width="${CS*0.95-0.6}" height="${CS*1.15-0.6}" fill="${up?WARP:WEFT}" opacity="${p===fpick?1:0.82}"/>`}
+  s+=Tm(ox+NE*CS*0.95/2,316,L.weaveCap,'middle',420);
+  const p=Math.min(fpick,NP-1);
+  if(fk!=='jac'){
+    const n=fk==='ex'?4:8;
+    for(let i=0;i<n;i++){
+      const up=lift(fk,i,p);const y=46+i*27-(up?9:0);
+      s+=`<rect x="40" y="${y}" width="420" height="14" rx="3" fill="${up?'#F7D9C4':'var(--panel)'}" stroke="#495057"/>`;
+      s+=TX(30,y+11,`S${i+1}`,'var(--muted)','end',500,11)}
+    s+=Tm(250,46+n*27+22,fk==='ex'?L.shafts4:L.shafts8,'middle',470);
+    for(let e=0;e<NE;e++){const x=50+e*10;s+=`<line x1="${x}" y1="${40+n*27}" x2="${x}" y2="${46+(e%n)*27+7}" stroke="${WARP}" stroke-width="1" opacity=".35"/>`}
+  }else{
+    s+=`<rect x="40" y="20" width="420" height="40" rx="6" fill="var(--panel)" stroke="#495057"/>`+TX(250,45,L.jacHead,'var(--fg)','middle',600,12,400);
+    for(let e=0;e<NE;e++){const up=lift(fk,e,p),x=50+e*10;
+      s+=`<line x1="${x}" y1="60" x2="${x}" y2="${up?150:200}" stroke="#868e96" stroke-width="1"/><circle cx="${x}" cy="${up?150:200}" r="3" fill="${up?'var(--acc)':'#adb5bd'}"/>`;
+      s+=`<line x1="${x}" y1="${up?150:200}" x2="${x}" y2="270" stroke="${WARP}" stroke-width="1.4"/>`}
+    s+=Tm(250,292,L.jacCap,'middle',470)}
+  s+=TX(250,318,fmt(L.pick,{n:p+1,total:NP}),'var(--fg)','middle',600,12);
+  const svg=$('fsvg');svg.innerHTML=s;svg.setAttribute('aria-label',T().scenes[0].k);
+}
+function setF(k){fk=k;fpick=PAUSED?15:0;drawFach()}
+function drawFach(){
+  const t=T().fach;
+  segBtns($('fseg'),FK,FK.map(k=>t.seg[k]),fk,setF);
+  $('ftxt').innerHTML=cmpCards(t.cards[fk]);drawF();
+}
+setInterval(()=>{if(!fPlay)return;fpick=(fpick+1)%(NP+6);if(scene===0){drawF();fUpd()}},260);
+const fUpd=mkBar('fbar',{isPlay:()=>fPlay,toggle:()=>{fPlay=!fPlay;if(!fPlay&&fpick>=NP)fpick=NP-1},
+  prev:()=>{fPlay=false;fpick=Math.max(0,Math.min(fpick,NP-1)-1);drawF()},next:()=>{fPlay=false;fpick=Math.min(NP-1,fpick+1);drawF()},
+  label:()=>fmt(T().fach.svg.pick,{n:Math.min(fpick,NP-1)+1,total:NP})});
+
+// ── 1 weft insertion
+let ik='greifer',iv='neg',iPlay=!PAUSED,zPlay=!PAUSED,t0=performance.now(),lastP=t0,cyc=0,iPh=0,zT0=performance.now(),zLt=0,zLp=0;
+const sysOf=id=>T().ins.sys[INS.indexOf(id)];
+function showI(id,keepVar){
+  const t=T().ins,u=t.lbl;ik=id;const m=sysOf(id),i=INS.indexOf(id);
+  if(!keepVar)iv=m.v?VARS[0]:null;
+  segBtns($('itabs'),INS,t.sys.map(x=>x.n),ik,k=>showI(k));
+  $('iname').textContent=m.n;$('ide').textContent=m.de;
+  if(m.v)segBtns($('ivar'),VARS,m.v,iv,k=>{iv=k;showI(ik,true)});else $('ivar').innerHTML='';
+  $('lhow').textContent=u.how;$('lfigs').textContent=u.figs;$('lmk').textContent=u.mk;
+  $('isteps').innerHTML=m.how.map(h=>`<li>${esc(h)}</li>`).join('');
+  $('ifigs').innerHTML=m.figs.map(f=>`<div><b>${esc(f[0])}</b><span>${esc(f[1])}</span></div>`).join('');
+  $('itab').innerHTML=`<tr>${t.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+m.mk.map((r,j)=>`<tr><td><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${ST(INS_ST[id][j])}</td></tr>`).join('');
+  $('inote').textContent=m.note||'';
+  $('ipc').innerHTML=`<div class="pcc pro"><span class="lbl">${esc(u.pro)}</span><ul>${m.pro.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="pcc con"><span class="lbl">${esc(u.con)}</span><ul>${m.con.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="pcc when"><span class="lbl">${esc(u.when)}</span><p>${esc(m.when)}</p></div>`;
+  $('heat').querySelectorAll('tr[data-id]').forEach(tr=>tr.style.background=tr.dataset.id===id?'#E07B3914':'');
+  if(PAUSED&&!iPlay)setI(2);
+}
+const XL=90,XR=670,YW=118,YREED=92,YFELL=196;
+function drawI(now){
+  if(!iPlay)t0+=now-lastP;lastP=now;
+  if(scene!==1){requestAnimationFrame(drawI);return}
+  const L=T().ins.svg;
+  const el=(now-t0)/2400;const c=Math.floor(el),ph=el-c;cyc=c;iPh=ph;
+  const ins=Math.min(ph/0.68,1),beat=ph>0.7?Math.min((ph-0.7)/0.22,1):0;
+  const dir=(ik==='schuetzen'&&c%2)?-1:1;
+  let s=`<defs><marker id="ahb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--cool)"/></marker></defs>`;
+  for(let x=XL+6;x<XR;x+=12)s+=`<line x1="${x}" y1="20" x2="${x}" y2="250" stroke="${WARP}" stroke-width="1.6" opacity=".55"/>`;
+  s+=`<rect x="${XL}" y="${YFELL}" width="${XR-XL}" height="60" fill="#2386C81F"/>`;
+  for(let i=0;i<8;i++){const y=YFELL+6+i*7;s+=`<line x1="${XL}" y1="${y}" x2="${XR}" y2="${y}" stroke="${WEFT}" stroke-width="2" opacity=".75"/>`}
+  const ry=YREED+(YFELL-12-YREED)*Math.sin(beat*Math.PI);
+  const prof=ik==='luft';
+  s+=`<rect x="${XL-10}" y="${ry}" width="${XR-XL+20}" height="${prof?14:8}" rx="3" fill="${prof?'#ced4da':'#adb5bd'}" opacity=".9"/>`;
+  if(prof)s+=`<rect x="${XL-10}" y="${ry+14}" width="${XR-XL+20}" height="22" fill="#1C7ED61A" stroke="#adb5bd" stroke-dasharray="4 3"/>`;
+  const wy=beat===0?YW:(beat<0.5?Math.max(YW,ry+(prof?20:13)):YFELL+2);
+  let tip=XL+(XR-XL)*ins;
+  if(ik==='greifer'&&iv==='ein')tip=ins<0.5?XL-30:XR+60-(XR-XL+60)*(2-ins*2);
+  if(dir<0)tip=XR-(XR-XL)*ins;
+  const wx1=dir>0?XL:tip,wx2=dir>0?tip:XR;
+  const wS=beat<1?`<line x1="${dir>0?XL-30:wx1}" y1="${wy}" x2="${dir>0?wx2:XR+30}" y2="${wy}" stroke="${WEFT}" stroke-width="3"/>`:'';
+  if(ik!=='greifer')s+=wS;
+  if(ik!=='schuetzen')s+=`<circle cx="40" cy="${YW}" r="16" fill="#fff4e6" stroke="${WEFT}" stroke-width="2"/><line x1="56" y1="${YW}" x2="${XL-30}" y2="${YW}" stroke="${WEFT}" stroke-width="2"/>`+Tm(40,YW+32,L.prestore,'middle',76);
+  if(beat<0.2){
+    if(ik==='schuetzen')s+=`<ellipse cx="${tip}" cy="${YW}" rx="26" ry="9" fill="#a07d50" stroke="#495057"/><rect x="${tip-12}" y="${YW-4}" width="24" height="8" rx="3" fill="${WEFT}"/>`;
+    if(ik==='projektil'){s+=`<rect x="${tip-14}" y="${YW-5}" width="18" height="10" rx="2" fill="#495057"/>`;
+      s+=`<rect x="${XL-60}" y="${YW-14}" width="28" height="28" rx="4" fill="var(--panel)" stroke="#495057"/>`+Tm(XL-46,YW-20,L.strike,'middle',80);
+      s+=`<rect x="${XR+20}" y="${YW-14}" width="28" height="28" rx="4" fill="var(--panel)" stroke="#495057"/>`+Tm(XR+34,YW+30,L.brake,'middle',76);
+      for(let k=0;k<4;k++){const px=XR-((ph*600+k*150)%(XR-XL));s+=`<rect x="${px}" y="266" width="14" height="7" rx="2" fill="#495057" opacity=".6"/>`}
+      s+=Tm(380,288,L.ret,'middle',560)}
+    if(ik==='greifer'){
+      if(iv==='ein'){const hx=XR+60-(XR-XL+60)*(ins<0.5?ins*2:2-ins*2);
+        s+=`<line x1="${XR+60}" y1="${YW}" x2="${hx}" y2="${YW}" stroke="#495057" stroke-width="7"/>`;
+        s+=`<path d="M${hx} ${YW-7} l-14 7 l14 7z" fill="var(--acc)"/>`;
+        s+=Tb(380,YW-22,L.single)}
+      else{const mid=(XL+XR)/2;
+        const lb=ins<0.5?XL+(mid-XL)*ins*2:mid-(mid-XL)*(ins-0.5)*2;
+        const rb=ins<0.5?XR-(XR-mid)*ins*2:XL+(XR-XL)*ins;
+        s+=`<line x1="10" y1="${YW}" x2="${lb}" y2="${YW}" stroke="#495057" stroke-width="7" opacity=".85"/><line x1="750" y1="${YW}" x2="${rb}" y2="${YW}" stroke="#495057" stroke-width="7" opacity=".85"/>`;
+        s+=`<path d="M${lb} ${YW-8} l14 8 l-14 8z" fill="var(--acc2)"/><path d="M${rb} ${YW-8} l-14 8 l14 8z" fill="var(--acc)"/>`;
+        if(Math.abs(ins-0.5)<0.06){const col=iv==='pos'?'var(--ok)':'var(--acc)';
+          const ht=iv==='pos'?L.handPos:L.handNeg,hw=Math.min(410,textW(ht,11,600)+14);
+          s+=`<circle cx="${mid}" cy="${YW}" r="18" fill="none" stroke="${col}" stroke-width="2.5"/><rect x="${mid-hw/2}" y="${YW+27}" width="${hw}" height="18" rx="4" fill="var(--bg)" opacity=".92"/>`+TX(mid,YW+40,ht,col,'middle',600,11,400)}
+        s+=Tm(125,YW+24,L.bringer,'middle',90)+Tm(712,YW+24,L.taker,'middle',90)}}
+    if(ik==='luft'){s+=`<path d="M${XL-34} ${YW-9} L${XL-6} ${YW-4} L${XL-6} ${YW+4} L${XL-34} ${YW+9} Z" fill="#495057"/>`+Tm(XL-20,YW-16,L.mainJet,'middle',100);
+      for(let x=XL+30;x<XR;x+=40){const act=tip>x-30&&tip<x+90&&ins<1;s+=`<path d="M${x} ${YW+18} l-6 10 l12 0z" fill="${act?'var(--cool)':'#adb5bd'}"/>`;
+        if(act)s+=`<line x1="${x}" y1="${YW+16}" x2="${x+16}" y2="${YW+3}" stroke="var(--cool)" stroke-width="2" marker-end="url(#ahb)"/>`}
+      s+=Tm(380,YW+44,L.relay,'middle',560)}
+    if(ik==='wasser'){s+=`<path d="M${XL-34} ${YW-9} L${XL-6} ${YW-4} L${XL-6} ${YW+4} L${XL-34} ${YW+9} Z" fill="var(--cool)"/>`+Tm(XL-20,YW-16,L.waterJet,'middle',100);
+      for(let k=0;k<14;k++){const dx=tip-k*12-(k%3)*3,dy=Math.sin(k*1.7+ph*20)*6;if(dx>XL)s+=`<circle cx="${dx}" cy="${YW+dy}" r="${2.6-k*0.12}" fill="var(--cool)" opacity="${0.8-k*0.05}"/>`}}
+  }
+  if(ik==='greifer')s+=wS;
+  const ttl=beat>0?L.beat:L.insertion,tw=Math.min(570,textW(ttl,11,600)+16);
+  s+=`<rect x="${380-tw/2}" y="10" width="${tw}" height="19" rx="4" fill="var(--bg)" opacity=".94"/>`+TX(380,24,ttl,'var(--fg)','middle',600,11,560);
+  s+=Tm(XL-6,YFELL+24,L.fabric,'end',80)+Tm(XR+12,YREED+6,L.reed,'start',76)+Tm(XR+12,40,L.back,'start',76)+Tm(XR+12,54,L.shafts,'start',76)+Tm(XR+12,YFELL+24,L.front,'start',76)+Tm(XR+12,YFELL+38,L.cloth,'start',76);
+  $('isvg').innerHTML=s;
+  drawZ(now);iUpd();zUpd();
+  requestAnimationFrame(drawI);
+}
+// zoom: rapier transfer in the middle of the shed
+function drawZ(now){
+  const show=ik==='greifer'&&iv!=='ein';$('zoomwrap').style.display=show?'block':'none';
+  if(!zPlay)zT0+=now-(zLp||now);zLp=now;if(!show)return;
+  const L=T().ins.zoom;
+  const lt=((now-zT0)/4200)%1;zLt=lt;
+  const pos=iv==='pos',cx=380,cy=105;
+  let g;if(lt<0.35)g=200*(1-lt/0.35)-50;else if(lt<0.55)g=-50;else g=-50+((lt-0.55)/0.45)*260;
+  const bt=cx-g/2,nt=cx+g/2;
+  const nClosed=lt>=0.42,bOpen=pos?(lt>=0.47&&lt<0.8):false,handed=lt>=0.5;
+  let z='';
+  z+=`<path d="M${bt-220} ${cy-22} L${bt-20} ${cy-22} L${bt} ${cy} L${bt-20} ${cy+22} L${bt-220} ${cy+22} Z" fill="#2386C840" stroke="var(--acc2)" stroke-width="2"/>`;
+  const ba=bOpen?-18:0;
+  z+=`<g transform="rotate(${ba} ${bt-70} ${cy-6})"><rect x="${bt-70}" y="${cy-10}" width="56" height="8" rx="2" fill="var(--acc2)"/></g>`;
+  if(!pos)z+=`<path d="M${bt-58} ${cy-12} l4 -8 l4 8 l4 -8 l4 8 l4 -8" fill="none" stroke="#495057" stroke-width="1.6"/>`+Tm(bt-48,cy-28,L.spring,'middle',90);
+  z+=`<path d="M${nt+220} ${cy-22} L${nt+20} ${cy-22} L${nt} ${cy} L${nt+20} ${cy+22} L${nt+220} ${cy+22} Z" fill="#E07B3938" stroke="var(--acc)" stroke-width="2"/>`;
+  const na=nClosed?0:16;
+  z+=`<g transform="rotate(${na} ${nt+70} ${cy+6})"><rect x="${nt+14}" y="${cy+2}" width="56" height="8" rx="2" fill="var(--acc)"/></g>`;
+  const yEnd=handed?nt+60:bt-30;
+  z+=`<path d="M20 ${cy} L${Math.max(yEnd,40)} ${cy}" stroke="${WEFT}" stroke-width="3.5"/>`;
+  if(pos){const cxo=bt-42,cyo=cy+44,rot=bOpen?40:0;
+    z+=`<g transform="rotate(${rot} ${cxo} ${cyo})"><path d="M${cxo-12} ${cyo} a12 12 0 1 0 24 0 a12 12 0 1 0 -24 0 M${cxo} ${cyo-12} l6 -10 l6 10" fill="#dee2e6" stroke="#495057" stroke-width="1.5"/></g>`+Tm(cxo,cyo+28,L.opener,'middle',130)}
+  let msg,col='var(--fg)';
+  if(lt<0.35)msg=L.msg[0];
+  else if(lt<0.47)msg=L.msg[1];
+  else if(lt<0.62){if(pos){msg=L.msg[2];col='var(--ok)'}
+    else{msg=L.msg[3];col='var(--bad)';
+      z+=`<path d="M${bt-40} ${cy+34} L${bt+30} ${cy+34}" stroke="var(--bad)" stroke-width="2.5" marker-end="url(#ahr)"/>`+TX(bt-5,cy+52,L.pull,'var(--bad)','middle',600,11,140)}}
+  else msg=L.msg[4];
+  const B=T().ins.svg;
+  z=`<defs><marker id="ahr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#c92a2a"/></marker></defs>`+TX(380,26,msg,col,'middle',600,13,730)+z+Tm(120,cy+46,B.bringer,'middle',110)+Tm(640,cy+46,B.taker,'middle',110);
+  $('zsvg').innerHTML=z;
+  const zt=pos?L.pos:L.neg;if($('ztxt').textContent!==zt)$('ztxt').textContent=zt;
+}
+// step control (insertion cycle phases and zoom phases)
+const IS=[0.0,0.17,0.34,0.52,0.69,0.78,0.86,0.97];
+const idxOf=(arr,v)=>{let k=0;arr.forEach((a,i)=>{if(v>=a-0.004)k=i});return k};
+function setI(k){const n=IS.length;let c=cyc;if(k>=n){k=0;c++}if(k<0){k=n-1;c--}lastP=performance.now();t0=lastP-(c+IS[k])*2400;iPh=IS[k]}
+const iUpd=mkBar('ibar',{isPlay:()=>iPlay,toggle:()=>{iPlay=!iPlay},
+  prev:()=>{iPlay=false;const k=idxOf(IS,iPh);setI(Math.abs(iPh-IS[k])>0.01?k:k-1)},
+  next:()=>{iPlay=false;setI(idxOf(IS,iPh)+1)},
+  label:()=>T().ins.steps[idxOf(IS,iPh)]});
+const ZS=[0.15,0.42,0.5,0.8];
+function setZ(k){k=(k+ZS.length)%ZS.length;zLp=performance.now();zT0=zLp-ZS[k]*4200;zLt=ZS[k]}
+const zUpd=mkBar('zbar',{isPlay:()=>zPlay,toggle:()=>{zPlay=!zPlay},
+  prev:()=>{zPlay=false;const k=idxOf(ZS,zLt);setZ(Math.abs(zLt-ZS[k])>0.01?k:k-1)},
+  next:()=>{zPlay=false;setZ(idxOf(ZS,zLt)+1)},
+  label:()=>fmt(T().ins.zoom.step,{n:idxOf([0,0.35,0.47,0.62],zLt)+1})});
+function drawInsStatic(){
+  const t=T().ins,u=t.lbl;
+  $('zlbl').textContent=u.zoom;
+  $('cmpT').textContent=u.cmpT;$('cmpN').textContent=u.cmpN;$('ituL').textContent=u.ituL;$('ituN').textContent=u.ituN;$('spL').textContent=u.spL;$('spN').textContent=u.spN;
+  $('heat').innerHTML=`<tr>${t.heatHead.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+INS.map((id,i)=>`<tr class="clk" data-id="${id}"><td><b>${esc(t.sys[i].n)}</b></td>${HV[id].map(v=>`<td style="background:rgba(57,166,80,${(v*0.17).toFixed(2)});font-weight:600">${v}</td>`).join('')}</tr>`).join('');
+  $('heat').querySelectorAll('tr[data-id]').forEach(tr=>tr.onclick=()=>{showI(tr.dataset.id);$('itabs').scrollIntoView({behavior:'smooth'})});
+  $('itu').innerHTML=`<tr>${t.ituHead.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+t.itu.map(r=>`<tr>${r.map((c,i)=>i?`<td>${esc(c)}</td>`:`<td><b>${esc(c)}</b></td>`).join('')}</tr>`).join('');
+  let s='';SPD.forEach(([v,c],i)=>{const w=v/1400*620,y=20+i*44;
+    s+=TX(330,y+20,t.speeds[i],'var(--fg)','end',500,13,320)+`<rect x="340" y="${y+5}" width="${w}" height="22" rx="4" fill="${c}"/>`+TX(346+w,y+21,num(v),'var(--fg)','start',700,13)});
+  $('spsvg').innerHTML=s;$('spsvg').setAttribute('aria-label',u.spL);
+  showI(ik,true);
+}
+
+// ── 2 shaft weaving
+function drawSchaft(){
+  const t=T().schaft;
+  t.titles.forEach((x,i)=>$('scht'+i).textContent=x);
+  t.cards.forEach((list,i)=>$('sch'+i).innerHTML=list.map((r,j)=>`<div class="opt"><b>${esc(r[0])}</b> ${ST(SCH_ST[i][j])}<small>${esc(r[1])}</small></div>`).join(''));
+}
+
+// ── 3 jacquard
+function drawJac(){
+  const t=T().jac;let s='';const lx=v=>300+Math.log10(v)/Math.log10(40000)*600;
+  [1,10,100,1000,10000].forEach(v=>{s+=`<line x1="${lx(v)}" y1="30" x2="${lx(v)}" y2="270" stroke="var(--line)"/>`+Tm(lx(v),288,num(v))});
+  HK.forEach((h,i)=>{const y=34+i*46;s+=TX(290,y+18,t.hk[i],'var(--fg)','end',500,13,280);
+    if(h[0]===h[1])s+=`<circle cx="${lx(h[0])}" cy="${y+13}" r="8" fill="${h[2]}"/>`+TX(lx(h[0])+14,y+18,num(h[0]),'var(--fg)','start',600,12);
+    else s+=`<rect x="${lx(h[0])}" y="${y+3}" width="${lx(h[1])-lx(h[0])}" height="20" rx="4" fill="${h[2]}" opacity=".85"/>`+TX(lx(h[1])+6,y+18,`${num(h[0])}–${num(h[1])}`,'var(--fg)','start',600,12)});
+  s+=Tm(600,16,t.hkNote,'middle',620);
+  $('hsvg').innerHTML=s;$('hsvg').setAttribute('aria-label',t.hkL);$('hkL').textContent=t.hkL;
+  $('jtab').innerHTML=`<tr>${t.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+t.rows.map((r,j)=>`<tr><td><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${ST(J_ST[j])}</td></tr>`).join('');
+  $('jnote').textContent=t.note;
+}
+
+// ── 4 wilton
+let wk='rute',wph=0,wPlay=!PAUSED;
+function drawW(){
+  const L=T().wil.svg;let s='';const sh=(wph%1)*40;
+  if(wk==='rute'){
+    for(let i=-1;i<26;i++){const x=40+i*40-sh;if(x<0||x>960)continue;
+      s+=`<circle cx="${x}" cy="220" r="5" fill="${WEFT}"/><circle cx="${x+20}" cy="236" r="5" fill="${WEFT}"/>`}
+    s+=`<line x1="0" y1="228" x2="1000" y2="228" stroke="#a07d50" stroke-width="3"/>`+Tm(980,256,L.ground,'end',400);
+    const cut=480;
+    for(let i=-1;i<26;i++){const x=40+i*40-sh;if(x<-40||x>980)continue;
+      if(x<cut)s+=`<path d="M${x+6} 222 L${x+2} 150 M${x+14} 222 L${x+18} 150" stroke="var(--acc)" stroke-width="4" stroke-linecap="round"/>`;
+      else s+=`<path d="M${x-4} 224 Q${x-4} 140 ${x+10} 140 Q${x+24} 140 ${x+24} 224" fill="none" stroke="var(--acc)" stroke-width="4"/><rect x="${x-8}" y="150" width="36" height="10" rx="2" fill="url(#steelw)" stroke="#495057"/>`}
+    s+=`<line x1="${cut}" y1="40" x2="${cut}" y2="270" stroke="var(--line)" stroke-dasharray="4 4"/>`+TX(cut,32,L.cutMsg,'var(--fg)','middle',600,12,900);
+    s+=Tb(240,110,L.cutPile)+Tb(740,110,L.loops);
+  }else if(wk==='f2f'){
+    for(let i=-1;i<26;i++){const x=40+i*40-sh;if(x<-40||x>990)continue;
+      s+=`<circle cx="${x}" cy="62" r="5" fill="${WEFT}"/><circle cx="${x}" cy="238" r="5" fill="${WEFT}"/>`}
+    s+=`<line x1="0" y1="70" x2="1000" y2="70" stroke="#a07d50" stroke-width="3"/><line x1="0" y1="230" x2="1000" y2="230" stroke="#a07d50" stroke-width="3"/>`;
+    const kx=520;
+    for(let i=-1;i<26;i++){const x=40+i*40-sh;if(x<-40||x>990)continue;
+      if(x<kx)s+=`<path d="M${x} 74 L${x+10} 145 M${x+20} 226 L${x+10} 155" stroke="var(--acc)" stroke-width="4" stroke-linecap="round"/>`;
+      else s+=`<path d="M${x} 74 L${x+20} 226" stroke="var(--acc)" stroke-width="4"/>`}
+    s+=`<g transform="translate(${kx} 150)"><path d="M-14 -6 L16 0 L-14 6 Z" fill="#495057"/></g>`+TX(kx,30,L.knife,'var(--fg)','middle',600,12,900);
+    s+=Tb(980,96,L.upper,'end')+Tb(980,262,L.lower,'end');
+    s+=Tb(250,154,L.twoCarpets)+Tb(760,154,L.pendulum);
+  }else{
+    for(let i=-1;i<26;i++){const x=40+i*40-sh;if(x<-40||x>990)continue;s+=`<circle cx="${x}" cy="220" r="5" fill="${WEFT}"/><circle cx="${x+20}" cy="236" r="5" fill="${WEFT}"/>`}
+    s+=`<line x1="0" y1="228" x2="1000" y2="228" stroke="#a07d50" stroke-width="3"/>`;
+    const cols=['var(--acc)','var(--acc2)','var(--ok)','var(--twist)','var(--bad)'];
+    for(let i=-1;i<26;i++){const x=40+i*40-sh;if(x<-40||x>720)continue;const c=cols[(i*7+3)%5<0?0:(i*7+3)%5];
+      s+=`<path d="M${x+2} 150 L${x+6} 226 Q${x+10} 232 ${x+14} 226 L${x+18} 150" fill="none" stroke="${c}" stroke-width="4"/>`}
+    s+=`<path d="M760 60 l30 40 l-14 6 l-26 -36z" fill="#495057"/><path d="M772 108 L776 190" stroke="var(--acc)" stroke-width="4" stroke-dasharray="3 2"/>`+TX(800,70,L.grip1,'var(--fg)','start',600,12,190)+TX(800,86,L.grip2,'var(--fg)','start',600,12,190);
+    s+=Tm(360,120,L.each,'middle',640)}
+  $('wsvg').innerHTML=`<defs><linearGradient id="steelw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dee2e6"/><stop offset="1" stop-color="#868e96"/></linearGradient></defs>`+s;
+  $('wsvg').setAttribute('aria-label',T().wil.seg[WK.indexOf(wk)]);
+}
+function setW(k){wk=k;drawWil()}
+function drawWil(){
+  const t=T().wil;
+  segBtns($('wseg'),WK,t.seg,wk,setW);
+  $('wtxt').innerHTML=cmpCards(t.cards[wk]);drawW();
+  $('wtab').innerHTML=`<tr>${t.head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`+t.rows.map((r,j)=>`<tr><td><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${ST(W_ST[j])}</td></tr>`).join('');
+  $('wnote').textContent=t.note;
+}
+setInterval(()=>{if(!wPlay||scene!==4)return;wph+=0.025;drawW()},50);
+mkBar('wbar',{isPlay:()=>wPlay,toggle:()=>{wPlay=!wPlay},prev:()=>{wPlay=false;wph=Math.max(0,wph-0.25);drawW()},next:()=>{wPlay=false;wph+=0.25;drawW()},label:()=>T().wil.step});
+
+// ── 5 differences
+function drawDiff(){
+  const t=T().diff;
+  $('dcards').innerHTML=t.cards.map(c=>`<div class="c"><h4>${esc(c[0])}</h4><p>${esc(c[1])}</p><p style="color:var(--muted)"><b style="color:var(--fg)">${esc(t.follow)}</b> ${esc(c[2])}</p></div>`).join('');
+}
+
+// ── 6 matrix + links
+function drawMx(){
+  const t=T().mx;
+  $('mxleg').innerHTML=`<span><i class="dot y"></i> = ${esc(t.legend[0])}</span><span><i class="dot l"></i> = ${esc(t.legend[1])}</span><span>${esc(t.legend[2])}</span>`;
+  $('mx').innerHTML=`<tr><th>${esc(t.head[0])}</th><th>${esc(t.head[1])}</th>${t.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr>`+
+    MXR.map(([cc,d],i)=>`<tr><td><b>${esc(t.firms[i])}</b></td><td style="text-align:left">${cc}</td>${MXC.map(c=>`<td>${d[c]===1?'<i class="dot y"></i>':d[c]===2?'<i class="dot l"></i>':''}</td>`).join('')}</tr>`).join('');
+  $('lkL').textContent=t.lkL;
+  $('links').innerHTML=t.links.map((l,i)=>`<button type="button" class="lk" data-k="${LINK_KEYS[i]}"><b>${esc(l[0])} →</b><span>${esc(l[1])}</span><em>${esc(T().ui.open)}</em></button>`).join('');
+  $('links').querySelectorAll('.lk').forEach(b=>b.onclick=()=>openModule(b.dataset.k));
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(scene===0){drawF();fUpd()}
+  if(scene===4)drawW();
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('kpis').innerHTML=t.kpis.map(k=>`<div class="kpi"><b>${esc(k[0])}</b><span>${esc(k[1])}</span></div>`).join('');
+  [1,2,3,4].forEach(i=>$('stleg'+i).textContent=u.stLegend);
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  drawFach();drawInsStatic();drawSchaft();drawJac();drawWil();drawDiff();drawMx();
+  bars.forEach(f=>f());go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+requestAnimationFrame(now=>{if(!PAUSED){lastP=now;t0=now}drawI(now)});
+})();
+</script>
+</body>
+</html>

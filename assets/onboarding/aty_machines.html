@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATY Machines</title>
+<!-- Knowledge Base module (ui/screen_onboarding.py), category ATY, group "Machines & manufacturers".
+     Content from the user's research page "ATY-Maschinen - Hersteller, Bauformen & Varianten" (as of Nov 2026).
+     Texts in aty_machines_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (no own header/scene buttons, reports the scene via document.title "scene:n"),
+     ?scene=n for screenshots. No external resources (sources and manufacturer sites as plain text only).
+     Scene 0 links module aty_air_texturing: embedded via document.title "open:<key>", otherwise <key>.html directly.
+     No canvas - SVG/DOM, because the content is data (filters, cards, bars). -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--yarn:#B5651D;--twist:#6A4FC8;--soft:#EEF3EC;
+  --water:#0C8599;--wind:#495057;--pin:#C62828;--cn:#C2255C;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.55;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--font-body)}
+.sc{display:none;flex-direction:column;gap:12px}
+.sc.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h3{font-family:var(--font-display);font-size:22px;margin:2px 0 6px}
+.card p{margin:6px 0}
+.grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:12px;align-items:start}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg.sm button{font-size:13px;padding:5px 10px}
+.lbl{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+.controls{display:flex;flex-wrap:wrap;gap:12px 18px;margin-bottom:10px}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;margin:2px 4px 2px 0;background:var(--soft);border:1px solid var(--line)}
+.note{font-size:12px;color:var(--muted);margin:0}
+.muted{color:var(--muted);font-size:13px}
+/* process */
+.node{cursor:pointer}
+.node:hover rect,.node:hover circle{stroke:var(--hl);stroke-width:2.5}
+.node.sel rect,.node.sel circle{stroke:var(--hl);stroke-width:3}
+.yarn{fill:none;stroke:var(--yarn);stroke-width:2.6;stroke-dasharray:7 6;animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-26}}
+@media (prefers-reduced-motion: reduce){.yarn{animation:none}}
+#detail ul{padding-left:18px;margin:6px 0}
+#detail .tag{display:inline-block;font-size:11px;font-family:var(--font-mono);padding:2px 8px;border-radius:999px;background:var(--soft);border:1px solid var(--line);margin:0 4px 6px 0}
+.golink{margin-top:8px;font-size:13px;padding:5px 10px;border-color:var(--hl);color:#1F7A36;font-weight:600}
+.golink:hover{background:#F0F7F2;border-color:var(--hl)}
+/* tree */
+.tree{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.dim{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.dim h4{margin:0 0 8px;font-size:15px;display:flex;align-items:center;gap:8px}
+.dim h4 .num{font-family:var(--font-mono);font-size:11px;background:var(--fg);color:#fff;border-radius:4px;padding:2px 6px}
+.opt{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin:6px 0;background:#fff}
+.opt:hover{border-color:var(--hl)}
+.opt b{display:block;font-size:14px}
+.opt small{display:block;color:var(--muted);font-size:12.5px}
+.opt.hl{background:#E8F5EA;border-color:var(--hl)}
+/* manufacturers */
+.filters{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-end}
+.filters input{font:inherit;font-size:14px;padding:6px 10px;border-radius:4px;border:1px solid var(--line);background:#fff;color:var(--fg);min-width:240px}
+.filters input:focus{outline:2px solid var(--hl);outline-offset:1px}
+#treefilter{font-size:13px;color:var(--muted)}
+#treefilter button{font-size:12px;padding:2px 8px;margin-left:6px}
+.mfr{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.mcard{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
+.mcard .top{padding:12px 14px 8px;display:flex;gap:10px;align-items:flex-start}
+.flag{font-family:var(--font-mono);font-size:11px;padding:3px 7px;border-radius:4px;background:var(--fg);color:#fff;white-space:nowrap}
+.mcard h3{margin:0;font-size:17px;font-family:var(--font-display)}
+.mcard .meta{color:var(--muted);font-size:13px}
+.mcard .thumb{background:var(--bg);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.mcard .thumb svg{height:120px}
+.mnote{padding:10px 14px 0;font-size:13.5px}
+.models{padding:6px 14px 12px}
+.model{border-top:1px dashed var(--line);padding:8px 0}
+.model:first-child{border-top:0}
+.model .mn{font-weight:600;font-size:14px}
+.model .mn span{font-family:var(--font-mono);font-weight:400;color:var(--muted);font-size:12px}
+.model .ms{font-size:13px;color:var(--muted)}
+.chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);margin:3px 3px 0 0;font-family:var(--font-mono)}
+.chip.auto{border-color:var(--hl);color:#1F7A36}
+.chip.man,.chip.lg{border-color:var(--muted);color:var(--muted)}
+.chip.lg{font-style:italic}
+.chip.pa{border-color:var(--twist);color:var(--twist)}
+.chip.pes{border-color:var(--air);color:var(--air)}
+.msrc{font-size:12px;color:var(--muted);font-family:var(--font-mono);margin-top:6px}
+.empty{color:var(--muted);padding:20px}
+/* comparison */
+.bars .row{display:grid;grid-template-columns:250px 1fr 60px;gap:10px;align-items:center;margin:5px 0;font-size:13.5px}
+.bars .track{height:18px;background:var(--soft);border-radius:4px;overflow:hidden}
+.bars .fill{height:100%;border-radius:4px;transition:width .6s}
+.bars .v{font-family:var(--font-mono);text-align:right}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:10px 0 6px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+/* market */
+.timeline{position:relative;padding-left:22px;border-left:2px solid var(--line);margin-left:6px}
+.tev{margin:0 0 12px;position:relative}
+.tev:before{content:"";position:absolute;left:-30px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--hl);border:2px solid var(--panel)}
+.tev b{font-family:var(--font-mono);font-size:13px;color:#1F7A36}
+.classif{padding-left:18px;margin:0}
+.classif li{margin-bottom:6px}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:860px){.grid2{grid-template-columns:1fr}header{flex-direction:column}details ol{columns:1}.bars .row{grid-template-columns:150px 1fr 48px;font-size:12px}}
+</style>
+<script src="aty_machines_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 process -->
+  <div class="sc" id="sc0">
+    <div class="grid2">
+      <div class="stage">
+        <div class="controls" id="ctl"></div>
+        <svg id="procsvg" viewBox="0 50 830 385" role="img"></svg>
+      </div>
+      <div class="card" id="detail"></div>
+    </div>
+  </div>
+  <!-- 1 variant tree -->
+  <div class="sc" id="sc1">
+    <div class="tree" id="tree"></div>
+    <p class="muted" id="treehint"></p>
+  </div>
+  <!-- 2 machine designs -->
+  <div class="sc" id="sc2">
+    <div class="seg" id="ptabs"></div>
+    <div class="grid2">
+      <div class="stage"><svg id="profsvg" viewBox="0 0 620 420" role="img"></svg></div>
+      <div class="card" id="profdesc"></div>
+    </div>
+  </div>
+  <!-- 3 manufacturers & models -->
+  <div class="sc" id="sc3">
+    <div class="filters">
+      <div><span class="lbl" id="lq"></span><input id="q" type="search"></div>
+      <div><span class="lbl" id="lreg"></span><div class="seg sm" id="freg"></div></div>
+      <div><span class="lbl" id="lauto"></span><div class="seg sm" id="fauto"></div></div>
+      <div id="treefilter"></div>
+    </div>
+    <div class="mfr" id="mfr"></div>
+  </div>
+  <!-- 4 comparison -->
+  <div class="sc" id="sc4">
+    <div class="card">
+      <div class="seg sm" id="csort" style="margin-bottom:10px"></div>
+      <div class="bars" id="bars"></div>
+      <div class="legend" id="legend"></div>
+      <p class="note" id="barsnote"></p>
+    </div>
+  </div>
+  <!-- 5 market -->
+  <div class="sc" id="sc5">
+    <div class="grid2">
+      <div class="card"><div class="timeline" id="timeline"></div></div>
+      <div class="card"><h3 id="classifh"></h3><ul class="classif" id="classif"></ul></div>
+    </div>
+  </div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const T=()=>TEXTS[lang];
+const NSC=6;
+const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// rough text width (CJK = 1 em) - used to shrink SVG labels that would overflow their slot
+const textW=(t,s,w)=>{let n=0;for(const ch of String(t))n+=/[⺀-鿿＀-￯　-〿]/.test(ch)?1:/[A-Z0-9%]/.test(ch)?.64:ch===' '?.3:.54;return n*s*(w>=600?1.05:1)};
+const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12,max=0)=>{
+  let sz=s,adj='';
+  if(max){const e=textW(t,s,w);if(e>max){sz=Math.max(s*.8,s*max/e);if(textW(t,sz,w)>max)adj=` textLength="${max}" lengthAdjust="spacingAndGlyphs"`}}
+  return `<text x="${x}" y="${y}" font-size="${+sz.toFixed(1)}" text-anchor="${a}" fill="${c}" font-weight="${w}"${adj}>${esc(t)}</text>`;
+};
+
+// ── language-neutral data (texts in aty_machines_texts.js, same order)
+// bl = label in the comparison chart; rel = related machine (not ATY), not in the chart
+const MFR=[
+ {id:'ssm',reg:'EU',country:'CH / DE / IT',dom:'ssm.ch',thumb:'single',models:[
+  {auto:true,pos:40,speed:1500,bl:'SSM · DP5-T',tags:['single','poy','fdy','ce','fancy','tech','glass','heat']},
+  {auto:true,pos:null,speed:1200,bl:'SSM · TG2-AT',tags:['double','poy','fdy']},
+  {auto:false,pos:null,speed:1200,bl:'SSM · TG1-AT',tags:['double','poy','fdy']},
+  {auto:true,pos:null,speed:1100,bl:'SSM · TG30-ETC',tags:['combo','ce','fancy','poy']},
+  {auto:null,pos:null,speed:null,bl:'SSM · DP2-T',tags:['legacy','tech']}]},
+ {id:'aiki',reg:'JP',country:'JP',dom:'pr.mono.ipros.com',thumb:'plate',models:[
+  {auto:null,pos:144,speed:1000,bl:'AIKI Riotech · AT-501A',tags:['plate','poy','fdy','heat','fancy']},
+  {auto:null,pos:216,speed:null,bl:'AIKI Riotech · AT-501B',tags:['plate','poy','fdy']},
+  {auto:null,pos:108,speed:null,bl:'AIKI Riotech · AT-501 EXII',tags:['plate','poy','heat','fancy']},
+  {auto:null,pos:null,speed:1300,bl:'AIKI Riotech · AT-501 HD III',tags:['plate','tech','heat']}]},
+ {id:'tmt',reg:'JP',country:'JP',dom:'tmt-machinery.jp',thumb:'plate',models:[
+  {auto:null,pos:null,speed:null,bl:'TMT · REIKA',tags:['poy']}]},
+ {id:'fadis',reg:'EU',country:'IT',dom:'ice.it',thumb:'winder',models:[
+  {auto:null,pos:null,speed:null,bl:'Fadis · Sincro Aquajet',tags:['winder','ce','fdy','wet']}]},
+ {id:'himson',reg:'IN',country:'IN',dom:'indiamart.com',thumb:'plate',models:[
+  {auto:true,pos:120,speed:null,bl:'Himson Engineering · HSS-ATX-3N',tags:['plate','poy','fdy']}]},
+ {id:'aalidhra',reg:'IN',country:'IN',dom:'indiamart.com',thumb:'plate',models:[
+  {auto:false,pos:104,speed:null,bl:'Aalidhra · ADT-800/4SH & /2SH',tags:['plate','poy']},
+  {auto:null,pos:null,speed:null,bl:'Aalidhra · ADT 900-950',tags:['plate']}]},
+ {id:'kaicheng',reg:'CN',country:'CN',dom:'kaichengtex.en.alibaba.com',thumb:'winder',models:[
+  {auto:null,pos:null,speed:null,bl:'Kaicheng · KC215C',tags:['winder','poy']},
+  {auto:null,pos:40,speed:1100,bl:'Kaicheng · KC215B',rel:true,tags:['winder','combo']}]},
+ {id:'cn',reg:'CN',country:'CN',dom:'fibre2fashion.com',thumb:'plate',models:[
+  {auto:null,pos:128,speed:600,bl:'CN · HLK-B',tags:['plate','fdy','wet','tech']},
+  {auto:null,pos:null,speed:null,bl:'CN · Shanxi Jingwei',tags:['plate']}]}
+];
+const DIMK=[['poy','fdy'],['ce','fancy','combo'],['wet','heat'],['single','double','plate','winder'],['tech','glass']];
+const PROFK=['plate','double','single','winder'];
+const REGK=['all','EU','JP','CN','IN'];
+const RC={EU:'var(--air)',JP:'var(--heat)',CN:'var(--cn)',IN:'var(--hl)'};
+const TLY=['1987','1989','1999','2003/04','2014','2016','2019','2020','2026'];
+const CTLK=[['src',['poy','fdy']],['ce',['ce','par']],['wet',['wet','dry']],['h',['mech','heat']]];
+const LINK_KEYS=['aty_air_texturing'];
+const SOURCES=['SSM – Air Texturing Machines (DP5-T, TG2-AT, TG1-AT)','DirectIndustry – SSM DP5-T data sheet','SSM – Product range',
+  'DirectIndustry – SSM Giudici TG30-ETC','textiletechnology.net – DP5-T at Turktex','texdata – DP5-T fancyflex, TG2-AT (ITM 2016)',
+  'Textile World – SSM Stähle-Eltex (DP2-T, RM3-T)','Innovation in Textiles – SSM/Stähle/Giudici history, TG1-AT',
+  'AIKI Riotech – AT-501A','AIKI Riotech – AT-501 EXII','AIKI Riotech – AT-501B','AIKI Riotech – AT-501 HD III',
+  'TMT – REIKA series','ICE – Fadis Sincro Aquajet (Heberlein jet)','Technofashion – Fadis Sincro Multipla Aquajet',
+  'IndiaMART – Himson, Aalidhra ATY','IndiaMART – Aalidhra ADT-800','Kaicheng – KC215C','Fibre2Fashion – HLK-B (Suzhou)',
+  'US 4922593 – core/effect, stabilising zone','US 5511295 – overfeed 5–200 %','US 4557689 – heater tube after air texturing',
+  'EP 0284945 – air texturing machine (plate machine)','EP 1566474 – air texturing machine with doffer',
+  'Acar et al. – process parameters, HemaJet','Loughborough – jet geometry, HemaJet types','Acar et al. – role of wetting'];
+
+let scene=Math.max(0,Math.min(NSC-1,parseInt(params.get('scene')||'0',10)||0));
+const st={src:'poy',ce:'ce',wet:'wet',h:'mech'};
+let sel='jet', treeSel=null, prof='plate', mode='pos';
+const flt={reg:'all',auto:'all',q:''};
+
+function segBtns(el,items,cur,cb){
+  el.innerHTML=items.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${v===cur}">${esc(l)}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.v));
+}
+
+// ── 0 process
+function drawCtl(){
+  const t=T();
+  $('ctl').innerHTML=CTLK.map(([k],i)=>`<div><span class="lbl">${esc(t.ctl[i].l)}</span><div class="seg sm" id="ctl_${k}"></div></div>`).join('');
+  CTLK.forEach(([k,vals],i)=>segBtns($('ctl_'+k),vals.map((v,j)=>[v,t.ctl[i].o[j]]),st[k],v=>{
+    st[k]=v;
+    sel=k==='src'?'feed':k==='ce'?(v==='ce'?'eff':'creel'):k==='wet'?'wet':(v==='heat'?'heat':'stab');
+    drawCtl();drawProc();showDetail();
+  }));
+}
+const roll=(x,y)=>`<circle cx="${x}" cy="${y}" r="15" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/><circle cx="${x}" cy="${y}" r="4" fill="var(--wind)"/>`;
+const pin=(x,y)=>`<circle cx="${x}" cy="${y}" r="9" fill="#FFD6D6" stroke="var(--pin)" stroke-width="2"/>`;
+const pkg=(x,y,c,s='#B07A2A')=>`<rect x="${x}" y="${y}" width="44" height="30" rx="6" fill="${c}" stroke="${s}"/>`;
+function drawProc(){
+  const TXp=(x,y,t,c,a,w,s,max)=>TX(x,y,t,c,a,w,s*1.15,max);
+  const v=T().sv;
+  let s=`<defs><marker id="aa" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8z" fill="var(--air)"/></marker></defs>`;
+  const yc=110,ye=300,yj=200;
+  // creel
+  s+=`<g class="node" data-id="creel">${pkg(20,yc-30,'#F3C98B')}${pkg(20,yc+6,'#F3C98B')}${TXp(42,yc-40,v.core,'var(--fg)','middle',600,13,84)}`;
+  if(st.ce==='ce')s+=pkg(20,ye-15,'#C8EBCD','#2F8F46')+TXp(42,ye-24,v.effect,'#2F8F46','middle',600,13,84);
+  s+=TXp(42,425,v.creel,'var(--muted)','middle',400,12,84)+`</g>`;
+  // core path
+  let dc=`M64 ${yc} `,core='';
+  if(st.src==='poy'){core+=`<g class="node" data-id="feed">${roll(120,yc)}${pin(175,yc)}${roll(230,yc)}${TXp(120,yc+36,'W1','var(--fg)','middle',600,12)}${TXp(175,yc-18,v.heatPin,'var(--pin)','middle',600,12,98)}${TXp(230,yc+36,'W2','var(--fg)','middle',600,12)}</g>`;dc+=`L120 ${yc-15} L175 ${yc-9} L230 ${yc-15} `}
+  else{core+=`<g class="node" data-id="feed">${roll(230,yc)}${TXp(230,yc+36,v.feedCore,'var(--fg)','middle',600,12,140)}</g>`;dc+=`L230 ${yc-15} `}
+  if(st.wet==='wet'){core+=`<g class="node" data-id="wet"><rect x="285" y="${yc-6}" width="60" height="30" rx="6" fill="#D3F0F3" stroke="var(--water)" stroke-width="1.5"/><path d="M290 ${yc+12} q7 -6 14 0 t14 0 t14 0 t14 0" stroke="var(--water)" fill="none"/>${TXp(315,yc-14,v.wetting,'var(--water)','middle',600,12,108)}</g>`;dc+=`L315 ${yc+10} `}
+  else core+=`<g class="node" data-id="wet"><rect x="285" y="${yc-6}" width="60" height="30" rx="6" fill="var(--bg)" stroke="var(--line)" stroke-dasharray="4 3"/>${TXp(315,yc-14,v.dry,'var(--muted)','middle',400,12,108)}</g>`;
+  dc+=`L400 ${yj}`;
+  s+=`<path d="${dc}" fill="none" stroke="var(--line)" stroke-width="6" stroke-linejoin="round"/><path d="${dc}" class="yarn" stroke-linejoin="round"/>`+core;
+  s+=TXp(175,yc+62,st.ce==='ce'?v.coreOf:v.allOf,'var(--muted)','middle',400,12.5,290);
+  // effect path
+  if(st.ce==='ce'){
+    let de=`M64 ${ye} `,eff='';
+    if(st.src==='poy'){eff+=`${roll(120,ye)}${pin(175,ye)}`;de+=`L120 ${ye-15} L175 ${ye-9} `}
+    eff+=roll(230,ye);de+=`L230 ${ye-15} L400 ${yj}`;
+    s+=`<path d="${de}" fill="none" stroke="var(--line)" stroke-width="6" stroke-linejoin="round"/><path d="${de}" class="yarn" style="stroke:var(--hl)" stroke-linejoin="round"/>`;
+    s+=`<g class="node" data-id="eff">${eff}${TXp(175,ye+42,v.effOf,'#2F8F46','middle',600,12.5,310)}</g>`;
+  }
+  // jet
+  s+=`<g class="node" data-id="jet"><rect x="395" y="${yj-22}" width="70" height="44" rx="10" fill="#DCEFFA" stroke="var(--air)" stroke-width="2"/><path d="M430 ${yj-70} L430 ${yj-26}" stroke="var(--air)" stroke-width="2.5" marker-end="url(#aa)"/>${TXp(440,yj-52,v.air,'var(--air)','start',600,12.5,230)}<rect x="470" y="${yj-18}" width="6" height="36" rx="2" fill="var(--wind)"/>${TXp(430,yj+42,v.jet,'var(--air)','middle',700,13.5,160)}${TXp(430,yj+59,v.baffle,'var(--muted)','middle',400,11.5,150)}</g>`;
+  // loops after the jet
+  let dp=`M465 ${yj} `;
+  for(let i=0;i<4;i++){const x=480+i*10;dp+=`Q${x+5} ${yj-12} ${x+10} ${yj} `}
+  dp+=`L540 ${yj-15} L640 ${yj-15} `;
+  const hx=st.h==='heat';
+  dp+=hx?`L760 ${yj-15} L780 ${yj} L780 300`:`L780 ${yj} L780 300`;
+  s+=`<path d="${dp}" fill="none" stroke="var(--line)" stroke-width="6" stroke-linejoin="round"/><path d="${dp}" class="yarn" stroke-linejoin="round"/>`;
+  s+=`<g class="node" data-id="stab">${roll(540,yj)}${roll(640,yj)}${TXp(540,yj+36,'W3','var(--fg)','middle',600,12)}${TXp(640,yj+36,'W4','var(--fg)','middle',600,12)}${TXp(590,yj-30,v.stab,'var(--twist)','middle',600,12.5,140)}${TXp(590,yj+56,v.stabOf,'var(--muted)','middle',400,11.5,150)}</g>`;
+  if(hx)s+=`<g class="node" data-id="heat"><rect x="670" y="${yj-24}" width="80" height="18" rx="5" fill="#FCE0C8" stroke="var(--heat)" stroke-width="1.5"/>${TXp(710,yj-32,v.heater,'var(--heat)','middle',600,12.5,90)}</g>`;
+  s+=`<g class="node" data-id="wind"><rect x="740" y="300" width="80" height="10" rx="3" fill="var(--panel)" stroke="var(--twist)"/><rect x="745" y="316" width="70" height="56" rx="14" fill="#E9ECEF" stroke="var(--wind)" stroke-width="1.5"/>${TXp(780,392,v.wind,'var(--fg)','middle',600,13,100)}</g>`;
+  s+=TXp(824,418,v.speed,'var(--muted)','end',400,11.5,330);
+  const svg=$('procsvg');svg.innerHTML=s;svg.setAttribute('aria-label',T().ui.ariaProc);
+  svg.querySelectorAll('.node').forEach(n=>{n.classList.toggle('sel',n.dataset.id===sel);n.onclick=()=>{sel=n.dataset.id;drawProc();showDetail()}});
+}
+function showDetail(){
+  const t=T(),c=t.comp[sel];
+  const p=sel==='feed'?c[st.src]:sel==='wet'?c[st.wet]:c.p;
+  $('detail').innerHTML=`<span class="lbl">${esc(t.ui.component)}</span><h3>${esc(c.t)}</h3>${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}<p>${esc(p)}</p>`+
+    (c.l.length?`<ul>${c.l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'')+
+    (sel==='jet'?`<p class="muted">${esc(t.ui.openAtyHint)}</p><button type="button" class="golink" data-k="${LINK_KEYS[0]}">${esc(t.ui.openAty)}</button>`:'')+
+    `<p class="note" style="margin-top:10px">${esc(t.ui.tip)}</p>`;
+  const b=$('detail').querySelector('.golink');if(b)b.onclick=()=>openModule(b.dataset.k);
+}
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+
+// ── 1 variant tree
+function drawTree(){
+  const t=T();
+  $('tree').innerHTML=t.dims.map((d,i)=>`<div class="dim"><h4><span class="num">${String(i+1).padStart(2,'0')}</span>${esc(d.t)}</h4>`+
+    d.o.map((o,j)=>`<button type="button" class="opt ${treeSel===DIMK[i][j]?'hl':''}" data-k="${DIMK[i][j]}"><b>${esc(o.b)}</b><small>${esc(o.d)}</small></button>`).join('')+`</div>`).join('');
+  $('tree').querySelectorAll('.opt').forEach(el=>el.onclick=()=>{
+    const k=el.dataset.k;treeSel=treeSel===k?null:k;drawTree();drawMfr();if(treeSel)go(3);
+  });
+  $('treehint').textContent=t.ui.treeHint;
+}
+function treeLabel(k){const t=T();for(let i=0;i<DIMK.length;i++){const j=DIMK[i].indexOf(k);if(j>=0)return t.dims[i].o[j].b}return k}
+
+// ── 2 machine designs
+function profSVG(k){
+  const v=T().psv;
+  let s=`<rect x="0" y="390" width="620" height="6" fill="var(--line)"/>`;
+  const L=(x,y,t,max,c='var(--fg)',a='middle')=>TX(x,y,t,c,a,600,12.5,max);
+  const person=(x,y)=>`<g fill="#9AA39F"><circle cx="${x}" cy="${y-88}" r="9"/><rect x="${x-8}" y="${y-77}" width="16" height="40" rx="5"/><rect x="${x-7}" y="${y-38}" width="6" height="38"/><rect x="${x+1}" y="${y-38}" width="6" height="38"/></g>`;
+  const r=(x,y)=>`<circle cx="${x}" cy="${y}" r="10" fill="var(--panel)" stroke="var(--wind)" stroke-width="2"/>`;
+  const jet=(x,y)=>`<rect x="${x-14}" y="${y-9}" width="28" height="18" rx="5" fill="#DCEFFA" stroke="var(--air)"/>`;
+  const sp=(x,y)=>`<rect x="${x}" y="${y}" width="34" height="26" rx="8" fill="#E9ECEF" stroke="var(--wind)"/>`;
+  if(k==='plate'){
+    s+=`<rect x="20" y="160" width="60" height="200" rx="6" fill="var(--bg)" stroke="var(--line)"/>`+[0,1,2,3].map(i=>`<rect x="30" y="${175+i*45}" width="40" height="28" rx="5" fill="#F3C98B" stroke="#B07A2A"/>`).join('')+L(50,150,v.creel,96);
+    s+=`<rect x="200" y="60" width="300" height="320" rx="8" fill="var(--panel)" stroke="var(--line)"/>`+L(350,50,v.plate,330);
+    s+=r(240,110)+`<circle cx="285" cy="110" r="7" fill="#FFD6D6" stroke="var(--pin)" stroke-width="2"/>`+r(330,110)+jet(390,140)+r(440,170)+r(470,200);
+    s+=sp(260,280)+sp(310,280)+sp(260,320)+sp(310,320)+L(380,300,v.decks,112,'var(--muted)','start');
+    s+=`<path d="M70 190 L240 100 L285 103 L330 100 L390 140 L440 160 L470 190 L300 280" class="yarn"/>`;
+    s+=person(560,390);
+  }
+  if(k==='double'){
+    s+=`<rect x="250" y="60" width="120" height="320" rx="8" fill="var(--bg)" stroke="var(--line)"/>`+L(310,50,v.frame,300);
+    [[-1,230],[1,390]].forEach(([d,x])=>{
+      s+=r(x,110)+r(x,150)+jet(x+d*30,190)+r(x,230)+r(x,260);
+      s+=`<rect x="${d<0?x-110:x+30}" y="290" width="80" height="60" rx="10" fill="var(--panel)" stroke="var(--hl)" stroke-width="2"/>`+sp(d<0?x-104:x+36,300)+`<rect x="${d<0?x-60:x+80}" y="318" width="30" height="8" rx="3" fill="var(--panel)" stroke="var(--wind)"/>`;
+      s+=`<path d="M${x} 100 L${x} 150 L${x+d*30} 190 L${x} 230 L${x} 260 L${d<0?x-87:x+53} 300" class="yarn"/>`;
+    });
+    s+=L(12,377,v.doffer,330,'#1F7A36','start')+L(500,377,v.sideB,150,'var(--muted)');
+    s+=`<rect x="20" y="100" width="60" height="150" rx="6" fill="var(--bg)" stroke="var(--line)"/><rect x="540" y="100" width="60" height="150" rx="6" fill="var(--bg)" stroke="var(--line)"/>`+L(50,92,v.creelA,96)+L(570,92,v.creelB,96);
+  }
+  if(k==='single'){
+    [0,1,2].forEach(i=>{const x=60+i*180;
+      s+=`<rect x="${x}" y="40" width="150" height="340" rx="10" fill="var(--panel)" stroke="var(--line)"/><rect x="${x+8}" y="48" width="22" height="10" rx="3" fill="var(--hl)"/>`;
+      s+=`<circle cx="${x+40}" cy="90" r="22" fill="#F3C98B" stroke="#B07A2A"/><circle cx="${x+110}" cy="90" r="22" fill="#C8EBCD" stroke="#2F8F46"/>`;
+      s+=r(x+45,150)+r(x+105,150)+jet(x+75,200)+r(x+75,240)+`<circle cx="${x+75}" cy="275" r="12" fill="#FCE0C8" stroke="var(--heat)" stroke-width="2"/><rect x="${x+40}" y="310" width="70" height="44" rx="12" fill="#E9ECEF" stroke="var(--wind)"/>`;
+      s+=`<path d="M${x+45} 112 L${x+45} 150 L${x+75} 200 L${x+75} 310 M${x+105} 112 L${x+105} 150 L${x+75} 200" class="yarn"/>`;
+      s+=TX(x+75,30,fmt(v.pos,{i:i+1,r:'ABC'[i]}),'var(--fg)','middle',600,12,170);
+    });
+    s+=TX(310,410,v.single,'#1F7A36','middle',600,12.5,600);
+  }
+  if(k==='winder'){
+    s+=`<rect x="140" y="80" width="360" height="300" rx="10" fill="var(--panel)" stroke="var(--line)"/>`+L(320,70,v.platform,350);
+    s+=`<rect x="30" y="120" width="70" height="160" rx="6" fill="var(--bg)" stroke="var(--line)"/><rect x="45" y="135" width="40" height="28" rx="5" fill="#F3C98B" stroke="#B07A2A"/><rect x="45" y="220" width="40" height="28" rx="5" fill="#C8EBCD" stroke="#2F8F46"/>`+L(65,112,v.creel,96);
+    s+=r(190,150)+L(190,132,v.core,90)+r(190,235)+L(190,265,v.effect,90);
+    s+=`<rect x="250" y="175" width="80" height="40" rx="8" fill="#D3F0F3" stroke="var(--water)"/>`+jet(290,195)+L(290,234,v.wetbox,170,'var(--air)');
+    s+=r(380,195)+L(380,177,v.master,84);
+    s+=`<rect x="400" y="250" width="60" height="10" rx="3" fill="var(--panel)" stroke="var(--twist)"/>`+L(468,259,v.sensor,146,'var(--muted)','start');
+    s+=`<rect x="395" y="290" width="70" height="50" rx="14" fill="#E9ECEF" stroke="var(--wind)"/>`;
+    s+=`<path d="M85 149 L190 140 L270 195 L380 185 L430 250 L430 290 M85 234 L190 225 L270 195" class="yarn"/>`;
+    s+=person(570,390);
+  }
+  return s;
+}
+function drawProf(){
+  const t=T();
+  segBtns($('ptabs'),PROFK.map(k=>[k,t.prof[k].t]),prof,k=>{prof=k;drawProf()});
+  $('profsvg').innerHTML=profSVG(prof);$('profsvg').setAttribute('aria-label',t.ui.ariaProf);
+  const p=t.prof[prof];
+  $('profdesc').innerHTML=`<h3>${esc(p.t)}</h3><p>${esc(p.d)}</p><span class="lbl" style="margin-top:10px">${esc(t.ui.examples)}</span>${p.ex.map(e=>`<span class="pill">${esc(e)}</span>`).join('')}`+
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px"><div><span class="lbl" style="color:#1F7A36">${esc(t.ui.pros)}</span><ul style="padding-left:16px;margin:0">${p.pro.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div><span class="lbl" style="color:var(--heat)">${esc(t.ui.cons)}</span><ul style="padding-left:16px;margin:0">${p.con.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
+}
+
+// ── 3 manufacturers & models
+function drawFilters(){
+  const u=T().ui;
+  $('lq').textContent=u.search;$('q').placeholder=u.searchPh;$('lreg').textContent=u.region;$('lauto').textContent=u.operation;
+  segBtns($('freg'),REGK.map((k,i)=>[k,i?u.regions[i-1]:u.all]),flt.reg,v=>{flt.reg=v;drawFilters();drawMfr()});
+  segBtns($('fauto'),[['all',u.all],['auto',u.autodoff],['man',u.manual]],flt.auto,v=>{flt.auto=v;drawFilters();drawMfr()});
+}
+$('q').addEventListener('input',e=>{flt.q=e.target.value.toLowerCase().trim();drawMfr()});
+function okModel(m,mt,M,Mt){
+  if(flt.auto==='auto'&&m.auto!==true)return false;
+  if(flt.auto==='man'&&m.auto!==false)return false;
+  if(treeSel&&!m.tags.includes(treeSel))return false;
+  if(flt.q){const h=[Mt.name,Mt.city,Mt.note,mt.n,mt.spec,m.bl,M.country].join(' ').toLowerCase();if(!h.includes(flt.q))return false}
+  return true;
+}
+function drawMfr(){
+  const t=T(),u=t.ui,ch=t.chips;
+  const tf=$('treefilter');
+  if(treeSel){tf.innerHTML=`${esc(u.treeFilter)} <b>${esc(treeLabel(treeSel))}</b><button type="button" id="clr">${esc(u.reset)}</button>`;$('clr').onclick=()=>{treeSel=null;drawTree();drawMfr()}}
+  else tf.innerHTML='';
+  const out=[];
+  MFR.forEach((M,mi)=>{
+    if(flt.reg!=='all'&&M.reg!==flt.reg)return;
+    const Mt=t.mfr[mi];
+    const ms=M.models.map((m,j)=>[m,Mt.models[j]]).filter(([m,mt])=>okModel(m,mt,M,Mt));if(!ms.length)return;
+    out.push(`<div class="mcard"><div class="top"><span class="flag">${esc(M.country)}</span><div><h3>${esc(Mt.name)}</h3><div class="meta">${esc(Mt.city)} · ${esc(Mt.owner)}</div></div></div>`+
+      `<div class="thumb"><svg viewBox="0 0 620 420" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${profSVG(M.thumb)}</svg></div><div class="mnote">${esc(Mt.note)}</div>`+
+      `<div class="models">`+ms.map(([m,mt])=>`<div class="model"><div class="mn">${esc(mt.n)}${m.pos?` <span>· ${esc(fmt(u.upTo,{n:m.pos}))}</span>`:''}${m.speed?` <span>· ${m.speed} m/min</span>`:''}</div>`+
+        `<div class="ms">${esc(mt.spec)}</div><div>`+
+        (m.auto===true?`<span class="chip auto">${esc(ch.auto)}</span>`:m.auto===false?`<span class="chip man">${esc(ch.man)}</span>`:'')+
+        (m.tags.includes('legacy')?`<span class="chip lg">${esc(ch.legacy)}</span>`:'')+
+        (m.tags.includes('poy')?`<span class="chip pes">${esc(ch.poy)}</span>`:'')+(m.tags.includes('fdy')?`<span class="chip pes">${esc(ch.fdy)}</span>`:'')+
+        (m.tags.includes('ce')?`<span class="chip pa">${esc(ch.ce)}</span>`:'')+(m.tags.includes('tech')?`<span class="chip">${esc(ch.tech)}</span>`:'')+
+        (m.tags.includes('combo')?`<span class="chip">${esc(ch.combo)}</span>`:'')+`</div></div>`).join('')+
+      `<div class="msrc">${esc(fmt(u.source,{d:M.dom}))}</div></div></div>`);
+  });
+  $('mfr').innerHTML=out.join('')||`<div class="empty">${esc(u.empty)}</div>`;
+}
+
+// ── 4 comparison
+function drawBars(){
+  const u=T().ui;
+  segBtns($('csort'),[['pos',u.sortPos],['speed',u.sortSpeed]],mode,v=>{mode=v;drawBars()});
+  const rows=[];
+  MFR.forEach(M=>M.models.forEach(m=>{const v=m[mode];if(v&&!m.tags.includes('legacy')&&!m.rel)rows.push({l:m.bl,v,r:M.reg})}));
+  rows.sort((a,b)=>b.v-a.v);
+  const max=mode==='pos'?240:1600;
+  $('bars').innerHTML=rows.map(r=>`<div class="row"><div>${esc(r.l)}</div><div class="track"><div class="fill" style="width:${r.v/max*100}%;background:${RC[r.r]}"></div></div><div class="v">${r.v}</div></div>`).join('');
+  $('legend').innerHTML=['EU','JP','CN','IN'].map((k,i)=>`<span><i style="background:${RC[k]}"></i>${esc(u.regions[i])}</span>`).join('');
+  $('barsnote').textContent=u.barsNote;
+}
+
+// ── 5 market
+function drawMarket(){
+  const t=T();
+  $('timeline').innerHTML=TLY.map((y,i)=>`<div class="tev"><b>${y}</b><div>${esc(t.tl[i])}</div></div>`).join('');
+  $('classifh').textContent=t.ui.classif;
+  $('classif').innerHTML=t.classif.map(([b,x])=>`<li><b>${esc(b)}</b> ${esc(x)}</li>`).join('');
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NSC)%NSC;
+  for(let k=0;k<NSC;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=SOURCES.map(x=>`<li>${esc(x)}</li>`).join('');
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  drawCtl();drawProc();showDetail();drawTree();drawProf();drawFilters();drawMfr();drawBars();drawMarket();go(scene);
+}
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+})();
+</script>
+</body>
+</html>

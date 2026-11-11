@@ -33,6 +33,10 @@ TEXTS = {
                   "Enter text (<i>contains…</i>) or, for numbers, a range from/to.",
                   "A green ▼ marks filtered columns. Right-click again → <i>Clear this filter</i> or <i>Clear all filters</i>."],
                  "Several column filters work together (all must match)."),
+                ("task", "Learn more about a material or yarn type",
+                 ["Right-click the <i>Material</i> (e.g. PES) or <i>Garntyp</i> (e.g. DTY) cell of a yarn → "
+                  "<b>Learn more in Knowledge Base…</b>. The same works on the drop-downs in New/Edit Yarn.",
+                  "The fibre portrait (or the process page) opens in a window. " + B("Close") + " or Esc brings you back."]),
                 ("task", "See in which trial series a yarn was used",
                  ["Click the <i>UsedInTrial</i> cell of the yarn (3). The series appear below it.",
                   "Click a series to see the trial numbers, double-click it to open the series."]),
@@ -82,6 +86,10 @@ TEXTS = {
                   "Text eingeben (<i>contains…</i>) oder bei Zahlen einen Bereich von/bis.",
                   "Ein grünes ▼ markiert gefilterte Spalten. Erneuter Rechtsklick → <i>Clear this filter</i> oder <i>Clear all filters</i>."],
                  "Mehrere Spaltenfilter wirken zusammen (alle müssen passen)."),
+                ("task", "Mehr über ein Material oder einen Garntyp erfahren",
+                 ["Rechtsklick auf die Zelle <i>Material</i> (z.&nbsp;B. PES) oder <i>Garntyp</i> (z.&nbsp;B. DTY) eines Garns → "
+                  "<b>Learn more in Knowledge Base…</b>. Das geht auch bei den Auswahllisten in New/Edit Yarn.",
+                  "Das Faserporträt (oder die Seite zum Verfahren) öffnet sich in einem Fenster. " + B("Close") + " oder Esc bringt dich zurück."]),
                 ("task", "Sehen, in welchen Versuchsserien ein Garn verwendet wurde",
                  ["Auf die Zelle <i>UsedInTrial</i> des Garns klicken (3). Die Serien erscheinen darunter.",
                   "Klick auf eine Serie zeigt die Versuchsnummern, Doppelklick öffnet die Serie."]),
@@ -131,6 +139,10 @@ TEXTS = {
                   "Introduce un texto (<i>contains…</i>) o, para números, un rango desde/hasta.",
                   "Un ▼ verde marca las columnas filtradas. Otro clic derecho → <i>Clear this filter</i> o <i>Clear all filters</i>."],
                  "Varios filtros de columna se combinan (deben cumplirse todos)."),
+                ("task", "Saber más sobre un material o un tipo de hilo",
+                 ["Clic derecho en la celda <i>Material</i> (p.&nbsp;ej. PES) o <i>Garntyp</i> (p.&nbsp;ej. DTY) de un hilo → "
+                  "<b>Learn more in Knowledge Base…</b>. También funciona en las listas desplegables de New/Edit Yarn.",
+                  "El retrato de la fibra (o la página del proceso) se abre en una ventana. " + B("Close") + " o Esc te devuelve."]),
                 ("task", "Ver en qué series de ensayos se usó un hilo",
                  ["Haz clic en la celda <i>UsedInTrial</i> del hilo (3). Las series aparecen debajo.",
                   "Un clic en una serie muestra los números de ensayo, un doble clic abre la serie."]),
