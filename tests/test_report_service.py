@@ -305,3 +305,12 @@ def test_delete_report_only_author_or_superuser(monkeypatch):
     assert receiver == "receiveDeleteDenied" and not deleted
     receiver, args = rs.handle("deleteReport", ["5"], user={"id": 7, "access_level": 2}, series_pk=1)
     assert receiver == "receiveDeleteResult" and args == [5] and deleted
+
+
+def test_group_join_keeps_table_and_uses_alias():
+    """2026-11-13: the alias replaced the table name ("LEFT JOIN gb_x ON ...") - group-by 'rohling' always failed."""
+    assert rs.group_join_sql("tblfoo", "gb_x", "LEFT JOIN tblfoo ON tblfoo.TrialID = T.ID") == \
+        "LEFT JOIN tblfoo AS gb_x ON gb_x.TrialID = T.ID"
+    # tbljetrohling has no JetID - the jet points to its blank (tbljets.Rohling)
+    assert rs.group_join_sql("tbljetrohling", "gb_rohling", "LEFT JOIN tbljetrohling ON tbljetrohling.JetID = J.ID") == \
+        "LEFT JOIN tbljetrohling AS gb_rohling ON gb_rohling.ID = J.Rohling"

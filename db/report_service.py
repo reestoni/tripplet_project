@@ -297,6 +297,25 @@ def series_data(series_pk: int) -> Dict[str, Any]:
             "meta": {"machine": machine, "material": material}}
 
 
+# Known relations for group-by tables whose join in tblSmartChartAxis is wrong: tbljetrohling has
+# no JetID - the jet points to its blank via tbljets.Rohling (as _ADV_JOINED does).
+_GROUP_JOIN_ON = {"tbljetrohling": "{a}.ID = J.Rohling"}
+
+
+def group_join_sql(table: str, alias: str, join_sql: str) -> str:
+    """JOIN for a group-by axis under its own alias. Before 2026-11-13 the alias replaced the
+    table NAME too ("LEFT JOIN gb_rohling ON ...") and the query always failed."""
+    import re as _re
+    tl = str(table).lower()
+    if tl in _GROUP_JOIN_ON:
+        on = _GROUP_JOIN_ON[tl].format(a=alias)
+    else:
+        m = _re.search(r"\bON\b(.*)$", join_sql, flags=_re.I | _re.S)
+        on = m.group(1).strip() if m else "1=0"
+        on = _re.sub(rf"\b{_re.escape(table)}\.", f"{alias}.", on, flags=_re.I)
+    return f"LEFT JOIN {table} AS {alias} ON {on}"
+
+
 def run_visual_query(series_pks, group_by: str, filters, adv_filters=None) -> List[dict]:
     """Rows over several series (X axis with is_group_by) -> receiveQueryResult(rows, len(rows)).
 
@@ -394,15 +413,15 @@ def run_visual_query(series_pks, group_by: str, filters, adv_filters=None) -> Li
         if _g.get('is_group_by') and _g.get('main_table') and _g.get('field'):
             _alias = f"gb_{_g['key']}"
             _expr  = f"{_alias}.{_g['field']}"
-            _g_axes_map[_g['key']] = {'expr': _expr, 'alias': _alias, 'join_sql': _g.get('join_sql')}
+            _g_axes_map[_g['key']] = {'expr': _expr, 'alias': _alias, 'join_sql': _g.get('join_sql'),
+                                      'table': _g['main_table']}
     # Collect all is_group_by X-axis keys so we can store group_label under them too
     _group_x_keys = [x['key'] for x in (db_x or []) if x.get('is_group_by')]
 
     if group_by in _g_axes_map:
         _ginfo = _g_axes_map[group_by]
         if _ginfo['join_sql']:
-            # JOIN-SQL: Alias einsetzen
-            _join = _ginfo['join_sql'].replace(_ginfo['join_sql'].split()[2], _ginfo['alias'])
+            _join = group_join_sql(_ginfo['table'], _ginfo['alias'], _ginfo['join_sql'])
             if _join not in extra_joins:
                 extra_joins.append(_join)
             group_expr = _ginfo['expr']
