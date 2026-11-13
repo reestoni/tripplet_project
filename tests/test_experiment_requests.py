@@ -50,6 +50,9 @@ class _Cur:
         self.log, self.rows, self.lastrowid, self.rowcount, self.description = log, rows, 77, 1, None
 
     def execute(self, sql, params=None):
+        if sql.strip().upper() in ("START TRANSACTION",):
+            self.log.append(("<tx>", []))     # transaction marker, checked separately
+            return
         self.log.append((" ".join(sql.split()), list(params or [])))
 
     def fetchone(self):
@@ -86,6 +89,10 @@ def fakedb(monkeypatch):
     monkeypatch.setattr(er.request_changes, "supports_change_tracking", lambda: True)
     monkeypatch.setattr(er.request_changes, "archive_current_version",
                         lambda rid: calls.append(("archive", rid)))
+    # since 2026-11-13 the archive runs on the save's own cursor (one transaction)
+    monkeypatch.setattr(er.request_changes, "supports_versioning", lambda: True)
+    monkeypatch.setattr(er.request_changes, "_archive_current_version_on",
+                        lambda cur, rid: calls.append(("archive", rid)))
     monkeypatch.setattr(er.request_changes, "create_or_update_pending_change",
                         lambda **kw: calls.append(("proposal", kw)) or 99)
     return log, calls
@@ -168,6 +175,7 @@ def test_save_superuser_archives_then_updates(fakedb):
     log, calls = fakedb
     r = _save(SU, 5, dict(FULL, Aufgabe="new"), loaded_values=dict(FULL), change_of_id=None)
     assert r.kind == "updated" and calls == [("archive", 5)]
+    assert log.pop(0) == ("<tx>", [])           # archive + update in one transaction
     assert log[0][0] == ("UPDATE [tblExperimentRequests] SET [Titel]=?,[Versuchsgrund]=?,[Aufgabe]=?,"
                          "[Beurteilungsparameter]=?,[Versuchsbedingungen]=?,[Wunschtermin]=?,"
                          "[Projekt]=?,[MachineID]=? WHERE [ID]=?")
@@ -186,7 +194,7 @@ def test_save_normal_user_makes_proposal(fakedb):
 def test_save_change_copy_updated_directly_without_archive(fakedb):
     log, calls = fakedb
     r = _save(NU, 9, dict(FULL, Aufgabe="new"), loaded_values=dict(FULL), change_of_id=5)
-    assert r.kind == "updated" and calls == [] and log[0][1][-1] == 9
+    assert r.kind == "updated" and calls == [] and log[-1][1][-1] == 9
 
 
 def test_save_without_change_tracking_updates_directly(fakedb, monkeypatch):
@@ -312,3 +320,19 @@ def test_image_paths_and_download_root(tmp_path, monkeypatch):
     monkeypatch.setattr(ei, "list_images", lambda rid: rows)
     assert ei.image_file(7, 1) == os.path.normcase(os.path.realpath(str(good)))
     assert ei.image_file(7, 2) is None and ei.image_file(7, 3) is None and ei.image_file(7, 9) is None
+
+
+def test_rename_image_only_uploader_or_superuser(monkeypatch):
+    """2026-11-13: same rule as delete (before: anyone who could open the request)."""
+    import pytest
+    from db import experiment_request_images as ei
+    from db import experiment_requests as er
+    monkeypatch.setattr(er, "fetch_request", lambda rid: {"ID": rid, "CreatedBy": 1})
+    images = [{"ID": 3, "CreatedBy": 9, "OriginalFilename": "a.png", "StoredFilename": "x.png"}]
+    monkeypatch.setattr(ei, "list_images", lambda rid: images)
+    monkeypatch.setattr(ei, "persist_original_filename", lambda *a: True)
+    with pytest.raises(PermissionError):
+        ei.rename_image({"id": 1, "access_level": 2}, 4, 3, "new")       # owner of the request, not uploader
+    assert ei.rename_image({"id": 1, "access_level": 4}, 4, 3, "new") == "new.png"   # superuser
+    images[0]["CreatedBy"] = 1
+    assert ei.rename_image({"id": 1, "access_level": 2}, 4, 3, "new") == "new.png"   # uploader

@@ -844,10 +844,40 @@ def save_report(data: dict, user: Optional[dict]) -> Dict[str, Any]:
     return {"id": int(report_id), "forked": forked, "message": msg}
 
 
-def delete_report(report_id: int) -> int:
-    """Delete a report (CASCADE deletes blocks + notes) -> receiveDeleteResult(id)."""
+class ReportPermissionError(Exception):
+    """The user may not delete this report."""
+
+
+def can_delete_report(report_id: int, user: Optional[dict]) -> bool:
+    """Same owner rule as overwriting (save_report): the author (by UserID) or a
+    superuser; old reports without UserID stay free (2026-11-13 - before, anybody
+    could delete any report)."""
+    from db.connection import fetch_all
+    u = _user(user)
+    try:
+        if int(u.get("access_level") or 0) >= 4:
+            return True
+    except (TypeError, ValueError):
+        pass
+    rows = fetch_all("SELECT UserID FROM tblSmartChartReport WHERE ID=?", [int(report_id)])
+    if not rows:
+        return True                     # already gone - deleting is a no-op
+    owner = rows[0].get("UserID")
+    if owner is None:
+        return True
+    try:
+        return u.get("id") is not None and int(owner) == int(u.get("id"))
+    except (TypeError, ValueError):
+        return False
+
+
+def delete_report(report_id: int, user: Optional[dict] = None) -> int:
+    """Delete a report (CASCADE deletes blocks + notes) -> receiveDeleteResult(id).
+    ReportPermissionError if `user` is not the author or a superuser."""
     from db.connection import execute
     rid = int(report_id)
+    if not can_delete_report(rid, user):
+        raise ReportPermissionError("Only the author or a superuser can delete this report.")
     execute("DELETE FROM tblSmartChartReport WHERE ID=?", [rid])
     return rid
 
@@ -1392,7 +1422,9 @@ def _slot_loadReport(report_id_str, *, user, series_pk):
 
 def _slot_deleteReport(report_id_str, *, user, series_pk):
     try:
-        return "receiveDeleteResult", [delete_report(int(report_id_str))]
+        return "receiveDeleteResult", [delete_report(int(report_id_str), user)]
+    except ReportPermissionError as e:
+        return "receiveDeleteDenied", [str(e)]
     except Exception as e:
         logger.error("deleteReport: %s", e)
         return None

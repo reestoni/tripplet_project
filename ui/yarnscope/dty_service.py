@@ -40,7 +40,7 @@ COLOR_OPEN_SEGMENT = "#39A650"     # green open-spot segment means
 COLOR_SIGNAL_LINE = "#c9d2e3"      # smoothed signal line / signal bars
 COLOR_GARNSPIEGEL_OPEN = "#3a6a4a"  # passed to the canvas, which draws open parts white
 TREND_COLOURS = {"open_knot": "#56d7d0", "peak_valley": "#ff6bb5", "opening": "#8de6a0"}
-TREND_TITLES = {"open_knot": "Centre open spot–knot", "peak_valley": "Mitte Peak–Tal",
+TREND_TITLES = {"open_knot": "Centre open spot–knot", "peak_valley": "Centre peak–valley",
                 "opening": "Open spot trend"}
 PROCESS_WAVE_COLOURS = {"binned": "#ffd166", "fitted": "#ff9f1c"}
 COMPARE_COLOURS = ["#56d7d0", "#ff6bb5", "#ffd166", "#9b8cff", "#7ddf9a", "#ff9f1c"]
@@ -51,7 +51,7 @@ VERDICT_COLOURS = {
 }
 COMPARE_TABLE_HEADERS = [
     "👁", "Farbe", "Trial", "Median [µm]", "λ [m]", "A [µm]", "R²", "Spektrum", "Drift [µm/m]", "Rest-RMS [µm]",
-    "10 m sign.", "10 m λ-CV", "10 m A med. [µm]", "10 m R² med.", "Wellenbefund",
+    "10 m sign.", "10 m λ-CV", "10 m A med. [µm]", "10 m R² med.", "Wave verdict",
 ]
 # (label, vals key, decimals, unit) of the green metrics box below the tabs
 METRICS_CARD = [
@@ -405,7 +405,7 @@ def roll_trend(positions, values, mode: str, amount: float):
     if mode == "Meter":
         return rolling_mean_by_distance(positions, values, amount), f"{amount:.1f} m"
     pairs = max(1, int(round(amount)))
-    return rolling_mean(values, pairs), f"{pairs} Paare"
+    return rolling_mean(values, pairs), f"{pairs} pairs"
 
 
 def local_extrema(values):
@@ -1335,7 +1335,7 @@ def comparison_traces(results, normalized: bool = True, show_process_mean: bool 
         if visible and show_process_mean:
             traces.append(dict(base, kind="process_mean", x=analysis["x"],
                                y=analysis["binned"] - offset,
-                               label=f'{result["label"]} Prozessmittel'))
+                               label=f'{result["label"]} process mean'))
         if visible and show_drift:
             traces.append(dict(base, kind="drift", x=analysis["x"],
                                y=analysis["drift_line"] - offset,
@@ -1343,7 +1343,7 @@ def comparison_traces(results, normalized: bool = True, show_process_mean: bool 
         if visible:
             traces.append(dict(base, kind="sine_fit", x=analysis["x"],
                                y=analysis["fitted"] - offset,
-                               label=f'{result["label"]} Sinus-Fit'))
+                               label=f'{result["label"]} sine fit'))
         if visible and show_open_trend:
             seg_x, seg_y = result.get("open_seg_x") or [], result.get("open_seg_y") or []
             if seg_x:

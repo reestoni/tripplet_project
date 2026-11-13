@@ -336,18 +336,22 @@ def accept_pending_change(copy_id: Any) -> tuple[Optional[Any], Optional[Any]]:
     actually a pending change.
     """
     with get_connection() as cn:
-        cn.autocommit = False
         cur = cn.cursor()
+        # the pool is autocommit=True - START TRANSACTION makes commit/rollback real
+        # (fixed 2026-11-13; before, "cn.autocommit = False" only set an attribute)
+        cur.execute("START TRANSACTION")
         try:
             cur.execute("SELECT * FROM [tblExperimentRequests] WHERE [ID]=?", [copy_id])
             row = cur.fetchone()
             if not row:
+                cn.rollback()
                 return None, None
             col_names = [d[0] for d in (cur.description or [])]
             values = {col_names[i]: row[i] for i in range(len(col_names))}
 
             original_id = values.get("ChangeOfRequestID")
             if original_id in (None, ""):
+                cn.rollback()
                 return None, None
 
             archived_version_id = None

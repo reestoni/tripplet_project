@@ -3808,6 +3808,7 @@ function renderReportList(reports){
   });
 }
 
+function receiveDeleteDenied(message){alert(message);}
 function receiveDeleteResult(reportId){
   _allReports=_allReports.filter(function(r){return r.id!==reportId;});
   renderReportList(_allReports);

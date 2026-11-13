@@ -878,7 +878,7 @@ def save_request(user: dict, request_id: Any, values: Dict[str, Any], *,
         values = with_auto_fields(user, cols, values, STATUS_REQUEST)
         # CreatedBy muss beim Insert vorhanden sein
         if values.get("CreatedBy") in (None, ""):
-            return SaveResult("no_user", None, "Login fehlt",
+            return SaveResult("no_user", None, "Login missing",
                               "CreatedBy could not be set because no user ID was found. Please log in again.")
         # ID: falls GUID/Text → setzen, ansonsten weglassen (Autonumber)
         id_col = next((c for c in cols if c.name == "ID"), None)
@@ -904,7 +904,7 @@ def save_request(user: dict, request_id: Any, values: Dict[str, Any], *,
             new_id = getattr(cur, "lastrowid", None)
         if new_id in (None, 0, "") and values.get("ID") is not None:
             new_id = values.get("ID")
-        return SaveResult("inserted", new_id, "Gespeichert", "Experiment request saved.")
+        return SaveResult("inserted", new_id, "Saved", "Experiment request saved.")
 
     if loaded_values is _UNSET or change_of_id is _UNSET:
         row = fetch_request(request_id)
@@ -948,24 +948,31 @@ def save_request(user: dict, request_id: Any, values: Dict[str, Any], *,
         # (change_of_id set), it's not "live" - no archive
         # needed. Best-effort: a failure here must not block the
         # actual save.
-        if change_of_id is None:
-            try:
-                request_changes.archive_current_version(request_id)
-            except Exception:
-                pass
-
         set_clause = ",".join([f"[{c}]=?" for c in upd_cols])
         sql = f"UPDATE [{TABLE}] SET {set_clause} WHERE [ID]=?"
         params = [values.get(c) for c in upd_cols] + [request_id]
 
+        # Archive + update in ONE transaction (2026-11-13): before, a failed update
+        # left an archived "version" of a change that never happened. The archive
+        # itself stays best-effort - its failure still must not block the save.
         with get_connection() as cn:
             cur = cn.cursor()
-            cur.execute(sql, params)
+            cur.execute("START TRANSACTION")   # pool is autocommit=True
             try:
+                if change_of_id is None and request_changes.supports_versioning():
+                    try:
+                        request_changes._archive_current_version_on(cur, request_id)
+                    except Exception:
+                        pass
+                cur.execute(sql, params)
                 cn.commit()
             except Exception:
-                pass
-        return SaveResult("updated", request_id, "Gespeichert", "Experiment request updated.")
+                try:
+                    cn.rollback()
+                except Exception:
+                    pass
+                raise
+        return SaveResult("updated", request_id, "Saved", "Experiment request updated.")
 
     # Normaler Nutzer bearbeitet ein bereits gespeichertes
     # Original: das Original bleibt unangetastet (inkl. Status
@@ -978,7 +985,7 @@ def save_request(user: dict, request_id: Any, values: Dict[str, Any], *,
         created_by=user_id(user),
     )
     return SaveResult(
-        "proposal", copy_id, "Zur Pruefung eingereicht",
+        "proposal", copy_id, "Submitted for review",
         "Your changes were saved as a proposal and are waiting for approval by a superuser. Until "
         "then the existing request stays unchanged.",
     )
@@ -1531,8 +1538,8 @@ def link_experiment(request_id: Any, experiment_pk: Any, er_field: str, pk_field
     """Links the experiment to the request and sets RequestStatus 4. Raises on DB errors."""
     try:
         with get_connection() as cn:
-            cn.autocommit = False
             cur = cn.cursor()
+            cur.execute("START TRANSACTION")   # pool is autocommit=True - both updates or none (fixed 2026-11-13)
             cur.execute(
                 f"UPDATE [tblExperimente] SET [{er_field}]=? WHERE [{pk_field}]=?",
                 [request_id, experiment_pk],

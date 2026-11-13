@@ -344,6 +344,8 @@ def rename_image(user: dict, request_id: Any, image_id: Any, typed: str) -> Opti
     img = next((d for d in list_images(request_id) if str(d.get("ID")) == str(image_id)), None)
     if img is None:
         raise LookupError("Image not found.")
+    if not can_delete(user, img):     # same rule as delete: uploader or superuser (2026-11-13)
+        raise PermissionError("Only the person who uploaded the image or a superuser can rename it.")
     new_name = new_original_filename(img, typed)
     if new_name is None:
         return None

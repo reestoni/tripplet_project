@@ -253,7 +253,7 @@ def test_save_load_delete_round_trip_on_dev_local():
             out["delete_slot"] = res == ("receiveDeleteResult", [r3["id"]])
             created.remove(r3["id"])
             out["deleted"] = rs.load_report(r3["id"]) is None
-            rs.delete_report(r["id"]); created.remove(r["id"])
+            rs.delete_report(r["id"], author); created.remove(r["id"])
             # layout templates
             tpl = rs.save_layout_template({"name": "RT tpl", "createdBy": "rt",
                                            "blocks": [{"chartType": "scatter", "xKey": "a", "yKey": "b"}]})
@@ -286,3 +286,22 @@ def test_save_load_delete_round_trip_on_dev_local():
                                        [False, "Only superusers can edit the default template"]], False]
     assert out["tpl_deleted"] is True
     assert out["counts_equal"]
+
+
+def test_delete_report_only_author_or_superuser(monkeypatch):
+    """2026-11-13: same owner rule as overwriting - before, anybody could delete any report."""
+    import db.connection as dbc
+    owner = {"UserID": 7}
+    monkeypatch.setattr(dbc, "fetch_all", lambda sql, p=None: [owner] if "SELECT UserID" in sql else [])
+    deleted = []
+    monkeypatch.setattr(dbc, "execute", lambda sql, p=None: deleted.append(p))
+    assert rs.can_delete_report(5, {"id": 7, "access_level": 2})
+    assert not rs.can_delete_report(5, {"id": 8, "access_level": 3})
+    assert rs.can_delete_report(5, {"id": 8, "access_level": 4})
+    owner["UserID"] = None
+    assert rs.can_delete_report(5, {"id": 8, "access_level": 1})        # old report without owner stays free
+    owner["UserID"] = 7
+    receiver, args = rs.handle("deleteReport", ["5"], user={"id": 8, "access_level": 2}, series_pk=1)
+    assert receiver == "receiveDeleteDenied" and not deleted
+    receiver, args = rs.handle("deleteReport", ["5"], user={"id": 7, "access_level": 2}, series_pk=1)
+    assert receiver == "receiveDeleteResult" and args == [5] and deleted

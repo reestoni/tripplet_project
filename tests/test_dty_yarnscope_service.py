@@ -152,7 +152,7 @@ def test_save_analysis_db_error_returns_false(monkeypatch):
 
 def test_rolling_and_trend_helpers():
     assert svc.rolling_mean([1, 2, 3, 4], 2) == [1.0, 1.5, 2.5, 3.5]
-    assert svc.roll_trend([0, 1, 2], [1, 2, 3], "Paare", 2) == ([1.0, 1.5, 2.5], "2 Paare")
+    assert svc.roll_trend([0, 1, 2], [1, 2, 3], "Paare", 2) == ([1.0, 1.5, 2.5], "2 pairs")
     y, label = svc.roll_trend([0.0, 0.5, 1.0, 1.5], [1, 2, 3, 4], "Meter", 0.5)
     assert label == "0.5 m" and y == [1.0, 1.5, 2.5, 3.5]
     x = np.linspace(0, 10, 2001)
