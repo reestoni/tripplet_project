@@ -147,3 +147,29 @@ def load_series_spool_ids(series_pk) -> Set[int]:
         except Exception:
             pass
     return out
+
+
+def series_materials(series_pk) -> List[Dict]:
+    """Material line of Show Experiment: per ply the most frequent yarn of the series
+    (robust against single wrong rows), sorted by ply number -> [{"ply", "yarn_id", "name"}].
+    Moved from ui/screen_show_experiment.py (_load_materials_summary) 2026-11-13, shared with the web app."""
+    import re
+    if not series_pk:
+        return []
+    rows = fetch_all(
+        "SELECT ts.Ply, y.ID AS YarnID, y.Name AS YarnName, COUNT(*) AS cnt "
+        "FROM tblTrialSettings ts JOIN tblYarn y ON y.ID = ts.YarnID JOIN tblTrial t ON t.ID = ts.TrialID "
+        "WHERE t.TrialSeriesID = ? GROUP BY ts.Ply, y.ID, y.Name ORDER BY ts.Ply, cnt DESC", [series_pk])
+    seen, out = set(), []
+    for r in rows or []:
+        ply = (r.get("Ply") or "").strip()
+        if ply in seen:
+            continue
+        seen.add(ply)
+        out.append({"ply": ply, "yarn_id": r.get("YarnID"), "name": (r.get("YarnName") or "").strip() or "(no name)"})
+
+    def _ply_key(m):
+        d = re.search(r"\d+", m["ply"])
+        return int(d.group()) if d else 9999
+    out.sort(key=_ply_key)
+    return out

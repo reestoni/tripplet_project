@@ -4421,39 +4421,10 @@ class ShowExperimentScreen(QWidget):
         if not getattr(self, "_series_pk", None):
             return ""
 
-        rows = fetch_all(
-            """
-            SELECT ts.Ply, y.ID AS YarnID, y.Name AS YarnName, COUNT(*) AS cnt
-            FROM tblTrialSettings ts
-                     JOIN tblYarn y ON y.ID = ts.YarnID
-                     JOIN tblTrial t ON t.ID = ts.TrialID
-            WHERE t.TrialSeriesID = ?
-            GROUP BY ts.Ply, y.ID, y.Name
-            ORDER BY ts.Ply, cnt DESC
-            """,
-            [self._series_pk],
-        )
-
-        if not rows:
+        from db.yarn_spools import series_materials   # Qt-free, shared with the web app
+        result = [(m["ply"], m["yarn_id"], m["name"]) for m in series_materials(self._series_pk)]
+        if not result:
             return ""
-
-        # Pro Ply nur die erste Zeile (= häufigste YarnName)
-        seen_plies = set()
-        result = []
-        for r in rows:
-            ply = (r.get("Ply") or "").strip()
-            if ply in seen_plies:
-                continue
-            seen_plies.add(ply)
-            yid = r.get("YarnID")
-            name = (r.get("YarnName") or "").strip() or "(no name)"
-            result.append((ply, yid, name))
-
-        def _ply_sort_key(triple):
-            m = re.search(r"\d+", triple[0])
-            return int(m.group()) if m else 9999
-
-        result.sort(key=_ply_sort_key)
 
         # Spulen-Symbol pro Ply (am Lager / nicht am Lager), Klick -> Lagerplaetze
         stock = _yarn_locations.load_stock_summary(yid for _p, yid, _n in result)
