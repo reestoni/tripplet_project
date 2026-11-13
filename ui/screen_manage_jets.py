@@ -2029,68 +2029,9 @@ class ManageJetsScreen(QWidget):
         return f'{f:.0f}' if f == int(f) else f'{f:.1f}'
 
     def _fetch_jet_usage(self, jet_id) -> List[Dict]:
-        """Alle TrialSeries (+ deren Versuchsnummern), die diesen Jet über
-        tbltrial.JetID verwenden (kein Ply/Settings-Umweg wie bei Yarn -
-        ein Trial referenziert seinen Jet direkt). Zusatzdaten pro Versuch wie
-        bei ManageYarnScreen (Overfeed/Speed, ATY-Sonderfelder), aber statt des
-        Jets (hier ja schon durch jet_id feststehend) wird das/die verwendete(n)
-        Garn(e) gezeigt - ein Trial kann mehrere Plies haben (tbltrialsettings),
-        darum GROUP_CONCAT statt eines einzelnen Werts."""
-        sql = (
-            "SELECT s.ID AS SeriesID, s.ExperimentID AS ExpPK, "
-            "e.ExperimentID AS ExperimentIdText, s.SeriesName, m.Maschine AS MachineName, "
-            "mt.Maschinentyp AS MachineType, "
-            "t.Versuchsnummer, t.Shaft2x_OF AS OverfeedPct, t.SpeedShaft2 AS SpeedMMin, "
-            "t.`Shaft1,1Core_OF` AS CoreOfPct, t.`Shaft1,2Effect_OF` AS EffectOfPct, "
-            "t.Shaft2Speed AS AtySpeedMMin, "
-            "GROUP_CONCAT(COALESCE(NULLIF(y.Kurzname, ''), y.Name) ORDER BY ts.Ply SEPARATOR ' / ') AS YarnNames "
-            "FROM tbltrial t "
-            "JOIN tbltrialseries s ON s.ID = t.TrialSeriesID "
-            "JOIN tblexperimente e ON e.ID = s.ExperimentID "
-            "LEFT JOIN tblmaschine m ON m.ID = s.MachineID "
-            "LEFT JOIN tblmaschinentypen mt ON mt.ID = m.Maschinentyp "
-            "LEFT JOIN tbltrialsettings ts ON ts.TrialID = t.ID "
-            "LEFT JOIN tblyarn y ON y.ID = ts.YarnID "
-            "WHERE t.JetID = ? AND " + exclude_references_sql("t") + " "
-            "GROUP BY t.ID, s.ID, s.ExperimentID, e.ExperimentID, s.SeriesName, m.Maschine, "
-            "mt.Maschinentyp, t.Versuchsnummer, t.Shaft2x_OF, t.SpeedShaft2, "
-            "t.`Shaft1,1Core_OF`, t.`Shaft1,2Effect_OF`, t.Shaft2Speed "
-            "ORDER BY e.ExperimentID, s.SeriesName, t.Versuchsnummer"
-        )
-        from db.connection import fetch_all
-        rows = fetch_all(sql, [jet_id])
-        series_map: Dict[object, Dict] = {}
-        for r in rows:
-            sid = r.get("SeriesID")
-            if sid not in series_map:
-                exp_txt = r.get("ExperimentIdText") or ""
-                series_name = r.get("SeriesName") or ""
-                label = f"{exp_txt}.{series_name}" if exp_txt else series_name
-                series_map[sid] = {
-                    "series_id": sid,
-                    "exp_pk": r.get("ExpPK"),
-                    "experiment_id_text": exp_txt,
-                    "label": label,
-                    "machine_name": r.get("MachineName"),
-                    "trial_numbers": [],
-                }
-            vno = r.get("Versuchsnummer")
-            if vno is None:
-                continue
-            existing_vnos = {t["vno"] for t in series_map[sid]["trial_numbers"]}
-            if vno not in existing_vnos:
-                is_aty = r.get("MachineType") == "ATY"
-                speed_val = r.get("AtySpeedMMin") if is_aty else r.get("SpeedMMin")
-                series_map[sid]["trial_numbers"].append({
-                    "vno": vno,
-                    "yarn": r.get("YarnNames"),
-                    "is_aty": is_aty,
-                    "of_pct": self._fmt_num(r.get("OverfeedPct")),
-                    "core_of": self._fmt_num(r.get("CoreOfPct")),
-                    "effect_of": self._fmt_num(r.get("EffectOfPct")),
-                    "speed": self._fmt_num(speed_val),
-                })
-        return list(series_map.values())
+        """Series (+ trials) that use this jet: db/jets_admin.jet_usage (Qt-free, shared with the web app)."""
+        from db import jets_admin
+        return jets_admin.jet_usage(jet_id)
 
     def _find_source_row_for_id(self, jet_id) -> Optional[int]:
         if not self.model:

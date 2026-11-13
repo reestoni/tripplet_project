@@ -20,13 +20,9 @@ from ui.widgets.friendly_error import show_error
 
 # ── File storage ─────────────────────────────────────────────────────────────
 def _jet_files_root() -> str:
-    try:
-        from db.connection import is_dev_mode
-        if is_dev_mode():
-            return "C:\\ttt\\JetFiles"
-    except Exception:
-        pass
-    return "H:\\Technik\\TrippleT\\JetFiles"
+    """JetFiles folder: db/jets_admin.files_root (shared with the web app)."""
+    from db import jets_admin
+    return jets_admin.files_root()
 
 _FILE_ICONS = {
     ".pdf":  "📄",
@@ -512,12 +508,8 @@ class NewJetScreen(QWidget):
         if not self._current_jet_id:
             return
         try:
-            from db.connection import fetch_all
-            rows = fetch_all(
-                "SELECT ID, FileName, StoredName, RelativePath, FileType, FileSizeKB, Notes "
-                "FROM tblJetFile WHERE JetID = %s ORDER BY UploadedAt DESC",
-                [self._current_jet_id]
-            )
+            from db import jets_admin
+            rows = jets_admin.list_files(self._current_jet_id)
         except Exception:
             return
         for r in rows:
@@ -554,24 +546,11 @@ class NewJetScreen(QWidget):
             QMessageBox.critical(self, "Upload failed", str(e))
             return
         errors = []
+        from db import jets_admin
         for path in paths:
             try:
-                fname  = os.path.basename(path)
-                ts     = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                stored = f"{ts}_{fname}"
-                dest   = os.path.join(jet_folder, stored)
-                shutil.copy2(path, dest)
-                rel    = os.path.join(str(self._current_jet_id), stored)
-                kb     = max(1, os.path.getsize(dest) // 1024)
-                ext    = os.path.splitext(fname)[1].lower()
-                ftype  = ("image" if ext in (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff")
-                          else "pdf" if ext == ".pdf" else "other")
-                execute(
-                    "INSERT INTO tblJetFile "
-                    "(JetID, FileName, StoredName, RelativePath, FileType, FileSizeKB, UploadedBy) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    [self._current_jet_id, fname, stored, rel, ftype, kb, uid]
-                )
+                with open(path, "rb") as fh:
+                    jets_admin.add_file(self._current_jet_id, os.path.basename(path), fh.read(), uid)
             except Exception as e:
                 errors.append(f"{os.path.basename(path)}: {e}")
         self._load_files()
@@ -616,8 +595,8 @@ class NewJetScreen(QWidget):
         if reply != QMessageBox.Yes:
             return
         try:
-            from db.connection import execute
-            execute("DELETE FROM tblJetFile WHERE ID = %s", [r["ID"]])
+            from db import jets_admin
+            jets_admin.remove_file(r["ID"])
         except Exception as e:
             QMessageBox.critical(self, "Delete failed", str(e))
             return

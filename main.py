@@ -847,181 +847,27 @@ class MainWindow(QMainWindow):
 
     # --- Data functions for Manage Jets --------------------------------------
     def _load_jets_data(self, limit: Optional[int] = None) -> List[Dict]:
-        """Lädt Jet-Daten aus tblJet mit has_files-Flag (0/1) und UsedInTrial
-        (rein berechnet, kein echtes tblDTYJets-Feld - ob dieser Jet in
-        mindestens einem Trial verwendet wurde, siehe tbltrial.JetID)."""
-        sql = """
-            SELECT j.*,
-                   CASE WHEN COUNT(f.ID) > 0 THEN 1 ELSE 0 END AS has_files,
-                   CASE WHEN EXISTS (SELECT 1 FROM tbltrial t WHERE t.JetID = j.ID)
-                        THEN 1 ELSE 0 END AS UsedInTrial
-            FROM tblDTYJets j
-            LEFT JOIN tblJetFile f ON f.JetID = j.ID
-            GROUP BY j.ID
-        """
-        try:
-            return fetch_all(sql, [])
-        except Exception:
-            # Fallback wenn tblJetFile noch nicht existiert
-            return fetch_all(
-                "SELECT j.*, "
-                "CASE WHEN EXISTS (SELECT 1 FROM tbltrial t WHERE t.JetID = j.ID) "
-                "THEN 1 ELSE 0 END AS UsedInTrial "
-                "FROM tblDTYJets j", [])
+        """Jet rows + has_files + UsedInTrial: db/jets_admin.load_jets (Qt-free, shared with the web app)."""
+        from db import jets_admin
+        return jets_admin.load_jets()
 
-    FK_DEF = [
-        # FK-Key (kanonisch), FK-Spalte in tblDTYJets, Mastertabelle, ID-Feld, Anzeigefeld
-        ("hersteller", "Hersteller", "tblJetHersteller", "ID", "Hersteller"),
-        ("serie", "Serie", "tblDTYSeries", "ID", "DTY Series"),
-        ("luftkanalform", "Luftkanalform",
-         "tblAirChannelShape", "ID", "Air Channel Shape"),
-        ("yarnchannelshape", "Yarn Channel Shape",
-         "tblYarnChannelShape", "ID", "Shape"),
-        ("wirbelkammer", "Wirbelkammer", "tblWirbelkammer", "ID", "Wirbelkammer"),
-        ("werkstoff", "Werkstoff", "tblWerkstoff", "ID", "Name"),
-        ("konusform", "Konus Form", "tblKonusForm", "ID", "KonusForm"),
-
-        # tblJetGroup: Display soll "GroupNumber | GroupName" sein (wie Manage Yarn)
-        ("jetgroup", "JetGroupID", "tblJetGroup", "ID", "GroupName"),
-
-        ("rohling", "Rohling", "tblJetRohling", "ID", "Name"),
-        ("jettype", "JetTypeID", "tblJetType", "ID", "Name"),
-    ]
+    # FK columns of tblDTYJets: db/jets_admin.FK_DEF
+    @property
+    def FK_DEF(self):
+        from db import jets_admin
+        return jets_admin.FK_DEF
 
     def _load_fk_maps_exact(self) -> Dict[str, Dict]:
-        """Lädt alle FK-Maps für Jet-Spalten (Garntyp, Material, Maschine usw.).
-
-        Returns:
-            Dict {Spaltenname: {'id2name': ..., 'name2id': ..., 'ordered_items': ...}}.
-        """
-        """Lädt alle FK-Werte ausschliesslich aus den Stammtabellen.
-
-        Jede ComboBox (Hersteller, Serie, Werkstoff, Konus Form, ...)
-        zeigt damit alle Einträge der jeweiligen Hilfstabelle, unabhängig
-        davon, ob der Wert bereits in tblDTYJets verwendet wird.
-
-        Zusätzlich werden Debug-Ausgaben geschrieben, damit sofort sichtbar ist,
-        wie viele Zeilen je Stammtabelle gefunden wurden bzw. ob ein Fehler
-        aufgetreten ist.
-        """
-        maps: Dict[str, Dict] = {}
-        for key, jets_fk_col, table, idc, namec in self.FK_DEF:
-            id_to_name: Dict = {}
-            name_to_id: Dict = {}
-
-            # Robustes SELECT mit sprechenden Alias-Namen
-            # Sonderfall: tblJetGroup soll als Label "GroupNumber | GroupName" erscheinen
-            # (und trotzdem die ID in tblDTYJets schreiben).
-            if str(table).strip().lower() == "tbljetgroup":
-                q = (
-                    f"SELECT [{idc}] AS [fk_id], "
-                    f"[GroupNumber] AS [fk_no], "
-                    f"[{namec}] AS [fk_name] "
-                    f"FROM [{table}] "
-                    f"ORDER BY [GroupNumber], [{namec}]"
-                )
-            elif str(table).strip().lower() == "tbljetrohling":
-                q = (
-                    f"SELECT [{idc}] AS [fk_id], "
-                    f"[Nummer] AS [fk_no], "
-                    f"[{namec}] AS [fk_name] "
-                    f"FROM [{table}] "
-                    f"ORDER BY [Nummer], [{namec}]"
-                )
-            else:
-                q = (
-                    f"SELECT [{idc}] AS [fk_id], "
-                    f"[{namec}] AS [fk_name] "
-                    f"FROM [{table}] "
-                    f"ORDER BY [{namec}]"
-                )
-
-            try:
-                rows = fetch_all(q, [])
-            except Exception as e:
-                # Fehler nicht mehr verschlucken, sondern anzeigen
-                print(f"[FK-LOAD] Fehler für {table}.{namec}: {e}")
-                rows = []
-
-                # Debug: wie viele Zeilen wurden geladen?
-            try:
-                row_count = len(rows)
-            except Exception:
-                row_count = -1
-            # print(f"[FK-LOAD] {table}.{namec}: {row_count} Zeilen geladen.")
-
-            for r in rows or []:
-                i = r.get("fk_id")
-                n = r.get("fk_name")
-
-                # Sonderfall: tblJetGroup => "<GroupNumber> | <GroupName>"
-                if str(table).strip().lower() == "tbljetgroup":
-                    no = r.get("fk_no")
-                    left = "" if no is None else str(no).strip()
-                    right = "" if n is None else str(n).strip()
-                    n = f"{left} | {right}".strip(" |")
-
-                # Sonderfall: tblJetRohling => "<Nummer> - <Name>"
-                elif str(table).strip().lower() == "tbljetrohling":
-                    no = r.get("fk_no")
-                    left = "" if no is None else str(no).strip()
-                    right = "" if n is None else str(n).strip()
-                    n = f"{left} - {right}".strip(" -")
-
-                if i is None or n is None:
-                    continue
-
-                # Verschiedene Schlüsselvarianten für bequemen Zugriff
-                id_to_name[i] = n
-                id_to_name[str(i)] = n
-                try:
-                    id_to_name[int(i)] = n  # falls ID numerisch ist
-                except Exception:
-                    pass
-
-                name_to_id[str(n)] = i
-
-            maps[key] = {
-                "id_to_name": id_to_name,
-                "name_to_id": name_to_id,
-            }
-            # Auch unter _canon(jets_fk_col) speichern, da screen_new_jet
-            # eine andere _canon-Implementierung verwendet (kein ID-stripping)
-            alt_key = _canon(jets_fk_col)
-            if alt_key != key:
-                maps[alt_key] = maps[key]
-
-        # "Created by" - who/when a jet was added (superuser-only visibility,
-        # never editable - see ManageJetsScreen/JetsTableModel's _AUDIT_COLS).
-        try:
-            from db.user_directory import load_user_id_to_name
-            maps["createdby"] = {"id_to_name": load_user_id_to_name(), "name_to_id": {}}
-        except Exception:
-            pass
-
-        return maps
+        """All FK lists of the jet columns from the master tables: db/jets_admin.fk_maps."""
+        from db import jets_admin
+        return jets_admin.fk_maps()
 
     def _quick_add_fk_value(self, col: str, name: str) -> Optional[int]:
-        """Fuegt einen neuen Eintrag in die Stammtabelle einer FK-Spalte ein
-        (z.B. neuer Jet-Hersteller direkt aus dem New-Jet-Formular, ueber den
-        "+"-Button) und aktualisiert den FK-Cache. Gibt die neue ID zurueck."""
-        name = (name or "").strip()
-        if not name:
-            return None
-        entry = None
-        for key, jets_fk_col, table, idc, namec in self.FK_DEF:
-            if jets_fk_col == col or _canon(jets_fk_col) == _canon(col) or key == _canon(col):
-                entry = (table, idc, namec)
-                break
-        if entry is None:
-            return None
-        table, idc, namec = entry
+        """"+" next to a FK dropdown of the New Jet form: new master value
+        (db/jets_admin.quick_add_fk_value), then the FK cache is reloaded."""
+        from db import jets_admin
         try:
-            execute(f"INSERT INTO [{table}] ([{namec}]) VALUES (?)", [name])
-            rows = fetch_all(
-                f"SELECT [{idc}] AS fk_id FROM [{table}] WHERE [{namec}] = ? ORDER BY [{idc}] DESC LIMIT 1",
-                [name])
-            new_id = rows[0]["fk_id"] if rows else None
+            new_id = jets_admin.quick_add_fk_value(col, name)
         except Exception as e:
             show_error(self, "Add value", "The value could not be added.", e)
             return None
@@ -1030,29 +876,10 @@ class MainWindow(QMainWindow):
         return new_id
 
     def _save_jets_changes(self, rows: List[Dict]) -> int:
-        """Schreibt geänderte Jet-Zeilen via UPDATE in die DB.
-
-        Returns:
-            Anzahl erfolgreich aktualisierter Zeilen.
-        """
+        """UPDATE of changed jet rows: db/jets_admin.save_changes."""
         _require_admin_box_write()
-        if not rows:
-            return 0
-        id_col = self._jets_id_col or "ID"
-        total = 0
-        _SYNTHETIC = {"__has_files__", "has_files", "UsedInTrial"}
-        for r in rows:
-            if id_col not in r:
-                raise ValueError(f"Row has no '{id_col}' field; cannot save.")
-            row_id = r[id_col]
-            cols = [c for c in r.keys() if c != id_col and c not in _SYNTHETIC]
-            if not cols:
-                continue
-            set_access = ", ".join([f"[{c}] = ?" for c in cols])
-            sql = f"UPDATE [tblDTYJets] SET {set_access} WHERE [{id_col}] = ?"
-            params = [r[c] for c in cols] + [row_id]
-            total += execute(sql, params) or 0
-        return total
+        from db import jets_admin
+        return jets_admin.save_changes(rows)
 
     # --- Create / Delete ------------------------------------------------------
     def _first_fk_default(self, fk_key_canon: str):
@@ -1103,85 +930,23 @@ class MainWindow(QMainWindow):
         return execute_insert(sql, vals)
 
     def _insert_jet_full(self, data: Dict) -> int:
-        """Fügt einen neuen Jet mit vollständigen Daten (Kopie) in die DB ein.
-
-        Returns:
-            Neue Jet-ID (execute_insert()/lastrowid).
-        """
+        """New jet with full data (New Jet form / copy): db/jets_admin.insert_jet."""
         _require_admin_box_write()
-        id_col = self._jets_id_col or "ID"
-        _SYNTHETIC = {"__has_files__", "has_files", "UsedInTrial"}
-
-        if id_col in data:
-            data = {k: v for k, v in data.items() if k.lower() !=
-                    id_col.lower()}
-
-        data = {k: v for k, v in data.items() if k not in _SYNTHETIC}
-
-        has_global = False
-        for k in data.keys():
-            if k.lower() == "globalid":
-                has_global = True
-                break
-        if not has_global:
-            data["GlobalID"] = new_global_id()
-
-        # Wer/wann angelegt wurde - immer frisch gesetzt, nie aus einer Kopiervorlage
-        # übernommen (NewJetScreen zeigt diese Felder gar nicht erst an, siehe
-        # screen_new_jet._HIDDEN_COLS, data enthält sie deshalb ohnehin nicht).
-        data["CreatedBy"] = (app_meta.current_user or {}).get("id")
-        data["CreationDate"] = datetime.datetime.now()
-
+        from db import jets_admin
         if not data:
             raise ValueError("No data passed for saving.")
-
-        cols = list(data.keys())
-        vals = [data[c] for c in cols]
-        cols_sql = ", ".join(f"[{c}]" for c in cols)
-        placeholders = ", ".join("?" for _ in cols)
-        sql = f"INSERT INTO [tblDTYJets] ({cols_sql}) VALUES ({placeholders})"
-        new_id = execute_insert(sql, vals)
-        if new_id is None:
-            raise RuntimeError("Could not determine the new ID after the insert.")
-        return new_id
+        return jets_admin.insert_jet(data, (app_meta.current_user or {}).get("id"))
 
     def _delete_jets(self, ids: List[int]) -> int:
-        """Löscht Jets mit den gegebenen IDs aus tblJet.
-
-        Returns:
-            Anzahl gelöschter Zeilen.
-        """
+        """Deletes jets: db/jets_admin.delete_jets."""
         _require_admin_box_write()
-        if not ids:
-            return 0
-        placeholders = ",".join(["?"] * len(ids))
-        sql = f"DELETE FROM [tblDTYJets] WHERE [ID] IN ({placeholders})"
-        return execute(sql, ids) or 0
+        from db import jets_admin
+        return jets_admin.delete_jets(ids)
 
     def _is_jet_name_available(self, jet_name: str) -> bool:
-        """Prüft ob ein Jet-Name in tblJet noch nicht vergeben ist."""
-        """Prüft, ob es den Jet-Namen in tblDTYJets bereits gibt."""
-        if not jet_name:
-            return False
-        try:
-            rows = fetch_all(
-                "SELECT COUNT(*) AS n FROM [tblDTYJets] WHERE [Jet] = ?", [jet_name])
-        except Exception:
-            return True  # im Zweifel nicht blockieren
-        if not rows:
-            return True
-        row = rows[0]
-        count = row.get("n")
-        if count is None:
-            # Fallback, falls der Key anders heisst
-            try:
-                count = list(row.values())[0]
-            except Exception:
-                count = 0
-        try:
-            return int(count) == 0
-        except Exception:
-            return True
+        """Unique "Jet" name: db/jets_admin.jet_name_available."""
+        from db import jets_admin
+        return jets_admin.jet_name_available(jet_name)
 
     # --- Data functions for Manage Top Plates ---------------------------------
     def _load_top_plates_data(self, limit: Optional[int] = None) -> List[Dict]:
