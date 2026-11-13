@@ -73,6 +73,9 @@ import re
 # insert_waterbath_rows: db/trial_actions.py (Qt-free, shared with the web app)
 from db.trial_actions import insert_waterbath_rows  # noqa: E402,F401
 import db.trial_actions as _trial_actions  # noqa: E402
+# Form data, rules and saving of create / add series / add lab machines:
+# db/experiment_create.py (Qt-free, shared with the web app)
+import db.experiment_create as _ec  # noqa: E402
 
 
 # -->-->-->-->-->-->-->-->-->- DB Helpers -->-->-->-->-->-->-->-->-->-
@@ -112,90 +115,8 @@ def get_columns_info(table: str) -> List[Dict[str, Any]]:
     return out
 
 
-def get_or_create_shadow_yarn(trial_id: int) -> Optional[int]:
-    """Multimaschinen-Halbfabrikat-Verknüpfung: liefert die YarnID einer
-    "Schatten"-tblYarn-Zeile für den Output eines bestimmten Trials, damit er
-    als Ply-Input für einen Trial auf einer anderen Maschine referenziert
-    werden kann - ohne den bestehenden Ply-Mechanismus (tbltrialsettings.
-    YarnID -> tblYarn) anzufassen und ohne für JEDEN tbltrial einen
-    Katalog-Eintrag anzulegen (nur lazy, beim tatsächlichen Auswählen).
-
-    Dedup: eine zweite Anfrage für denselben trial_id gibt dieselbe YarnID
-    zurück (SourceTrialID ist der eindeutige Schlüssel), statt einen neuen
-    Eintrag anzulegen. Material/Titer/Filamentzahl werden vom Eingangsgarn
-    des Quell-Trials übernommen, der gemessene Titer des Quell-Trials
-    (tbllabortiter, falls vorhanden) überschreibt den kopierten Wert - beides
-    nur für Anzeige/Reports relevant, die Ply-Speicherlogik selbst braucht
-    nur eine gültige YarnID.
-    """
-    existing = fetch_all("SELECT ID FROM tblYarn WHERE SourceTrialID = ?", [trial_id])
-    if existing:
-        return int(existing[0]["ID"])
-
-    trial_rows = fetch_all(
-        "SELECT t.Versuchsnummer, ts.SeriesName "
-        "FROM tbltrial t JOIN tbltrialseries ts ON ts.ID = t.TrialSeriesID "
-        "WHERE t.ID = ?",
-        [trial_id],
-    )
-    if not trial_rows:
-        return None
-    vno = trial_rows[0].get("Versuchsnummer")
-    series_name = trial_rows[0].get("SeriesName") or ""
-    name = f"Semi-finished V{vno} ({series_name})".strip()
-    # tblYarn.Name ist varchar(45) - lange SeriesNames muessen gekuerzt
-    # werden, sonst bricht der INSERT ("Data too long for column 'Name'").
-    _NAME_MAXLEN = 45
-    if len(name) > _NAME_MAXLEN:
-        prefix = f"Semi-finished V{vno} ("
-        suffix = ")"
-        budget = _NAME_MAXLEN - len(prefix) - len(suffix) - 1  # -1 fuer "…"
-        name = f"{prefix}{series_name[:max(budget, 0)]}…{suffix}"
-
-    # Eingangsgarn des Quell-Trials (erste/Haupt-Ply) als Vorlage für
-    # Material/Garntyp/Filamentzahl/dpf.
-    input_yarn_rows = fetch_all(
-        "SELECT y.Material, y.Garntyp, y.NumberOfFilaments, y.dpf, y.Titer, y.Endtiter "
-        "FROM tbltrialsettings ts2 JOIN tblYarn y ON y.ID = ts2.YarnID "
-        "WHERE ts2.TrialID = ? ORDER BY ts2.ID LIMIT 1",
-        [trial_id],
-    )
-    template = input_yarn_rows[0] if input_yarn_rows else {}
-
-    # Gemessener Titer des Quell-Trials (gleiches AVG-über-Plies-Muster wie
-    # report_queries._fetch_y_values) überschreibt den kopierten Titer, falls vorhanden.
-    titer_rows = fetch_all(
-        "SELECT AVG(Titer) AS val FROM tbllabortiter "
-        "WHERE TrialID = ? AND Titer IS NOT NULL AND Titer <> 0",
-        [trial_id],
-    )
-    measured_titer = titer_rows[0]["val"] if titer_rows and titer_rows[0]["val"] is not None else None
-    titer = int(round(float(measured_titer))) if measured_titer is not None else template.get("Titer")
-
-    with get_connection() as cn:
-        cur = cn.cursor()
-        cur.execute(
-            "INSERT INTO tblYarn "
-            "(Name, Material, Garntyp, NumberOfFilaments, dpf, Titer, Endtiter, GlobalID, SourceTrialID) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
-            [
-                name,
-                template.get("Material"),
-                template.get("Garntyp"),
-                template.get("NumberOfFilaments"),
-                template.get("dpf"),
-                titer,
-                template.get("Endtiter"),
-                new_global_id(),
-                trial_id,
-            ],
-        )
-        new_id = cur.lastrowid
-        try:
-            cn.commit()
-        except Exception:
-            pass
-    return int(new_id) if new_id else None
+# get_or_create_shadow_yarn: db/experiment_create.py (Qt-free, shared with the web app)
+from db.experiment_create import get_or_create_shadow_yarn  # noqa: E402,F401
 
 
 # -->-->-->-->-->-->-->-->-->- UI Helpers -->-->-->-->-->-->-->-->-->-
@@ -1101,64 +1022,29 @@ class CreateExperimentScreen(QWidget):
 
     # -->-->-->- DB-Lader -->-->-->-
     def _load_product_groups(self):
-        """Lädt alle Produktgruppen aus der DB in die entsprechende Combobox."""
+        """Produktgruppen (db/experiment_create.product_groups)."""
         self.cmbProductGroup.clear()
-        rows = fetch_all(
-            "SELECT ID, Produktgruppe FROM tblProduktgruppe ORDER BY ID")
-        for r in rows:
-            self.cmbProductGroup.addItem(
-                f"{r['ID']} – {r['Produktgruppe']}", r["ID"])
+        for r in _ec.product_groups():
+            self.cmbProductGroup.addItem(r["label"], r["id"])
         self.cmbProductGroup.setCurrentIndex(-1)
         self.strExperimentData[1] = ""
 
     def _load_order_types(self):
-        """Lädt alle Bestellungstypen aus der DB in die entsprechende Combobox."""
+        """Bestellungstypen (db/experiment_create.order_types)."""
         self.cmbOrderType.clear()
-        rows = fetch_all(
-            "SELECT ID, Bestellungstyp FROM tblBestellungstyp ORDER BY ID")
-        for r in rows:
-            self.cmbOrderType.addItem(
-                f"{r['ID']} – {r['Bestellungstyp']}", r["ID"])
+        for r in _ec.order_types():
+            self.cmbOrderType.addItem(r["label"], r["id"])
         self.cmbOrderType.setCurrentIndex(-1)
         self.strExperimentData[2] = ""
 
     def _load_projects(self):
-        """Lädt alle Projekte aus tblProject/tblProjects in die Project-Combobox
-        (General-Tab, optional - siehe _sync_project_from_request() für die
-        Auto-Fill+Lock-Logik, wenn ein Experiment Request mit Projekt gewählt wird)."""
+        """Projekte (db/experiment_create.projects) plus "— none —" (user request
+        2026-09-02: a chosen project must be clearable again); siehe
+        _sync_project_from_request() für Auto-Fill+Lock bei verknüpftem Request."""
         self.cmbProject.clear()
-        # Explicit "none" entry (data=None) - user request 2026-09-02: once a
-        # project was picked, it must stay possible to clear it back to empty
-        # again (as long as no linked request forces one, see
-        # _sync_project_from_request()). A bare QComboBox has no built-in way
-        # to deselect back to "nothing chosen" via the UI once an item was
-        # picked - this placeholder is that "nothing" choice.
         self.cmbProject.addItem("— none —", None)
-        project_table = "tblProjects" if table_exists("tblProjects") else (
-            "tblProject" if table_exists("tblProject") else None)
-        if not project_table:
-            self.cmbProject.setCurrentIndex(0)
-            return
-        cmap = get_columns_map(project_table)
-        col_id = resolve_field(["ID"], cmap) or "ID"
-        col_no = resolve_field(["Project Number", "ProjectNumber", "Projekt Nummer", "ProjektNummer"], cmap)
-        col_name = resolve_field(["Project Name", "ProjectName", "Projekt Name", "ProjektName"], cmap)
-        if not (col_no and col_name):
-            self.cmbProject.setCurrentIndex(0)
-            return
-        try:
-            rows = fetch_all(
-                f"SELECT [{col_id}] AS PID, [{col_no}] AS PNo, [{col_name}] AS PName "
-                f"FROM [{project_table}] ORDER BY [{col_no}]"
-            )
-        except Exception:
-            rows = []
-        for r in rows:
-            pid = r.get("PID")
-            if pid is None:
-                continue
-            txt = f"{r.get('PNo')} – {r.get('PName')}".strip(' –') or f"Project {pid}"
-            self.cmbProject.addItem(txt, int(pid))
+        for r in _ec.projects():
+            self.cmbProject.addItem(r["label"], r["id"])
         self.cmbProject.setCurrentIndex(0)
 
     def _sync_project_from_request(self) -> None:
@@ -1176,20 +1062,7 @@ class CreateExperimentScreen(QWidget):
         except Exception:
             rid = None
 
-        project_id = None
-        if rid is not None:
-            try:
-                req_cols = get_columns_map("tblExperimentRequests")
-                col_proj = resolve_field(["Projekt", "Project", "ProjectID"], req_cols)
-                if col_proj:
-                    rows = fetch_all(
-                        f"SELECT [{col_proj}] AS Projekt FROM [tblExperimentRequests] WHERE [ID]=?",
-                        [rid],
-                    )
-                    if rows:
-                        project_id = self._to_int_or_none(rows[0].get("Projekt"))
-            except Exception:
-                project_id = None
+        project_id = _ec.request_project(rid)
 
         if project_id is not None:
             self._select_combo_by_data(self.cmbProject, project_id)
@@ -1238,126 +1111,14 @@ class CreateExperimentScreen(QWidget):
 
         self._set_expreq_combo_highlight(False)
 
-        if not table_exists("tblExperimentRequests"):
-            # Standard: Platzhalter auswählen
-            if self.cmbExperimentRequest.count() > 0:
-                self.cmbExperimentRequest.setCurrentIndex(0)
-            else:
-                self.cmbExperimentRequest.setCurrentIndex(-1)
-            return
-
-        # tblProjects (plural) oder tblProject (singular) akzeptieren
-        project_table = None
-        if table_exists("tblProjects"):
-            project_table = "tblProjects"
-        elif table_exists("tblProject"):
-            project_table = "tblProject"
-        else:
-            self.cmbExperimentRequest.setCurrentIndex(-1)
-            return
-
-        req_cols = get_columns_map("tblExperimentRequests")
-        prj_cols = get_columns_map(project_table)
-
-        col_req_id = resolve_field(["ID"], req_cols) or "ID"
-        col_req_status = resolve_field(["RequestStatus", "Status"], req_cols) or "RequestStatus"
-        col_req_proj = resolve_field(["Projekt", "Project", "ProjectID"], req_cols) or "Projekt"
-
-        col_prj_id = resolve_field(["ID"], prj_cols) or "ID"
-        col_prj_no = resolve_field(["Project Number", "ProjectNumber", "Projekt Nummer", "ProjektNummer"], prj_cols)
-        col_prj_name = resolve_field(["Project Name", "ProjectName", "Projekt Name", "ProjektName"], prj_cols)
-
-        if not (col_prj_no and col_prj_name):
-            # Ohne diese beiden Spalten können wir das gewünschte Anzeigeformat nicht sicher erstellen
-            self.cmbExperimentRequest.setCurrentIndex(-1)
-            return
-
-        # Optional: nur Requests zeigen, die noch *nicht* in einem Experiment verknüpft sind.
-        exp_join = ""
-        exp_where = ""
-        resolved = self._resolve_experiments_table_and_columns()
-        if resolved:
-            exp_table, exp_cols = resolved
-            col_expreq = exp_cols.get("expreq")
-            if col_expreq:
-                # ID-Spalte der Experimente-Tabelle (kann in manchen DBs abweichen)
-                exp_cmap = get_columns_map(exp_table)
-                col_exp_id = resolve_field(["ID"], exp_cmap) or "ID"
-
-                # LEFT JOIN, dann nur die ohne Match (nicht verknüpft)
-                exp_join = f"LEFT JOIN [{exp_table}] AS e ON e.[{col_expreq}] = r.[{col_req_id}]\n"
-                exp_where = f"AND e.[{col_exp_id}] IS NULL\n"
-
-        # Titel als Fallback fürs Label
-        col_req_title = resolve_field(["Titel", "Title"], req_cols)
-
-        # JOIN auf Projekt ist nice-to-have, nicht zwingend.
-        has_project_cols = bool(col_prj_no and col_prj_name)
-        select_project = ""
-        join_project = ""
-        if has_project_cols:
-            select_project = f", p.[{col_prj_no}] AS ProjectNo, p.[{col_prj_name}] AS ProjectName"
-            join_project = (
-                f"LEFT JOIN [{project_table}] AS p ON r.[{col_req_proj}] = p.[{col_prj_id}]\n"
-            )
-
-        select_title = f", r.[{col_req_title}] AS ReqTitle" if col_req_title else ""
-
-        # Archived prior versions (PriorVersionOfID set, see
-        # db/experiment_request_changes.py) are not standalone requests -
-        # without this filter, this dropdown would grow an extra stale entry
-        # for the same request with every accepted change to an approved
-        # request. Column doesn't exist on every environment yet (dev is
-        # still pending as of 2026-09-02), hence the columns-map check.
-        version_where = "AND r.[PriorVersionOfID] IS NULL\n" if "priorversionofid" in req_cols else ""
-
-        sql = (
-            f"SELECT r.[{col_req_id}] AS RequestID"
-            f"{select_project}"
-            f"{select_title}\n"
-            f"FROM [tblExperimentRequests] AS r\n"
-            f"{join_project}"
-            f"{exp_join}"
-            f"WHERE 1=1\n"
-            f"AND r.[{col_req_status}] = ?\n"
-            f"{exp_where}"
-            f"{version_where}"
-            f"ORDER BY r.[{col_req_id}] DESC"
-        )
-
-        try:
-            rows = fetch_all(sql, [3])
-        except Exception:
-            rows = []
-
+        # approved, not linked, no prior versions: db/experiment_create.open_requests
+        rows = _ec.open_requests()
         # Remember whether there are approved requests available.
         # We only want to highlight the dropdown as "attention" *until* the user selects one.
         self._expreq_has_approved = bool(rows)
         self._refresh_expreq_combo_highlight()
-
         for r in rows:
-            rid = r.get("RequestID")
-            if rid is None:
-                continue
-
-            pno = r.get("ProjectNo")
-            pname = r.get("ProjectName")
-            title = r.get("ReqTitle")
-
-            # Build display text robustly (avoid UnboundLocalError)
-            parts = []
-            if pno not in (None, '') or pname not in (None, ''):
-                base_txt = f"{pno} - {pname}".strip(' -')
-                if base_txt:
-                    parts.append(base_txt)
-            if title not in (None, ''):
-                t = str(title).strip()
-                if t:
-                    parts.append(t)
-            txt = ' - '.join(parts).strip(' -') if parts else f"Request {rid}"
-
-
-            self.cmbExperimentRequest.addItem(txt, int(rid))
+            self.cmbExperimentRequest.addItem(r["label"], r["id"])
 
         # Standard: Platzhalter selektiert lassen
         self.cmbExperimentRequest.setCurrentIndex(0)
@@ -1503,50 +1264,13 @@ class CreateExperimentScreen(QWidget):
             self._expreq_popup = None
 
 
-    def _set_experiment_request_status(self, cur, request_id: int, new_status: int):
-        """Setzt tblExperimentRequests.RequestStatus auf den gewünschten Wert."""
-        if not table_exists("tblExperimentRequests"):
-            return
-        req_cols = get_columns_map("tblExperimentRequests")
-        col_id = resolve_field(["ID"], req_cols) or "ID"
-        col_status = resolve_field(["RequestStatus", "Status"], req_cols) or "RequestStatus"
-        cur.execute(
-            f"UPDATE [tblExperimentRequests] SET [{col_status}] = ? WHERE [{col_id}] = ?",
-            [int(new_status), int(request_id)],
-        )
     def _load_backlog_status(self):
         """Backlog-Status für neue TrialSeries laden (nur 'Backlog' und 'In Progress')."""
         if not hasattr(self, "cmbBacklogStatus"):
             return
         self.cmbBacklogStatus.clear()
-        try:
-            rows = fetch_all(
-                "SELECT ID, BacklogStatus FROM tblBacklogStatus ORDER BY ID"
-            )
-        except Exception:
-            rows = [
-                {"ID": 1, "BacklogStatus": "Backlog"},
-                {"ID": 2, "BacklogStatus": "In Progress"},
-            ]
-
-        wanted = ["Backlog", "In Progress"]
-        filtered = [
-            r for r in rows
-            if str(r.get("BacklogStatus", "")).strip() in wanted
-        ]
-        if not filtered:
-            filtered = rows
-
-        order = {name: idx for idx, name in enumerate(wanted)}
-        filtered.sort(
-            key=lambda r: order.get(
-                str(r.get("BacklogStatus", "")).strip(), 99)
-        )
-
-        for r in filtered:
-            name = str(r.get("BacklogStatus", "")).strip()
-            _id = r.get("ID")
-            self.cmbBacklogStatus.addItem(name, _id)
+        for r in _ec.backlog_statuses():   # Backlog, In Progress
+            self.cmbBacklogStatus.addItem(r["name"], r["id"])
 
         if self.cmbBacklogStatus.count() > 0:
             idx = self.cmbBacklogStatus.findText("Backlog")
@@ -1558,44 +1282,22 @@ class CreateExperimentScreen(QWidget):
         """Für addSeries/addTrials: Combo mit bestehenden Experimenten befüllen.
            Anzeigeformat: YEAR-PGOT-NNN (z. B. 2025-70-006 bei PG=7, OT=0)"""
         self.cmbExistingExperiment.clear()
-        resolved = self._resolve_experiments_table_and_columns()
-        if not resolved:
-            QMessageBox.warning(self, "Existing Experiment",
-                                "Experiments table/columns not found.")
-            return
-        table, cols = resolved
         try:
-            rows = fetch_all(
-                f"SELECT ID AS EID, [{cols['year']}] AS Y, "
-                f"[{cols['pg']}] AS PG, [{cols['ot']}] AS OT, "
-                f"[{cols['num']}] AS Num, [{cols['machine']}] AS MID "
-                f"FROM {table} "
-                f"ORDER BY [{cols['year']}] DESC, [{cols['pg']}], [{cols['ot']}], [{cols['num']}]"
-            )
-            for r in rows:
-                num = r['Num']
-                try:
-                    numtxt = f"{int(num):03d}"
-                except Exception:
-                    numtxt = str(num)
-                pg = str(r.get('PG', '')).strip()
-                ot = str(r.get('OT', '')).strip()
-                disp_mid = f"{pg}{ot}"
-                disp = f"{r['Y']}-{disp_mid}-{numtxt}"
-                self.cmbExistingExperiment.addItem(
-                    disp,
-                    (r['EID'], r['MID'], r['Y'], r['PG'], r['OT'], r['Num'])
-                )
-            if self.existing_experiment_id is not None:
-                for i in range(self.cmbExistingExperiment.count()):
-                    data = self.cmbExistingExperiment.itemData(i)
-                    if data and data[0] == self.existing_experiment_id:
-                        self.cmbExistingExperiment.setCurrentIndex(i)
-                        break
-            else:
-                self.cmbExistingExperiment.setCurrentIndex(-1)
+            rows = _ec.existing_experiments()
         except Exception as e:
             show_error(self, "Existing Experiment", "The experiment could not be loaded.", e)
+            return
+        for r in rows:
+            self.cmbExistingExperiment.addItem(
+                r["label"], (r["id"], r["machine_id"], r["year"], r["pg"], r["ot"], r["num"]))
+        if self.existing_experiment_id is not None:
+            for i in range(self.cmbExistingExperiment.count()):
+                data = self.cmbExistingExperiment.itemData(i)
+                if data and data[0] == self.existing_experiment_id:
+                    self.cmbExistingExperiment.setCurrentIndex(i)
+                    break
+        else:
+            self.cmbExistingExperiment.setCurrentIndex(-1)
 
     def _load_trials_for_selection(self, exp_id: int, series_id: int):
         # UI leeren
@@ -1612,18 +1314,7 @@ class CreateExperimentScreen(QWidget):
         # Guard
         if series_id is None or series_id < 0:
             return
-        if not table_exists("tblTrial"):
-            return
-
-        cmap_t = get_columns_map("tblTrial")
-        col_t_sid = resolve_field(
-            ["TrialSeriesID", "SerieID", "SeriesID"], cmap_t) or "TrialSeriesID"
-        col_t_no = resolve_field(["Versuchsnummer", "TrialNumber",
-                                 "VersuchsNr", "VNr", "Number"], cmap_t) or "Versuchsnummer"
-        col_t_id = resolve_field(["ID"], cmap_t) or "ID"
-
-        sql = f"SELECT [{col_t_id}] AS TID, [{col_t_no}] AS TNo FROM [tblTrial] WHERE [{col_t_sid}] = ? ORDER BY [{col_t_no}]"
-        rows = fetch_all(sql, [series_id])
+        rows = [{"TID": t["id"], "TNo": t["number"]} for t in _ec.trials_of_series(series_id)]
 
         self._trial_checks = []
         cols = 5
@@ -1680,133 +1371,40 @@ class CreateExperimentScreen(QWidget):
     def _load_series_for_experiment(self, exp_id: int):
         """Für addTrials: Serien des Experiments laden."""
         self.cmbExistingSeries.clear()
-        table = "tblTrialSeries"
-        if not table_exists(table):
-            QMessageBox.warning(self, "Trial Series",
-                                "Table 'tblTrialSeries' not found.")
+        try:
+            rows = _ec.series_of_experiment(exp_id)
+        except RuntimeError as e:
+            QMessageBox.warning(self, "Trial Series", str(e))
             return
-        cmap = get_columns_map(table)
-        col_id = resolve_field(["ID"], cmap) or "ID"
-        col_exp = resolve_field(["ExperimentID"], cmap) or "ExperimentID"
-        col_name = resolve_field(["SeriesName", "Name"], cmap) or "SeriesName"
-        rows = fetch_all(
-            f"SELECT [{col_id}] AS SID, [{col_name}] AS SName FROM {table} WHERE [{col_exp}] = ? ORDER BY [{col_id}]",
-            [exp_id]
-        )
         for r in rows:
-            self.cmbExistingSeries.addItem(str(r["SName"]), int(r["SID"]))
-        if rows:
-            self.cmbExistingSeries.setCurrentIndex(0)
-        else:
-            self.cmbExistingSeries.setCurrentIndex(-1)
+            self.cmbExistingSeries.addItem(r["name"], r["id"])
+        self.cmbExistingSeries.setCurrentIndex(0 if rows else -1)
 
     def _load_yarns(self):
-        """Material-Auswahl als einklappbarer Tree nach YarnGroup.
-
-        Gruppen-Header:
-            --> <GroupNumber> - <GroupName>
-        Child-Einträge sind die bisherigen Dropdown-Zeilen.
-        """
+        """Material-Auswahl als einklappbarer Tree nach YarnGroup
+        (Daten: db/experiment_create.yarn_tree, Qt-free, shared with the web app).
+        Gruppen-Header "<GroupNumber> | <GroupName>", Spalte 1 = Spulen-Symbol."""
         self.treeMaterial.clear()
-
-        # --> Groups laden (tblyarngroup) -->
-        gtable = "tblyarngroup"
-        groups: list[dict] = []
-
-        if table_exists(gtable):
-            gcmap = get_columns_map(gtable)
-            g_id = resolve_field(["ID"], gcmap) or "ID"
-            g_no = resolve_field(["GroupNumber", "GruppenNummer", "GroupNo", "Nummer", "Number"], gcmap)
-            g_name = resolve_field(["GroupName", "GruppenName", "Name", "Bezeichnung"], gcmap)
-
-            sel_cols = [f"[{g_id}] AS GID"]
-            sel_cols.append(f"[{g_no}] AS GNo" if g_no else "NULL AS GNo")
-            sel_cols.append(f"[{g_name}] AS GName" if g_name else "NULL AS GName")
-
-            order = f"ORDER BY [{g_no}] ASC" if g_no else f"ORDER BY [{g_id}] ASC"
-            rows = fetch_all(f"SELECT {', '.join(sel_cols)} FROM {gtable} {order}")
-
-            for r in rows:
-                gid = r.get("GID")
-                if gid is None:
-                    continue
-                gno_raw = r.get("GNo")
-                gname = str(r.get("GName") or "").strip()
-                try:
-                    gno = int(str(gno_raw).strip()) if gno_raw not in (None, "") else None
-                except Exception:
-                    gno = None
-
-                if gno is not None and gname:
-                    label = f"{gno} | {gname}"
-                elif gno is not None and not gname:
-                    label = f"{gno} |"
-                elif gno is None and gname:
-                    label = f"| {gname}"
-                else:
-                    label = "Group"
-
-                groups.append({"GID": gid, "GNo": gno, "GName": gname, "Label": label})
-
-            # Natural sort by GroupNumber (None -> last)
-            groups.sort(key=lambda d: (d["GNo"] is None, d["GNo"] if d["GNo"] is not None else 0, str(d["GName"]).lower()))
-        else:
-            groups = [{"GID": None, "GNo": None, "GName": "", "Label": "Material"}]
-
-        # --> Yarns laden (tblYarn) -->
-        ytable = "tblYarn"
-        if not table_exists(ytable):
+        tree = _ec.yarn_tree()
+        if not tree["groups"]:
             self.butAddMaterial.setEnabled(False)
             self.butAddTrialPly.setEnabled(False)
             return
-
-        ycmap = get_columns_map(ytable)
-        y_id = resolve_field(["ID"], ycmap) or "ID"
-        y_name = resolve_field(["Name", "Bezeichnung", "YarnName", "Material"], ycmap)
-        y_group = resolve_field(["YarnGroupID", "YarnGroup", "GroupID", "Group"], ycmap)
-        # Automatisch angelegte Halbfabrikat-"Schatten"-Garne (siehe
-        # get_or_create_shadow_yarn()) sollen hier nicht auftauchen - die
-        # werden gezielt über den "+ Trial"-Button ausgewählt, nicht über den
-        # normalen Katalog-Baum. Spalte optional (resolve_field), falls diese
-        # Umgebung die Migration noch nicht hat.
-        y_src_trial = resolve_field(["SourceTrialID"], ycmap)
-        _where_no_shadow = f" WHERE [{y_src_trial}] IS NULL" if y_src_trial else ""
-
-        if not y_name:
-            self.butAddMaterial.setEnabled(False)
-            self.butAddTrialPly.setEnabled(False)
-            return
-
-        if y_group:
-            yrows = fetch_all(
-                f"SELECT [{y_id}] AS YarnID, [{y_name}] AS YarnName, [{y_group}] AS GID "
-                f"FROM {ytable}{_where_no_shadow} ORDER BY [{y_group}] ASC, [{y_name}] ASC"
-            )
-        else:
-            yrows = fetch_all(
-                f"SELECT [{y_id}] AS YarnID, [{y_name}] AS YarnName, NULL AS GID "
-                f"FROM {ytable}{_where_no_shadow} ORDER BY [{y_name}] ASC"
-            )
-
         self._yarn_colours, _ = load_yarn_colours()
-        # Bestand pro Garn (eine Abfrage fuer alle) -> Spulen-Symbol
+        # Bestand pro Garn (eine Abfrage fuer alle) -> Spulen-Symbol + Tooltip
         self._material_stock_summary = _yarn_locations.load_stock_summary(
-            r.get("YarnID") for r in yrows)
+            y["id"] for g in tree["groups"] for y in g["yarns"])
         _sym_in = _sym_none = None
         try:
             _sym_in = QIcon(_yarn_locations.symbol_path(True))
             _sym_none = QIcon(_yarn_locations.symbol_path(False))
         except Exception:
             pass
-        yarns_by_gid: dict[Any, list[dict]] = {}
-        for r in yrows:
-            yarns_by_gid.setdefault(r.get("GID"), []).append(r)
-
-        # --> Tree bauen -->
         any_children = False
-        for g in groups:
-            top = QTreeWidgetItem([g["Label"]])
-            top.setData(0, Qt.UserRole, {"kind": "group", "gid": g.get("GID")})
+        target_item = None
+        for g in tree["groups"]:
+            top = QTreeWidgetItem([g["label"]])
+            top.setData(0, Qt.UserRole, {"kind": "group"})
             try:
                 f = top.font(0)
                 f.setBold(True)
@@ -1814,29 +1412,17 @@ class CreateExperimentScreen(QWidget):
                 top.setForeground(0, QColor("#39A650"))
             except Exception:
                 pass
-
             self.treeMaterial.addTopLevelItem(top)
             top.setFirstColumnSpanned(True)
-
-            gid = g.get("GID")
-            children = yarns_by_gid.get(gid, [])
-
-            # Falls YarnGroupID evtl. GroupNumber statt Group-ID ist
-            if not children and gid is not None:
-                gno = g.get("GNo")
-                if gno is not None:
-                    children = yarns_by_gid.get(gno, [])
-
-            for yr in children:
-                yid = yr.get("YarnID")
-                yname = str(yr.get("YarnName") or "").strip()
-                if yid is None or not yname:
-                    continue
-                child = QTreeWidgetItem([yname])
-                child.setData(0, Qt.UserRole, {"kind": "yarn", "yarn_id": yid, "yarn_name": yname})
-                child.setIcon(0, colour_icon(self._yarn_colours.get(int(yid))))
-                child.setToolTip(0, colour_tooltip(self._yarn_colours.get(int(yid))))
-                _stock = self._material_stock_summary.get(int(yid))
+            if g["label"] == tree["open"] and target_item is None:
+                target_item = top
+            for y in g["yarns"]:
+                yid = y["id"]
+                child = QTreeWidgetItem([y["name"]])
+                child.setData(0, Qt.UserRole, {"kind": "yarn", "yarn_id": yid, "yarn_name": y["name"]})
+                child.setIcon(0, colour_icon(self._yarn_colours.get(yid)))
+                child.setToolTip(0, colour_tooltip(self._yarn_colours.get(yid)))
+                _stock = self._material_stock_summary.get(yid)
                 _sym = _sym_in if _stock is not None else _sym_none
                 if _sym is not None:
                     child.setIcon(1, _sym)
@@ -1844,36 +1430,11 @@ class CreateExperimentScreen(QWidget):
                 top.addChild(child)
                 any_children = True
 
-            # expansion is handled after building the tree
-
-        # Default: expand only the group "1 | Standard Yarn" (all others collapsed)
-        target_item = None
+        # Default: only "1 | Standard Yarn" open (else the first group);
+        # without any yarn everything open so the user sees something
         for i in range(self.treeMaterial.topLevelItemCount()):
             it = self.treeMaterial.topLevelItem(i)
-            try:
-                meta = it.data(0, Qt.UserRole) or {}
-                gid = (meta.get("gid") if isinstance(meta, dict) else None)
-            except Exception:
-                gid = None
-
-            # Determine the label in a robust way
-            label = (it.text(0) or "").strip()
-            if label.lower() == "1 | standard yarn":
-                target_item = it
-                break
-
-        # Fallback: if not found, expand first group (if any)
-        if target_item is None and self.treeMaterial.topLevelItemCount() > 0:
-            target_item = self.treeMaterial.topLevelItem(0)
-
-        for i in range(self.treeMaterial.topLevelItemCount()):
-            it = self.treeMaterial.topLevelItem(i)
-            it.setExpanded(it is target_item)
-
-        # If there are no child entries at all, keep everything expanded so the user sees something
-        if not any_children:
-            for i in range(self.treeMaterial.topLevelItemCount()):
-                self.treeMaterial.topLevelItem(i).setExpanded(True)
+            it.setExpanded(it is target_item or not any_children)
 
         self.treeMaterial.clearSelection()
         if hasattr(self, "searchMaterial"):
@@ -1881,194 +1442,18 @@ class CreateExperimentScreen(QWidget):
         self._update_add_material_enabled()
 
     def _load_jets(self):
-        """Jet-Auswahl als einklappbarer Tree nach JetGroup.
-
-        Erwartete Tabellen:
-            - tbljetgroup: ID, GroupNumber, GroupName
-            - tbljets: ID, Name (oder Jet/Bezeichnung), JetGroupID
-
-        Fallback: wenn nur tblDTYJets existiert, werden alle Jets in einer Gruppe angezeigt.
-        """
+        """Jet-Auswahl als einklappbarer Tree nach JetGroup mit Geometrie und
+        Titerbereich (Daten: db/experiment_create.jet_tree, Qt-free, shared with
+        the web app)."""
         if hasattr(self, "treeJet"):
             self.treeJet.clear()
         else:
             return
-
-        # --> Groups laden (tbljetgroup) -->
-        gtable = "tbljetgroup"
-        groups: list[dict] = []
-
-        if table_exists(gtable):
-            cmap = get_columns_map(gtable)
-            g_id = resolve_field(["ID"], cmap) or "ID"
-            g_no = resolve_field(["GroupNumber", "Number", "Nr", "No"], cmap)
-            g_name = resolve_field(["GroupName", "Name", "Bezeichnung"], cmap)
-
-            sel_cols = [f"[{g_id}] AS GID"]
-            sel_cols.append(f"[{g_no}] AS GNo" if g_no else "NULL AS GNo")
-            sel_cols.append(f"[{g_name}] AS GName" if g_name else "NULL AS GName")
-
-            order = f"ORDER BY [{g_no}] ASC" if g_no else f"ORDER BY [{g_id}] ASC"
-            rows = fetch_all(f"SELECT {', '.join(sel_cols)} FROM {gtable} {order}")
-
-            for r in rows:
-                gid = r.get("GID")
-                if gid is None:
-                    continue
-                gno_raw = r.get("GNo")
-                gname = str(r.get("GName") or "").strip()
-                try:
-                    gno = int(str(gno_raw).strip()) if gno_raw not in (None, "") else None
-                except Exception:
-                    gno = None
-
-                if gno is not None and gname:
-                    label = f"{gno} | {gname}"
-                elif gno is not None and not gname:
-                    label = f"{gno} |"
-                elif gno is None and gname:
-                    label = f"| {gname}"
-                else:
-                    label = "Group"
-
-                groups.append({"GID": gid, "GNo": gno, "GName": gname, "Label": label})
-
-            groups.sort(key=lambda d: (d["GNo"] is None, d["GNo"] if d["GNo"] is not None else 0, str(d["GName"]).lower()))
-        else:
-            groups = [{"GID": None, "GNo": None, "GName": "", "Label": "Jets"}]
-
-        # --> Jets laden (inkl. Geometrie-Spalten aus tblDTYJets) -->
-        # Geometrie-Map: JetID -> dict mit Luftbohrung etc.
-        geo_map: dict[Any, dict] = {}
-        try:
-            if table_exists("tblDTYJets"):
-                geo_cmap = get_columns_map("tblDTYJets")
-                geo_id_col = resolve_field(["ID"], geo_cmap) or "ID"
-                _geo_cols = {
-                    "Luftbohrung":      resolve_field(["Luftbohrung"], geo_cmap),
-                    "WinkelLuftbohrung": resolve_field(["WinkelLuftbohrung", "Winkel Luftbohrung"], geo_cmap),
-                    "GarnkanalBreite":  resolve_field(["GarnkanalBreite", "Garnkanal Breite", "GarnkanalB"], geo_cmap),
-                    "Luftverbrauch":    resolve_field(["Luftverbrauch"], geo_cmap),
-                    "Entwicklungsname": resolve_field(["Entwicklungsname"], geo_cmap),
-                }
-                sel_geo = [f"[{geo_id_col}] AS GeoID"]
-                for alias, col in _geo_cols.items():
-                    sel_geo.append(f"[{col}] AS {alias}" if col else f"NULL AS {alias}")
-                geo_rows = fetch_all(f"SELECT {', '.join(sel_geo)} FROM tblDTYJets")
-                for gr in geo_rows:
-                    gid_raw = gr.get("GeoID")
-                    if gid_raw is None:
-                        continue
-                    geo_map[gid_raw] = gr
-                    try:
-                        geo_map[int(gid_raw)] = gr
-                    except Exception:
-                        pass
-                    geo_map[str(gid_raw)] = gr
-        except Exception:
-            pass
-
-        def _geo_val(jet_id: Any, key: str) -> str:
-            """Gibt Geometrie-Wert als String zurück, oder '' wenn nicht vorhanden."""
-            entry = geo_map.get(jet_id) or geo_map.get(str(jet_id)) or {}
-            val = entry.get(key)
-            if val is None or str(val).strip() == "":
-                return ""
-            try:
-                f = float(val)
-                # Trailing zeros entfernen, aber mindestens eine Nachkommastelle
-                s = f"{f:.3f}".rstrip("0").rstrip(".")
-                return s
-            except Exception:
-                return str(val).strip()
-
-        # Preferred: tbljets
-        jtable = "tbljets"
-        if table_exists(jtable):
-            cmap = get_columns_map(jtable)
-            j_id = resolve_field(["ID"], cmap) or "ID"
-            j_name = resolve_field(["Name", "Jet", "Bezeichnung"], cmap)
-            j_group = resolve_field(["JetGroupID", "GroupID", "Group"], cmap)
-            j_tvon = resolve_field(["TiterVon"], cmap)
-            j_tbis = resolve_field(["TiterBis"], cmap)
-            j_ideal = resolve_field(["IdealTiter"], cmap)
-
-            if not j_name:
-                return
-
-            extra_cols = []
-            extra_cols.append(f"[{j_tvon}] AS TiterVon" if j_tvon else "NULL AS TiterVon")
-            extra_cols.append(f"[{j_tbis}] AS TiterBis" if j_tbis else "NULL AS TiterBis")
-            extra_cols.append(f"[{j_ideal}] AS IdealTiter" if j_ideal else "NULL AS IdealTiter")
-            extra_sql = ", " + ", ".join(extra_cols)
-
-            if j_group:
-                jrows = fetch_all(
-                    f"SELECT [{j_id}] AS JetID, [{j_name}] AS JetName, [{j_group}] AS GID"
-                    f"{extra_sql} "
-                    f"FROM {jtable} ORDER BY [{j_group}] ASC, [{j_name}] ASC"
-                )
-            else:
-                jrows = fetch_all(
-                    f"SELECT [{j_id}] AS JetID, [{j_name}] AS JetName, NULL AS GID"
-                    f"{extra_sql} "
-                    f"FROM {jtable} ORDER BY [{j_name}] ASC"
-                )
-        else:
-            # Fallback: tblDTYJets (alte Struktur)
-            table = "tblDTYJets"
-            if not table_exists(table):
-                return
-            cmap = get_columns_map(table)
-            col_id = resolve_field(["ID"], cmap) or "ID"
-            col_jet = resolve_field(["Jet", "Name", "Bezeichnung"], cmap)
-            col_group = resolve_field(["JetGroupID", "GroupID", "Group"], cmap)
-            if not col_jet:
-                return
-            if col_group:
-                jrows = fetch_all(
-                    f"SELECT [{col_id}] AS JetID, [{col_jet}] AS JetName, [{col_group}] AS GID "
-                    f"FROM {table} ORDER BY [{col_group}] ASC, [{col_jet}] ASC"
-                )
-            else:
-                jrows = fetch_all(
-                    f"SELECT [{col_id}] AS JetID, [{col_jet}] AS JetName, NULL AS GID "
-                    f"FROM {table} ORDER BY [{col_jet}] ASC"
-                )
-
-        jets_by_gid: dict[Any, list[dict]] = {}
-        self._jet_titer_map: dict[Any, dict] = {}
-        for r in jrows:
-            jets_by_gid.setdefault(r.get("GID"), []).append(r)
-            jid_r = r.get("JetID")
-            if jid_r is not None:
-                self._jet_titer_map[jid_r] = {
-                    "TiterVon": r.get("TiterVon"),
-                    "TiterBis": r.get("TiterBis"),
-                    "IdealTiter": r.get("IdealTiter"),
-                }
-
-        def _titer_range_val(jet_id: Any) -> str:
-            tm = self._jet_titer_map.get(jet_id) or {}
-            tvon = tm.get("TiterVon")
-            tbis = tm.get("TiterBis")
-            if tvon is not None and tbis is not None and str(tvon).strip() and str(tbis).strip():
-                return f"{tvon} dtex - {tbis} dtex"
-            return ""
-
-        def _ideal_titer_val(jet_id: Any) -> str:
-            tm = self._jet_titer_map.get(jet_id) or {}
-            ideal = tm.get("IdealTiter")
-            if ideal is not None and str(ideal).strip():
-                return f"{ideal} dtex"
-            return ""
-
-        # --> Tree bauen -->
+        groups = _ec.jet_tree()
         any_children = False
         for g in groups:
-            label = str(g.get("Label") or "Group")
-            top = QTreeWidgetItem([label, "", "", "", "", "", "", ""])
-            top.setData(0, Qt.UserRole, {"kind": "group", "gid": g.get("GID")})
+            top = QTreeWidgetItem([g["label"], "", "", "", "", "", "", ""])
+            top.setData(0, Qt.UserRole, {"kind": "group"})
             try:
                 f = top.font(0)
                 f.setBold(True)
@@ -2076,42 +1461,19 @@ class CreateExperimentScreen(QWidget):
                 top.setForeground(0, QColor("#39A650"))
             except Exception:
                 pass
-
             self.treeJet.addTopLevelItem(top)
             top.setFirstColumnSpanned(True)
-
-            gid = g.get("GID")
-            children = jets_by_gid.get(gid, [])
-
-            # Falls JetGroupID evtl. GroupNumber statt Group-ID ist
-            if not children and gid is not None:
-                gno = g.get("GNo")
-                if gno is not None:
-                    children = jets_by_gid.get(gno, [])
-
-            for jt in children:
-                jid = jt.get("JetID")
-                jname = str(jt.get("JetName") or "").strip()
-                if jid is None or not jname:
-                    continue
-                child = QTreeWidgetItem([
-                    jname,
-                    _geo_val(jid, "Luftbohrung"),
-                    _geo_val(jid, "WinkelLuftbohrung"),
-                    _geo_val(jid, "GarnkanalBreite"),
-                    _geo_val(jid, "Luftverbrauch"),
-                    _geo_val(jid, "Entwicklungsname"),
-                    _titer_range_val(jid),
-                    _ideal_titer_val(jid),
-                ])
-                child.setData(0, Qt.UserRole, {"kind": "jet", "jet_id": jid, "jet_name": jname})
+            for jt in g["jets"]:
+                child = QTreeWidgetItem([jt["name"]] + [jt["geo"][k] for k in _ec.JET_GEO_COLUMNS]
+                                        + [jt["titer_range"], jt["ideal_titer"]])
+                child.setData(0, Qt.UserRole, {"kind": "jet", "jet_id": jt["id"], "jet_name": jt["name"]})
                 # Numerische Spalten rechtsbündig
                 for col_idx in (1, 2, 3, 4):
                     child.setTextAlignment(col_idx, Qt.AlignRight | Qt.AlignVCenter)
                 top.addChild(child)
                 any_children = True
 
-        # Default: expand first group (oder alles, wenn keine Gruppen existieren)
+        # Default: expand first group (oder alles, wenn keine Jets existieren)
         if self.treeJet.topLevelItemCount() > 0:
             self.treeJet.topLevelItem(0).setExpanded(True)
         if not any_children:
@@ -2121,7 +1483,6 @@ class CreateExperimentScreen(QWidget):
         # Spaltenbreiten anpassen
         for col_idx in range(self.treeJet.columnCount()):
             self.treeJet.resizeColumnToContents(col_idx)
-        # Spalte 0 etwas Luft geben
         self.treeJet.setColumnWidth(0, max(self.treeJet.columnWidth(0), 120))
 
         # Sortier-Zustand zurücksetzen
@@ -2176,17 +1537,8 @@ class CreateExperimentScreen(QWidget):
         self.cmbHousing.blockSignals(True)
         self.cmbHousing.clear()
         self.cmbHousing.addItem("", None)          # leerer Platzhalter
-        if table_exists("tblHousing"):
-            cmap = get_columns_map("tblHousing")
-            col_id = resolve_field(["ID"], cmap) or "ID"
-            col_name = resolve_field(["HousingName", "Name", "Bezeichnung"], cmap)
-            if col_name:
-                rows = fetch_all(
-                    f"SELECT [{col_id}] AS HID, [{col_name}] AS HName "
-                    f"FROM tblHousing ORDER BY [{col_name}]"
-                )
-                for r in rows:
-                    self.cmbHousing.addItem(str(r["HName"]), r["HID"])
+        for r in _ec.housings():
+            self.cmbHousing.addItem(r["name"], r["id"])
         # Auswahl wiederherstellen (z.B. nach Jet-Add)
         if current_id is not None:
             idx = self.cmbHousing.findData(current_id)
@@ -2214,53 +1566,17 @@ class CreateExperimentScreen(QWidget):
         self._check_safe()
 
     def _load_machines(self):
+        """Maschinen mit Joker-Flag (db/experiment_create.machines)."""
         self.cmbMachine.clear()
-        table = "tblMaschine"
-        if not table_exists(table):
-            QMessageBox.warning(
-                self, "Machine", "Table 'tblMaschine' not found.")
+        try:
+            rows = _ec.machines()
+        except RuntimeError as e:
+            QMessageBox.warning(self, "Machine", str(e))
             return
-        cmap = get_columns_map(table)
-        col_id = resolve_field(["ID"], cmap) or "ID"
-        col_name = resolve_field(["Maschine", "Machine", "Name"], cmap)
-        if not col_name:
-            QMessageBox.warning(
-                self, "Machine", "Column 'Maschine' not found.")
-            return
-
-        # Optionales Joker-Flag erkennen (tblMaschine.IsJoker)
-        col_is_joker = resolve_field(["IsJoker", "Is Joker", "Joker"], cmap)
-
-        if col_is_joker:
-            sql = (
-                f"SELECT [{col_id}] AS MID, "
-                f"[{col_name}] AS MName, "
-                f"[{col_is_joker}] AS MIsJoker "
-                f"FROM {table} ORDER BY [{col_name}]"
-            )
-        else:
-            sql = (
-                f"SELECT [{col_id}] AS MID, "
-                f"[{col_name}] AS MName "
-                f"FROM {table} ORDER BY [{col_name}]"
-            )
-
-        rows = fetch_all(sql)
         for r in rows:
-            is_joker = False
-            if "MIsJoker" in r:
-                val = r.get("MIsJoker")
-                try:
-                    # Access speichert Booleans häufig als 0/‑1
-                    is_joker = bool(int(val))
-                except Exception:
-                    is_joker = bool(val)
-
-            self.cmbMachine.addItem(str(r["MName"]), r["MID"])
-            idx = self.cmbMachine.count() - 1
+            self.cmbMachine.addItem(r["name"], r["id"])
             # Joker-Flag als zusätzliches Item-Data (UserRole+1) ablegen
-            self.cmbMachine.setItemData(idx, bool(is_joker), Qt.UserRole + 1)
-
+            self.cmbMachine.setItemData(self.cmbMachine.count() - 1, bool(r["joker"]), Qt.UserRole + 1)
         self.cmbMachine.setCurrentIndex(-1)
 
     def _load_lab_machines(self):
@@ -2571,20 +1887,6 @@ class CreateExperimentScreen(QWidget):
             gen_ok = True
         self.butSave.setEnabled(bool(ok_lab and gen_ok))
 
-    def _parse_additional_value(self, val):
-        """Extract a float from strings like '0.3 cN/dtex'; return original if no number found."""
-        try:
-            if isinstance(val, (int, float)):
-                return float(val)
-            s = str(val).strip()
-            import re as _re
-            m = _re.search(r'[-+]?\d+(?:[.,]\d+)?', s)
-            if m:
-                return float(m.group(0).replace(',', '.'))
-        except Exception:
-            pass
-        return val
-
     def _save_addlabmachines(self):
         """Assign selected lab machines to the checked trials in addlabmachines mode."""
         # Validate selections
@@ -2614,154 +1916,25 @@ class CreateExperimentScreen(QWidget):
                 self, "Save", "Please tick at least one trial.")
             return
 
+        # Writing: db/experiment_create.add_lab_machines (Qt-free, shared with the web app)
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute("START TRANSACTION")   # the pool runs autocommit - a real transaction
-                inserted = 0
-                skipped = 0
-
-                # Einige Labor-Tabellen haben einen NOT NULL FK auf tbluser(ID) (z.B. tbllabordtyomat.UserID).
-                # Wenn UserID beim INSERT fehlt, setzt MySQL je nach Default z.B. 0 → FK-Fehler.
-                # Primär: aktueller Login-User (app_meta.current_user['id']); Fallback: MIN(ID) aus tbluser.
-                default_user_id = None
-                try:
-                    if app_meta.current_user and app_meta.current_user.get("id") is not None:
-                        default_user_id = int(app_meta.current_user.get("id"))
-                except Exception:
-                    default_user_id = None
-                if default_user_id is None and table_exists("tbluser"):
-                    try:
-                        urows = fetch_all("SELECT MIN([ID]) AS uid FROM tbluser")
-                        if urows and urows[0].get("uid") is not None:
-                            default_user_id = int(urows[0]["uid"])
-                    except Exception:
-                        default_user_id = None
-
-                for lm in self._lab_data:
-                    if str(lm.get("RowMode") or "").strip().lower() == "seriesfreeform":
-                        # Jet Air Consumption & Co: keine Zeile pro Trial -
-                        # wird unten einmal pro Series (physische Duese x Druck) angelegt.
-                        continue
-                    tbl = (lm.get("TableName") or "").strip()
-                    if not tbl or not table_exists(tbl):
-                        continue
-                    lcols = get_columns_map(tbl)
-                    col_trial = resolve_field(["TrialID"], lcols) or "TrialID"
-                    add_src = (lm.get("AdditionalFieldSource") or "").strip()
-                    add_real = resolve_field(
-                        [add_src], lcols) if add_src else None
-                    add_val = lm.get("AdditionalVal", None)
-                    # parse numeric from strings with units
-                    add_val = self._parse_additional_value(add_val)
-                    if isinstance(add_val, (bytes, bytearray)):
-                        try:
-                            add_val = add_val.decode('utf-8')
-                        except Exception:
-                            add_val = float(add_val[0]) if len(
-                                add_val) > 0 else None
-
-                    # optionaler UserID (FK auf tbluser) – falls vorhanden, sauber setzen
-                    col_user = resolve_field(["UserID", "User", "CreatedBy", "CreatedByID"], lcols)
-
-                    for tid in selected_trial_ids:
-                        # Special case: Waterbath → allow 3 rows on first creation (no additional field)
-                        if 'waterbath' in tbl.lower():
-                            try:
-                                cur.execute(
-                                    f"SELECT COUNT(*) AS Cnt FROM [{tbl}] WHERE [{col_trial}] = ?", [tid])
-                                row = cur.fetchone()
-                                cnt = int(row[0] if row is not None else 0)
-                            except Exception:
-                                cnt = 0
-                            if cnt == 0:
-                                col_gid = resolve_field(["GlobalID"], lcols)
-                                for _ in range(3):
-                                    cols_sql_parts = [f"[{col_trial}]"]
-                                    params = [tid]
-                                    if col_gid:
-                                        cols_sql_parts.append(f"[{col_gid}]")
-                                        params.append(new_global_id())
-                                    if col_user:
-                                        if default_user_id is None:
-                                            raise Exception("No valid user found (tbluser). Please log in first or check tbluser.")
-                                        cols_sql_parts.append(f"[{col_user}]")
-                                        params.append(default_user_id)
-                                    placeholders = ",".join(
-                                        ["?"] * len(params))
-                                    cur.execute(
-                                        f"INSERT INTO [{tbl}] (" + ",".join(
-                                            cols_sql_parts) + ") VALUES (" + placeholders + ")",
-                                        params,
-                                    )
-                                    inserted += 1
-                            else:
-                                skipped += 1
-                            continue
-
-                        # Normal machines (with/without additional)
-                        exists = False
-                        try:
-                            if add_real:
-                                cur.execute(f"SELECT 1 FROM [{tbl}] WHERE [{col_trial}] = ? AND [{add_real}] = ?", [
-                                            tid, add_val])
-                            else:
-                                cur.execute(
-                                    f"SELECT 1 FROM [{tbl}] WHERE [{col_trial}] = ?", [tid])
-                            exists = cur.fetchone() is not None
-                        except Exception:
-                            exists = False
-                        if exists:
-                            skipped += 1
-                            continue
-                        col_gid = resolve_field(["GlobalID"], lcols)
-                        cols_sql_parts = [f"[{col_trial}]"]
-                        params = [tid]
-                        if col_gid:
-                            cols_sql_parts.append(f"[{col_gid}]")
-                            params.append(new_global_id())
-                        if add_real is not None:
-                            cols_sql_parts.append(f"[{add_real}]")
-                            params.append(add_val)
-                        if col_user:
-                            if default_user_id is None:
-                                raise Exception("No valid user found (tbluser). Please log in first or check tbluser.")
-                            cols_sql_parts.append(f"[{col_user}]")
-                            params.append(default_user_id)
-                        placeholders = ",".join(["?"] * len(params))
-                        cur.execute(
-                            f"INSERT INTO [{tbl}] (" + ",".join(cols_sql_parts) +
-                            ") VALUES (" + placeholders + ")",
-                            params,
-                        )
-                        inserted += 1
-
-                jet_air_stats = self._save_jet_air_consumption_rows(cur, ts_id)
-                cn.commit()
-
-            msg_lines = [
-                "Lab Machines zugewiesen.",
-                f"Experiment ID: {exp_id} • Series: {ts_id}",
-                f"Created: {inserted} • Skipped (already exists): {skipped}",
-            ]
-            if any(jet_air_stats.values()):
-                if jet_air_stats["physical_jets"] == 0:
-                    msg_lines.append(
-                        "Jet Air Consumption: no physical jet (JetID) found in this series — no rows were created.")
-                else:
-                    msg_lines.append(
-                        f"Jet Air Consumption: {jet_air_stats['created']} row(s) created, "
-                        f"{jet_air_stats['skipped_exists']} already there, "
-                        f"{jet_air_stats['physical_jets']} physical jet(s) found"
-                        + (f", {jet_air_stats['no_user']} skipped (no user)"
-                           if jet_air_stats['no_user'] else "") + ".")
-            QMessageBox.information(self, "Saved", "\n".join(msg_lines))
+            user_id = app_meta.current_user.get("id") if app_meta.current_user else None
+        except Exception:
+            user_id = None
+        try:
+            res = _ec.add_lab_machines(ts_id, selected_trial_ids, self._lab_data, user_id)
         except Exception as e:
-            try:
-                cn.rollback()
-            except Exception:
-                pass
             show_error(self, "Save failed", "The experiment could not be saved.", e)
+            return
+        msg_lines = [
+            "Lab Machines zugewiesen.",
+            f"Experiment ID: {exp_id} • Series: {ts_id}",
+            f"Created: {res['created']} • Skipped (already exists): {res['skipped']}",
+        ]
+        jet_line = _ec.jet_air_message(res["jet_air"])
+        if jet_line:
+            msg_lines.append(jet_line)
+        QMessageBox.information(self, "Saved", "\n".join(msg_lines))
 
     def _save_addtrials(self):
         """Erstellt neue Trials in der gewählten TrialSeries.
@@ -3030,22 +2203,7 @@ class CreateExperimentScreen(QWidget):
         self._update_lab_state_addlabmachines()
 
     def _resolve_experiments_table_and_columns(self) -> Optional[tuple[str, Dict[str, str]]]:
-        table_candidates = ["tblExperimente", "tblExperiments"]
-        table = next((t for t in table_candidates if table_exists(t)), None)
-        if not table:
-            return None
-        cmap = get_columns_map(table)
-        col_year = resolve_field(["Jahr", "Year"], cmap)
-        col_pg = resolve_field(["Produktgruppe", "ProductGroup"], cmap)
-        col_ot = resolve_field(["Bestellungstyp", "OrderType"], cmap)
-        col_num = resolve_field(["Experimentnummer", "ExperimentNumber"], cmap)
-        col_mac = resolve_field(["Maschine", "MachineID", "Machine"], cmap)
-        col_gid = resolve_field(["GlobalID"], cmap)
-        col_expreq = resolve_field(["ExperimentRequest", "Experiment Request", "RequestID", "ExperimentRequestID"], cmap)
-        col_project = resolve_field(["Projekt", "Project", "ProjectID"], cmap)
-        if not all([col_year, col_pg, col_ot, col_num]) or not col_mac:
-            return None
-        return table, {"year": col_year, "pg": col_pg, "ot": col_ot, "num": col_num, "machine": col_mac, "gid": col_gid, "expreq": col_expreq, "project": col_project}
+        return _ec.experiments_table()
 
     def _recompute_experiment_number(self):
         if self.mode == "legacy":
@@ -3062,35 +2220,14 @@ class CreateExperimentScreen(QWidget):
             self.txtExperimentNumber.clear()
             self.strExperimentData[3] = ""
             return
-        resolved = self._resolve_experiments_table_and_columns()
-        if not resolved:
+        if not self._resolve_experiments_table_and_columns():
             self.txtExperimentNumber.clear()
             self.strExperimentData[3] = ""
             QMessageBox.warning(self, "Experiment Number",
                                 "Experiments table or columns not found.")
             return
-        table, cols = resolved
         try:
-            rows = fetch_all(
-                f"""
-                SELECT [{cols['num']}] AS Num
-                FROM {table}
-                WHERE [{cols['year']}] = ? AND [{cols['pg']}] = ? AND [{cols['ot']}] = ?
-                """,
-                [year, pg, ot],
-            )
-            max_num = 0
-            for r in rows:
-                val = r.get("Num")
-                if val is None or val == "":
-                    continue
-                try:
-                    n = int(str(val).strip())
-                except Exception:
-                    continue
-                if n > max_num:
-                    max_num = n
-            next_txt = f"{(max_num + 1):03d}"
+            next_txt = _ec.next_experiment_number(year, pg, ot)
             self.txtExperimentNumber.setText(next_txt)
             self.strExperimentData[3] = next_txt
         except Exception as e:
@@ -3102,24 +2239,7 @@ class CreateExperimentScreen(QWidget):
                                               year: str, pg, ot, preferred_no_txt: str) -> str:
         """Gibt die kleinste freie Experimentnummer >= preferred_no_txt zurück.
         Wird in _on_save verwendet, um Race-Conditions bei gleichzeitigem Anlegen zu vermeiden."""
-        try:
-            cur.execute(
-                f"SELECT [{cols['num']}] FROM {exp_table} "
-                f"WHERE [{cols['year']}] = ? AND [{cols['pg']}] = ? AND [{cols['ot']}] = ?",
-                [year, pg, ot],
-            )
-            taken = set()
-            for row in cur.fetchall():
-                try:
-                    taken.add(int(str(row[0]).strip()))
-                except Exception:
-                    pass
-            candidate = int(preferred_no_txt)
-            while candidate in taken:
-                candidate += 1
-            return f"{candidate:03d}"
-        except Exception:
-            return preferred_no_txt
+        return _ec.next_free_number(cur, exp_table, cols, year, pg, ot, preferred_no_txt)
 
     # -->-->-->- Material -->-->-->-
     def _on_material_changed(self):
@@ -3199,9 +2319,18 @@ class CreateExperimentScreen(QWidget):
             return False
         if 0 <= row < len(self._materials_data):
             del self._materials_data[row]
-        # Ply-Labels in _materials_data und Tabelle neu vergeben
-        for i in range(len(self._materials_data)):
-            self._materials_data[i]["Ply"] = f"Ply {i + 1}"
+        # Ply-Labels neu vergeben - gleiche Regel wie beim Hinzufügen
+        # (db/experiment_create.renumber_plies: gleiches Garn = gleiche Ply;
+        # vorher stur "Ply 1..n", womit die Enden eines Garns verschiedene Plies bekamen)
+        series_pk = None
+        if self.mode in ("addtrials", "addlabmachines"):
+            try:
+                series_pk = int(self.cmbExistingSeries.currentData())
+            except Exception:
+                series_pk = None
+        for m, label in zip(self._materials_data, _ec.renumber_plies(
+                self._materials_data, getattr(self, "_ply_offset", 0), series_pk)):
+            m["Ply"] = label
         # UI nach dem Löschen aktualisieren (Tabelle hat Zeile noch nicht entfernt)
         # → Renummerierung wird nach removeRow() sichtbar, daher per QTimer
         from PySide6.QtCore import QTimer
@@ -3237,9 +2366,9 @@ class CreateExperimentScreen(QWidget):
                 self, "Material",
                 f"Maximum of {self.MAX_PLIES} yarns per trial series allowed.")
             return
-        # Konsistenzprüfung gegen bestehende Series (addtrials / addlabmachines)
-        # Hinweis: _series_pk/_edit_series_pk gibt es in dieser Klasse nicht -
-        # die aktuell gewaehlte Serie steht in cmbExistingSeries.
+        # Ply label + series/list conflict: db/experiment_create.ply_label_for
+        # (Qt-free, shared with the web app) - same yarn = same ply, a ply
+        # keeps one yarn in the whole series.
         series_pk: Optional[int] = None
         if self.mode in ("addtrials", "addlabmachines") and hasattr(self, "cmbExistingSeries"):
             try:
@@ -3248,82 +2377,11 @@ class CreateExperimentScreen(QWidget):
                     series_pk = int(data)
             except Exception:
                 series_pk = None
-
-        # Falls dieses Garn in der Series bereits einer bestimmten Ply-Nummer
-        # zugeordnet ist (z.B. "Ply 1" bei den bestehenden Trials), soll ein
-        # neuer Trial mit demselben Garn dieselbe Ply-Nummer bekommen –
-        # statt (wie bisher) immer per _ply_offset auf die naechste freie
-        # Nummer verschoben zu werden.
-        existing_ply_for_yarn: Optional[str] = None
-        if series_pk:
-            try:
-                ply_rows = fetch_all(
-                    """
-                    SELECT DISTINCT ts.Ply
-                    FROM tblTrialSettings ts
-                    JOIN tblTrial t ON t.ID = ts.TrialID
-                    WHERE t.TrialSeriesID = ? AND ts.YarnID = ?
-                    """,
-                    [series_pk, yarn_id],
-                )
-                plys = {r["Ply"] for r in ply_rows if r.get("Ply")}
-                if len(plys) == 1:
-                    existing_ply_for_yarn = next(iter(plys))
-            except Exception:
-                existing_ply_for_yarn = None
-
-        # Gleiches Prinzip fuer den gerade in Bearbeitung befindlichen (noch
-        # nicht gespeicherten) Trial selbst: wird dasselbe Garn ein zweites
-        # Mal ueber einen separaten "Add"-Klick hinzugefuegt (statt ueber
-        # n_ends unten in einem Rutsch), soll es dieselbe Ply-Nummer bekommen
-        # statt eine neue - sonst haette z.B. TrialSeries 385 Garn A viermal
-        # als Ply 1/2/3/4 im selben Trial bekommen (2026-08-20, Nutzer-Bugreport
-        # + Feature-Wunsch: "dasselbe Garn im selben Versuch = dieselbe Ply").
-        if existing_ply_for_yarn is None:
-            for m in self._materials_data:
-                if int(m.get("YarnID") or -1) == int(yarn_id):
-                    existing_ply_for_yarn = m.get("Ply")
-                    break
-
-        ply_offset = getattr(self, "_ply_offset", 0)
-        # Gleiche Formel wie beim spaeteren Speichern (Zeile mit ply_offset weiter
-        # unten) – Pruefung und gespeicherter Wert muessen konsistent sein.
-        ply_label = existing_ply_for_yarn or f"Ply {ply_offset + self.tblYarns.rowCount() + 1}"
-
-        if series_pk:
-            conflict_rows = fetch_all(
-                """
-                SELECT DISTINCT y.Name AS YarnName
-                FROM tblTrialSettings ts
-                JOIN tblTrial t ON t.ID = ts.TrialID
-                JOIN tblYarn y ON y.ID = ts.YarnID
-                WHERE t.TrialSeriesID = ?
-                  AND ts.Ply = ?
-                  AND ts.YarnID != ?
-                """,
-                [series_pk, ply_label, yarn_id],
-            )
-            if conflict_rows:
-                existing = ", ".join(r["YarnName"] for r in conflict_rows)
-                QMessageBox.critical(
-                    self, "Yarn Conflict",
-                    f"Cannot add this yarn to {ply_label}.\n\n"
-                    f"This ply already has a different yarn in this series:\n"
-                    f"  {existing}\n\n"
-                    f"All trials in a series must use the same yarn per ply."
-                )
-                return
-
-        # Konsistenzprüfung gegen bereits hinzugefügte Plies in _materials_data
-        for m in self._materials_data:
-            if m.get("Ply") == ply_label and int(m["YarnID"]) != int(yarn_id):
-                QMessageBox.critical(
-                    self, "Yarn Conflict",
-                    f"{ply_label} is already assigned to a different yarn:\n"
-                    f"  {m['Name']}\n\n"
-                    f"All trials in a series must use the same yarn per ply."
-                )
-                return
+        ply_label, conflict = _ec.ply_label_for(
+            self._materials_data, yarn_id, getattr(self, "_ply_offset", 0), series_pk)
+        if conflict:
+            QMessageBox.critical(self, "Yarn Conflict", conflict)
+            return
         r = self.tblYarns.rowCount()
         yarn_use_id = None
         yarn_use_name = "—"
@@ -3680,129 +2738,42 @@ class CreateExperimentScreen(QWidget):
                 # die DB-Logik erzwingt den Wert zusätzlich noch einmal.
                 pass
 
-        table = "tblMachineFields"
-        if not table_exists(table):
-            QMessageBox.warning(
-                self, "Machine", "Table 'tblMachineFields' not found.")
+        # Field layout: db/experiment_create.machine_fields (Qt-free, shared with the web app)
+        try:
+            fields = _ec.machine_fields(machine_id)
+        except RuntimeError as e:
+            QMessageBox.warning(self, "Machine", str(e))
             self._check_machine()
             self._check_safe()
             return
 
-        cmap = get_columns_map(table)
-        col_mid = resolve_field(
-            ["MachineID", "MaschineID"], cmap) or "MachineID"
-        col_fno = resolve_field(["FieldNumber"], cmap) or "FieldNumber"
-        col_row = resolve_field(["Row", "Zeile"], cmap) or "Row"
-        col_col = resolve_field(["Column", "Spalte"], cmap) or "Column"
-        col_group = resolve_field(["Group", "Gruppe"], cmap) or "Group"
-        col_name = resolve_field(["FieldName", "Caption"], cmap) or "FieldName"
-        col_func = resolve_field(
-            ["FieldFunction", "Function"], cmap) or "FieldFunction"
-        col_orig = resolve_field(
-            ["OriginalName", "Original", "OriginalFieldName"], cmap) or "FieldName"
-        col_storage = resolve_field(["StorageTable"], cmap)  # kann NULL sein → default 'tbltrial'
-
-        rows = fetch_all(
-            f"""
-            SELECT [{col_fno}]   AS FNo,
-                   [{col_row}]   AS R,
-                   [{col_col}]   AS C,
-                   [{col_group}] AS G,
-                   [{col_name}]  AS Caption,
-                   [{col_func}]  AS Fnc,
-                   [{col_orig}]  AS Orig
-                   {f', [{col_storage}] AS StorTbl' if col_storage else ', NULL AS StorTbl'}
-            FROM {table}
-            WHERE [{col_mid}] = ?
-              AND COALESCE(RDSetting, 0) = 0
-            ORDER BY [{col_fno}]
-            """,
-            [machine_id],
-        )
-
-        if not rows:
-            self._check_machine()
-            self._check_safe()
-            return
-
-        group_to_minrow: Dict[Any, int] = {}
-        for r in rows:
-            g = r["G"]
-            if g not in group_to_minrow:
-                group_to_minrow[g] = int(r["R"] or 0)
-            else:
-                group_to_minrow[g] = min(group_to_minrow[g], int(r["R"] or 0))
-        groups_sorted = sorted(group_to_minrow.items(), key=lambda kv: kv[1])
-        group_start_rows = [gr for gr, _ in groups_sorted]
-
-        def _offset_for_row(base_row: int) -> int:
-            cnt = 0
-            for gr in group_start_rows:
-                if group_to_minrow[gr] < base_row:
-                    cnt += 1
-            return cnt
-
-        for r in rows:
-            r0 = int(r["R"] or 0)
-            c0 = int(r["C"] or 0)
-            fno = int(r["FNo"] or 0)
-            caption = str(r["Caption"] or "")
-            fnc = (r["Fnc"] or "").strip()
-            orig = (r["Orig"] or "").strip() or caption
-            storage = str(r.get("StorTbl") or "tbltrial").strip().lower()
-            if storage not in ("tbltrial", "tbltrialsettings"):
-                storage = "tbltrial"
-
-            # hidden-Felder komplett überspringen
-            if fnc.lower() == "hidden":
-                continue
-
-            if r0 == group_to_minrow[r["G"]]:
-                if group_start_rows.index(r["G"]) > 0:
-                    spacer = QSpacerItem(
-                        0, 16, QSizePolicy.Minimum, QSizePolicy.Fixed)
-                    self.machine_grid.addItem(
-                        spacer, r0 - 1 + _offset_for_row(r0), 0, 1, 6)
-
-            row_idx = r0 + _offset_for_row(r0)
-            col_idx = max(0, c0) * 2
-
-            lab = QLabel(caption)
+        for f in fields:
+            row_idx = f["row"]
+            col_idx = f["col"] * 2
+            if f["gap_before"]:
+                spacer = QSpacerItem(0, 16, QSizePolicy.Minimum, QSizePolicy.Fixed)
+                self.machine_grid.addItem(spacer, row_idx - 1, 0, 1, 6)
+            lab = QLabel(f["caption"])
 
             # dropdown:tblXxx → QComboBox statt QLineEdit
-            if fnc.lower().startswith("dropdown:"):
-                lookup_table = fnc[len("dropdown:"):].strip()
+            if f["kind"] == "dropdown":
                 widget = QComboBox()
                 widget.setInsertPolicy(QComboBox.NoInsert)
                 widget.addItem("", None)   # leerer Eintrag (kein Wert)
-                try:
-                    lk_cmap = get_columns_map(lookup_table)
-                    lk_id = resolve_field(["ID"], lk_cmap) or "ID"
-                    # Anzeige-Spalte: DiscName, Name, Bezeichnung o.ä.
-                    lk_name = resolve_field(
-                        ["DiscName", "Name", "Bezeichnung", "Caption"], lk_cmap)
-                    if lk_name:
-                        lk_rows = fetch_all(
-                            f"SELECT [{lk_id}] AS LID, [{lk_name}] AS LName "
-                            f"FROM {lookup_table} ORDER BY [{lk_name}] ASC"
-                        )
-                        for lk in lk_rows:
-                            widget.addItem(str(lk.get("LName") or ""), lk.get("LID"))
-                except Exception:
-                    pass
-                self.machine_grid.addWidget(lab,    row_idx, col_idx)
+                for lid, lname in f.get("options", []):
+                    widget.addItem(str(lname or ""), lid)
+                self.machine_grid.addWidget(lab, row_idx, col_idx)
                 self.machine_grid.addWidget(widget, row_idx, col_idx + 1)
-                self._machine_field_widgets.append((lab, widget, fno, orig, storage))
+                self._machine_field_widgets.append((lab, widget, f["fno"], f["orig"], f["storage"]))
                 continue
 
             edit = QLineEdit()
-
-            if fnc.lower() == "onlyinteger":
+            if f["kind"] == "int":
                 edit.setValidator(QIntValidator(-10**9, 10**9, self))
-            elif fnc.lower() == "onlydoubles":
+            elif f["kind"] == "double":
                 regex = QRegularExpression(r"^\s*[+-]?\d+(?:[.,]\d{1,3})?\s*$")
                 edit.setValidator(QRegularExpressionValidator(regex, self))
-            elif fnc.lower().replace(" ", "") in ("onlysz", "onlys,z", "onlys z", "only s z"):
+            elif f["kind"] == "sz":
                 regex = QRegularExpression(
                     r"^\s*(S|Z|SZ)\s*$", QRegularExpression.CaseInsensitiveOption)
                 edit.setValidator(QRegularExpressionValidator(regex, self))
@@ -3813,10 +2784,9 @@ class CreateExperimentScreen(QWidget):
                     e.blockSignals(False)
                 edit.textChanged.connect(_up)
 
-            self.machine_grid.addWidget(lab,  row_idx, col_idx)
+            self.machine_grid.addWidget(lab, row_idx, col_idx)
             self.machine_grid.addWidget(edit, row_idx, col_idx + 1)
-
-            self._machine_field_widgets.append((lab, edit, fno, orig, storage))
+            self._machine_field_widgets.append((lab, edit, f["fno"], f["orig"], f["storage"]))
 
         self._check_machine()
         self._check_safe()
@@ -3895,7 +2865,7 @@ class CreateExperimentScreen(QWidget):
         """Gibt die ausgewählten Tension-Werte als float-Liste zurück."""
         result = []
         for cb in getattr(self, "_tension_checkboxes", []):
-            if cb.isVisible() and cb.isChecked():
+            if not cb.isHidden() and cb.isChecked():
                 try:
                     result.append(float(cb.text().split()[0].replace(",", ".")))
                 except Exception:
@@ -3916,369 +2886,69 @@ class CreateExperimentScreen(QWidget):
             ok = ok and bool(txt) and self.txtAdditional.hasAcceptableInput()
         self.butAddLabMachine.setEnabled(ok)
 
-    def _norm_add_val(self, v):
-        """Normalisiere AdditionalValue für Vergleiche (Float auf 3 Nachkommastellen)."""
-        if v is None or v == "":
-            return None
-        try:
-            return round(float(str(v).replace(",", ".")), 3)
-        except Exception:
-            return str(v).strip()
-
-    def _entry_matches(self, row: dict, lm_id: int, add_val_norm):
-        if int(row.get("LMID")) != int(lm_id):
-            return False
-        # vorhandenen Wert robust ermitteln
-        existing = row.get("AdditionalVal", None)
-        if existing is None:
-            disp = (row.get("AdditionalDisp") or "").split(" ")[0]
-            existing = self._norm_add_val(disp)
-        else:
-            existing = self._norm_add_val(existing)
-
-        # Maschinen ohne AdditionalField -> add_val_norm == None macht sie eindeutig
-        return existing == add_val_norm
-
-    def _lab_entry_exists(self, lm_id: int, add_val_norm):
-        """True, wenn Kombination (LMID, AdditionalVal_norm) bereits existiert.
-        Für Maschinen ohne AdditionalField ist add_val_norm=None."""
-        for r in self._lab_data:
-            if self._entry_matches(r, lm_id, add_val_norm):
-                return True
-        return False
-
-    def _addlabmachines_value_needed(self, table: str, add_src: str, value: float) -> bool:
-        """In addlabmachines mode: True if at least one currently checked
-        trial does not yet have this (table, value) combination in the DB.
-        Used to suppress the automatic Itemat 0.0-baseline from the pending
-        list when every checked trial already has it - _lab_entry_exists()
-        alone can't see that, it only knows about entries added in this UI
-        session, not what's already saved for the selected (existing)
-        trials. In create/addtrials mode trials don't exist yet, so this
-        is always True there (nothing to check against)."""
-        if self.mode != "addlabmachines" or not table or not table_exists(table):
-            return True
-        trial_ids = self._get_checked_trial_ids()
-        if not trial_ids:
-            return True
-        try:
-            lcols = get_columns_map(table)
-            col_trial = resolve_field(["TrialID"], lcols) or "TrialID"
-            add_real = resolve_field([add_src], lcols) if add_src else None
-            placeholders = ",".join(["?"] * len(trial_ids))
-            if add_real:
-                rows = fetch_all(
-                    f"SELECT DISTINCT [{col_trial}] AS TrialID FROM [{table}] "
-                    f"WHERE [{col_trial}] IN ({placeholders}) AND [{add_real}] = ?",
-                    trial_ids + [value],
-                )
-            else:
-                rows = fetch_all(
-                    f"SELECT DISTINCT [{col_trial}] AS TrialID FROM [{table}] "
-                    f"WHERE [{col_trial}] IN ({placeholders})",
-                    trial_ids,
-                )
-            have = {int(r["TrialID"]) for r in rows}
-            return any(tid not in have for tid in trial_ids)
-        except Exception:
-            return True
-
     def _is_itemat(self, meta: dict, fallback_name: str = "") -> bool:
         """Erkenne Itemat-Maschinen robust: db/trial_actions.is_itemat."""
         return _trial_actions.is_itemat(meta, fallback_name)
 
     def _is_series_freeform(self, meta: dict) -> bool:
-        """
-        Erkennt Lab Machines mit RowMode='SeriesFreeform' (z.B. Jet Air Consumption):
-        diese bekommen KEINE automatische 1-Zeile-pro-Trial-Erzeugung, sondern eine
-        eigene Kreuzprodukt-Logik (physische Duese x Druck), einmal pro Series.
-        """
-        return str(meta.get("RowMode") or "").strip().lower() == "seriesfreeform"
+        """RowMode='SeriesFreeform' (z.B. Jet Air Consumption): db/experiment_create.is_series_freeform."""
+        return _ec.is_series_freeform(meta)
 
     def _add_lab_machine(self):
         # Button-Guard
         if not self.butAddLabMachine.isEnabled():
             return
-
-        # Ausgewählte Maschine & Metadaten
-        lm_name = self.cmbLabMachine.currentText().strip()
         lm_id = int(self.cmbLabMachine.currentData())
         meta = self._lab_machines.get(lm_id) or {}
-
-        # leer => kein Additional Field
-        caption = (meta.get("AddField") or "").strip()
-        unit = (meta.get("AddUnit") or "").strip()
-        table = (meta.get("Tbl") or "").strip()
-        src = (meta.get("Src") or "").strip()
-
-        needs_additional = bool(caption)
-        is_itemat = self._is_itemat(meta, self.cmbLabMachine.currentText())
-        is_series_freeform = self._is_series_freeform(meta)
-
-        # ── SeriesFreeform (z.B. Jet Air Consumption): kommagetrennte Liste
-        # von Werten (z.B. Druckstufen) statt einem Einzelwert. Diese Werte
-        # werden NICHT pro Trial dupliziert, sondern beim Speichern einmal
-        # pro Series mit den physischen Duesen (JetID+JetPlate) gekreuzt.
-        if is_series_freeform and needs_additional:
-            raw = self.txtAdditional.text().strip()
-            if raw == "":
-                QMessageBox.information(
-                    self, "Lab Machine",
-                    f"Please enter one or more {caption} values (comma-separated, e.g. 4, 5, 6).")
-                return
-            parts = [p.strip() for p in raw.replace(";", ",").split(",") if p.strip() != ""]
-            vals: List[float] = []
-            bad: List[str] = []
-            for p in parts:
-                try:
-                    vals.append(float(p.replace(",", ".")))
-                except Exception:
-                    bad.append(p)
-            if bad:
-                QMessageBox.warning(
-                    self, "Lab Machine",
-                    f"Invalid values: {', '.join(bad)}. Numbers only, comma-separated.")
-                return
-            if not vals:
-                return
-
-            added_any = False
-            for val in vals:
-                norm = self._norm_add_val(val)
-                if self._lab_entry_exists(lm_id, norm):
-                    continue
-                disp = f"{val:g}" + ((" " + unit) if unit else "")
-                rr = self.tblLabMachines.rowCount()
-                self.tblLabMachines.insertRow(rr)
-                self.tblLabMachines.setItem(rr, 0, QTableWidgetItem(lm_name))
-                self.tblLabMachines.setItem(rr, 1, QTableWidgetItem(disp))
-                self._lab_data.append({
-                    "LMID": lm_id, "Name": lm_name,
-                    "AdditionalDisp": disp, "AdditionalVal": val,
-                    "TableName": table, "AdditionalFieldSource": src,
-                    "Unit": unit, "RowMode": "SeriesFreeform",
-                })
-                added_any = True
-
-            if added_any:
-                self.txtAdditional.clear()
-                self._update_add_lab_enabled()
-                self._check_lab()
-                self._check_safe()
-                self._update_lab_state_addlabmachines()
+        # Which entries the "+" adds: db/experiment_create.plan_lab_entries
+        # (Qt-free, shared with the web app)
+        text = self.txtAdditional.text() if not self.txtAdditional.isHidden() else ""
+        trial_ids = self._get_checked_trial_ids() if self.mode == "addlabmachines" else []
+        entries, msg = _ec.plan_lab_entries(meta, self.mode, self._lab_data, text,
+                                            self._get_checked_tensions(), trial_ids)
+        if msg:
+            QMessageBox.information(self, "Lab Machine", msg)
             return
-
-        # In addtrials: Itemat-Maschinen immer nur 0.0 einfügen (kein manueller Wert)
-        if self.mode == "addtrials" and is_itemat and needs_additional:
-            baseline_norm = self._norm_add_val(0.0)
-            if self._lab_entry_exists(lm_id, baseline_norm):
-                return  # bereits vorhanden
+        for e in entries:
             rr = self.tblLabMachines.rowCount()
             self.tblLabMachines.insertRow(rr)
-            disp0 = "0.0" + ((" " + unit) if unit else "")
-            self.tblLabMachines.setItem(rr, 0, QTableWidgetItem(lm_name))
-            self.tblLabMachines.setItem(rr, 1, QTableWidgetItem(disp0))
-            self._lab_data.append({
-                "LMID": lm_id, "Name": lm_name,
-                "AdditionalDisp": disp0, "AdditionalVal": 0.0,
-                "TableName": table, "AdditionalFieldSource": src,
-                "Unit": unit,
-            })
-            self._update_add_lab_enabled()
-            self._check_lab()
-            self._check_safe()
-            return
-
-        # Itemat in allen anderen Modi: Checkboxen + optionales Textfeld
-        if is_itemat and needs_additional and any(
-                cb.isVisible() for cb in getattr(self, "_tension_checkboxes", [])):
-            checked_vals = self._get_checked_tensions()
-
-            # Allfälligen manuellen Wert aus txtAdditional dazunehmen
-            manual_val = None
-            raw_txt = self.txtAdditional.text().strip() if self.txtAdditional.isVisible() else ""
-            if raw_txt and self.txtAdditional.hasAcceptableInput():
-                try:
-                    manual_val = float(raw_txt.replace(",", "."))
-                except Exception:
-                    pass
-
-            if not checked_vals and manual_val is None:
-                return
-
-            # Alle Werte die eingefügt werden sollen: 0.0 immer + angehakte + manuell
-            # (0.0-Baseline nur, falls noch nicht in der Pending-Liste UND
-            # noch nicht für mindestens einen der angehakten Trials in der DB)
-            vals_to_insert: List[float] = []
-            baseline_norm = self._norm_add_val(0.0)
-            if not self._lab_entry_exists(lm_id, baseline_norm) and \
-                    self._addlabmachines_value_needed(table, src, 0.0):
-                vals_to_insert.append(0.0)
-            for tv in checked_vals:
-                if not self._lab_entry_exists(lm_id, self._norm_add_val(tv)):
-                    vals_to_insert.append(tv)
-            if manual_val is not None and not self._lab_entry_exists(lm_id, self._norm_add_val(manual_val)):
-                vals_to_insert.append(manual_val)
-
-            for val in vals_to_insert:
-                disp = f"{val:.1f}" + ((" " + unit) if unit else "")
-                rr = self.tblLabMachines.rowCount()
-                self.tblLabMachines.insertRow(rr)
-                self.tblLabMachines.setItem(rr, 0, QTableWidgetItem(lm_name))
-                self.tblLabMachines.setItem(rr, 1, QTableWidgetItem(disp))
-                self._lab_data.append({
-                    "LMID": lm_id, "Name": lm_name,
-                    "AdditionalDisp": disp, "AdditionalVal": val,
-                    "TableName": table, "AdditionalFieldSource": src,
-                    "Unit": unit,
-                })
-
-            # Checkboxen zurücksetzen, Textfeld leeren
-            self._set_tension_checkboxes_visible(True, uncheck=True)
-            self.txtAdditional.clear()
-            self._update_add_lab_enabled()
-            self._check_lab()
-            self._check_safe()
-            self._update_lab_state_addlabmachines()
-            return
-
-        # -->- 1) Wert lesen/normalisieren
-        add_disp = ""
-        add_val = None
-        add_norm = None
-
-        if needs_additional:
-            raw = self.txtAdditional.text().strip()
-            if raw == "":
-                # Safety (Button sollte eigentlich disabled sein)
-                QMessageBox.information(
-                    self, "Lab Machine", "Please enter an additional value.")
-                return
-            try:
-                add_val = float(raw.replace(",", "."))
-                add_norm = self._norm_add_val(add_val)
-                add_disp = f"{add_val:.2f}".rstrip("0").rstrip(".")
-            except Exception:
-                add_val = None
-                add_norm = self._norm_add_val(raw)
-                add_disp = raw
-        else:
-            # Maschinen ohne Additional Field: nur einmal erlauben
-            add_norm = None
-            add_disp = ""
-
-        # -->- 2) Duplikate verhindern
-        if self._lab_entry_exists(lm_id, add_norm):
-            # duplicate suppressed for add stage
-            return
-
-        # -->- 3) (NEU) Pflicht-Baseline 0.0 VOR dem eigentlichen Wert einfügen
-        # Nur wenn Maschine ein Additional Field hat und Itemat-Variante ist.
-        if needs_additional and is_itemat:
-            baseline_norm = self._norm_add_val(0.0)
-            if not self._lab_entry_exists(lm_id, baseline_norm) and \
-                    self._addlabmachines_value_needed(table, src, 0.0):
-                # Insert baseline row first
-                rr = self.tblLabMachines.rowCount()
-                self.tblLabMachines.insertRow(rr)
-                disp0 = "0.0" + ((" " + unit) if unit else "")
-                self.tblLabMachines.setItem(rr, 0, QTableWidgetItem(lm_name))
-                self.tblLabMachines.setItem(rr, 1, QTableWidgetItem(disp0))
-                self._lab_data.append({
-                    "LMID": lm_id, "Name": lm_name,
-                    "AdditionalDisp": disp0, "AdditionalVal": 0.0,
-                    "TableName": table, "AdditionalFieldSource": src,
-                    "Unit": unit,
-                })
-            # Wenn der Nutzer selbst 0 / 0.0 eingegeben hat, war das die Baseline —
-            # keinen zweiten Eintrag anlegen.
-            if add_norm == self._norm_add_val(0.0):
-                if needs_additional:
-                    self.txtAdditional.clear()
-                self._update_add_lab_enabled()
-                self._check_lab()
-                self._check_safe()
-                self._update_lab_state_addlabmachines()
-                return
-
-        # -->- 4) Eigentlichen (vom Nutzer gewählten) Eintrag hinzufügen
-        r = self.tblLabMachines.rowCount()
-        self.tblLabMachines.insertRow(r)
-        disp = add_disp + ((" " + unit) if unit and add_disp else "")
-        self.tblLabMachines.setItem(r, 0, QTableWidgetItem(lm_name))
-        self.tblLabMachines.setItem(r, 1, QTableWidgetItem(disp))
-
-        self._lab_data.append({
-            "LMID": lm_id,
-            "Name": lm_name,
-            "AdditionalDisp": disp,
-            "AdditionalVal": add_val,
-            "TableName": table,
-            "AdditionalFieldSource": src,
-            "Unit": unit,
-        })
-
+            self.tblLabMachines.setItem(rr, 0, QTableWidgetItem(e["Name"]))
+            self.tblLabMachines.setItem(rr, 1, QTableWidgetItem(e["AdditionalDisp"]))
+            self._lab_data.append(e)
         # Eingabefelder zurücksetzen
-        if needs_additional:
-            self.txtAdditional.clear()
+        if any(not cb.isHidden() for cb in getattr(self, "_tension_checkboxes", [])):
+            self._set_tension_checkboxes_visible(True, uncheck=True)
+        if (meta.get("AddField") or "").strip():
+            if entries:
+                self.txtAdditional.clear()
         else:
             self._set_additional_visible(False, clear=True)
-
         self._update_add_lab_enabled()
         self._check_lab()
         self._check_safe()
         self._update_lab_state_addlabmachines()
 
     def _delete_lab_row(self, row: int):
-        """Delete a lab-machine row.
-        For Itemat machines (Itemat Lab / Itemat Plus),
-        the 0.0 cN/dtex variant may only be deleted if no
-        other variants of this machine exist for that series.
-        """
+        """Delete a lab-machine row. The Itemat 0.0 cN/dtex baseline may only
+        go when no other variant of that machine is in the list
+        (db/experiment_create.can_delete_lab_entry)."""
         if not (0 <= row < len(self._lab_data)):
             # inkonsistenter Zustand -> nichts tun, aber Deletion nicht blockieren
             return True
-
-        entry = self._lab_data[row]
-        lm_id = entry.get("LMID")
-        name = entry.get("Name", "")
-
-        # Meta holen und prüfen, ob es eine Itemat‑Maschine ist
-        meta = self._lab_machines.get(lm_id) or {}
-        is_itemat = self._is_itemat(meta, name)
-
-        # Prüfen, ob es sich um die 0.0‑Baseline handelt
-        add_val = entry.get("AdditionalVal", None)
-        is_baseline_zero = False
-        try:
-            if add_val is not None:
-                is_baseline_zero = (self._norm_add_val(add_val) ==
-                                    self._norm_add_val(0.0))
-        except Exception:
-            is_baseline_zero = False
-
-        # Falls Itemat & 0.0‑Variante: nur löschen, wenn keine weiteren Varianten existieren
-        if is_itemat and is_baseline_zero:
-            has_other_variants = any(
-                (i != row) and (d.get("LMID") == lm_id)
-                for i, d in enumerate(self._lab_data)
+        if not _ec.can_delete_lab_entry(self._lab_data, row, self._lab_machines):
+            QMessageBox.information(
+                self,
+                "0.0 variant cannot be deleted",
+                (
+                    "The 0.0 cN/dtex variant of Itemat machines can only be deleted "
+                    "when all other variants of this machine for this "
+                    "Serie entfernt wurden.\n\n"
+                    "Please delete the other variants first "
+                    "(z. B. 0.3, 0.6 usw.)."
+                ),
             )
-            if has_other_variants:
-                QMessageBox.information(
-                    self,
-                    "0.0 variant cannot be deleted",
-                    (
-                        "The 0.0 cN/dtex variant of Itemat machines can only be deleted "
-                        "when all other variants of this machine for this "
-                        "Serie entfernt wurden.\n\n"
-                        "Please delete the other variants first "
-                        "(z. B. 0.3, 0.6 usw.)."
-                    ),
-                )
-                # False signalisiert dem ReadOnlyTable, dass die Zeile NICHT entfernt werden soll
-                return False
-
-        # Normaler Löschpfad (oder Itemat-Baseline ohne weitere Varianten)
+            # False signalisiert dem ReadOnlyTable, dass die Zeile NICHT entfernt werden soll
+            return False
         del self._lab_data[row]
         self._check_lab()
         self._check_safe()
@@ -4370,15 +3040,6 @@ class CreateExperimentScreen(QWidget):
             except Exception:
                 pass
 
-    def _insert_and_identity(self, cur, sql: str, params: list | tuple) -> int:
-        cur.execute(sql, params)
-        cur.execute("SELECT @@IDENTITY")
-        rid = cur.fetchone()[0]
-        try:
-            return int(rid)
-        except Exception:
-            return int(float(rid))
-
     def _to_int_or_none(self, s: Any) -> Optional[int]:
         if s is None:
             return None
@@ -4401,17 +3062,6 @@ class CreateExperimentScreen(QWidget):
         except Exception:
             return None
 
-    def _col_is_numeric(self, table: str, real_col: str) -> bool:
-        info = get_columns_info(table)
-        for i in info:
-            if i["real"].lower() == real_col.lower():
-                dt = i.get("data_type")
-                tn = (i.get("type_name") or "").upper()
-                if dt in (2, 3, 4, 5, 6, 7) or any(x in tn for x in
-                                                   ["BYTE", "SHORT", "LONG", "INT", "INTEGER", "SINGLE", "DOUBLE", "NUMERIC", "DECIMAL"]):
-                    return True
-        return False
-
     def _open_help(self):
         from ui.widgets.multilang_help import show_help
         from ui.widgets.help_texts_create_experiment import TEXTS
@@ -4432,475 +3082,70 @@ class CreateExperimentScreen(QWidget):
                 self, "Create/Attach", "Please fill in all tabs correctly.")
             return
 
-        # --> 1) Tabellen & Spalten auflösen -->
-        exp_res = self._resolve_experiments_table_and_columns()
-        if not exp_res:
-            QMessageBox.critical(
-                self, "Save", "Experiments table not found/incomplete.")
-            return
-        exp_table, exp_cols = exp_res
-
-        ts_table = "tblTrialSeries"
-        if not table_exists(ts_table):
-            QMessageBox.critical(
-                self, "Save", "Table 'tblTrialSeries' not found.")
-            return
-        ts_cols = get_columns_map(ts_table)
-        ts_exp = resolve_field(
-            ["ExperimentID", "Experiment Id"], ts_cols) or "ExperimentID"
-        ts_name = resolve_field(["SeriesName", "Name"],
-                                ts_cols) or "SeriesName"
-
-        trial_table = "tblTrial"
-        if not table_exists(trial_table):
-            QMessageBox.critical(
-                self, "Save", "Table 'tblTrial' not found.")
-            return
-        tr_cols = get_columns_map(trial_table)
-        tr_sid = resolve_field(
-            ["TrialSeriesID", "SerieID", "SeriesID"], tr_cols) or "TrialSeriesID"
-        tr_no = resolve_field(
-            ["Versuchsnummer", "TrialNumber", "Nr"], tr_cols) or "Versuchsnummer"
-        tr_jetid = resolve_field(
-            ["JetID", "Jet Id", "Jet"], tr_cols) or "JetID"
-        tr_plate = resolve_field(
-            ["Jet Plate Number", "JetPlate", "Jet Plate", "JetPlateNumber"], tr_cols) or "Jet Plate Number"
-        tr_press = resolve_field(
-            ["Air Pressure (bar)", "AirPressure", "Air Pressure"], tr_cols) or "Air Pressure (bar)"
-        tr_housing = resolve_field(["HousingID"], tr_cols)
-
-        # dynamische Maschinenfelder – aufgeteilt nach StorageTable
-        machine_dynamic_cols_trial: List[Tuple[str, Any]] = []        # → tblTrial
-        machine_dynamic_cols_settings: List[Tuple[str, Any]] = []     # → tblTrialSettings
-        ts_cols_map: Dict[str, str] = get_columns_map("tblTrialSettings") \
-            if table_exists("tblTrialSettings") else {}
+        # Machine tab -> (tblTrial values, tblTrialSettings values); combo = id, line edit = text
+        fields = []
         for lab, widget, fno, orig, storage in self._machine_field_widgets:
-            # Wert auslesen — QComboBox liefert ID via currentData(), QLineEdit via text()
-            if isinstance(widget, QComboBox):
-                val = widget.currentData()
-                if val is None:
-                    continue
-            else:
-                txt = widget.text().strip()
-                if txt == "":
-                    continue
-                val = self._to_float_or_none(txt)
-                if val is None:
-                    ival = self._to_int_or_none(txt)
-                    val = ival if ival is not None else txt
-            orig_col = orig or lab.text().strip()
-            if storage == "tbltrialsettings":
-                real = resolve_field([orig_col], ts_cols_map)
-                if real:
-                    machine_dynamic_cols_settings.append((real, val))
-            else:
-                real = resolve_field([orig_col], tr_cols)
-                if real:
-                    machine_dynamic_cols_trial.append((real, val))
+            val = widget.currentData() if isinstance(widget, QComboBox) else widget.text()
+            fields.append((orig or lab.text().strip(), val, storage))
+        trial_vals, settings_vals = _trial_actions.machine_values(fields)
 
-        from datetime import datetime
-        year_txt = self.strExperimentData[0] or str(datetime.now().year)
-        machine_id = self._to_int_or_none(self.cmbMachine.currentData()) or 0
-        series_name = self.txtSeriesName.text().strip()
+        if self.mode == "legacy" and not _ec.parse_legacy_id(self.txtExperimentNumber.text()):
+            QMessageBox.warning(self, "Experiment Number",
+                                "Invalid experiment ID. Expected: YYYY-<PGOT>-NNN (e.g. 2019-73-002)")
+            return
+        experiment_id = None
+        if self.mode == "addseries":
+            if self.cmbExistingExperiment.currentIndex() < 0:
+                QMessageBox.information(self, "Save", "No existing experiment selected.")
+                return
+            experiment_id = int(self.cmbExistingExperiment.currentData()[0])
         selected_request_id = None
         try:
             if self.mode == "create" and self.cmbExperimentRequest.currentIndex() >= 0:
                 selected_request_id = self._to_int_or_none(self.cmbExperimentRequest.currentData())
         except Exception:
             selected_request_id = None
-
-        # "create-like" modes create a new Experiment + TrialSeries (+ Trials)
-        is_create_like = self.mode in ("create", "legacy")
-
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute("START TRANSACTION")   # the pool runs autocommit - a real transaction
+            user_id = app_meta.current_user.get("id")
+        except Exception:
+            user_id = None
+        try:
+            prio = self._to_int_or_none(self.cmbBacklogPrio.currentText().strip())
+        except Exception:
+            prio = None
 
-                if self.mode == "addseries":
-                    if self.cmbExistingExperiment.currentIndex() < 0:
-                        raise Exception("No existing experiment selected.")
-                    exp_id = int(self.cmbExistingExperiment.currentData()[0])
-                elif self.mode == "addtrials":
-                    if self.cmbExistingExperiment.currentIndex() < 0 or self.cmbExistingSeries.currentIndex() < 0:
-                        raise Exception("Please select experiment and series.")
-                    exp_id = int(self.cmbExistingExperiment.currentData()[0])
-                    ts_id = int(self.cmbExistingSeries.currentData())
-                else:
-                    pg_id = self._to_int_or_none(
-                        self.cmbProductGroup.currentData()) or 0
-                    ot_id = self._to_int_or_none(
-                        self.cmbOrderType.currentData()) or 0
-                    exp_gid_col = exp_cols.get('gid')
-                    exp_req_col = exp_cols.get('expreq')
-                    exp_project_col = exp_cols.get('project')
-
-                    if self.mode == "legacy":
-                        manual = self.txtExperimentNumber.text().strip()
-                        parsed = self._parse_legacy_experiment_id(manual)
-                        if not parsed:
-                            QMessageBox.warning(self, "Experiment Number",
-                                                "Invalid experiment ID. Expected: YYYY-<PGOT>-NNN (e.g. 2019-73-002)")
-                            raise Exception("Invalid legacy experiment id")
-                        year_txt, pg_id, ot_id, exp_no_txt = parsed
-                        exp_id_text = f"{year_txt}-{pg_id}{ot_id}-{exp_no_txt}"
-                    else:
-                        exp_no_txt = self.txtExperimentNumber.text().strip()
-                        # Race-Condition-Schutz: nochmal prüfen ob Nummer noch frei ist
-                        exp_no_txt = self._resolve_next_free_experiment_number(
-                            cur, exp_table, exp_cols, year_txt, pg_id, ot_id, exp_no_txt)
-                        # Experiment ID zusammensetzen: Jahr-PGOT-NNN (z. B. 2025-70-006)
-                        exp_id_text = f"{year_txt}-{pg_id}{ot_id}-{exp_no_txt}"
-
-                    exp_fields = [exp_cols['year'], exp_cols['pg'], exp_cols['ot'], exp_cols['num'], 'Experiment ID']
-                    exp_values = [year_txt, pg_id, ot_id, exp_no_txt, exp_id_text]
-
-                    if exp_req_col and selected_request_id is not None:
-                        exp_fields.append(exp_req_col)
-                        exp_values.append(int(selected_request_id))
-
-                    if exp_gid_col:
-                        exp_fields.append(exp_gid_col)
-                        exp_values.append(new_global_id())
-
-                    if exp_project_col:
-                        # Re-derive from the DB (not just the UI's cmbProject
-                        # state) so a linked request's project always wins
-                        # here, authoritatively - matches the "immer" in the
-                        # user request even if _sync_project_from_request()
-                        # somehow got out of sync with the selection.
-                        project_id = None
-                        if selected_request_id is not None:
-                            try:
-                                req_cols_pj = get_columns_map("tblExperimentRequests")
-                                col_proj_pj = resolve_field(["Projekt", "Project", "ProjectID"], req_cols_pj)
-                                if col_proj_pj:
-                                    rows_pj = fetch_all(
-                                        f"SELECT [{col_proj_pj}] AS Projekt FROM [tblExperimentRequests] WHERE [ID]=?",
-                                        [int(selected_request_id)],
-                                    )
-                                    if rows_pj:
-                                        project_id = self._to_int_or_none(rows_pj[0].get("Projekt"))
-                            except Exception:
-                                project_id = None
-                        if project_id is None and hasattr(self, "cmbProject"):
-                            project_id = self._to_int_or_none(self.cmbProject.currentData())
-                        if project_id is not None:
-                            exp_fields.append(exp_project_col)
-                            exp_values.append(int(project_id))
-
-                    fields_sql = ",".join(f"[{f}]" if f != 'Experiment ID' else "[Experiment ID]" for f in exp_fields)
-                    qmarks = ",".join(["?"] * len(exp_values))
-                    exp_sql = f"INSERT INTO {exp_table} ({fields_sql}) VALUES ({qmarks})"
-                    exp_params = exp_values
-
-                    exp_id = self._insert_and_identity(cur, exp_sql, exp_params)
-
-                # Falls ein Experiment Request verknuepft wurde: Status auf 4 setzen
-                if is_create_like and selected_request_id is not None:
-                    self._set_experiment_request_status(cur, int(selected_request_id), 4)
-
-                if self.mode in ("create", "legacy", "addseries"):
-                    # CreationDate & CreatedBy automatisch setzen, falls Spalten existieren
-                    ts_cdate = resolve_field(
-                        ["CreationDate", "Created", "Creation Date",
-                            "Creation_Date"], ts_cols
-                    )
-                    ts_createdby = resolve_field(
-                        ["CreatedBy", "Created By", "Created_By", "CreatedByID",
-                            "CreatedUserID", "CreatedUser"], ts_cols
-                    )
-                    # Backlog-Spalten (optional)
-                    ts_backlog_status = resolve_field(
-                        ["BacklogStatusID", "BacklogStatus"], ts_cols
-                    )
-                    ts_backlog_prio = resolve_field(
-                        ["BacklogPrio", "BacklogPriority", "Priority"], ts_cols
-                    )
-                    ts_backlog_owner = resolve_field(
-                        ["BacklogOwner", "OwnerUserID", "Owner"], ts_cols
-                    )
-
-                    # Werte vorbereiten
-                    fields = [ts_exp, ts_name]
-                    # Serienname automatisch nummerieren: '01 <Name>' basierend auf Anzahl
-                    # vorhandener TrialSeries im Experiment (erste Serie => 01).
-                    series_name_db = series_name
-                    try:
-                        base_name = re.sub(
-                            r'^\s*\d{2}\s+', '', series_name or '').strip()
-                        cur.execute(
-                            f"SELECT COUNT(*) FROM {ts_table} WHERE [{ts_exp}] = ?",
-                            [exp_id],
-                        )
-                        row = cur.fetchone()
-                        cnt_int = int(
-                            row[0]) if row and row[0] is not None else 0
-                        series_name_db = (
-                            f"{cnt_int+1:02d} {base_name}".strip()
-                            if base_name
-                            else f"{cnt_int+1:02d}"
-                        )
-                    except Exception:
-                        series_name_db = series_name
-                    values = [exp_id, series_name_db]
-                    # optionale GlobalID-Spalte
-                    ts_gid = resolve_field(["GlobalID"], ts_cols)
-                    if ts_gid:
-                        fields.append(ts_gid)
-                        values.append(new_global_id())
-
-                    if ts_cdate:
-                        fields.append(ts_cdate)
-                        values.append(datetime.now())
-
-                    # Werte aus Backlog-UI holen
-                    backlog_status_id = None
-                    try:
-                        backlog_status_id = self._to_int_or_none(
-                            self.cmbBacklogStatus.currentData()
-                        )
-                    except Exception:
-                        backlog_status_id = None
-
-                    # Joker-Maschine erzwingt BacklogStatusID = 1 ("Backlog"),
-                    # unabhängig davon, was im General-Tab ausgewählt ist.
-                    try:
-                        if getattr(self, "_joker_machine_selected", False):
-                            backlog_status_id = 1
-                    except Exception:
-                        # Fallback: nichts tun, wenn Flag aus irgendeinem Grund fehlt
-                        pass
-
-                    backlog_prio_val = None
-                    try:
-                        prio_txt = self.cmbBacklogPrio.currentText().strip()
-                        if prio_txt:
-                            backlog_prio_val = self._to_int_or_none(prio_txt)
-                    except Exception:
-                        backlog_prio_val = None
-
-                    # User-ID aus app_meta.current_user (für CreatedBy / BacklogOwner)
-                    try:
-                        user_id = app_meta.current_user.get("id")
-                    except Exception:
-                        user_id = None
-
-                    if ts_backlog_status and backlog_status_id is not None:
-                        fields.append(ts_backlog_status)
-                        values.append(int(backlog_status_id))
-
-                    if ts_backlog_prio and backlog_prio_val is not None:
-                        fields.append(ts_backlog_prio)
-                        values.append(backlog_prio_val)
-
-                    if ts_backlog_owner and user_id is not None:
-                        fields.append(ts_backlog_owner)
-                        values.append(int(user_id))
-
-                    if ts_createdby and user_id is not None:
-                        fields.append(ts_createdby)
-                        values.append(int(user_id))
-
-                        # MachineID der Serie zuweisen (statt in Experiments)
-                        ts_machine = resolve_field(
-                            ["MachineID", "Maschine"], ts_cols)
-                        if ts_machine is not None:
-                            fields.append(ts_machine)
-                            values.append(machine_id)
-
-                        # Joker-Maschine: Flag + OriginalJoker in tblTrialSeries setzen
-                        is_joker_selected = bool(
-                            getattr(self, "_joker_machine_selected", False))
-
-                        ts_is_joker = resolve_field([
-                            "IsJoker", "Is Joker", "Joker"
-                        ], ts_cols)
-                        if ts_is_joker is not None:
-                            fields.append(ts_is_joker)
-                            values.append(-1 if is_joker_selected else 0)
-
-                        ts_original_joker = resolve_field([
-                            "OriginalJoker",
-                            "Original Joker",
-                            "OriginalJokerID",
-                            "Original Joker ID",
-                            "OriginalJokerMachineID",
-                            "Original Joker Machine ID",
-                        ], ts_cols)
-                        if is_joker_selected and ts_original_joker is not None:
-                            fields.append(ts_original_joker)
-                            values.append(machine_id)
-
-                    placeholders = ",".join(["?"] * len(fields))
-                    ts_sql = f"INSERT INTO {ts_table} ({','.join('['+c+']' for c in fields)}) VALUES ({placeholders})"
-                    ts_id = self._insert_and_identity(cur, ts_sql, values)
-                # YarnID wird direkt in tblTrialSettings pro Trial gesetzt (siehe unten)
-
-                new_trial_ids: List[int] = []
-
-                jetplate_is_numeric = self._col_is_numeric(
-                    trial_table, tr_plate)
-                rows_max = fetch_all(
-                    f"SELECT MAX([{tr_no}]) AS mx FROM {trial_table} WHERE [{tr_sid}] = ?", [ts_id])
-                trial_counter = next_trial_number(rows_max[0]["mx"] if rows_max else None)
-
-                for j in self._jets_data:
-                    try:
-                        plates_list = [p.strip() for p in str(
-                            j["PlateList"]).split(",") if p.strip() != ""]
-                    except Exception:
-                        plates_list = []
-                    if not plates_list:
-                        try:
-                            nn = int(j.get("Plates") or 0)
-                        except Exception:
-                            nn = 0
-                        plates_list = [str(k+1) for k in range(max(0, nn))]
-
-                    for plate in plates_list:
-                        cols = [tr_sid, tr_no, tr_jetid, tr_plate, tr_press]
-                        press_val = self._to_float_or_none(j["Pressure"])
-                        plate_value: Any = self._to_int_or_none(
-                            plate) if jetplate_is_numeric else str(plate)
-                        vals: List[Any] = [ts_id, trial_counter,
-                                           int(j["JetID"]), plate_value, press_val]
-                        # HousingID – aus _jets_data (gespeichert beim Add)
-                        housing_id = j.get("HousingID")
-                        if tr_housing and housing_id is not None:
-                            cols.append(tr_housing)
-                            vals.append(int(housing_id))
-                        for col, val in machine_dynamic_cols_trial:
-                            cols.append(col)
-                            vals.append(val)
-                        # optionale GlobalID-Spalte im Trial (falls vorhanden)
-                        tr_gid = resolve_field(["GlobalID"], tr_cols)
-                        if tr_gid:
-                            cols.append(tr_gid)
-                            vals.append(new_global_id())
-                        placeholders = ",".join(["?"] * len(cols))
-                        sql = f"INSERT INTO {trial_table} ({','.join('['+c+']' for c in cols)}) VALUES ({placeholders})"
-                        tid = self._insert_and_identity(cur, sql, vals)
-                        new_trial_ids.append(tid)
-
-                        # tblTrialSettings: pro Garn einen Datensatz anlegen
-                        if table_exists("tblTrialSettings") and self._materials_data:
-                            ts_set_cols_map = get_columns_map("tblTrialSettings")
-                            has_yarn_use_col = "yarnuseid" in ts_set_cols_map
-                            has_spool_col = "spoolid" in ts_set_cols_map
-                            for idx_m, m in enumerate(self._materials_data):
-                                s_cols = ["TrialID", "YarnID", "Ply"]
-                                s_vals: List[Any] = [
-                                    tid,
-                                    int(m["YarnID"]),
-                                    m.get("Ply") or f"Ply {idx_m + 1}",
-                                ]
-                                # YarnUseID optional mitschreiben
-                                if has_yarn_use_col and m.get("YarnUseID") is not None:
-                                    real_yuse = ts_set_cols_map.get("yarnuseid") or "YarnUseID"
-                                    s_cols.append(real_yuse)
-                                    s_vals.append(m["YarnUseID"])
-                                if has_spool_col and m.get("SpoolID") is not None:
-                                    real_spool = ts_set_cols_map.get("spoolid") or "SpoolID"
-                                    s_cols.append(real_spool)
-                                    s_vals.append(m["SpoolID"])
-                                for s_col, s_val in machine_dynamic_cols_settings:
-                                    real_s = ts_set_cols_map.get(s_col.lower()) or s_col
-                                    s_cols.append(real_s)
-                                    s_vals.append(s_val)
-                                append_ratio_column(s_cols, s_vals, ts_set_cols_map)
-                                s_gid = resolve_field(["GlobalID"], ts_set_cols_map)
-                                if s_gid:
-                                    s_cols.append(s_gid)
-                                    s_vals.append(new_global_id())
-                                s_ph = ",".join(["?"] * len(s_cols))
-                                cur.execute(
-                                    f"INSERT INTO tblTrialSettings "
-                                    f"({','.join('[' + c + ']' for c in s_cols)}) "
-                                    f"VALUES ({s_ph})",
-                                    s_vals,
-                                )
-
-                        trial_counter += 1
-
-                # Lab Machines -> in AddTrials jetzt FRISCH aus _lab_data schreiben (kein Übernehmen)
-                # Einige Labor-Tabellen (z.B. tbllabordytomat) haben einen NOT NULL FK auf tbluser(UserID).
-                # Falls im Insert kein UserID angegeben wird, landet in MySQL oft ein Default (z.B. 0) -> FK-Fehler.
-                default_user_id = _trial_actions.lab_row_user_id()   # logged-in user (before: smallest user ID)
-
-                for lm in self._lab_data:
-                    if str(lm.get("RowMode") or "").strip().lower() == "seriesfreeform":
-                        # Jet Air Consumption & Co: keine Zeile pro Trial -
-                        # wird unten einmal pro Series (physische Duese x Druck) angelegt.
-                        continue
-                    tbl = (lm.get("TableName") or "").strip()
-                    if not tbl or not table_exists(tbl):
-                        continue
-                    lcols = get_columns_map(tbl)
-                    col_trial = resolve_field(["TrialID"], lcols) or "TrialID"
-                    add_src = (lm.get("AdditionalFieldSource") or "").strip()
-                    add_real = resolve_field(
-                        [add_src], lcols) if add_src else None
-                    add_val = lm.get("AdditionalVal", None)
-                    if isinstance(add_val, str):
-                        add_val = self._to_float_or_none(add_val) or add_val
-                    for tid in new_trial_ids:
-                        if 'waterbath' in (tbl or '').lower():
-                            insert_waterbath_rows(cur, tbl, col_trial, tid)
-                            continue
-                        # optionale GlobalID-Spalte im Labor-Table
-                        col_gid = resolve_field(["GlobalID"], lcols)
-                        cols_sql_parts = [f"[{col_trial}]"]
-                        params = [tid]
-                        if col_gid:
-                            cols_sql_parts.append(f"[{col_gid}]")
-                            params.append(new_global_id())
-                        if add_real:
-                            cols_sql_parts.append(f"[{add_real}]")
-                            params.append(add_val)
-
-                        # optionaler UserID (FK auf tbluser) – falls vorhanden, sauber setzen
-                        col_user = resolve_field(["UserID", "User"], lcols)
-                        if col_user:
-                            if default_user_id is None:
-                                # Ohne gültigen User können wir diese Lab-Row nicht anlegen (sonst FK-Fehler)
-                                continue
-                            cols_sql_parts.append(f"[{col_user}]")
-                            params.append(default_user_id)
-
-                        placeholders = ",".join(["?"] * len(params))
-                        cur.execute(
-                            f"INSERT INTO {tbl} (" + ",".join(cols_sql_parts) +
-                            ") VALUES (" + placeholders + ")",
-                            params,
-                        )
-                self._save_jet_air_consumption_rows(cur, ts_id)
-                cn.commit()
-
-            if callable(self.on_open_experiment):
-                if is_create_like:
-                    if self.mode == "legacy":
-                        # In legacy mode the textbox contains the full Experiment-ID (e.g. 2019-73-002)
-                        exp_label = self.txtExperimentNumber.text().strip()
-                    else:
-                        exp_label = f"{self.strExperimentData[0]}-{self.txtExperimentNumber.text().strip()}"
-                else:
-                    data = self.cmbExistingExperiment.currentData()
-                    num = data[5]
-                    exp_label = f"{data[2]}-{str(data[3])}{str(data[4])}-{str(num).zfill(3) if str(num).isdigit() else num}"
-                self.on_open_experiment(exp_id, ts_id, exp_label)
-            else:
-                QMessageBox.information(
-                    self, "Saved",
-                    f"{'Trials added' if self.mode == 'addtrials' else ('Trial series added' if self.mode == 'addseries' else 'Experiment saved')}.\n"
-                    f"Experiment ID: {exp_id} • Series: {ts_id}"
-                )
+        # Writing (experiment, series, trials, lab rows in one transaction):
+        # db/experiment_create.create (Qt-free, shared with the web app)
+        try:
+            res = _ec.create(
+                self.mode,
+                series_name=self.txtSeriesName.text().strip(),
+                machine_id=self._to_int_or_none(self.cmbMachine.currentData()) or 0,
+                jets=self._jets_data, materials=self._materials_data, lab_data=self._lab_data,
+                trial_values=trial_vals, settings_values=settings_vals,
+                product_group=self.cmbProductGroup.currentData(),
+                order_type=self.cmbOrderType.currentData(),
+                request_id=selected_request_id,
+                project_id=self.cmbProject.currentData() if hasattr(self, "cmbProject") else None,
+                experiment_id=experiment_id,
+                backlog_status=self.cmbBacklogStatus.currentData(),
+                backlog_prio=prio,
+                user_id=user_id,
+                year=(self.strExperimentData[0] or None) if self.mode == "create" else None,
+                legacy_id=self.txtExperimentNumber.text().strip() if self.mode == "legacy" else None,
+            )
         except Exception as e:
-            try:
-                cn.rollback()
-            except Exception:
-                pass
             show_error(self, "Save failed", "The experiment could not be saved.", e)
+            return
+
+        if callable(self.on_open_experiment):
+            self.on_open_experiment(res["experiment_id"], res["series_id"], res["label"])
+        else:
+            QMessageBox.information(
+                self, "Saved",
+                f"{'Trial series added' if self.mode == 'addseries' else 'Experiment saved'}.\n"
+                f"Experiment ID: {res['experiment_id']} • Series: {res['series_id']}"
+            )
 
     # -->-->-->- addSeries/addTrials Helper -->-->-->-
     def _prefill_lab_from_series(self, series_id: int) -> None:

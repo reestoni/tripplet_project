@@ -949,11 +949,37 @@ def add_trials(series_id: int, jets: Sequence[Dict[str, Any]], materials: Sequen
     lab_data:  [{"TableName", "AdditionalFieldSource", "AdditionalVal", "RowMode"}]
     trial_values / settings_values: [(real column, value)] (machine_values()).
     """
+    if not table_exists("tblTrial"):
+        raise RuntimeError("Table 'tblTrial' not found.")
+    cn = None
+    try:
+        with get_connection() as cn:
+            cur = cn.cursor()
+            cur.execute("START TRANSACTION")   # the pool runs autocommit - a real transaction
+            new_trial_ids = insert_trials(cur, series_id, jets, materials, lab_data,
+                                          trial_values, settings_values)
+            cn.commit()
+    except Exception:
+        try:
+            if cn is not None:
+                cn.rollback()
+        except Exception:
+            pass
+        raise
+    return new_trial_ids
+
+
+def insert_trials(cur, series_id: int, jets: Sequence[Dict[str, Any]], materials: Sequence[Dict[str, Any]],
+                  lab_data: Sequence[Dict[str, Any]],
+                  trial_values: Sequence[Tuple[str, Any]] = (),
+                  settings_values: Sequence[Tuple[str, Any]] = ()) -> List[int]:
+    """The writing part of add_trials() on an open transaction `cur` (no
+    commit) - also used by db/experiment_create.py for the trials of a new
+    series, so Create Experiment / Add Trial Series / Add trials write the
+    trials the same way."""
     ts_id = int(series_id)
     # Trial-Tabelle + Spalten-Map
     trial_table = "tblTrial"
-    if not table_exists(trial_table):
-        raise RuntimeError("Table 'tblTrial' not found.")
     tr_cols = get_columns_map(trial_table)
     tr_sid     = resolve_field(["TrialSeriesID", "SerieID", "SeriesID"], tr_cols) or "TrialSeriesID"
     tr_no      = resolve_field(["Versuchsnummer", "TrialNumber", "Nr"], tr_cols) or "Versuchsnummer"
@@ -965,154 +991,140 @@ def add_trials(series_id: int, jets: Sequence[Dict[str, Any]], materials: Sequen
 
     jetplate_is_numeric = col_is_numeric(trial_table, tr_plate)
 
-    cn = None
-    try:
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute("START TRANSACTION")   # the pool runs autocommit - a real transaction
+    # Letzter Trial der Serie für Lab-Klon
+    cur.execute(
+        f"SELECT MAX([{tr_no}]) AS mx, "
+        f"MAX(CASE WHEN {exclude_references_sql('')} THEN [ID] END) AS lid "
+        f"FROM [{trial_table}] WHERE [{tr_sid}] = ?", [ts_id])
+    row = cur.fetchone()
+    # next_trial_number(): clamped at 0 - reference samples have
+    # negative numbers (db/trial_reference.py)
+    trial_counter = next_trial_number(row[0] if row else None)
 
-            # Letzter Trial der Serie für Lab-Klon
-            cur.execute(
-                f"SELECT MAX([{tr_no}]) AS mx, "
-                f"MAX(CASE WHEN {exclude_references_sql('')} THEN [ID] END) AS lid "
-                f"FROM [{trial_table}] WHERE [{tr_sid}] = ?", [ts_id])
-            row = cur.fetchone()
-            # next_trial_number(): clamped at 0 - reference samples have
-            # negative numbers (db/trial_reference.py)
-            trial_counter = next_trial_number(row[0] if row else None)
+    new_trial_ids: List[int] = []
 
-            new_trial_ids: List[int] = []
-
-            for j in jets:
-                try:
-                    plates_list = [p.strip() for p in str(j["PlateList"]).split(",") if p.strip()]
-                except Exception:
-                    plates_list = []
-                if not plates_list:
-                    try:
-                        nn = int(j.get("Plates") or 0)
-                    except Exception:
-                        nn = 0
-                    plates_list = [str(k+1) for k in range(max(0, nn))]
-
-                for plate in plates_list:
-                    press_val   = to_float_or_none(j["Pressure"])
-                    plate_value = to_int_or_none(plate) if jetplate_is_numeric else str(plate)
-                    housing_id  = j.get("HousingID")
-
-                    cols = [tr_sid, tr_no, tr_jetid, tr_plate, tr_press]
-                    vals: List[Any] = [ts_id, trial_counter, int(j["JetID"]), plate_value, press_val]
-
-                    if tr_housing and housing_id is not None:
-                        cols.append(tr_housing)
-                        vals.append(int(housing_id))
-                    for col, val in trial_values:
-                        cols.append(col)
-                        vals.append(val)
-                    if tr_gid:
-                        cols.append(tr_gid)
-                        vals.append(new_global_id())
-
-                    ph = ",".join(["?"] * len(cols))
-                    sql = f"INSERT INTO {trial_table} ({','.join('['+c+']' for c in cols)}) VALUES ({ph})"
-                    tid = _insert_and_identity(cur, sql, vals)
-                    new_trial_ids.append(tid)
-
-                    # tblTrialSettings: pro Garn eine Zeile
-                    if table_exists("tblTrialSettings") and materials:
-                        from db.dy_ratio import append_ratio_column
-                        ts_set_cols_map = get_columns_map("tblTrialSettings")
-                        has_yuse = "yarnuseid" in ts_set_cols_map
-                        has_spool = "spoolid" in ts_set_cols_map
-                        for idx_m, m in enumerate(materials):
-                            s_cols = ["TrialID", "YarnID", "Ply"]
-                            s_vals: List[Any] = [tid, int(m["YarnID"]), m.get("Ply") or f"Ply {idx_m+1}"]
-                            if has_yuse and m.get("YarnUseID") is not None:
-                                real_yuse = ts_set_cols_map.get("yarnuseid") or "YarnUseID"
-                                s_cols.append(real_yuse)
-                                s_vals.append(m["YarnUseID"])
-                            if has_spool and m.get("SpoolID") is not None:
-                                real_spool = ts_set_cols_map.get("spoolid") or "SpoolID"
-                                s_cols.append(real_spool)
-                                s_vals.append(m["SpoolID"])
-                            for s_col, s_val in settings_values:
-                                real_s = ts_set_cols_map.get(s_col.lower()) or s_col
-                                s_cols.append(real_s)
-                                s_vals.append(s_val)
-                            append_ratio_column(s_cols, s_vals, ts_set_cols_map)
-                            s_gid = resolve_field(["GlobalID"], ts_set_cols_map)
-                            if s_gid:
-                                s_cols.append(s_gid)
-                                s_vals.append(new_global_id())
-                            s_ph = ",".join(["?"] * len(s_cols))
-                            cur.execute(
-                                f"INSERT INTO tblTrialSettings "
-                                f"({','.join('['+c+']' for c in s_cols)}) VALUES ({s_ph})",
-                                s_vals)
-
-                    trial_counter += 1
-
-            # Lab Machines -> FRISCH aus lab_data schreiben (wie im
-            # regulaeren Create-Flow), NICHT vom letzten Trial klonen - der
-            # letzte Trial hat nicht unbedingt in jeder Tabelle schon eine
-            # Zeile. lab_data kommt aus series_lab_data() (ganze Serie).
-            default_user_id = lab_row_user_id()
-
-            for lm in lab_data:
-                if str(lm.get("RowMode") or "").strip().lower() == "seriesfreeform":
-                    # Jet Air Consumption & Co: keine Zeile pro Trial -
-                    # wird unten einmal pro Series (physische Duese x Druck) angelegt.
-                    continue
-                tbl = (lm.get("TableName") or "").strip()
-                if not tbl or not table_exists(tbl):
-                    continue
-                lcols = get_columns_map(tbl)
-                col_trial = resolve_field(["TrialID"], lcols) or "TrialID"
-                add_src = (lm.get("AdditionalFieldSource") or "").strip()
-                add_real = resolve_field([add_src], lcols) if add_src else None
-                add_val = lm.get("AdditionalVal", None)
-                if isinstance(add_val, str):
-                    add_val = to_float_or_none(add_val) or add_val
-                for tid in new_trial_ids:
-                    if 'waterbath' in (tbl or '').lower():
-                        insert_waterbath_rows(cur, tbl, col_trial, tid)
-                        continue
-                    # optionale GlobalID-Spalte im Labor-Table
-                    col_gid = resolve_field(["GlobalID"], lcols)
-                    cols_sql_parts = [f"[{col_trial}]"]
-                    params: List[Any] = [tid]
-                    if col_gid:
-                        cols_sql_parts.append(f"[{col_gid}]")
-                        params.append(new_global_id())
-                    if add_real:
-                        cols_sql_parts.append(f"[{add_real}]")
-                        params.append(add_val)
-
-                    # optionaler UserID (FK auf tbluser) - falls vorhanden, sauber setzen
-                    col_user = resolve_field(["UserID", "User"], lcols)
-                    if col_user:
-                        if default_user_id is None:
-                            # Ohne gueltigen User koennen wir diese Lab-Row nicht anlegen (sonst FK-Fehler)
-                            continue
-                        cols_sql_parts.append(f"[{col_user}]")
-                        params.append(default_user_id)
-
-                    placeholders = ",".join(["?"] * len(params))
-                    cur.execute(
-                        f"INSERT INTO {tbl} (" + ",".join(cols_sql_parts) +
-                        ") VALUES (" + placeholders + ")",
-                        params,
-                    )
-
-            save_jet_air_consumption_rows(cur, ts_id, lab_data)
-            cn.commit()
-    except Exception:
+    for j in jets:
         try:
-            if cn is not None:
-                cn.rollback()
+            plates_list = [p.strip() for p in str(j["PlateList"]).split(",") if p.strip()]
         except Exception:
-            pass
-        raise
+            plates_list = []
+        if not plates_list:
+            try:
+                nn = int(j.get("Plates") or 0)
+            except Exception:
+                nn = 0
+            plates_list = [str(k+1) for k in range(max(0, nn))]
+
+        for plate in plates_list:
+            press_val   = to_float_or_none(j["Pressure"])
+            plate_value = to_int_or_none(plate) if jetplate_is_numeric else str(plate)
+            housing_id  = j.get("HousingID")
+
+            cols = [tr_sid, tr_no, tr_jetid, tr_plate, tr_press]
+            vals: List[Any] = [ts_id, trial_counter, int(j["JetID"]), plate_value, press_val]
+
+            if tr_housing and housing_id is not None:
+                cols.append(tr_housing)
+                vals.append(int(housing_id))
+            for col, val in trial_values:
+                cols.append(col)
+                vals.append(val)
+            if tr_gid:
+                cols.append(tr_gid)
+                vals.append(new_global_id())
+
+            ph = ",".join(["?"] * len(cols))
+            sql = f"INSERT INTO {trial_table} ({','.join('['+c+']' for c in cols)}) VALUES ({ph})"
+            tid = _insert_and_identity(cur, sql, vals)
+            new_trial_ids.append(tid)
+
+            # tblTrialSettings: pro Garn eine Zeile
+            if table_exists("tblTrialSettings") and materials:
+                from db.dy_ratio import append_ratio_column
+                ts_set_cols_map = get_columns_map("tblTrialSettings")
+                has_yuse = "yarnuseid" in ts_set_cols_map
+                has_spool = "spoolid" in ts_set_cols_map
+                for idx_m, m in enumerate(materials):
+                    s_cols = ["TrialID", "YarnID", "Ply"]
+                    s_vals: List[Any] = [tid, int(m["YarnID"]), m.get("Ply") or f"Ply {idx_m+1}"]
+                    if has_yuse and m.get("YarnUseID") is not None:
+                        real_yuse = ts_set_cols_map.get("yarnuseid") or "YarnUseID"
+                        s_cols.append(real_yuse)
+                        s_vals.append(m["YarnUseID"])
+                    if has_spool and m.get("SpoolID") is not None:
+                        real_spool = ts_set_cols_map.get("spoolid") or "SpoolID"
+                        s_cols.append(real_spool)
+                        s_vals.append(m["SpoolID"])
+                    for s_col, s_val in settings_values:
+                        real_s = ts_set_cols_map.get(s_col.lower()) or s_col
+                        s_cols.append(real_s)
+                        s_vals.append(s_val)
+                    append_ratio_column(s_cols, s_vals, ts_set_cols_map)
+                    s_gid = resolve_field(["GlobalID"], ts_set_cols_map)
+                    if s_gid:
+                        s_cols.append(s_gid)
+                        s_vals.append(new_global_id())
+                    s_ph = ",".join(["?"] * len(s_cols))
+                    cur.execute(
+                        f"INSERT INTO tblTrialSettings "
+                        f"({','.join('['+c+']' for c in s_cols)}) VALUES ({s_ph})",
+                        s_vals)
+
+            trial_counter += 1
+
+    # Lab Machines -> FRISCH aus lab_data schreiben (wie im
+    # regulaeren Create-Flow), NICHT vom letzten Trial klonen - der
+    # letzte Trial hat nicht unbedingt in jeder Tabelle schon eine
+    # Zeile. lab_data kommt aus series_lab_data() (ganze Serie).
+    default_user_id = lab_row_user_id()
+
+    for lm in lab_data:
+        if str(lm.get("RowMode") or "").strip().lower() == "seriesfreeform":
+            # Jet Air Consumption & Co: keine Zeile pro Trial -
+            # wird unten einmal pro Series (physische Duese x Druck) angelegt.
+            continue
+        tbl = (lm.get("TableName") or "").strip()
+        if not tbl or not table_exists(tbl):
+            continue
+        lcols = get_columns_map(tbl)
+        col_trial = resolve_field(["TrialID"], lcols) or "TrialID"
+        add_src = (lm.get("AdditionalFieldSource") or "").strip()
+        add_real = resolve_field([add_src], lcols) if add_src else None
+        add_val = lm.get("AdditionalVal", None)
+        if isinstance(add_val, str):
+            add_val = to_float_or_none(add_val) or add_val
+        for tid in new_trial_ids:
+            if 'waterbath' in (tbl or '').lower():
+                insert_waterbath_rows(cur, tbl, col_trial, tid)
+                continue
+            # optionale GlobalID-Spalte im Labor-Table
+            col_gid = resolve_field(["GlobalID"], lcols)
+            cols_sql_parts = [f"[{col_trial}]"]
+            params: List[Any] = [tid]
+            if col_gid:
+                cols_sql_parts.append(f"[{col_gid}]")
+                params.append(new_global_id())
+            if add_real:
+                cols_sql_parts.append(f"[{add_real}]")
+                params.append(add_val)
+
+            # optionaler UserID (FK auf tbluser) - falls vorhanden, sauber setzen
+            col_user = resolve_field(["UserID", "User"], lcols)
+            if col_user:
+                if default_user_id is None:
+                    # Ohne gueltigen User koennen wir diese Lab-Row nicht anlegen (sonst FK-Fehler)
+                    continue
+                cols_sql_parts.append(f"[{col_user}]")
+                params.append(default_user_id)
+
+            placeholders = ",".join(["?"] * len(params))
+            cur.execute(
+                f"INSERT INTO {tbl} (" + ",".join(cols_sql_parts) +
+                ") VALUES (" + placeholders + ")",
+                params,
+            )
+
+    save_jet_air_consumption_rows(cur, ts_id, lab_data)
     return new_trial_ids
 
 

@@ -13,34 +13,8 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QComboBox, QLabel, QDialogButtonBox,
 )
 
-from db.connection import fetch_all, table_exists
-
-
-def get_available_spools(yarn_id: int, include_spool_id: Optional[int] = None) -> List[Dict]:
-    """Spulen desselben Garns, die am Lager sind (Status='in stock', WeightKg>0).
-    `include_spool_id` wird immer mit zurückgegeben, auch falls nicht mehr
-    am Lager (z.B. bestehende Zuordnung, die man sich beim Bearbeiten
-    weiterhin anschauen koennen soll)."""
-    if not table_exists("tblYarnSpool") or not yarn_id:
-        return []
-    rows = fetch_all(
-        "SELECT [ID], [Charge], [WeightKg], [Location], [Status] "
-        "FROM tblYarnSpool WHERE [YarnID] = ? AND "
-        "(([Status] = 'in stock' AND [WeightKg] > 0)" +
-        (" OR [ID] = ?" if include_spool_id else "") + ") "
-        "ORDER BY [Charge], [ID]",
-        [yarn_id] + ([include_spool_id] if include_spool_id else []),
-    )
-    return rows
-
-
-def spool_label(row: Dict) -> str:
-    charge = row.get("Charge") or "–"
-    weight = row.get("WeightKg")
-    loc = row.get("Location") or "–"
-    w_txt = f"{float(weight):.2f} kg" if weight is not None else "?"
-    suffix = "" if row.get("Status") == "in stock" else "  (discarded)"
-    return f"#{row['ID']} — Batch {charge} — {w_txt} — {loc}{suffix}"
+# get_available_spools / spool_label: db/yarn_spools.py (Qt-free, shared with the web app)
+from db.yarn_spools import get_available_spools, spool_label  # noqa: F401
 
 
 class SpoolPickerDialog(QDialog):

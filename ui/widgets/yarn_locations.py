@@ -36,45 +36,11 @@ _SYMBOL_SCALE = 2         # drawn at 2x so it stays sharp on HiDPI screens
 _symbol_paths: Dict[bool, str] = {}
 
 
-@dataclass
-class StockSummary:
-    spools: int
-    kg: float
-    locations: int
-
-
-def location_sort_key(loc: Optional[str]) -> List[object]:
-    """Natural sort: E2 before E12, empty locations last."""
-    s = (loc or "").strip().upper()
-    if not s:
-        return [1]
-    return [0] + [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s) if t]
-
-
-def load_stock_summary(yarn_ids: Iterable[int]) -> Dict[int, StockSummary]:
-    """{yarn_id: StockSummary} for yarns with at least one spool in stock.
-    Yarns without stock are missing from the dict. Best effort: {} on error."""
-    ids = sorted({int(y) for y in yarn_ids if y is not None})
-    if not ids or not table_exists("tblYarnSpool"):
-        return {}
-    ph = ",".join(["?"] * len(ids))
-    try:
-        rows = fetch_all(
-            f"SELECT YarnID, COUNT(*) AS n, SUM(WeightKg) AS kg, "
-            f"COUNT(DISTINCT Location) AS locs FROM tblYarnSpool "
-            f"WHERE YarnID IN ({ph}) AND Status = 'in stock' GROUP BY YarnID",
-            ids,
-        )
-    except Exception:
-        return {}
-    out: Dict[int, StockSummary] = {}
-    for r in rows:
-        n = int(r.get("n") or 0)
-        if n <= 0 or r.get("YarnID") is None:
-            continue
-        out[int(r["YarnID"])] = StockSummary(
-            spools=n, kg=float(r.get("kg") or 0.0), locations=int(r.get("locs") or 0))
-    return out
+# StockSummary / load_stock_summary / location_sort_key / load_spools_in_stock /
+# load_series_spool_ids / tube colour words: db/yarn_spools.py (Qt-free, shared with the web app)
+from db.yarn_spools import (  # noqa: E402,F401
+    StockSummary, load_stock_summary, location_sort_key, load_spools_in_stock,
+    load_series_spool_ids, tube_colour_candidates)
 
 
 def _draw_symbol(in_stock: bool) -> QPixmap:
@@ -141,11 +107,6 @@ def stock_symbol_tooltip(summary: Optional[StockSummary]) -> str:
             f"in {summary.locations} {loc}<br>Click to see where")
 
 
-# tube colours are free text, often two-tone ("Black/Yellow", "white / green")
-# and with lab spellings - extras on top of yarn_colour.COLOUR_HEX
-_TUBE_ALIASES = {"lila": "purple", "blac": "black", "rosa": "pink", "gelb": "yellow",
-                 "schwarz": "black", "weiss": "white", "grün": "green", "gruen": "green",
-                 "rot": "red", "blau": "blue", "braun": "brown", "grau": "grey"}
 _tube_icon_cache: Dict[str, QIcon] = {}
 
 
@@ -153,9 +114,9 @@ def tube_colours(text: Optional[str]) -> List[QColor]:
     """Colours of a tube colour text, e.g. "black / pink" -> [black, pink].
     Extra words ("with print", "conical") are ignored; unknown parts dropped."""
     out: List[QColor] = []
-    for part in re.split(r"[/,+&]|\band\b", (text or "").lower()):
-        for word in part.split():
-            c = colour_qcolor(_TUBE_ALIASES.get(word, word))
+    for words in tube_colour_candidates(text):
+        for word in words:
+            c = colour_qcolor(word)
             if c is not None:
                 out.append(c)
                 break
@@ -190,44 +151,6 @@ def tube_colour_icon(text: Optional[str], size: int = 12) -> QIcon:
         icon = QIcon(pm)
     _tube_icon_cache[key] = icon
     return icon
-
-
-def load_spools_in_stock(yarn_id: int) -> List[Dict]:
-    """All spools of the yarn in stock, sorted by location. 'Colour' (tube
-    colour) is optional in older databases."""
-    if not table_exists("tblYarnSpool"):
-        return []
-    base = "SELECT ID, Charge, WeightKg, Location, ReceivedDate{c} FROM tblYarnSpool " \
-           "WHERE YarnID = ? AND Status = 'in stock'"
-    try:
-        rows = fetch_all(base.format(c=", Colour"), [int(yarn_id)])
-    except Exception:
-        rows = fetch_all(base.format(c=""), [int(yarn_id)])
-    rows.sort(key=lambda r: (location_sort_key(r.get("Location")), str(r.get("Charge") or ""),
-                             int(r.get("ID") or 0)))
-    return rows
-
-
-def load_series_spool_ids(series_pk) -> Set[int]:
-    """Spools assigned to trials of the series (Machine Data -> row 'Spool')."""
-    if not series_pk:
-        return set()
-    try:
-        rows = fetch_all(
-            "SELECT DISTINCT ts.SpoolID FROM tblTrialSettings ts "
-            "JOIN tblTrial t ON t.ID = ts.TrialID "
-            "WHERE t.TrialSeriesID = ? AND ts.SpoolID IS NOT NULL",
-            [series_pk])
-    except Exception:
-        return set()
-    out: Set[int] = set()
-    for r in rows:
-        try:
-            if int(r["SpoolID"] or 0) > 0:
-                out.add(int(r["SpoolID"]))
-        except Exception:
-            pass
-    return out
 
 
 class YarnLocationsDialog(QDialog):

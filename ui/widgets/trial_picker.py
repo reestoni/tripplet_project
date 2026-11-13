@@ -17,44 +17,8 @@ from PySide6.QtWidgets import (
 
 from db.connection import fetch_all
 
-_SEARCH_LIMIT = 200
-
-
-def search_trials(term: str):
-    """Trials whose experiment ID, series name or machine contain every
-    word of the search term (case-insensitive, any order, each word may
-    match a different field) - newest experiments first."""
-    words = term.split()
-    if not words:
-        return []
-    where_parts = []
-    params: list = []
-    for word in words:
-        like = f"%{word}%"
-        where_parts.append(
-            "(e.[Experiment ID] LIKE ? OR ts.SeriesName LIKE ? OR m.Maschine LIKE ?)"
-        )
-        params.extend([like, like, like])
-    where_sql = " AND ".join(where_parts)
-    return fetch_all(
-        "SELECT t.ID AS TrialID, t.Versuchsnummer, ts.SeriesName, "
-        "e.[Experiment ID] AS ExperimentID, m.Maschine "
-        "FROM tbltrial t "
-        "JOIN tbltrialseries ts ON ts.ID = t.TrialSeriesID "
-        "JOIN tblexperimente e ON e.ID = ts.ExperimentID "
-        "LEFT JOIN tblmaschine m ON m.ID = ts.MachineID "
-        f"WHERE {where_sql} "
-        f"ORDER BY e.[Experiment ID] DESC, t.Versuchsnummer ASC LIMIT {_SEARCH_LIMIT}",
-        params,
-    )
-
-
-def trial_label(row) -> str:
-    machine = row.get("Maschine") or "?"
-    series = row.get("SeriesName") or ""
-    vno = row.get("Versuchsnummer")
-    exp_id = row.get("ExperimentID") or "?"
-    return f"{exp_id} · {series} · V{vno} — {machine}"
+# search_trials / trial_label: db/experiment_create.py (Qt-free, shared with the web app)
+from db.experiment_create import search_trials, trial_label  # noqa: E402,F401
 
 
 class TrialPickerDialog(QDialog):
