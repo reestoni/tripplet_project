@@ -13,7 +13,8 @@ Desktop-App (PySide6) für Textil-/Garnlabor-Tests (Heberlein). MySQL-Backend, h
 - **DB-Modus**: `db/connection.py` liest `TRIPPLET_MODE` (`prod`/`dev`/`dev_local`/`offline`). Beim Start aus dem Quellcode (`python main.py`) fragt `main.py` per Dialog danach (Default `prod`) – `offline` ist dort noch nicht als Option verdrahtet (siehe Offline-Modus-Bullet unten, Stand: Proof-of-Concept, noch nicht in main.py/UI angebunden). Für Skripte/Tests: `os.environ["TRIPPLET_MODE"] = "dev_local"` **vor** dem ersten Import von `db.connection` setzen.
 - **dev_local** = lokale MySQL-Instanz (`tripplet_dev_local`, localhost) – hier darf frei getestet/geschrieben werden. `dev`/`prod` liegen auf einem Remote-Server (10.50.212.60) – **niemals** ungefragt Schreiboperationen dort ausführen.
 - Headless-Test: `QT_QPA_PLATFORM=offscreen` setzen, dann normal `QApplication`/Screens instanziieren.
-- Tests: `python -m pytest tests/` (401 Tests, ~20s, alle grün).
+- Tests: `python -m pytest tests/` (861 Tests, ~1.5-2 min, alle grün).
+- **Web-Version** (`C:\python\tripplet_web`, seit 2026-11-13, eigene `CLAUDE.md`): importiert `db/` und Qt-freie Logik direkt von hier. Logik, die beide Apps brauchen, gehört in Qt-freie Module (bisher `db/nav_counts.py`, `db/user_profile.py`, `feature_access.rules_for()`) - beim Ändern dieser Module an die Web-App denken (deren Tests laufen mit).
 
 ## Aktuell offene Threads (Codewords)
 

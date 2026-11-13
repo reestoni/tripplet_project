@@ -165,21 +165,28 @@ def load(force: bool = False) -> Dict[str, Any]:
     if not force and _state.get("uid") == uid and _state.get("level") == level and "user" in _state:
         return _state
     _state.clear()
-    _state.update({"uid": uid, "level": level, "group": None, "user": {}, "groups": {}})
+    _state.update(rules_for(uid, level))
+    return _state
+
+
+def rules_for(uid: Optional[int], level: int) -> Dict[str, Any]:
+    """Rules of ANY user, without the module cache (the web app asks per request):
+    {"uid", "level", "group", "user": {key: bool}, "groups": {key: bool}}."""
+    st: Dict[str, Any] = {"uid": uid, "level": level, "group": None, "user": {}, "groups": {}}
     if uid is None or level >= SUPERUSER_LEVEL or not available():
-        return _state
+        return st
     try:
         from db.connection import fetch_all
         rows = fetch_all("SELECT AccessRights FROM tblUser WHERE ID = ?", [uid])
         group = rows[0].get("AccessRights") if rows else None
-        _state["group"] = int(group) if group is not None else None
+        st["group"] = int(group) if group is not None else None
         for r in fetch_all("SELECT FeatureKey, AccessRightID, UserID, Allowed FROM tblFeatureAccess "
-                           "WHERE UserID = ? OR AccessRightID = ?", [uid, _state["group"] if group is not None else -1]):
+                           "WHERE UserID = ? OR AccessRightID = ?", [uid, st["group"] if group is not None else -1]):
             target = "user" if r.get("UserID") is not None else "groups"
-            _state[target][str(r["FeatureKey"])] = bool(int(r.get("Allowed") or 0))
+            st[target][str(r["FeatureKey"])] = bool(int(r.get("Allowed") or 0))
     except Exception as e:
         logger.warning("feature_access: rules not loaded: %s", e)
-    return _state
+    return st
 
 
 def can_use(key: str) -> bool:

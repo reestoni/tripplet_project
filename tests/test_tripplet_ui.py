@@ -153,13 +153,13 @@ class TestLoginScreenSicherheit:
         w.txt_user.setText("jens")
         w.txt_pw.setText("richtig")
         with patch("ui.screen_login.check_credentials", return_value=True), \
-             patch("ui.screen_login.get_user_access_level", return_value=2), \
-             patch("ui.screen_login.get_user_access_right", return_value="User"), \
-             patch("ui.screen_login.get_user_admin_box", return_value=False), \
-             patch("ui.screen_login.get_user_first_last_name", return_value=("Jens", "S")), \
-             patch("ui.screen_login.get_user_accent_colour", return_value=None), \
+             patch("db.user_profile.get_user_access_level", return_value=2), \
+             patch("db.user_profile.get_user_access_right", return_value="User"), \
+             patch("db.user_profile.get_user_admin_box", return_value=False), \
+             patch("db.user_profile.get_user_first_last_name", return_value=("Jens", "S")), \
+             patch("db.user_profile.get_user_accent_colour", return_value=None), \
              patch("ui.screen_login.cleanup_draft_experiment_requests", return_value={}), \
-             patch("ui.screen_login.get_user_id", return_value=42):
+             patch("db.user_profile.get_user_id", return_value=42):
             w._attempt_login()
         assert len(success_data) == 1
         assert success_data[0]["username"] == "jens"

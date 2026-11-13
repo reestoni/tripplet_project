@@ -191,42 +191,19 @@ class LoginScreen(QWidget):
 
         if ok:
             # --- Benutzerinfos aus DB laden ---
-            try:
-                access_level = int(get_user_access_level(user) or 0)
-            except Exception:
-                access_level = 0
+            # gemeinsame Logik mit der Web-App (db/user_profile.py)
+            from db.user_profile import load_profile
+            _profile = load_profile(user)
+            access_level = _profile["access_level"]
+            access_right = _profile["access_right"]
+            admin_box = _profile["admin_box"]
+            uid = _profile["id"]
+            first_name, last_name = _profile["first_name"], _profile["last_name"]
+            accent_colour = _profile["accent_colour"]
 
             print(f"Login successful for user: {user}", flush=True)
             print(f"AccessLevel: {access_level}", flush=True)
-
-            try:
-                access_right = get_user_access_right(user)   # Rollenname (z.B. "Admin")
-            except Exception:
-                access_right = None
-
-            try:
-                admin_box = bool(get_user_admin_box(user))    # tblUser.AdminBox
-            except Exception:
-                admin_box = False
-
             print(f"AccessRight: {access_right}", flush=True)
-
-            uid = None
-            if callable(get_user_id):
-                try:
-                    uid = get_user_id(user)
-                except Exception:
-                    uid = None
-
-            try:
-                first_name, last_name = get_user_first_last_name(user)
-            except Exception:
-                first_name, last_name = "", ""
-
-            try:
-                accent_colour = get_user_accent_colour(user)  # z.B. "#39a650"
-            except Exception:
-                accent_colour = None
 
             # --- Globalen Benutzerkontext setzen ---
             try:
