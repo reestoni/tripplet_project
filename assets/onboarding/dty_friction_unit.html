@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DTY Friction Unit</title>
+<!-- Knowledge-Base-Modul (ui/screen_onboarding.py), Kategorie DTY, Unterordner Spezialwissen.
+     Inhalt aus der Recherche-Seite des Nutzers "Friktionsaggregat im DTY-Prozess" (Stand Nov. 2026),
+     ins Onboarding-Format portiert (Light Mode, keine externen Ressourcen, Quellen nur als Text).
+     Texte in dty_friction_unit_texts.js (de/en/es/zh). ?lang=xx, window.setLang('xx'), window.goScene(i),
+     ?embedded=1 (ohne eigenen Kopf/Kapitel-Knoepfe, meldet das Kapitel per document.title "scene:n"),
+     ?scene=n (0-basiert) fuer Screenshots, &paused=1 friert die Animation ein.
+     Wird aus dty_machines (Detailkarte Drallgeber bei Friktionsscheiben + Doppelklick) und dty_intermingling (Doppelklick Station 5) per "open:dty_friction_unit" geoeffnet. -->
+<style>
+:root{
+  --bg:#F4F6F3;--panel:#FFFFFF;--panel2:#EEF3EC;--line:#DADFD8;--fg:#1C2321;--muted:#5A6460;
+  --hl:#39A650;--air:#2386C8;--heat:#E07B39;--yarn:#B5651D;--twist:#6A4FC8;--bad:#C62828;--good:#2B7D3C;
+  --font-display:"Bahnschrift SemiCondensed","Bahnschrift","Arial Narrow","Microsoft YaHei",sans-serif;
+  --font-body:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",ui-monospace,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.5;padding:20px 16px 36px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--hl)}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.05;margin:4px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:80ch}
+.langs,.scenes{display:flex;gap:6px;flex-wrap:wrap}
+.langs[hidden]{display:none}
+button{font:inherit;color:var(--fg);background:#fff;border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+.scenes button[aria-pressed="true"],.langs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
+.caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 6px}
+.caption p{margin:0;color:var(--muted);max-width:90ch}
+.sc{display:none;flex-direction:column;gap:16px}
+.sc.on{display:flex}
+.grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.card h2{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px;font-weight:400}
+.card h3{font-family:var(--font-display);font-size:21px;margin:0 0 2px}
+.card .sub{color:var(--muted);font-size:13px;margin-bottom:10px}
+canvas{width:100%;height:auto;display:block}
+.ctl{display:grid;gap:14px}
+.lbl{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.lbl b{color:var(--fg);font-weight:600;text-transform:none}
+input[type=range]{width:100%;accent-color:var(--hl)}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button{padding:5px 10px;font-size:13px}
+.read{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.read div{background:var(--panel2);border-radius:6px;padding:10px 12px}
+.read span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.read b{font-family:var(--font-mono);font-size:19px;font-weight:500}
+.hint{border-left:3px solid var(--hl);background:var(--panel2);padding:10px 12px;border-radius:0 6px 6px 0;font-size:14px}
+.bars{display:grid;gap:7px;margin-top:6px}
+.bar{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;font-size:13px;color:var(--muted)}
+.bar i{display:block;height:8px;border-radius:4px;background:var(--panel2);position:relative;overflow:hidden}
+.bar i::after{content:"";position:absolute;inset:0;width:var(--w);background:var(--hl);border-radius:4px;transition:width .3s}
+.small{font-size:12.5px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.card ul{margin:6px 0 0;padding-left:18px}
+.card li{margin:3px 0}
+ul.pro li::marker{color:var(--good);content:"+  "}
+ul.con li::marker{color:var(--bad);content:"–  "}
+.tag{display:inline-block;font-size:11px;font-family:var(--font-mono);border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--muted);margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:400;font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.mono{font-family:var(--font-mono)}
+.lk{display:block;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 14px}
+.lk:hover{border-color:var(--hl)}
+.lk b{display:block;font-size:15px;color:var(--hl)}
+.lk span{font-size:13px;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);margin:0}
+details{font-size:12px;color:var(--muted)}
+details ol{columns:2;column-gap:28px;margin:8px 0 0}
+details li{break-inside:avoid;margin-bottom:4px}
+body.embedded header,body.embedded .scenes{display:none}
+body.embedded{padding-top:12px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}header{flex-direction:column}details ol{columns:1}}
+</style>
+<script src="dty_friction_unit_texts.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="h1"></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="langs" id="langs"></div>
+  </header>
+  <div class="scenes" id="scenes" role="group"></div>
+  <section class="caption" aria-live="polite"><h2 id="ctitle"></h2><p id="ctext"></p></section>
+
+  <!-- 0 animation -->
+  <div class="sc" id="sc0">
+    <div class="grid">
+      <div class="card">
+        <h2 id="sideT"></h2>
+        <canvas id="side" width="500" height="560"></canvas>
+      </div>
+      <div style="display:grid;gap:16px;align-content:start">
+        <div class="card">
+          <h2 id="topT"></h2>
+          <canvas id="top" width="360" height="330"></canvas>
+        </div>
+        <div class="card ctl">
+          <div>
+            <span class="lbl" id="fibL"></span>
+            <div class="seg" id="fib"></div>
+            <p class="hint" id="fhint" style="margin:10px 0 0;font-size:13.5px"></p>
+          </div>
+          <div>
+            <span class="lbl"><span id="dyL"></span><b id="dyv"></b></span>
+            <input type="range" id="dy" min="1.4" max="2.6" step="0.05" value="1.8">
+          </div>
+          <div>
+            <span class="lbl"><span id="vL"></span><b id="vv"></b></span>
+            <input type="range" id="v" min="400" max="1300" step="50" value="900">
+          </div>
+          <div><span class="lbl" id="cfgL"></span><div class="seg" id="cfg"></div></div>
+          <div><span class="lbl" id="matL"></span><div class="seg" id="mat"></div></div>
+          <div><span class="lbl" id="twL"></span><div class="seg" id="tw"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h2 id="opT"></h2>
+        <div class="read">
+          <div><span id="rnL"></span><b id="rn"></b></div>
+          <div><span id="rvuL"></span><b id="rvu"></b></div>
+          <div><span id="rkL"></span><b id="rk"></b></div>
+          <div><span id="rnumL"></span><b id="rnum"></b></div>
+        </div>
+        <p class="hint" id="hint" style="margin:12px 0 0"></p>
+        <p class="small" id="calcNote" style="margin:10px 0 0"></p>
+      </div>
+      <div style="display:grid;gap:16px;align-content:start">
+        <div class="card">
+          <h2 id="mtitle"></h2>
+          <p id="mtext" style="margin:0 0 8px"></p>
+          <div class="bars" id="bars"></div>
+          <p class="small" id="barsNote" style="margin:10px 0 0"></p>
+        </div>
+        <button type="button" class="lk" id="lkmach"></button>
+      </div>
+    </div>
+  </div>
+  <!-- 1 disc types -->
+  <div class="sc" id="sc1"><div class="cols" id="types"></div></div>
+  <!-- 2 fibres -->
+  <div class="sc" id="sc2"><div class="card"><table id="ftable"></table><ul class="small" id="fnotes" style="margin-top:14px"></ul></div></div>
+  <!-- 3 manufacturers -->
+  <div class="sc" id="sc3"><div class="card"><table id="mtable"></table><p id="agg" style="margin:14px 0 0"></p></div></div>
+  <!-- 4 key figures & alternatives -->
+  <div class="sc" id="sc4"><div class="cols" id="alt"></div></div>
+
+  <p class="note" id="note"></p>
+  <details><summary id="srcsum"></summary><ol id="srclist"></ol></details>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+let lang=params.get('lang')||'de';if(!TEXTS[lang])lang='de';
+const EMBED=params.get('embedded')==='1';if(EMBED){$('langs').hidden=true;document.body.classList.add('embedded')}
+const PAUSED=params.get('paused')==='1';
+const T=()=>TEXTS[lang];
+const NS=5;
+const LINK_KEYS=['dty_machines'];
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// number format per language: thousands / decimal separator (de like the rest of TrippleT: 9’917 and 1,80)
+const SEP={de:['’',','],en:[',','.'],es:[' ',','],zh:[',','.']};
+const num=(n,d=0)=>{const [g,p]=SEP[lang];return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})
+  .replace(/[,.]/g,c=>c===','?g:p)};
+
+// ── language-neutral data (texts: fib[i], mat[k], bars[i] in dty_friction_unit_texts.js)
+const S={dy:1.8,v:900,cfg:[1,5,1],mat:'pu',tw:'S',fib:'pes'};
+const FIB=[
+  {k:'pes',mat:'pu',cfg:[1,5,1]},{k:'pesm',mat:'pu',cfg:[1,4,1]},{k:'pest',mat:'pu'},{k:'pa',mat:'ker',cfg:[1,6,1]},
+  {k:'paf',mat:'pu',cfg:[1,4,1]},{k:'sd',mat:'ker'},{k:'rec',mat:'ker'},{k:'ptt',mat:'pu',cfg:[1,3,1]}
+];
+const CFG=[[1,3,1],[1,4,1],[1,5,1],[1,6,1],[1,7,1],[1,8,1]];
+// disc colours (light mode) and qualitative bars 1-5: yarn care, bulk, service life, low bearing load
+const MAT={
+  pu:{col:'#E9B95C',edge:'#9A6A1E',bars:[5,5,2,5]},
+  ker:{col:'#F3F0E8',edge:'#8F8A7E',bars:[3,3,5,2]},
+  coat:{col:'#B8C4CC',edge:'#5E6E78',bars:[2,3,3,4]}
+};
+const C={fg:'#1C2321',muted:'#5A6460',line:'#DADFD8',hl:'#39A650',yarn:'#B5651D',yarnD:'#7A3F0F',shaft0:'#9AA7AF',shaft1:'#D9E0E4',base:'#C9D1D6',bg:'#FFFFFF'};
+const FONT='"Segoe UI","Microsoft YaHei",sans-serif',MONO='Consolas,"Microsoft YaHei",monospace';
+
+let scene=Math.max(0,Math.min(NS-1,parseInt(params.get('scene')||'0',10)||0));
+
+function segBtns(el,opts,cur,cb){
+  el.innerHTML=opts.map(([v,l])=>`<button type="button" data-v="${esc(v)}" aria-pressed="${v===cur}">${esc(l)}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>cb(b.dataset.v));
+}
+function segs(){
+  const t=T(),u=t.ui;
+  segBtns($('fib'),FIB.map((f,i)=>[f.k,t.fib[i].l]),S.fib,k=>{const f=FIB.find(q=>q.k===k);S.fib=k;S.mat=f.mat;if(f.cfg)S.cfg=f.cfg;segs();update()});
+  segBtns($('cfg'),CFG.map(c=>[c.join('-'),c.join('-')]),S.cfg.join('-'),v=>{S.cfg=v.split('-').map(Number);segs();update()});
+  segBtns($('mat'),Object.keys(MAT).map(k=>[k,t.mat[k].name]),S.mat,v=>{S.mat=v;segs();update()});
+  segBtns($('tw'),[['S',u.sTwist],['Z',u.zTwist]],S.tw,v=>{S.tw=v;segs();update()});
+}
+$('dy').oninput=e=>{S.dy=+e.target.value;update()};
+$('v').oninput=e=>{S.v=+e.target.value;update()};
+
+function update(){
+  const t=T(),u=t.ui;
+  $('dyv').textContent=num(S.dy,2);
+  $('vv').textContent=num(S.v)+' m/min';
+  const vu=S.dy*S.v,n=vu/(Math.PI*0.052);
+  $('rn').textContent=num(n)+' min⁻¹';
+  $('rvu').textContent=num(vu)+' m/min';
+  const k=Math.max(0.6,Math.min(1.45,1.2-(S.dy-1.75)*0.48));
+  $('rk').textContent='≈ '+num(k,2);
+  $('rnum').textContent=S.cfg.reduce((a,b)=>a+b,0)+' ('+S.cfg.join('-')+')';
+  $('hint').textContent=S.dy<1.6?u.hiLow:S.dy<=2.1?u.hiMid:u.hiHigh;
+  const i=FIB.findIndex(q=>q.k===S.fib),f=FIB[i];
+  $('fhint').textContent=t.fib[i].t+((f.mat!==S.mat||(f.cfg&&f.cfg.join()!==S.cfg.join()))?u.deviates:'');
+  const m=MAT[S.mat],mt=t.mat[S.mat];
+  $('mtitle').textContent=u.workDiscs+' · '+mt.name;
+  $('mtext').textContent=mt.text;
+  $('bars').innerHTML=t.bars.map((b,j)=>`<div class="bar"><span>${esc(b)}</span><i style="--w:${m.bars[j]*20}%"></i></div>`).join('');
+  if(PAUSED||reduce)draw();
+}
+
+// ── canvases
+function setup(c){const d=Math.min(window.devicePixelRatio||1,2);const w=c.width,h=c.height;c.width=w*d;c.height=h*d;const x=c.getContext('2d');x.scale(d,d);return{x,w,h}}
+const A=setup($('side')),B=setup($('top'));
+const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let th=0.6,flow=0,last=performance.now();
+
+function rr(x,px,py,w,h,r){x.beginPath();x.moveTo(px+r,py);x.lineTo(px+w-r,py);x.arcTo(px+w,py,px+w,py+r,r);x.lineTo(px+w,py+h-r);x.arcTo(px+w,py+h,px+w-r,py+h,r);x.lineTo(px+r,py+h);x.arcTo(px,py+h,px,py+h-r,r);x.lineTo(px,py+r);x.arcTo(px,py,px+r,py,r);x.closePath()}
+function discCol(type){
+  if(type==='work')return MAT[S.mat];
+  if(type==='in')return{col:'#FAF8F3',edge:'#A39E91'};
+  return{col:'#D3DADF',edge:'#6C7A84'};
+}
+
+function drawSide(){
+  const {x,w,h}=A,u=T().ui,mname=T().mat[S.mat].name;x.clearRect(0,0,w,h);
+  const s=3.3,cx=190,dir=S.tw==='S'?1:-1;
+  const N=S.cfg[0]+S.cfg[1]+S.cfg[2],pitch=9.6*s,stackH=N*pitch,top=(h-stackH)/2+6;
+  const order=dir===1?[0,1,2]:[0,2,1];
+  const sx=[cx-18.5*s,cx+18.5*s,cx];
+  const discs=[];
+  for(let i=0;i<N;i++){
+    const type=i<S.cfg[0]?'in':(i>=S.cfg[0]+S.cfg[1]?'out':'work');
+    discs.push({i,sh:order[i%3],y:top+pitch*(i+.5),type});
+  }
+  const shaft=k=>{
+    const g=x.createLinearGradient(sx[k]-16,0,sx[k]+16,0);
+    g.addColorStop(0,C.shaft0);g.addColorStop(.5,C.shaft1);g.addColorStop(1,C.shaft0);
+    x.fillStyle=g;x.fillRect(sx[k]-15,top-26,30,stackH+62);
+    x.fillStyle=C.base;rr(x,sx[k]-22,top+stackH+36,44,16,4);x.fill();
+    x.fillStyle=C.muted;x.font='600 12px '+MONO;x.textAlign='center';
+    x.fillText('ABC'[k],sx[k],top-32);
+  };
+  const disc=d=>{
+    const c=discCol(d.type),half=26*s,hh=d.type==='work'?9*s:(d.type==='in'?6.5*s:5*s),xc=sx[d.sh];
+    const g=x.createLinearGradient(xc-half,0,xc+half,0);
+    g.addColorStop(0,c.edge);g.addColorStop(.35,c.col);g.addColorStop(.65,c.col);g.addColorStop(1,c.edge);
+    x.fillStyle=g;
+    if(d.type==='out'){x.beginPath();x.moveTo(xc-half,d.y);x.lineTo(xc-half+10,d.y-hh/2);x.lineTo(xc+half-10,d.y-hh/2);x.lineTo(xc+half,d.y);x.lineTo(xc+half-10,d.y+hh/2);x.lineTo(xc-half+10,d.y+hh/2);x.closePath()}
+    else rr(x,xc-half,d.y-hh/2,half*2,hh,hh/2);
+    x.fill();x.strokeStyle='rgba(28,35,33,.45)';x.lineWidth=1;x.stroke();
+    for(let k=0;k<12;k++){
+      const a=th*dir+k*Math.PI/6,sn=Math.sin(a);
+      if(sn>0.05){const px=xc+half*.96*Math.cos(a);x.strokeStyle='rgba(28,35,33,'+(sn*.35)+')';x.lineWidth=1.5;x.beginPath();x.moveTo(px,d.y-hh/2+3);x.lineTo(px,d.y+hh/2-3);x.stroke()}
+    }
+  };
+  shaft(2);discs.filter(d=>d.sh===2).forEach(disc);
+  shaft(0);shaft(1);discs.filter(d=>d.sh!==2).forEach(disc);
+
+  // yarn path
+  const off=[7*s,-7*s,0];
+  const pts=[[cx,0],[cx,top-34]];
+  discs.forEach(d=>pts.push([cx+off[d.sh],d.y]));
+  const lastY=discs[N-1].y;
+  const path=()=>{x.beginPath();x.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length-1;i++){const mx=(pts[i][0]+pts[i+1][0])/2,my=(pts[i][1]+pts[i+1][1])/2;x.quadraticCurveTo(pts[i][0],pts[i][1],mx,my)}
+    x.lineTo(pts[pts.length-1][0],pts[pts.length-1][1])};
+  x.lineCap='butt';
+  x.strokeStyle=C.bg;x.lineWidth=9;path();x.stroke();
+  x.strokeStyle=C.yarn;x.lineWidth=5.5;path();x.stroke();
+  x.setLineDash([3,5]);x.lineDashOffset=-flow;x.strokeStyle=C.yarnD;x.lineWidth=5.5;path();x.stroke();x.setLineDash([]);
+  // untwisted, crimped yarn below
+  const ex=pts[pts.length-1][0];
+  for(let j=-1;j<=1;j++){
+    x.beginPath();
+    for(let y=lastY;y<=h-18;y+=3){
+      const t=Math.min(1,(y-lastY)/40);
+      const px=ex+(cx-ex)*t+j*3*t+3.2*t*Math.sin((y-flow*1.4)/6+j*2.1);
+      y===lastY?x.moveTo(px,y):x.lineTo(px,y);
+    }
+    x.strokeStyle=C.yarn;x.lineWidth=1.4;x.stroke();
+  }
+  // labels
+  x.textAlign='left';x.font='12px '+FONT;
+  const lx=356;
+  const grp=(a,b,label,sub)=>{
+    if(b<a)return;const y1=discs[a].y-pitch*.4,y2=discs[b].y+pitch*.4,ym=(y1+y2)/2;
+    x.strokeStyle=C.muted;x.lineWidth=1;x.beginPath();x.moveTo(lx-10,y1);x.lineTo(lx-5,y1);x.lineTo(lx-5,y2);x.lineTo(lx-10,y2);x.stroke();
+    x.fillStyle=C.fg;x.font='600 12px '+FONT;x.fillText(label,lx+2,ym+(sub?-2:4));
+    if(sub){x.fillStyle=C.muted;x.font='12px '+FONT;x.fillText(sub,lx+2,ym+13)}
+  };
+  grp(0,S.cfg[0]-1,u.inlet,u.inletSub);
+  grp(S.cfg[0],S.cfg[0]+S.cfg[1]-1,u.workDiscs,'× '+S.cfg[1]+' · '+mname);
+  grp(S.cfg[0]+S.cfg[1],N-1,u.outlet,u.outletSub);
+  x.fillStyle=C.hl;x.font='600 12px '+MONO;
+  x.fillText('T1',cx+14,16);x.fillText('T2',cx+14,h-6);
+  x.fillStyle=C.muted;x.font='12px '+FONT;
+  x.fillText(u.t1Note,cx+38,16);
+  x.fillText(u.t2Note,cx+38,h-6);
+}
+
+function drawTop(){
+  const {x,w,h}=B;x.clearRect(0,0,w,h);
+  const s=3.1,cx=w/2,cy=h/2+26,dir=S.tw==='S'?1:-1,R=26*s;
+  const P=[[cx-18.5*s,cy+10.7*s,'A'],[cx+18.5*s,cy+10.7*s,'B'],[cx,cy-21.4*s,'C']];
+  const m=MAT[S.mat];
+  P.forEach(c=>{
+    x.beginPath();x.arc(c[0],c[1],R,0,7);x.globalAlpha=.45;x.fillStyle=m.col;x.fill();x.globalAlpha=1;
+    x.strokeStyle=m.edge;x.lineWidth=2;x.stroke();
+    for(let k=0;k<6;k++){const a=th*dir+k*Math.PI/3;x.strokeStyle='rgba(28,35,33,.22)';x.lineWidth=1;x.beginPath();x.moveTo(c[0]+Math.cos(a)*8*s,c[1]+Math.sin(a)*8*s);x.lineTo(c[0]+Math.cos(a)*(R-4),c[1]+Math.sin(a)*(R-4));x.stroke()}
+    x.beginPath();x.arc(c[0],c[1],7.2*s,0,7);x.fillStyle=C.shaft0;x.fill();
+    x.fillStyle=C.fg;x.font='600 12px '+MONO;x.textAlign='center';x.fillText(c[2],c[0],c[1]+4);
+    // direction arrow
+    const a0=Math.atan2(c[1]-cy,c[0]-cx)-0.5,a1=a0+1.0,ra=R+9;
+    x.strokeStyle=C.hl;x.lineWidth=1.8;x.beginPath();x.arc(c[0],c[1],ra,a0,a1);x.stroke();
+    const ae=dir===1?a1:a0,tx=c[0]+ra*Math.cos(ae),ty=c[1]+ra*Math.sin(ae),ta=ae+dir*Math.PI/2;
+    x.fillStyle=C.hl;x.beginPath();x.moveTo(tx+7*Math.cos(ta),ty+7*Math.sin(ta));x.lineTo(tx+4*Math.cos(ta+2.4),ty+4*Math.sin(ta+2.4));x.lineTo(tx+4*Math.cos(ta-2.4),ty+4*Math.sin(ta-2.4));x.closePath();x.fill();
+  });
+  // yarn (rolls opposite to the discs)
+  x.beginPath();x.arc(cx,cy,6.5,0,7);x.fillStyle=C.yarn;x.fill();x.strokeStyle=C.bg;x.lineWidth=2;x.stroke();
+  const ya=-th*dir*5;x.strokeStyle=C.yarnD;x.lineWidth=2;x.beginPath();x.moveTo(cx-5*Math.cos(ya),cy-5*Math.sin(ya));x.lineTo(cx+5*Math.cos(ya),cy+5*Math.sin(ya));x.stroke();
+  x.fillStyle=C.muted;x.font='12px '+FONT;x.textAlign='center';
+  // long translations (es) break into two lines instead of being cut off
+  const note=T().ui.topNote,max=w-16;
+  if(x.measureText(note).width<=max)x.fillText(note,cx,16);
+  else{const ws=note.split(' ');let a='',i=0;
+    while(i<ws.length&&x.measureText((a+' '+ws[i]).trim()).width<=max*0.6)a=(a+' '+ws[i++]).trim();
+    x.fillText(a,cx,13);x.fillText(ws.slice(i).join(' '),cx,28)}
+}
+function draw(){drawSide();drawTop()}
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  if(scene===0){th+=dt*S.dy*(S.v/900)*2.4;flow+=dt*(S.v/900)*60;draw()}
+  requestAnimationFrame(frame);
+}
+
+// ── scene 1: disc types + functions in the stack
+function drawTypes(){
+  const t=T(),u=t.ui;
+  const card=ty=>`<div class="card"><h3>${esc(ty.t)}</h3><div class="sub">${esc(ty.sub)}</div>`+
+    `<ul class="pro">${ty.pro.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><ul class="con">${ty.con.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`+
+    (ty.note?`<p class="small">${esc(ty.note)}</p>`:'')+`</div>`;
+  const sp=t.special,st=t.stack;
+  $('types').innerHTML=t.types.map(card).join('')+
+    `<div class="card"><h3>${esc(sp.t)}</h3><div class="sub">${esc(sp.sub)}</div><ul>${sp.items.map(([b,x])=>`<li><b>${esc(b)}</b>: ${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="card" style="grid-column:1/-1"><h3>${esc(st.t)}</h3><div class="sub">${esc(st.sub)}</div>`+
+    `<table><tr><th>${esc(u.posH)}</th><th>${esc(u.taskH)}</th><th>${esc(u.execH)}</th></tr>`+
+    st.rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')+`</table><p class="small">${esc(st.note)}</p></div>`;
+}
+// ── scene 2: fibres
+function drawFibres(){
+  const t=T(),u=t.ui;
+  $('ftable').innerHTML=`<tr><th>${esc(u.fibreH)}</th><th>${esc(u.choiceH)}</th><th>${esc(u.reasonH)}</th></tr>`+
+    t.ftable.map(([f,c,tag,r])=>`<tr><td><b>${esc(f)}</b></td><td>${esc(c)}${tag?`<br><span class="tag">${esc(tag)}</span>`:''}</td><td>${esc(r)}</td></tr>`).join('');
+  $('fnotes').innerHTML=t.fnotes.map(x=>`<li>${esc(x)}</li>`).join('');
+}
+// ── scene 3: manufacturers
+function drawMfr(){
+  const t=T(),u=t.ui;
+  $('mtable').innerHTML=`<tr><th>${esc(u.mfrH)}</th><th>${esc(u.seatH)}</th><th>${esc(u.prodH)}</th><th>${esc(u.remarkH)}</th></tr>`+
+    t.mfr.map(([n,s,p,r])=>`<tr><td><b>${esc(n)}</b></td><td>${esc(s)}</td><td>${esc(p)}</td><td>${esc(r)}</td></tr>`).join('');
+  $('agg').innerHTML=`<b>${esc(u.aggT)}:</b> ${esc(t.agg)}`;
+}
+// ── scene 4: key figures & alternatives
+function drawAlt(){
+  const t=T(),k=t.kpi,d=t.dycard,a=t.alt;
+  $('alt').innerHTML=`<div class="card"><h3>${esc(k.t)}</h3><div class="sub">${esc(k.sub)}</div><table>`+
+    k.rows.map(([l,v])=>`<tr><td>${esc(l)}</td><td class="mono">${esc(v)}</td></tr>`).join('')+`</table><p class="small">${esc(k.note)}</p></div>`+
+    `<div class="card"><h3>${esc(d.t)}</h3><div class="sub">${esc(d.sub)}</div><ul>${d.l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`+
+    `<div class="card"><h3>${esc(a.t)}</h3><div class="sub">${esc(a.sub)}</div><ul>${a.l.map(([b,x])=>`<li><b>${esc(b)}</b>: ${esc(x)}</li>`).join('')}</ul></div>`;
+}
+
+function openModule(key){
+  if(EMBED){document.title='open:'+key;return}
+  location.href=key+'.html?lang='+encodeURIComponent(lang);
+}
+
+// ── scenes / language
+function go(i){
+  scene=(i+NS)%NS;
+  for(let k=0;k<NS;k++)$('sc'+k).classList.toggle('on',k===scene);
+  $('scenes').querySelectorAll('button').forEach((b,k)=>b.setAttribute('aria-pressed',k===scene));
+  const sc=T().scenes[scene];$('ctitle').textContent=sc.title;$('ctext').textContent=sc.text;
+  if(EMBED)document.title='scene:'+scene;
+}
+function applyLang(){
+  const t=T(),u=t.ui;document.documentElement.lang=lang;
+  $('eyebrow').textContent=u.eyebrow;$('h1').textContent=u.h1;$('lead').textContent=u.lead;$('note').textContent=u.note;
+  $('srcsum').textContent=u.sources;$('srclist').innerHTML=t.sources.map(x=>`<li>${esc(x)}</li>`).join('');
+  const L={sideT:'sideTitle',topT:'topTitle',fibL:'fibre',dyL:'dy',vL:'speed',cfgL:'combo',matL:'material',twL:'twist',opT:'opPoint',
+    rnL:'rpm',rvuL:'surf',rkL:'t2t1',rnumL:'total',calcNote:'calcNote',barsNote:'barsNote'};
+  Object.entries(L).forEach(([id,k])=>$(id).textContent=u[k]);
+  $('side').setAttribute('aria-label',u.sideTitle);$('top').setAttribute('aria-label',u.topTitle);
+  $('lkmach').innerHTML=`<b>${esc(u.linkMachines)}</b><span>${esc(u.linkMachinesHint)}</span>`;
+  $('scenes').innerHTML=t.scenes.map((s,i)=>`<button type="button" data-i="${i}">${esc(s.k)}</button>`).join('');
+  $('scenes').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
+  $('langs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
+  segs();update();draw();drawTypes();drawFibres();drawMfr();drawAlt();go(scene);
+}
+$('lkmach').onclick=()=>openModule(LINK_KEYS[0]);
+window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
+window.goScene=i=>go(i);
+[['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
+applyLang();
+if(!PAUSED&&!reduce)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

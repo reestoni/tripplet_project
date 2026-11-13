@@ -151,7 +151,7 @@ function applyLang(){const u=T().ui;document.documentElement.lang=lang;
   [...$('langs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
   pin.oninput();ofin.oninput();setPlay();const keep=sceneT;go(scene);sceneT=keep}
 function showStation(){const S=T().stations;
-  $('cnow').textContent=scene!==0?'':selSt>=0?`▸ ${S[selSt].n}: ${S[selSt].d}`:`▸ ${T().ui.clickHint}`}
+  $('cnow').textContent=scene!==0?'':selSt>=0?`▸ ${S[selSt].n}: ${S[selSt].d}`+(selSt===FRICTION_ST?` ${T().ui.fricHint}`:''):`▸ ${T().ui.clickHint}`}
 /* Szene 1: Positionen anklicken (Symbol oder Beschriftung) */
 function hitStation(ev){const r=cv.getBoundingClientRect(),x=(ev.clientX-r.left)*W/r.width,y=(ev.clientY-r.top)*H/r.height;
   for(let i=0;i<ST.length;i++){const p=ST[i];if(Math.hypot(x-p.x,y-p.y)<46)return i;
@@ -160,6 +160,10 @@ function hitStation(ev){const r=cv.getBoundingClientRect(),x=(ev.clientX-r.left)
 cv.addEventListener('mousemove',ev=>{if(scene!==0){cv.style.cursor='';return}hoverSt=hitStation(ev);cv.style.cursor=hoverSt>=0?'pointer':''});
 cv.addEventListener('mouseleave',()=>{hoverSt=-1;cv.style.cursor=''});
 cv.addEventListener('click',ev=>{if(scene!==0)return;const i=hitStation(ev);selSt=(i===selSt)?-1:i;showStation()});
+/* Doppelklick auf Station 5 (Friktionsaggregat) oeffnet die Detailseite dty_friction_unit */
+const LINK_KEYS=['dty_friction_unit'],FRICTION_ST=4;
+cv.addEventListener('dblclick',ev=>{if(scene!==0||hitStation(ev)!==FRICTION_ST)return;selSt=FRICTION_ST;showStation();
+  if(EMBED){document.title='open:'+LINK_KEYS[0];return}location.href=LINK_KEYS[0]+'.html?lang='+encodeURIComponent(lang)});
 window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
 window.goScene=i=>go(i);
 [['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
@@ -201,7 +205,7 @@ function ofZonePts(){const pts=[],sag=1.2+of*1.6,w=1+.12*Math.sin(t*7);
 function scene1(){
   const S=T().stations,cvT=T().cv;
   const st=selSt;
-  infoBox(st>=0?`${st+1}  ${S[st].n}`:'',st>=0?S[st].d:T().ui.clickHint);
+  infoBox(st>=0?`${st+1}  ${S[st].n}`:'',st>=0?S[st].d+(st===FRICTION_ST?' '+T().ui.fricHint:''):T().ui.clickHint);
   ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.strokeRect(60,160,1480,700);
   label(cvT.machine,90,195,{a:'left',s:22});
   ctx.lineCap='round';

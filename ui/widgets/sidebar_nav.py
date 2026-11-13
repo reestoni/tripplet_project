@@ -547,6 +547,12 @@ def build_tools_group(
                               tab_capable=True, open_in_new_tab=open_in_new_tab)
     _add_if(sidebar, btn_yarn_count, "yarn_count")
 
+    # Process Playground: DTY - was passiert bei mehr Luftdruck/OF/Speed (aus unseren Versuchen) - fuer alle
+    btn_playground = icon_btn("Process Playground", "process_playground.png", "SidebarItem",
+                              trigger_process_playground, tab_capable=True, open_in_new_tab=open_in_new_tab)
+    offline_gated_buttons.append(btn_playground)
+    _add_if(sidebar, btn_playground, "process_playground")
+
     # Dashboards: anschauen, was man selbst gebaut hat oder was einem freigegeben wurde - fuer alle
     btn_dashboards = icon_btn("Dashboards", "dashboards.png", "SidebarItem", trigger_dashboards,
                               tab_capable=True, open_in_new_tab=open_in_new_tab)
@@ -705,6 +711,17 @@ def trigger_yarn_count():
         import app_meta
         if callable(app_meta.open_yarn_count):
             app_meta.open_yarn_count()
+    except Exception:
+        pass
+
+
+def trigger_process_playground():
+    """Sidebar "Process Playground" (ui/screen_process_playground.py) - main.py
+    setzt app_meta.open_process_playground (gleiches Muster wie Dashboards)."""
+    try:
+        import app_meta
+        if callable(app_meta.open_process_playground):
+            app_meta.open_process_playground()
     except Exception:
         pass
 

@@ -10,13 +10,13 @@ from ui.widgets.multilang_help import check_texts
 from ui.widgets import (
     help_texts_backlog, help_texts_show_experiment, help_texts_report,
     help_texts_all_experiments, help_texts_create_experiment, help_texts_manage_yarn, help_texts_manage_jets,
-    help_texts_smart_chart, help_texts_dashboards,
+    help_texts_smart_chart, help_texts_dashboards, help_texts_process_playground,
 )
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODULES = [help_texts_backlog, help_texts_show_experiment, help_texts_report,
            help_texts_all_experiments, help_texts_create_experiment, help_texts_manage_yarn, help_texts_manage_jets,
-           help_texts_smart_chart, help_texts_dashboards]
+           help_texts_smart_chart, help_texts_dashboards, help_texts_process_playground]
 
 
 @pytest.mark.parametrize("mod", MODULES, ids=lambda m: m.__name__.rsplit(".", 1)[-1])

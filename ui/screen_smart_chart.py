@@ -81,13 +81,6 @@ class SmartChartScreen(QWidget):
 
         # ── header ──────────────────────────────────────────────────────
         head = QHBoxLayout()
-        self.btn_back = QPushButton("← Home")
-        self.btn_back.setStyleSheet("QPushButton{background:transparent;color:#39a650;border:1px solid #39a650;"
-                                    "border-radius:4px;padding:5px 10px;font-weight:600;}"
-                                    "QPushButton:hover{background:#e8f5e9;}")
-        self.btn_back.clicked.connect(lambda: self.on_back() if callable(self.on_back) else None)
-        self.btn_back.setVisible(callable(on_back))
-        head.addWidget(self.btn_back)
         tbox = QVBoxLayout()
         tbox.setSpacing(0)
         lbl_kicker = QLabel("SMART CHART")

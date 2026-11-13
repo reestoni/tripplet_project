@@ -43,6 +43,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--hl);outline-off
 .slider[hidden]{display:none}
 .slider input{accent-color:var(--hl);width:160px}
 .slider output{min-width:6.5em;color:var(--fg)}
+.slider select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.seg{gap:0}.seg button{border-radius:0;padding:6px 10px;font-size:13px}.seg button:first-child{border-radius:4px 0 0 4px}.seg button:last-child{border-radius:0 4px 4px 0}
+.seg button[aria-pressed="true"]{background:#000;color:var(--hl);border-color:#000}
 .play{min-width:120px;justify-content:center}
 .caption{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;border-top:1px solid var(--line);padding-top:16px}
 .caption h2{font-family:var(--font-display);font-weight:600;font-size:27px;line-height:1.15;margin:0 0 8px}
@@ -72,6 +75,9 @@ body.embedded{padding-top:12px}
   <div class="controls">
     <div class="scenes" id="scenes" role="group"></div>
     <div class="right">
+      <div class="slider seg" id="modewrap" hidden><button type="button" id="mNat"></button><button type="button" id="mSyn"></button></div>
+      <label class="slider" id="lenwrap" hidden><span id="lenlab"></span><select id="flen"><option>32</option><option selected>38</option><option>40</option><option>44</option><option>51</option><option>60</option></select><span>mm</span></label>
+      <label class="slider" id="sdwrap" hidden><span id="sdlab"></span><input id="sd" type="range" min="0" max="60" step="1" value="20"><output id="sdout"></output></label>
       <button class="play" id="play" type="button"></button>
     </div>
   </div>
@@ -105,7 +111,7 @@ const hx=c=>[1,3,5].map(i=>parseInt(c.slice(i,i+2),16));
 const mix=(c1,c2,q)=>{const a=hx(c1),b=hx(c2);return`rgb(${a.map((v,i)=>Math.round(lerp(v,b[i],q))).join(',')})`};
 const hsh=(a,b,c)=>{const v=Math.sin(a*127.1+b*311.7+c*74.7)*43758.5453;return v-Math.floor(v)};
 
-const NSC=5;
+const NSC=6;
 C.fib=C.yarn;C.wrap=C.fdy;C.steel='#8f9a9d';
 let rs=3;const rnd=()=>{rs=(rs*16807)%2147483647;return rs/2147483647};
 
@@ -117,18 +123,18 @@ const FIB=[];
 function setPlay(){play.setAttribute('aria-pressed',auto);play.textContent=auto?T().ui.pause:T().ui.play}
 play.onclick=()=>{auto=!auto;setPlay()};
 function showStation(){const S=T().stations;
-  $('cnow').textContent=scene===2?'▸ '+T().cv.now3:scene!==0?'':selSt>=0?`▸ ${S[selSt].n}: ${S[selSt].d}`:`▸ ${T().ui.clickHint}`}
+  $('cnow').textContent=scene===2?'▸ '+T().cv.now3:scene===3?'▸ '+T().cv.now4:scene!==0?'':selSt>=0?`▸ ${S[selSt].n}: ${S[selSt].d}`:`▸ ${T().ui.clickHint}`}
 function go(i,keepFib){const n=(i+NSC)%NSC;if(n!==scene){selSt=-1;hoverSt=-1;FIB.length=0}scene=n;sceneT=0;if(EMBED)document.title='scene:'+scene;
   [...sceneEl.children].forEach((b,j)=>b.setAttribute('aria-pressed',j===scene));
   const s=T().scenes[scene];$('ctitle').textContent=`${scene+1}  ·  ${s.title}`;$('ctext').textContent=s.text;
   $('cfacts').innerHTML='';s.facts.forEach(f=>{const li=document.createElement('li');const b=document.createElement('b');b.textContent=f[0];const sp=document.createElement('span');sp.textContent=f[1];li.append(b,sp);$('cfacts').appendChild(li)});
-  showStation()}
+  showStation();spacingUI()}
 function applyLang(){const u=T().ui;document.documentElement.lang=lang;
   ['eyebrow','h1','lead','note'].forEach(k=>$(k).textContent=u[k]);
   sceneEl.setAttribute('aria-label',u.scenes);sceneEl.innerHTML='';
   T().scenes.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML=`<span>${i+1}</span>`;b.append(s.k);b.onclick=()=>go(i);sceneEl.appendChild(b)});
   [...$('langs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===lang));
-  setPlay();const keep=sceneT;go(scene);sceneT=keep}
+  spacingLang();setPlay();const keep=sceneT;go(scene);sceneT=keep}
 /* Szene 1: Stationen = Kaesten der Prozesskette */
 const BOX=[[70,300,170,150],[320,300,170,150],[570,300,170,150],[820,300,170,150],[1070,240,420,270]];
 function hitStation(ev){const r=cv.getBoundingClientRect(),x=(ev.clientX-r.left)*W/r.width,y=(ev.clientY-r.top)*H/r.height;
@@ -192,47 +198,182 @@ function scene2(){const cvT=T().cv;
   label(cvT.toJet,1500,cy+40,{a:'right',s:15,c:C.air,f:SANS});
 }
 
-/* ---------- Szene 3: Spinnduese ---------- */
-const XT=600;let CY=330;
+/* ---------- Szene 3: Spinnduese ----------
+   Laengsschnitt nach der Skizze des Nutzers (2026-11-12): Gehaeuse, Faserkanal, Hohlspindel mit
+   kegelfoermiger Spitze. Die geneigten Luftbohrungen zielen GENAU auf die Spindelspitze (Strahlachse
+   endet dort, Zielmarke). Die freien hinteren Faserenden spreizen sich um die Spitze, legen sich ueber
+   den Kegel zurueck und kreisen = "Spinnsonne"; rechts der Blick auf die Spindelspitze. */
+const XT=640;let CY=330;
+const SP_R=46,SP_CONE=70,SP_BORE=7;           // spindle: outer radius, cone length, bore radius
+const AIR_IN=[[XT-165,CY-215],[XT-110,CY+215]]; // bore inlets (housing surface), axis -> spindle tip
+const sunPt=(d,th)=>{const r=Math.min(86,10+d*.85);return[XT+Math.min(d*.42,SP_CONE),CY+r*Math.cos(th),Math.sin(th)]};
 function fibrePts(f){const pts=[],lead=f.x,L=f.len;for(let s=0;s<=L;s+=4){const xi=lead-s;let x=xi,y,z=1;
-    if(xi<470){const w=xi<300?26:lerp(26,10,smooth(300,470,xi));y=CY+f.lane*w+2*Math.sin(s*.2+f.ph)}
-    else if(!f.w||lead<XT){y=CY+f.lane*10*(1-smooth(470,XT,xi))}
-    else if(xi<XT){const d=XT-xi,th=t*18+f.ph+d*.06,r=Math.min(46,10+d*.55);x=XT-6-d*.22;y=CY+r*Math.cos(th);z=Math.sin(th)}
-    else{const th=f.ph+xi*.22;y=CY+7*Math.cos(th);z=Math.sin(th)}
+    if(xi<480){const w=xi<300?26:lerp(26,8,smooth(300,480,xi));y=CY+f.lane*w+2*Math.sin(s*.2+f.ph)}
+    else if(xi<XT){if(f.w&&lead>XT){const P=sunPt(XT-xi,f.ph+t*7);x=P[0];y=P[1];z=P[2]}else y=CY+f.lane*8*(1-smooth(480,XT,xi))}
+    else{if(f.w){const th=f.ph+xi*.22;y=CY+5*Math.cos(th);z=Math.sin(th)}else y=CY+f.lane*3}
     pts.push([x,y,z])}return pts}
-function step3(){if(rnd()<.5)FIB.push({x:150,lane:(rnd()-.5)*2,len:80+rnd()*40,ph:rnd()*6.28,w:rnd()<.4});
-  const dt=1/60;for(let i=FIB.length-1;i>=0;i--){const f=FIB[i];f.x+=(f.x<240?60:130)*dt;if(f.x-f.len>1000)FIB.splice(i,1)}}
+function step3(){if(rnd()<.7)FIB.push({x:150,lane:(rnd()-.5)*2,len:80+rnd()*40,ph:rnd()*6.28,w:rnd()<.55});
+  const dt=1/60;for(let i=FIB.length-1;i>=0;i--){const f=FIB[i];f.x+=(f.x<240?60:130)*dt;if(f.x-f.len>1200)FIB.splice(i,1)}}
+function hatchFill(path,fill){ctx.save();path();ctx.fillStyle=fill;ctx.fill();ctx.clip();ctx.strokeStyle='rgba(90,100,96,.35)';ctx.lineWidth=1.2;
+  for(let k=-900;k<1700;k+=14){ctx.beginPath();ctx.moveTo(k,0);ctx.lineTo(k+700,700);ctx.stroke()}ctx.restore()}
+function bgLabel(s,x,y,o={}){ctx.font=`${o.w||500} ${o.s||15}px ${o.f||MONO}`;const w=ctx.measureText(s).width,x0=o.a==='left'?x:o.a==='right'?x-w:x-w/2;
+  ctx.fillStyle=C.bg;ctx.globalAlpha=.9;ctx.fillRect(x0-5,y-11,w+10,22);ctx.globalAlpha=1;label(s,x,y,o)}
+function sunRays(front){/* steady part of the spinning sun: many free fibre ends at once */
+  for(let k=0;k<44;k++){const th=k*.1428+t*7,L=70+40*hsh(k,3,1);const z=Math.sin(th);if((z>=0)!==front)continue;
+    ctx.strokeStyle=front?C.wrap:`rgba(${FRGB},.45)`;ctx.lineWidth=front?2:1.3;ctx.beginPath();
+    for(let d=0;d<=L;d+=5){const P=sunPt(d,th+d*.004);d?ctx.lineTo(P[0],P[1]):ctx.moveTo(P[0],P[1])}ctx.stroke()}}
+function fibres(front){FIB.forEach(f=>{const P=fibrePts(f);for(let j=0;j<P.length-1;j++){const fr=P[j][2]>=0;if(fr!==front)continue;
+    const sunPart=f.w&&f.x>=XT;ctx.strokeStyle=sunPart?(fr?C.wrap:`rgba(${FRGB},.38)`):(fr?C.fib:`rgba(${YRGB},.4)`);ctx.lineWidth=fr?1.7:1.2;
+    ctx.beginPath();ctx.moveTo(P[j][0],P[j][1]);ctx.lineTo(P[j+1][0],P[j+1][1]);ctx.stroke()}})}
+function spindle(){const x1=1180,g=ctx.createLinearGradient(0,CY-SP_R,0,CY+SP_R);g.addColorStop(0,'#7f8a8d');g.addColorStop(.5,'#c3cacb');g.addColorStop(1,'#7f8a8d');
+  ctx.fillStyle=g;ctx.strokeStyle='#5f696b';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(XT,CY-12);ctx.lineTo(XT+SP_CONE,CY-SP_R);ctx.lineTo(x1,CY-SP_R);ctx.lineTo(x1,CY+SP_R);ctx.lineTo(XT+SP_CONE,CY+SP_R);ctx.lineTo(XT,CY+12);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.bg;ctx.fillRect(XT,CY-SP_BORE,x1-XT,SP_BORE*2);ctx.strokeStyle='#5f696b';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(XT,CY-SP_BORE);ctx.lineTo(x1,CY-SP_BORE);ctx.moveTo(XT,CY+SP_BORE);ctx.lineTo(x1,CY+SP_BORE);ctx.stroke()}
 function scene3(){const cvT=T().cv;
-  CY=330;const cy=CY;
-  label(cvT.long,80,110,{a:'left',s:22,c:C.fg});
-  roller(240,cy-36,30,3);roller(240,cy+36,30,-3);label(cvT.delivery,240,cy+100,{s:15});
-  ctx.fillStyle='#D5DBDA';ctx.strokeStyle='#8f9a9d';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(330,cy-140,520,280,14);ctx.fill();ctx.stroke();
-  ctx.fillStyle=C.bg;ctx.beginPath();ctx.moveTo(330,cy-24);ctx.lineTo(470,cy-14);ctx.lineTo(480,cy-70);ctx.lineTo(650,cy-70);ctx.lineTo(650,cy+70);ctx.lineTo(480,cy+70);ctx.lineTo(470,cy+14);ctx.lineTo(330,cy+24);ctx.closePath();ctx.fill();
-  label(cvT.guide,400,cy-46,{s:13});
-  ctx.fillStyle='#8f9a9d';ctx.beginPath();ctx.moveTo(XT,cy-16);ctx.lineTo(XT+40,cy-34);ctx.lineTo(1000,cy-34);ctx.lineTo(1000,cy-14);ctx.lineTo(XT+10,cy-10);ctx.closePath();ctx.fill();
-  ctx.beginPath();ctx.moveTo(XT,cy+16);ctx.lineTo(XT+40,cy+34);ctx.lineTo(1000,cy+34);ctx.lineTo(1000,cy+14);ctx.lineTo(XT+10,cy+10);ctx.closePath();ctx.fill();
-  label(cvT.spindle,830,cy+66,{s:15,c:C.fg});
-  [[-1,540],[1,560]].forEach(([d,x])=>{ctx.fillStyle=C.bg;ctx.beginPath();ctx.moveTo(x-10,cy+d*140);ctx.lineTo(x+10,cy+d*140);ctx.lineTo(x+20,cy+d*70);ctx.lineTo(x,cy+d*70);ctx.fill();
-    for(let k=0;k<5;k++){const u=(t*1.4+k*.2)%1;ctx.fillStyle=C.air;ctx.beginPath();ctx.arc(lerp(x,x+10,u),cy+d*lerp(140,72,u),3,0,7);ctx.fill()}});
-  label(cvT.air,552,cy-166,{s:15,c:C.air});
-  ctx.strokeStyle=`rgba(${ARGB},.45)`;ctx.lineWidth=2;ctx.setLineDash([8,8]);ctx.lineDashOffset=-t*40;ctx.beginPath();ctx.ellipse(XT-10,cy,24,58,0,0,7);ctx.stroke();ctx.setLineDash([]);
+  CY=330;const cy=CY,H0=cy-215,H1=cy+215,X0=290,X1=1130;
+  label(cvT.long,80,82,{a:'left',s:16,c:C.fg});
+  roller(200,cy-36,30,3);roller(200,cy+36,30,-3);label(cvT.delivery,200,cy+100,{s:15});
+  // housing with cavity (inlet channel, vortex chamber, exhaust gap along the spindle)
+  const cavity=()=>{ctx.beginPath();ctx.moveTo(X0,cy-40);ctx.lineTo(500,cy-14);ctx.lineTo(520,cy-92);ctx.lineTo(X1,cy-92);ctx.lineTo(X1,cy+92);ctx.lineTo(520,cy+92);ctx.lineTo(500,cy+14);ctx.lineTo(X0,cy+40);ctx.closePath()};
+  hatchFill(()=>{ctx.beginPath();ctx.roundRect(X0,H0,X1-X0,H1-H0,14)},'#E1E6E4');
+  ctx.strokeStyle='#8f9a9d';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(X0,H0,X1-X0,H1-H0,14);ctx.stroke();
+  ctx.fillStyle=C.bg;cavity();ctx.fill();ctx.strokeStyle='#8f9a9d';ctx.lineWidth=1.5;cavity();ctx.stroke();
+  // air bores: their axis ends exactly at the spindle tip
+  AIR_IN.forEach(([ax,ay])=>{const dx=XT-ax,dy=cy-ay,L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L,sIn=Math.abs((Math.abs(dy)-92)/uy);
+    ctx.strokeStyle=C.bg;ctx.lineWidth=20;ctx.lineCap='butt';ctx.beginPath();ctx.moveTo(ax-ux*4,ay-uy*4);ctx.lineTo(ax+ux*sIn,ay+uy*sIn);ctx.stroke();
+    ctx.strokeStyle='#8f9a9d';ctx.lineWidth=1.2;[-10,10].forEach(o=>{ctx.beginPath();ctx.moveTo(ax-uy*o,ay+ux*o);ctx.lineTo(ax+ux*sIn-uy*o,ay+uy*sIn+ux*o);ctx.stroke()});ctx.lineCap='round';
+    ctx.strokeStyle=`rgba(${ARGB},.55)`;ctx.lineWidth=1.5;ctx.setLineDash([6,6]);ctx.lineDashOffset=-t*50;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(XT,cy);ctx.stroke();ctx.setLineDash([]);
+    for(let k=0;k<9;k++){const u=(t*1.1+k/9)%1;ctx.fillStyle=C.air;ctx.globalAlpha=u>.85?(1-u)/.15:1;ctx.beginPath();ctx.arc(ax+dx*u,ay+dy*u,3.2,0,7);ctx.fill()}ctx.globalAlpha=1;
+    ctx.fillStyle=C.air;const ex=ax-ux*14,ey=ay-uy*14;ctx.beginPath();ctx.moveTo(ex+ux*12,ey+uy*12);ctx.lineTo(ex-uy*7,ey+ux*7);ctx.lineTo(ex+uy*7,ey-ux*7);ctx.fill()});
+  // fibres + spinning sun: back half, spindle, front half
   if(FIB.length===0)for(let n=0;n<700;n++)step3();if(auto)step3();
-  for(const pass of [0,1])FIB.forEach(f=>{const P=fibrePts(f);for(let j=0;j<P.length-1;j++){const front=P[j][2]>=0;if(front!==(pass===1))continue;
-    ctx.strokeStyle=f.w&&f.x>=XT?(front?C.wrap:`rgba(${FRGB},.35)`):(front?C.fib:`rgba(${YRGB},.4)`);ctx.lineWidth=front?1.7:1.2;ctx.beginPath();ctx.moveTo(P[j][0],P[j][1]);ctx.lineTo(P[j+1][0],P[j+1][1]);ctx.stroke()}});
-  for(let i=0;i<6;i++){ctx.strokeStyle=`rgba(${YRGB},.85)`;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(1000,cy+(i-2.5)*2);ctx.lineTo(1180,cy+(i-2.5)*2);ctx.stroke()}
-  for(let k=0;k<3;k++){ctx.strokeStyle=C.wrap;ctx.lineWidth=1.6;ctx.beginPath();for(let x=1000;x<=1180;x+=3){const th=k*2.1+(x+t*130)*.22,y=cy+7*Math.cos(th);if(Math.sin(th)>=0){ctx.lineTo(x,y)}else{ctx.stroke();ctx.beginPath();ctx.moveTo(x,y)}}ctx.stroke()}
-  ctx.strokeStyle=C.muted;ctx.fillStyle=C.muted;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(1190,cy);ctx.lineTo(1240,cy);ctx.stroke();ctx.beginPath();ctx.moveTo(1252,cy);ctx.lineTo(1238,cy-8);ctx.lineTo(1238,cy+8);ctx.fill();label(cvT.yarn,1270,cy,{a:'left',s:16,c:C.fg});
-  ctx.fillStyle=C.fib;ctx.fillRect(80,560,26,4);label(cvT.coreLeg,116,562,{a:'left',s:16,c:C.fg,f:SANS});
-  ctx.fillStyle=C.wrap;ctx.fillRect(80,596,26,4);label(cvT.wrapLeg,116,598,{a:'left',s:16,c:C.fg,f:SANS});
-  const qx=1400,qy=250,R=90;label(cvT.xsec,qx,124,{s:15,c:C.fg});
-  ctx.fillStyle='#D5DBDA';ctx.beginPath();ctx.arc(qx,qy,R+20,0,7);ctx.fill();ctx.fillStyle=C.bg;ctx.beginPath();ctx.arc(qx,qy,R,0,7);ctx.fill();
-  [0,1,2,3].forEach(k=>{const a=k*Math.PI/2;ctx.strokeStyle=C.air;ctx.lineWidth=3;const x1=qx+Math.cos(a)*(R+18),y1=qy+Math.sin(a)*(R+18),x2=qx+Math.cos(a+.9)*(R-6),y2=qy+Math.sin(a+.9)*(R-6);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()});
-  ctx.fillStyle='#8f9a9d';ctx.beginPath();ctx.arc(qx,qy,22,0,7);ctx.fill();ctx.fillStyle=C.bg;ctx.beginPath();ctx.arc(qx,qy,9,0,7);ctx.fill();
-  for(let k=0;k<7;k++){const a=t*4+k*.9;ctx.strokeStyle=C.wrap;ctx.lineWidth=2;ctx.beginPath();ctx.arc(qx,qy,30+k*6,a,a+.9);ctx.stroke()}
-  label(cvT.xsecSub,qx,qy+R+40,{s:13,c:C.air});
+  sunRays(false);fibres(false);spindle();fibres(true);sunRays(true);
+  // aim mark on the spindle tip
+  ctx.strokeStyle=C.air;ctx.lineWidth=2;ctx.beginPath();ctx.arc(XT,cy,9+2*Math.sin(t*6),0,7);ctx.stroke();
+  // yarn leaving through the spindle
+  ctx.strokeStyle=C.muted;ctx.fillStyle=C.muted;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(1190,cy);ctx.lineTo(1240,cy);ctx.stroke();ctx.beginPath();ctx.moveTo(1252,cy);ctx.lineTo(1238,cy-8);ctx.lineTo(1238,cy+8);ctx.fill();
+  label(cvT.yarn,1222,cy+26,{s:16,c:C.fg});
+  // labels
+  {const ax=AIR_IN[0][0]+16;label(cvT.air,ax,H0-30,{a:'left',s:16,c:C.air,w:700});const aw=ctx.measureText(cvT.air).width;label('- '+cvT.aim,ax+aw+10,H0-30,{a:'left',s:15,c:C.air})}
+  label(cvT.air,AIR_IN[1][0],H1+30,{s:16,c:C.air,w:700});
+  leader(XT+44,cy-62,XT+118,cy-70,C.wrap);bgLabel(cvT.sun,XT+124,cy-70,{a:'left',s:20,c:C.wrap,w:700,f:SANS});
+  bgLabel(cvT.spindle,960,cy+68,{s:15,c:C.fg});bgLabel(cvT.guide,395,cy-56,{s:13});
+  ctx.fillStyle=C.fib;ctx.fillRect(80,640,26,4);label(cvT.coreLeg,116,642,{a:'left',s:16,c:C.fg,f:SANS});
+  ctx.fillStyle=C.wrap;ctx.fillRect(80,676,26,4);label(cvT.wrapLeg,116,678,{a:'left',s:16,c:C.fg,f:SANS});
+  ctx.strokeStyle=C.air;ctx.lineWidth=2;ctx.beginPath();ctx.arc(93,714,7,0,7);ctx.stroke();label(cvT.aimLeg,116,714,{a:'left',s:16,c:C.fg,f:SANS});
+  // view onto the spindle tip: tangential air, the spinning sun turns
+  const qx=1430,qy=cy+40,R=96;label(cvT.xsec,qx,qy-R-58,{s:15,c:C.fg});
+  hatchFill(()=>{ctx.beginPath();ctx.arc(qx,qy,R+26,0,7);ctx.arc(qx,qy,R,0,7,true)},'#E1E6E4');
+  ctx.strokeStyle='#8f9a9d';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(qx,qy,R+26,0,7);ctx.stroke();ctx.beginPath();ctx.arc(qx,qy,R,0,7);ctx.stroke();
+  [0,1,2,3].forEach(k=>{const a=k*Math.PI/2,ox=Math.cos(a),oy=Math.sin(a),tx=-oy,ty=ox,off=R*.62;
+    const x1=qx+ox*(R+30)+tx*off,y1=qy+oy*(R+30)+ty*off,x2=qx+ox*(R-4)+tx*off*.2,y2=qy+oy*(R-4)+ty*off*.2;
+    ctx.strokeStyle=C.bg;ctx.lineWidth=12;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    for(let j=0;j<4;j++){const u=(t*1.3+j/4)%1;ctx.fillStyle=C.air;ctx.beginPath();ctx.arc(lerp(x1,x2,u),lerp(y1,y2,u),2.6,0,7);ctx.fill()}});
+  ctx.strokeStyle=`rgba(${ARGB},.45)`;ctx.lineWidth=2;ctx.setLineDash([7,7]);ctx.lineDashOffset=-t*40;ctx.beginPath();ctx.arc(qx,qy,R-12,0,7);ctx.stroke();ctx.setLineDash([]);
+  const g=ctx.createRadialGradient(qx,qy,8,qx,qy,SP_R);g.addColorStop(0,'#c3cacb');g.addColorStop(1,'#7f8a8d');ctx.fillStyle=g;ctx.beginPath();ctx.arc(qx,qy,SP_R,0,7);ctx.fill();
+  for(let k=0;k<28;k++){const a0=k*.2244+t*4,L=58+26*hsh(k,5,1);ctx.strokeStyle=C.wrap;ctx.lineWidth=1.6;ctx.globalAlpha=.9;ctx.beginPath();
+    for(let r=10;r<=10+L;r+=4){const a=a0-(r-10)*.012;r===10?ctx.moveTo(qx+r*Math.cos(a),qy+r*Math.sin(a)):ctx.lineTo(qx+r*Math.cos(a),qy+r*Math.sin(a))}ctx.stroke()}ctx.globalAlpha=1;
+  ctx.fillStyle=C.bg;ctx.beginPath();ctx.arc(qx,qy,SP_BORE+2,0,7);ctx.fill();ctx.fillStyle=C.fib;ctx.beginPath();ctx.arc(qx,qy,SP_BORE-1,0,7);ctx.fill();
+  label(cvT.sun,qx,qy+R+48,{s:17,c:C.wrap,w:700,f:SANS});label(cvT.xsecSub,qx,qy+R+72,{s:13,c:C.air});
 }
 
-/* ---------- Szene 4: Garnstruktur ---------- */
+/* ---------- Szene 4: Spinnabstand (Nutzerangabe 2026-11-12) ----------
+   S = Klemmlinie letzte Lieferwalze bis Spindelspitze [mm]. Naturfasern: Anteile parallel / Umwindefasern /
+   Abfall nach der Grafik des Nutzers (Kurven digitalisiert, SD_S = S in mm). Synthese-Stapelfasern (alle gleich
+   lang): Richtwert S = 0.55 x Faserlaenge; die Animation nutzt dort qualitativ dieselbe Kurve, auf den
+   Richtwert skaliert (keine Prozentzahlen angezeigt). */
+const SD_S=[0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,50,55,60];
+const SD_WASTE=[0,1,2,3,5,7,9.5,12,15,19,24,29,34.5,40,46,52,58,64,72,83,93,97,98.3,98.8,99.2,99.6,100];
+const SD_UPPER=[100,94,88,82,77,72.5,68.5,65,62,60.3,59.5,59.7,60.3,62,63.5,65,67,70.5,76,85,94,97.6,98.6,98.9,99.3,99.6,100];
+const SD_RULE=.55;
+let SD=20,SD_MODE='nat',SD_LEN=38;
+const sdAt=(arr,x)=>{x=Math.max(0,Math.min(60,x));for(let i=1;i<SD_S.length;i++)if(x<=SD_S[i]){const q=(x-SD_S[i-1])/(SD_S[i]-SD_S[i-1]);return lerp(arr[i-1],arr[i],q)}return arr[arr.length-1]};
+function shares(x){const w=sdAt(SD_WASTE,x),u=sdAt(SD_UPPER,x);return{par:Math.max(0,u-w),wrap:100-u,waste:w}}
+const effS=()=>SD_MODE==='nat'?SD:SD*20/(SD_RULE*SD_LEN);   // synthetic: rule value maps to the chart minimum
+const n1=v=>lang==='de'||lang==='es'?String(v).replace('.',','):String(v);
+function spacingUI(){const on=scene===3;['sdwrap','modewrap'].forEach(id=>$(id).hidden=!on);$('lenwrap').hidden=!on||SD_MODE!=='syn';
+  $('mNat').setAttribute('aria-pressed',SD_MODE==='nat');$('mSyn').setAttribute('aria-pressed',SD_MODE==='syn');$('sd').value=SD;$('sdout').value=SD+' mm';$('sdout').textContent=SD+' mm'}
+function spacingLang(){const c=T().cv;$('sdlab').textContent=c.sLabel;$('lenlab').textContent=c.lenLabel;$('mNat').textContent=c.modeNat;$('mSyn').textContent=c.modeSyn;spacingUI()}
+$('sd').oninput=e=>{SD=+e.target.value;spacingUI()};
+$('mNat').onclick=()=>{SD_MODE='nat';SD=20;FIB.length=0;spacingUI()};
+$('mSyn').onclick=()=>{SD_MODE='syn';SD=Math.round(SD_RULE*SD_LEN);FIB.length=0;spacingUI()};
+$('flen').onchange=e=>{SD_LEN=+e.target.value;SD=Math.round(SD_RULE*SD_LEN);spacingUI()};
+const SD_NX=200,SD_K=8.4,SD_CY=300;
+const sdTip=()=>SD_NX+16+SD*SD_K;
+function stepS(){if(rnd()<.55){const sh=shares(effS()),r=rnd()*100;
+    FIB.push({x:SD_NX,lane:(rnd()-.5)*2,len:SD_MODE==='nat'?40+rnd()*150:SD_LEN*SD_K*.9,ph:rnd()*6.28,
+      k:r<sh.waste?'waste':r<sh.waste+sh.wrap?'wrap':'par',rel:.2+rnd()*.75})}
+  const dt=1/60,tip=sdTip();for(let i=FIB.length-1;i>=0;i--){const f=FIB[i];f.x+=150*dt;
+    if(f.x-f.len>1000||(f.k==='waste'&&f.x>SD_NX+(tip-SD_NX)*f.rel+170))FIB.splice(i,1)}}
+function sceneS(){const c=T().cv,cy=SD_CY,tip=sdTip(),sh=shares(effS());
+  // fibres
+  if(FIB.length===0)for(let n=0;n<500;n++)stepS();if(auto)stepS();
+  FIB.forEach(f=>{const y0=cy+f.lane*7;
+    if(f.k==='waste'){/* lost its hold: blown out sideways, tumbling and fading */
+      const xr=SD_NX+(tip-SD_NX)*f.rel,off=Math.max(0,f.x-xr),dir=f.lane>=0?1:-1,al=Math.max(0,1-off/170);
+      const xa=Math.max(SD_NX,Math.min(f.x,xr)-f.len*.7)+off*.3,xb=Math.min(f.x,xr)+off*.3,ya=y0+dir*off*1.25,yb=y0+dir*off*.85+(off>0?dir*off*.2*Math.sin(off*.05+f.ph):0);
+      ctx.strokeStyle=`rgba(140,148,146,${al*.85})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(xa,ya);ctx.quadraticCurveTo((xa+xb)/2,(ya+yb)/2+dir*8,xb,yb);ctx.stroke();return}
+    if(f.k==='wrap'&&f.x>tip){const free=Math.min(f.len,f.x-tip),L=Math.min(free,90),a=f.ph+t*6;
+      ctx.strokeStyle=C.wrap;ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(tip,cy);
+      for(let d=6;d<=L;d+=6){const r=6+d*.75;ctx.lineTo(tip+d*.35,cy+r*Math.cos(a+d*.01))}ctx.stroke();
+      if(f.x-f.len<tip){ctx.beginPath();ctx.moveTo(Math.max(SD_NX,f.x-f.len),y0);ctx.lineTo(tip,cy);ctx.stroke()}return}
+    if(f.x-f.len>=tip)return;   // already completely inside the spindle
+    ctx.strokeStyle=C.fib;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(Math.max(SD_NX,f.x-f.len),y0);ctx.lineTo(Math.min(f.x,tip),lerp(y0,cy,smooth(SD_NX,tip,Math.min(f.x,tip))));ctx.stroke()});
+  // delivery rollers (nip) and spindle
+  roller(SD_NX,cy-38,36,3);roller(SD_NX,cy+38,36,-3);
+  const g=ctx.createLinearGradient(0,cy-40,0,cy+40);g.addColorStop(0,'#7f8a8d');g.addColorStop(.5,'#c3cacb');g.addColorStop(1,'#7f8a8d');
+  ctx.fillStyle=g;ctx.strokeStyle='#5f696b';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(tip,cy-9);ctx.lineTo(tip+56,cy-40);ctx.lineTo(820,cy-40);ctx.lineTo(820,cy+40);ctx.lineTo(tip+56,cy+40);ctx.lineTo(tip,cy+9);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.bg;ctx.fillRect(tip,cy-5,820-tip,10);
+  for(let k=0;k<3;k++){ctx.strokeStyle=`rgba(${YRGB},.85)`;ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(tip+2,cy+(k-1)*2);ctx.lineTo(850,cy+(k-1)*2);ctx.stroke()}
+  // air aimed at the tip
+  [[-1],[1]].forEach(([d])=>{const ax=tip-70,ay=cy+d*130;ctx.strokeStyle=`rgba(${ARGB},.5)`;ctx.lineWidth=1.5;ctx.setLineDash([6,6]);ctx.lineDashOffset=-t*50;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(tip,cy);ctx.stroke();ctx.setLineDash([]);
+    for(let k=0;k<5;k++){const u=(t*1.1+k/5)%1;ctx.fillStyle=C.air;ctx.beginPath();ctx.arc(lerp(ax,tip,u),lerp(ay,cy,u),3,0,7);ctx.fill()}});
+  ctx.strokeStyle=C.air;ctx.lineWidth=2;ctx.beginPath();ctx.arc(tip,cy,8,0,7);ctx.stroke();
+  // dimension S
+  const dy=cy+170;ctx.strokeStyle=C.fg;ctx.fillStyle=C.fg;ctx.lineWidth=1.5;
+  [[SD_NX,1],[tip,-1]].forEach(([x])=>{ctx.beginPath();ctx.moveTo(x,cy+30);ctx.lineTo(x,dy+10);ctx.stroke()});
+  ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(SD_NX,cy);ctx.lineTo(SD_NX,cy+30);ctx.stroke();ctx.setLineDash([]);
+  if(tip-SD_NX>30){ctx.beginPath();ctx.moveTo(SD_NX,dy);ctx.lineTo(tip,dy);ctx.stroke();
+    [[SD_NX,1],[tip,-1]].forEach(([x,d])=>{ctx.beginPath();ctx.moveTo(x,dy);ctx.lineTo(x+d*12,dy-6);ctx.lineTo(x+d*12,dy+6);ctx.fill()})}
+  if(tip-SD_NX>=190){label(`S = ${SD} mm`,(SD_NX+tip)/2,dy-20,{s:22,c:C.fg,w:700});label(c.dist,(SD_NX+tip)/2,dy+28,{s:15})}
+  else{label(`S = ${SD} mm`,tip+18,dy-2,{a:'left',s:22,c:C.fg,w:700});label(c.dist,tip+18,dy+26,{a:'left',s:15})}   // small S: next to the arrow
+  label(c.nip,70,cy-104,{a:'left',s:14,c:C.fg});label(c.tip,tip-70,cy-152,{s:14,c:C.air});
+  // legend
+  [[C.fib,c.par],[C.wrap,c.wrapA],['#969E9C',c.waste]].forEach(([col,txt],i)=>{ctx.fillStyle=col;ctx.fillRect(80,600+i*34,26,6);label(txt,116,603+i*34,{a:'left',s:16,c:C.fg,f:SANS})});
+  // right panel: natural = chart of the shares, synthetic = rule of thumb
+  const X0=960,X1=1520,Y0=150,Y1=520,px=v=>X0+(X1-X0)*v/60,py=v=>Y1-(Y1-Y0)*v/100;
+  if(SD_MODE==='nat'){
+    label(c.chartT,X0,112,{a:'left',s:17,c:C.fg,f:SANS,w:600});
+    const band=(lo,hi,col)=>{ctx.fillStyle=col;ctx.beginPath();SD_S.forEach((x,i)=>{const v=hi(i);i?ctx.lineTo(px(x),py(v)):ctx.moveTo(px(x),py(v))});
+      for(let i=SD_S.length-1;i>=0;i--)ctx.lineTo(px(SD_S[i]),py(lo(i)));ctx.closePath();ctx.fill()};
+    band(()=>0,i=>SD_WASTE[i],'#B5BCBA');band(i=>SD_WASTE[i],i=>SD_UPPER[i],`rgba(${YRGB},.45)`);band(i=>SD_UPPER[i],()=>100,`rgba(${FRGB},.35)`);
+    ctx.strokeStyle=C.muted;ctx.lineWidth=1.5;ctx.strokeRect(X0,Y0,X1-X0,Y1-Y0);
+    for(let v=0;v<=100;v+=20){label(String(v),X0-10,py(v),{a:'right',s:13});}
+    for(let x=0;x<=60;x+=10){label(String(x),px(x),Y1+18,{s:13})}
+    label(c.axX,(X0+X1)/2,Y1+46,{s:14,c:C.fg});
+    ctx.save();ctx.translate(X0-52,(Y0+Y1)/2);ctx.rotate(-Math.PI/2);label(c.axY,0,0,{s:14,c:C.fg});ctx.restore();
+    label(c.wrapA,px(30),py(88),{s:14,c:C.fg,f:SANS,w:600});label(c.par,px(7),py(45),{s:14,c:C.fg,f:SANS,w:600});label(c.waste,px(47),py(40),{s:14,c:C.fg,f:SANS,w:600});
+    const xs=px(SD);ctx.strokeStyle='#D23B3B';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(xs,Y0);ctx.lineTo(xs,Y1);ctx.stroke();
+    const vals=[[c.par,sh.par,C.fib],[c.wrapA,sh.wrap,C.wrap],[c.waste,sh.waste,'#7B8381']];
+    vals.forEach(([n,v,col],i)=>{const x=X0+i*190;label(Math.round(v)+' %',x,632,{a:'left',s:34,f:DISP,w:700,c:col});label(n,x,668,{a:'left',s:14,f:SANS})});
+    label(c.natNote,X0,716,{a:'left',s:15,f:SANS,c:C.fg});label(c.chartSrc,X0,742,{a:'left',s:13,f:SANS});
+  }else{
+    const rec=SD_RULE*SD_LEN,r=SD/SD_LEN;
+    label(c.rule,X0,150,{a:'left',s:26,f:DISP,w:700,c:C.fg});
+    label(fmt(c.ruleNow,{L:SD_LEN,S:n1(rec.toFixed(1))}),X0,196,{a:'left',s:20,f:SANS,c:C.wrap,w:600});
+    // ratio scale 0 .. 1.2 with the rule band
+    const RX0=X0,RX1=X1,ry=300,rx=v=>RX0+(RX1-RX0)*v/1.2;
+    ctx.fillStyle='#EEF1EF';ctx.fillRect(RX0,ry-14,RX1-RX0,28);ctx.fillStyle=`rgba(${FRGB},.35)`;ctx.fillRect(rx(.5),ry-14,rx(.6)-rx(.5),28);
+    for(let v=0;v<=1.2001;v+=.2){label(n1(v.toFixed(1)),rx(v),ry+34,{s:13})}
+    ctx.strokeStyle=C.wrap;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(rx(SD_RULE),ry-22);ctx.lineTo(rx(SD_RULE),ry+22);ctx.stroke();
+    const mx=rx(Math.min(1.2,r));ctx.fillStyle='#D23B3B';ctx.beginPath();ctx.moveTo(mx,ry-16);ctx.lineTo(mx-9,ry-32);ctx.lineTo(mx+9,ry-32);ctx.fill();
+    label(fmt(c.ratio,{r:n1(r.toFixed(2))}),X0,ry-60,{a:'left',s:16,c:C.fg});
+    const verdict=r<SD_RULE-.05?c.low:r>SD_RULE+.05?c.high:c.ok;
+    ctx.font=`500 18px ${SANS}`;wrap(verdict,X1-X0).slice(0,3).forEach((ln,k)=>label(ln,X0,400+k*28,{a:'left',s:18,f:SANS,c:C.fg}));
+    ctx.font=`400 15px ${SANS}`;wrap(c.synNote,X1-X0).slice(0,3).forEach((ln,k)=>label(ln,X0,520+k*24,{a:'left',s:15,f:SANS}));
+  }
+}
+
+/* ---------- Szene 5: Garnstruktur ---------- */
 function yarnModel(x0,x1,cy,type,sh){
   if(type===0){for(let i=0;i<12;i++){ctx.strokeStyle=C.fib;ctx.lineWidth=1.5;ctx.globalAlpha=.85;ctx.beginPath();let pv=null;
       for(let x=x0;x<=x1;x+=3){const th=i*.52+(x+sh)*.09,y=cy+13*Math.cos(th);const fr=Math.sin(th)>=0;if(fr){if(pv===false){ctx.stroke();ctx.beginPath();ctx.moveTo(x,y)}else ctx.lineTo(x,y)}pv=fr}ctx.stroke()}
@@ -250,7 +391,7 @@ function scene4(){const cvT=T().cv;
   cvT.table.forEach((r,i)=>{const y=170+i*58;label(r[0],tx,y,{a:'left',s:15,f:SANS});label(r[1],tx+200,y,{a:'left',s:i?17:24,f:i?SANS:DISP,w:600,c:i?C.fg:C.wrap});ctx.strokeStyle=C.line;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(tx,y+28);ctx.lineTo(1560,y+28);ctx.stroke()});
 }
 
-/* ---------- Szene 5: Leistung ---------- */
+/* ---------- Szene 6: Leistung ---------- */
 function scene5(){const cvT=T().cv;
   label(cvT.prodTitle,80,110,{a:'left',s:22,c:C.fg,f:SANS,w:600});
   const bars=[[1,C.muted],[20/3,C.yarn],[20,C.wrap]];const k=smooth(0,2.5,sceneT);
@@ -266,7 +407,7 @@ applyLang();
 if(params.get('scene'))go((+params.get('scene')||1)-1);
 if(params.get('paused')==='1'){auto=false;setPlay()}
 if(params.get('station')){selSt=(+params.get('station')||1)-1;showStation()}
-const DRAWFN=[scene1,scene2,scene3,scene4,scene5];let last=performance.now();
+const DRAWFN=[scene1,scene2,scene3,sceneS,scene4,scene5];let last=performance.now();
 function frame(now){const real=Math.min(.05,(now-last)/1000)*(reduce?.5:1),dt=auto?real:0;last=now;t+=dt;sceneT+=real;fit();
   try{const s=cv.width/W;ctx.setTransform(s,0,0,s,0,0);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
     ctx.strokeStyle='rgba(90,100,96,.06)';ctx.lineWidth=1;for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}

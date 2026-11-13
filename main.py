@@ -615,6 +615,9 @@ class MainWindow(QMainWindow):
         # Yarn Count Converter (ui/screen_yarn_count.py) - erst beim ersten Oeffnen gebaut
         self.yarn_count_screen = None
         app_meta.open_yarn_count = self._go_yarn_count
+        # Process Playground (ui/screen_process_playground.py) - erst beim ersten Oeffnen gebaut
+        self.process_playground_screen = None
+        app_meta.open_process_playground = self._go_process_playground
         # Onboarding (ui/screen_onboarding.py) - erst beim ersten Oeffnen gebaut
         self.onboarding_screen = None
         app_meta.open_onboarding = self._go_onboarding
@@ -1802,6 +1805,7 @@ class MainWindow(QMainWindow):
             "manage_yarn": self._go_add_yarn,
             "manage_jets": self._go_add_jet,
             "yarn_stock": self._go_yarn_stock,
+            "process_playground": self._go_process_playground,
         }
         fn = targets.get(screen)
         if callable(fn):
@@ -2518,6 +2522,23 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(self.yarn_count_screen)
         self.setWindowTitle("TrippleT – Yarn Count Converter")
         self.stack.setCurrentWidget(self.yarn_count_screen)
+
+    def _go_process_playground(self, trial_id=None) -> None:
+        """Process Playground (ui/screen_process_playground.py): DTY - was passiert
+        mit den Laborwerten bei mehr Luftdruck/Overfeed/Speed. trial_id (Rechtsklick
+        Versuchsnummer in Show Experiment) = Garn/Duese und Startwerte dieses Versuchs."""
+        if self.process_playground_screen is None:
+            try:
+                from ui.screen_process_playground import ProcessPlaygroundScreen
+            except Exception as e:
+                show_error(self, "Process Playground", "The Process Playground could not be opened.", e)
+                return
+            self.process_playground_screen = ProcessPlaygroundScreen(sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.process_playground_screen)
+        self.setWindowTitle("TrippleT – Process Playground")
+        self.stack.setCurrentWidget(self.process_playground_screen)
+        if trial_id is not None:
+            self.process_playground_screen.open_trial(trial_id)
 
     def _go_onboarding(self) -> None:
         """Onboarding (ui/screen_onboarding.py): animierte Einfuehrungen, Vollbild."""

@@ -198,7 +198,7 @@ const NS=6;
 const fmt=(s,o)=>s.replace(/\{(\w+)\}/g,(_,k)=>o[k]);
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const TX=(x,y,t,c='var(--fg)',a='middle',w=600,s=12)=>`<text x="${x}" y="${y}" font-size="${s}" text-anchor="${a}" fill="${c}" font-weight="${w}">${esc(t)}</text>`;
-const LINK_KEYS=['dty_intermingling'];
+const LINK_KEYS=['dty_intermingling','dty_friction_unit'];
 // yarn-path labels are drawn 2 px larger (that SVG is scaled down most in the embedded pane)
 const TP=(x,y,t,c='var(--fg)',a='middle',w=600,s=12)=>TX(x,y,t,c,a,w,s+2);
 
@@ -339,12 +339,18 @@ function drawPath(){
   s=`<defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8z" fill="var(--twist)"/></marker><marker id="ar2" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto"><path d="M8 0 L0 4 L8 8z" fill="var(--twist)"/></marker></defs>`+s;
   const svg=$('pathsvg');svg.innerHTML=s;
   svg.querySelectorAll('.node').forEach(n=>{n.classList.toggle('sel',n.dataset.id===sel);
-    n.onclick=()=>{sel=n.dataset.id;drawPath();showDetail()}});
+    n.onclick=()=>{sel=n.dataset.id;drawPath();showDetail()};
+    // double-click on the friction discs opens the friction unit page (dty_friction_unit)
+    if(n.dataset.id==='tw')n.ondblclick=()=>{if(st.tw==='disc')openModule(LINK_KEYS[1])}});
 }
 function showDetail(){
   const t=T(),c=t.comp[sel];if(!c)return;
   $('detail').innerHTML=`<span class="lbl">${esc(t.ui.component)}</span><h3>${esc(c.t)}</h3>${c.tags.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}<p>${esc(c.p)}</p>`+
-    (c.l.length?`<ul>${c.l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'')+`<p class="note">${esc(t.ui.tip)}</p>`;
+    (c.l.length?`<ul>${c.l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'')+
+    // friction discs: link to the detail page of the friction unit (dty_friction_unit)
+    (sel==='tw'&&st.tw==='disc'?`<button type="button" class="lk" id="lkfric"><b>${esc(t.ui.linkFric)}</b><span>${esc(t.ui.linkFricHint)}</span></button>`:'')+
+    `<p class="note">${esc(t.ui.tip)}</p>`;
+  if($('lkfric'))$('lkfric').onclick=()=>openModule(LINK_KEYS[1]);
 }
 
 // ── scene 1: variant tree

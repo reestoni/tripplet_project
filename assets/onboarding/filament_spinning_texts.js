@@ -3,7 +3,7 @@ window.TEXTS = {
  "ui": {"eyebrow": "Knowledge Base · Filamentgarnspinnerei", "h1": "Wie aus Granulat POY und FDY werden",
   "lead": "Im Schmelzspinnen wird Polyester aufgeschmolzen, durch feine Düsenlöcher gepresst, abgekühlt und aufgewickelt. Wie schnell und mit welchen Galetten abgezogen wird, entscheidet, ob ein POY oder ein FDY entsteht. Sechs kurze Szenen zeigen den Weg und die Rolle der Heberlein-Düsen.",
   "speed": "Abzugsgeschwindigkeit", "dec": ",", "pause": "⏸ Pause", "play": "▶ Abspielen", "scenes": "Szenen",
-  "clickHint": "Auf eine Position in der Anlage klicken - sie wird hier erklärt.",
+  "clickHint": "Auf eine Position in der Anlage klicken - sie wird hier erklärt.", "jetsHint": "(Doppelklick: Düsen im Detail)",
   "note": "Schematische Darstellung für Polyester (PET). Zahlenwerte sind typische Bereiche aus einer Herstellerübersicht; Galettengeschwindigkeiten und Verstreckverhältnis sind Beispielwerte. Reale Einstellungen hängen von Titer, Filamentzahl und Anlage ab."},
  "stations": [
   {"n": "Granulat", "d": "Polyester-Granulat (Chips) ist der Rohstoff. Alternativ kommt die Schmelze direkt aus der Polykondensation."},
@@ -58,7 +58,7 @@ window.TEXTS = {
  "ui": {"eyebrow": "Knowledge Base · Filament yarn spinning", "h1": "How chips become POY and FDY",
   "lead": "In melt spinning, polyester is melted, pressed through fine spinneret holes, cooled and wound up. How fast and over which godets it is taken off decides whether POY or FDY is made. Six short scenes show the path and the role of the Heberlein jets.",
   "speed": "Take-up speed", "dec": ".", "pause": "⏸ Pause", "play": "▶ Play", "scenes": "Scenes",
-  "clickHint": "Click a position on the plant - it is explained here.",
+  "clickHint": "Click a position on the plant - it is explained here.", "jetsHint": "(Double-click: jets in detail)",
   "note": "Schematic for polyester (PET). Figures are typical ranges from a manufacturer overview; godet speeds and draw ratio are example values. Real settings depend on count, number of filaments and plant."},
  "stations": [
   {"n": "Chips", "d": "Polyester chips are the raw material. Alternatively the melt comes directly from polycondensation."},
@@ -113,7 +113,7 @@ window.TEXTS = {
  "ui": {"eyebrow": "Knowledge Base · Hilatura de filamento", "h1": "Cómo el granulado se convierte en POY y FDY",
   "lead": "En la hilatura por fusión, el poliéster se funde, se presiona a través de los finos orificios de la hilera, se enfría y se bobina. La velocidad de retirada y los godets utilizados deciden si se obtiene POY o FDY. Seis escenas cortas muestran el recorrido y el papel de las toberas Heberlein.",
   "speed": "Velocidad de bobinado", "dec": ",", "pause": "⏸ Pausa", "play": "▶ Reproducir", "scenes": "Escenas",
-  "clickHint": "Haz clic en una posición de la instalación: aquí se explica.",
+  "clickHint": "Haz clic en una posición de la instalación: aquí se explica.", "jetsHint": "(Doble clic: toberas en detalle)",
   "note": "Representación esquemática para poliéster (PET). Las cifras son rangos típicos de una visión general de fabricante; las velocidades de los godets y la relación de estirado son valores de ejemplo. Los ajustes reales dependen del título, el número de filamentos y la instalación."},
  "stations": [
   {"n": "Granulado", "d": "El granulado de poliéster (chips) es la materia prima. También puede llegar la masa fundida directamente de la policondensación."},
@@ -168,7 +168,7 @@ window.TEXTS = {
  "ui": {"eyebrow": "知识库 · 长丝纺丝", "h1": "切片是如何变成 POY 和 FDY 的",
   "lead": "熔体纺丝时，涤纶被熔融、通过喷丝板的细孔挤出、冷却并卷绕。卷绕速度以及使用哪些导丝辊，决定了生产的是 POY 还是 FDY。六个短场景介绍工艺路线以及 Heberlein 喷嘴的作用。",
   "speed": "卷绕速度", "dec": ".", "pause": "⏸ 暂停", "play": "▶ 播放", "scenes": "场景",
-  "clickHint": "点击设备上的某个位置，这里会显示说明。",
+  "clickHint": "点击设备上的某个位置，这里会显示说明。", "jetsHint": "（双击：喷嘴详解）",
   "note": "涤纶（PET）示意图。数值为某制造商资料中的典型范围；导丝辊速度和拉伸比为示例值。实际设置取决于纤度、单丝数量和设备。"},
  "stations": [
   {"n": "切片", "d": "涤纶切片是原料。也可以直接使用缩聚工段的熔体（直纺）。"},

@@ -121,7 +121,7 @@ function setPlay(){play.setAttribute('aria-pressed',auto);play.textContent=auto?
 play.onclick=()=>{auto=!auto;setPlay()};
 vin.oninput=()=>{VS=+vin.value;$('vout').textContent=VS+' m/min'};
 function showStation(){const S=T().stations;
-  $('cnow').textContent=scene!==0?'':selSt>=0?`▸ ${S[selSt].n}: ${S[selSt].d}`:`▸ ${T().ui.clickHint}`}
+  $('cnow').textContent=scene!==0?'':selSt>=0?`▸ ${S[selSt].n}: ${S[selSt].d}`+(selSt===JETS_ST?` ${T().ui.jetsHint}`:''):`▸ ${T().ui.clickHint}`}
 function go(i){const n=(i+NSC)%NSC;if(n!==scene){selSt=-1;hoverSt=-1}scene=n;sceneT=0;if(EMBED)document.title='scene:'+scene;
   [...sceneEl.children].forEach((b,j)=>b.setAttribute('aria-pressed',j===scene));
   const s=T().scenes[scene];$('ctitle').textContent=`${scene+1}  ·  ${s.title}`;$('ctext').textContent=s.text;
@@ -141,6 +141,10 @@ function hitStation(ev){const r=cv.getBoundingClientRect(),x=(ev.clientX-r.left)
 cv.addEventListener('mousemove',ev=>{if(scene!==0){cv.style.cursor='';return}hoverSt=hitStation(ev);cv.style.cursor=hoverSt>=0?'pointer':''});
 cv.addEventListener('mouseleave',()=>{hoverSt=-1;cv.style.cursor=''});
 cv.addEventListener('click',ev=>{if(scene!==0)return;const i=hitStation(ev);selSt=(i===selSt)?-1:i;showStation()});
+// double-click on the jets opens the jet basics (Spezialwissen)
+const LINK_KEYS=['filament_jets'],JETS_ST=7;
+cv.addEventListener('dblclick',ev=>{if(scene!==0||hitStation(ev)!==JETS_ST)return;selSt=JETS_ST;showStation();
+  if(EMBED){document.title='open:'+LINK_KEYS[0];return}location.href=LINK_KEYS[0]+'.html?lang='+encodeURIComponent(lang)});
 window.setLang=l=>{if(TEXTS[l]){lang=l;applyLang()}};
 window.goScene=i=>go(i);
 [['de','DE'],['en','EN'],['es','ES'],['zh','中文']].forEach(([l,n])=>{const b=document.createElement('button');b.type='button';b.dataset.l=l;b.textContent=n;b.onclick=()=>setLang(l);$('langs').appendChild(b)});
@@ -181,7 +185,7 @@ const eg=x=>fmt(T().cv.eg,{x});
 /* ---------- Szene 1: Anlage ---------- */
 function scene1(){const S=T().stations,cvT=T().cv;
   const st=selSt,hl=i=>i===st||i===hoverSt;
-  sideBox(st>=0?`${st+1}  ${S[st].n}`:'',st>=0?S[st].d:T().ui.clickHint);
+  sideBox(st>=0?`${st+1}  ${S[st].n}`:'',st>=0?S[st].d+(st===JETS_ST?' '+T().ui.jetsHint:''):T().ui.clickHint);
   // Silo + Trockner
   ctx.fillStyle='#EEF1ED';ctx.strokeStyle=hl(0)?C.hl:C.muted;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(80,150);ctx.lineTo(160,150);ctx.lineTo(160,210);ctx.lineTo(130,240);ctx.lineTo(110,240);ctx.lineTo(80,210);ctx.closePath();ctx.fill();ctx.stroke();
   for(let k=0;k<14;k++){ctx.fillStyle=C.yarn;ctx.beginPath();ctx.arc(92+(k%5)*14,165+Math.floor(k/5)*12,4,0,7);ctx.fill()}

@@ -1274,8 +1274,10 @@ class PivotEditModel(QAbstractTableModel):
     # Reference sample columns (customer originals, see db/trial_reference.py):
     # amber, deliberately independent of the user's accent colour.
     _REF_HDR_BG = QColor("#E8C15A")
-    _REF_EVEN = QColor("#FFF4D6")
-    _REF_ODD = QColor("#FBE8B5")
+    # even = the darker stripe, like accent_tint() vs accent_gridline() of
+    # the regular trial columns (same phase as the neighbouring columns)
+    _REF_EVEN = QColor("#FBE8B5")
+    _REF_ODD = QColor("#FFF4D6")
 
     # Display settings (ui/display_prefs.py, passed in by FrozenFirstColumnTable)
     _CONTRAST_EVEN = QColor("#FFFFFF")
@@ -6055,6 +6057,12 @@ class ShowExperimentScreen(QWidget):
         menu = QMenu(self)
         act_copy = None if is_ref else menu.addAction("Copy trials…")
         act_note = _cell_notes_ui.add_trial_note_action(self, menu, trial_id)
+        act_playground = None
+        if not is_ref and self._process_playground_available():
+            act_playground = menu.addAction(f"Open V{vno} in Process Playground…")
+            act_playground.setToolTip("What happens to the lab values if you change air pressure, overfeed "
+                                      "or speed - starting from this trial")
+            menu.setToolTipsVisible(True)
         menu.addSeparator()
         act_add = menu.addAction("Add reference sample…")
         act_mark = act_rename = act_unmark = None
@@ -6099,6 +6107,21 @@ class ShowExperimentScreen(QWidget):
             self._delete_trials(del_ids)
         elif act_compare is not None and chosen is act_compare:
             self._open_ref_compare(trial_id)
+        elif act_playground is not None and chosen is act_playground:
+            app_meta.open_process_playground(trial_id=trial_id)
+
+    def _process_playground_available(self) -> bool:
+        """Right-click "Open in Process Playground…": DTY series only, the
+        tool allowed for this user, not offline (ui/screen_process_playground.py)."""
+        if not callable(getattr(app_meta, "open_process_playground", None)):
+            return False
+        try:
+            from db.connection import is_offline_mode
+            from db.feature_access import can_use
+            from ui import dty_schema_panel as _dsp
+            return _dsp._profile(self) == "dty" and not is_offline_mode() and can_use("process_playground")
+        except Exception:
+            return False
 
     def _open_ref_compare(self, ref_id: Optional[int] = None) -> None:
         from ui.ref_compare_dialog import open_ref_compare

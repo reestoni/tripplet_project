@@ -45,6 +45,19 @@ RELEASES = [
                  "in. Formulas &amp; definitions can be opened below. Every value has a <b>Copy</b> button, the last "
                  "input is remembered, and it works without a network connection.",
                  "Sidebar → Tools → <b>Yarn Count Converter</b>", "wn_yarn_count.svg"),
+                ("feature", "Process Playground: what happens if I raise the air pressure?",
+                 "New under <b>Tools</b>, for DTY: pick a yarn and a jet, type your start conditions (or take them "
+                 "from a trial) and move <b>air pressure</b>, <b>overfeed</b> or <b>speed</b>. The table tells you what happens to "
+                 "points/m, their CV, the stabilities 0.3 to 1.3 and the tension before and after the jet: "
+                 "<i>more</i>, <i>fewer</i> or <i>about the same</i> - and how sure that is (clearly, probably, "
+                 "tendency), with how many series show the same. It only uses our own trials of exactly this yarn "
+                 "and jet, never goes beyond what we measured and says so when there are too few trials. Click a "
+                 "lab value to see the trials behind the statement in a chart. The other way round: choose a main goal "
+                 "(e.g. stability 1.0 higher) and further goals (e.g. CV keep, tension lower) and click "
+                 "<b>Find settings</b> - you get up to 5 settings near what we really ran, with what they do to every "
+                 "goal. In Show Experiment, right-click a DTY trial number → <i>Open in Process Playground…</i> to "
+                 "start from that trial. F5 / <b>Reload</b> loads the latest trials.",
+                 "Sidebar → Tools → <b>Process Playground</b>", "wn_process_playground.svg"),
                 ("h", "Show Experiment"),
                 ("feature", "DTY: choose the process and see the machine path",
                  "On DTY machines, Machine Data has a new row <b>DTY Process</b>: Standard, Elastane or one of the "
@@ -218,6 +231,26 @@ RELEASES = [
                  "<b>Fabric testing</b> (tensile and tear strength, Martindale, pilling, colour fastness, shrinkage). All of them "
                  "are on the Textile chain start page.",
                  "Sidebar → <b>Knowledge Base</b> → Textile knowledge", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: the friction unit in detail",
+                 "New page <b>Friction unit</b> under DTY → Specialist knowledge: the disc stack as an animation - choose fibre, "
+                 "D/Y, yarn speed, disc combination (e.g. 1-5-1), PU or ceramic and S or Z twist, and see the disc speed and how "
+                 "T2/T1 moves. Plus disc types, which disc for which yarn, disc manufacturers, key figures and other twisters. "
+                 "Double-click the friction unit in <b>DTY intermingling</b> (Machine, position 5) or the friction discs in <b>DTY machines</b> to jump there.",
+                 "Sidebar → <b>Knowledge Base</b> → Our technology → DTY → Specialist knowledge → <b>Friction unit</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: jets in filament spinning",
+                 "New page <b>Jets in filament spinning</b> under Spinning → Specialist knowledge: the spinning line with all jets "
+                 "(click a station), what ends and pitch of a jet pack mean (with sliders), what happens in the yarn channel "
+                 "(intermingling or migration, pressure slider, cross-section and side view as animation), how air consumption "
+                 "follows channel, pressure and ends, and the key terms. Double-click the jets in <b>Filament yarn spinning</b> "
+                 "(Plant, station 8) to jump there.",
+                 "Sidebar → <b>Knowledge Base</b> → Our technology → Spinning → Specialist knowledge → <b>Jets in filament spinning</b>",
+                 "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: spinning sun and spinning distance in air-jet spinning",
+                 "<b>Air-jet spinning</b>, scene <i>Spinning jet</i>, is redrawn as a section like a real jet: the inclined air bores "
+                 "aim exactly at the tip of the hollow spindle, and the free fibre ends spread over the conical tip and circle "
+                 "around it as the <b>spinning sun</b> - in the section and in the view onto the spindle tip. New scene <i>Spinning distance</i>: the distance S from the last delivery roller to the spindle tip, with a slider - for natural fibres a chart shows how S shifts the shares of parallel fibres, wrapper fibres and blown-out waste; for synthetic staple fibres pick the fibre length and see the guide value S ≈ 0.55 × fibre length.",
+                 "Sidebar → <b>Knowledge Base</b> → Our technology → Spinning → <b>Air-jet spinning</b> → Spinning jet / Spinning distance",
+                 "wn_onboarding.svg"),
             ],
             # ═══════════════════════════════ DE ═══════════════════════════════
             "de": [
@@ -231,6 +264,20 @@ RELEASES = [
                  "ausgefüllt. Formeln &amp; Definitionen lassen sich unten aufklappen. Jeder Wert hat einen Knopf "
                  "<b>Copy</b>, die letzte Eingabe wird gemerkt, und es geht auch ohne Netzwerk.",
                  "Sidebar → Tools → <b>Yarn Count Converter</b>", "wn_yarn_count.svg"),
+                ("feature", "Process Playground: was passiert, wenn ich den Luftdruck erhöhe?",
+                 "Neu unter <b>Tools</b>, für DTY: Garn und Düse wählen, deine Startbedingungen eintippen (oder von "
+                 "einem Versuch übernehmen) und <b>Luftdruck</b>, <b>Overfeed</b> oder <b>Speed</b> verschieben. Die "
+                 "Tabelle sagt, was mit Punkten/m, deren CV, den Stabilitäten 0.3 bis 1.3 und der Spannung vor und "
+                 "nach der Düse passiert: <i>mehr</i>, <i>weniger</i> oder <i>etwa gleich</i> - und wie sicher das "
+                 "ist (deutlich, wahrscheinlich, Tendenz), mit wie vielen Serien, die dasselbe zeigen. Verwendet "
+                 "nur unsere eigenen Versuche mit genau diesem Garn und dieser Düse, geht nie über den gemessenen "
+                 "Bereich hinaus und sagt es, wenn es zu wenige Versuche gibt. Klick auf einen Laborwert zeigt die "
+                 "Versuche hinter der Aussage im Diagramm. Umgekehrt: Hauptziel wählen (z.&nbsp;B. Stabilität 1.0 "
+                 "höher) und weitere Ziele (z.&nbsp;B. CV halten, Spannung tiefer), dann <b>Find settings</b> - du "
+                 "bekommst bis zu 5 Einstellungen in der Nähe dessen, was wir wirklich gefahren haben, mit ihrer "
+                 "Wirkung auf jedes Ziel. In Show Experiment Rechtsklick auf eine DTY-Versuchsnummer → <i>Open in "
+                 "Process Playground…</i> startet bei diesem Versuch. F5 / <b>Reload</b> lädt die neuesten Versuche.",
+                 "Sidebar → Tools → <b>Process Playground</b>", "wn_process_playground.svg"),
                 ("h", "Show Experiment"),
                 ("feature", "DTY: Verfahren wählen und den Maschinenweg sehen",
                  "Bei DTY-Maschinen hat Machine Data eine neue Zeile <b>DTY Process</b>: Standard, Elastane oder eine "
@@ -411,6 +458,30 @@ RELEASES = [
                  "<b>Stoffprüfung</b> (Zug- und Weiterreissfestigkeit, Martindale, Pilling, Farbechtheit, Massänderung). Alle sind "
                  "auf der Startseite Textilkette verlinkt.",
                  "Sidebar → <b>Knowledge Base</b> → Textiles Wissen", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: das Friktionsaggregat im Detail",
+                 "Neue Seite <b>Friktionsaggregat</b> unter DTY → Spezialwissen: der Scheibenstapel als Animation - "
+                 "Faserstoff, D/Y, Fadengeschwindigkeit, Scheibenkombination (z.&nbsp;B. 1-5-1), PU oder Keramik und S- oder Z-Drall "
+                 "wählen und Scheibendrehzahl und T2/T1-Verlauf sehen. Dazu Scheibentypen, welche Scheibe für welches Garn, "
+                 "Scheibenhersteller, Kennzahlen und andere Drallgeber. Doppelklick auf das Friktionsaggregat in <b>DTY-Verwirbelung</b> (Maschine, "
+                 "Position 5) oder auf die Friktionsscheiben in <b>DTY-Maschinen</b> springt direkt dorthin.",
+                 "Sidebar → <b>Knowledge Base</b> → Unsere Technologie → DTY → Spezialwissen → <b>Friktionsaggregat</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Düsen in der Filamentspinnerei",
+                 "Neue Seite <b>Düsen in der Filamentspinnerei</b> unter Spinnerei → Spezialwissen: die Spinnlinie mit allen Düsen "
+                 "(Station anklicken), was Fachung und Teilung eines Düsenpakets bedeuten (mit Reglern), was im Fadenkanal passiert "
+                 "(Verwirbelung oder Migration, Regler für den Druck, Querschnitt und Seitenansicht als Animation), wie der "
+                 "Luftverbrauch von Luftkanal, Druck und Fachung abhängt, und die wichtigsten Begriffe. Doppelklick auf die Düsen in "
+                 "der <b>Filamentgarnspinnerei</b> (Anlage, Station 8) springt direkt dorthin.",
+                 "Sidebar → <b>Knowledge Base</b> → Unsere Technologie → Spinnerei → Spezialwissen → <b>Düsen in der Filamentspinnerei</b>",
+                 "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: Spinnsonne und Spinnabstand beim Luftdüsenspinnen",
+                 "<b>Luftdüsenspinnen</b>, Szene <i>Spinndüse</i>, ist neu als Schnitt wie eine echte Düse gezeichnet: Die geneigten "
+                 "Luftbohrungen zielen genau auf die Spitze der Hohlspindel, und die freien Faserenden spreizen sich über die "
+                 "kegelförmige Spitze und kreisen als <b>Spinnsonne</b> um sie - im Schnitt und im Blick auf die Spindelspitze. "
+                 "Neue Szene <i>Spinnabstand</i>: der Abstand S von der letzten Lieferwalze zur Spindelspitze, mit Regler - bei "
+                 "Naturfasern zeigt eine Grafik, wie S die Anteile von parallelen Fasern, Umwindefasern und ausgeblasenem "
+                 "Abfall verschiebt; bei Synthese-Stapelfasern Faserlänge wählen und den Richtwert S ≈ 0,55 × Faserlänge sehen.",
+                 "Sidebar → <b>Knowledge Base</b> → Unsere Technologie → Spinnerei → <b>Luftdüsenspinnen</b> → Spinndüse / Spinnabstand",
+                 "wn_onboarding.svg"),
             ],
             # ═══════════════════════════════ ES ═══════════════════════════════
             "es": [
@@ -424,6 +495,20 @@ RELEASES = [
                  "todo. Fórmulas y definiciones se despliegan abajo. Cada valor tiene un botón <b>Copy</b>, la última "
                  "entrada se recuerda y funciona sin conexión de red.",
                  "Sidebar → Tools → <b>Yarn Count Converter</b>", "wn_yarn_count.svg"),
+                ("feature", "Process Playground: ¿qué pasa si subo la presión de aire?",
+                 "Nuevo en <b>Tools</b>, para DTY: elija un hilo y una tobera, escriba sus condiciones de inicio (o "
+                 "tómelas de un ensayo) y mueva la <b>presión de aire</b>, el <b>overfeed</b> o la <b>velocidad</b>. La tabla "
+                 "dice qué pasa con los puntos/m, su CV, las estabilidades 0.3 a 1.3 y la tensión antes y después "
+                 "de la tobera: <i>más</i>, <i>menos</i> o <i>más o menos igual</i> - y con qué seguridad "
+                 "(claramente, probablemente, tendencia), con cuántas series muestran lo mismo. Solo usa nuestros "
+                 "propios ensayos con exactamente este hilo y esta tobera, nunca va más allá de lo medido y lo dice "
+                 "cuando hay pocos ensayos. Un clic en un valor muestra en un gráfico los ensayos detrás de la "
+                 "afirmación. Al revés: elija un objetivo principal (p.&nbsp;ej. estabilidad 1.0 más alta) y otros "
+                 "objetivos (p.&nbsp;ej. CV mantener, tensión más baja) y pulse <b>Find settings</b> - obtiene hasta 5 "
+                 "ajustes cerca de lo que realmente hicimos, con su efecto en cada objetivo. En Show Experiment, clic "
+                 "derecho en un número de ensayo DTY → <i>Open in Process Playground…</i> parte de ese ensayo. "
+                 "F5 / <b>Reload</b> carga los ensayos más recientes.",
+                 "Sidebar → Tools → <b>Process Playground</b>", "wn_process_playground.svg"),
                 ("h", "Show Experiment"),
                 ("feature", "DTY: elegir el proceso y ver el recorrido en la máquina",
                  "En las máquinas DTY, Machine Data tiene una fila nueva <b>DTY Process</b>: Standard, Elastane o una "
@@ -605,6 +690,31 @@ RELEASES = [
                  "sellado de costuras, soldadura) y <b>Ensayos de tejidos</b> (tracción y desgarro, Martindale, pilling, solidez "
                  "del color, cambio dimensional). Todas están en la página de inicio Cadena textil.",
                  "Sidebar → <b>Knowledge Base</b> → Conocimiento textil", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: el grupo de fricción en detalle",
+                 "Nueva página <b>Grupo de fricción</b> en DTY → Conocimiento especializado: la pila de discos como animación - elige "
+                 "fibra, D/Y, velocidad del hilo, combinación de discos (p.&nbsp;ej. 1-5-1), PU o cerámica y torsión S o Z, y ve la "
+                 "velocidad del disco y cómo cambia T2/T1. Además tipos de disco, qué disco para qué hilo, fabricantes de discos, "
+                 "indicadores y otros torsionadores. Doble clic en el grupo de fricción en <b>Entrelazado DTY</b> (Máquina, posición 5) "
+                 "o en los discos de fricción en <b>Máquinas DTY</b> para ir directamente.",
+                 "Sidebar → <b>Knowledge Base</b> → Nuestra tecnología → DTY → Conocimiento especializado → <b>Grupo de fricción</b>", "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: toberas en la hilatura de filamento",
+                 "Nueva página <b>Toberas en la hilatura de filamento</b> en Hilatura → Conocimiento especializado: la línea de "
+                 "hilatura con todas las toberas (haz clic en una estación), qué significan número de cabos y paso de un paquete de "
+                 "toberas (con reguladores), qué pasa en el canal del hilo (entrelazado o migración, regulador de presión, sección "
+                 "y vista lateral animadas), cómo el consumo de aire depende del canal, la presión y los cabos, y los términos clave. "
+                 "Doble clic en las toberas en <b>Hilatura de filamento</b> (Instalación, estación 8) para ir directamente.",
+                 "Sidebar → <b>Knowledge Base</b> → Nuestra tecnología → Hilatura → Conocimiento especializado → <b>Toberas en la hilatura de filamento</b>",
+                 "wn_onboarding.svg"),
+                ("feature", "Knowledge Base: sol de hilatura y distancia de hilatura por chorro de aire",
+                 "<b>Hilatura por chorro de aire</b>, escena <i>Tobera</i>, se ha redibujado como sección de una tobera real: los "
+                 "orificios de aire inclinados apuntan exactamente a la punta del huso hueco, y los extremos libres de las fibras se "
+                 "abren sobre la punta cónica y giran a su alrededor como <b>sol de hilatura</b>, en la sección y en la vista sobre "
+                 "la punta del huso. Nueva escena <i>Distancia de hilatura</i>: la distancia S del último cilindro de salida a la "
+                 "punta del huso, con regulador - para fibras naturales un gráfico muestra cómo S desplaza las proporciones de "
+                 "fibras paralelas, envolventes y desperdicio; para fibras cortadas sintéticas se elige la longitud y se ve el "
+                 "valor orientativo S ≈ 0,55 × longitud de fibra.",
+                 "Sidebar → <b>Knowledge Base</b> → Nuestra tecnología → Hilatura → <b>Hilatura por chorro de aire</b> → Tobera / Distancia de hilatura",
+                 "wn_onboarding.svg"),
             ],
         },
     },

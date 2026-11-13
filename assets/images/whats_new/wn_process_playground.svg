@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 130" width="300" height="130">
+  <!-- Process Playground - generated, language-neutral (UI labels are English in the app). -->
+  <rect x="0" y="0" width="300" height="130" fill="#ffffff"/>
+  <rect x="1" y="1" width="298" height="128" rx="8" fill="#fafafa" stroke="#cccccc" stroke-width="1"/>
+  <rect x="12" y="12" width="118" height="106" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="20" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">Change</text>
+  <text x="20" y="42" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="start">Air pressure</text>
+  <line x1="20" y1="50" x2="120" y2="50" stroke="#39a650" stroke-width="3"/>
+  <circle cx="104" cy="50" r="4.5" fill="#39a650"/>
+  <text x="20" y="66" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="start">Overfeed</text>
+  <line x1="20" y1="74" x2="120" y2="74" stroke="#cccccc" stroke-width="3"/>
+  <circle cx="62" cy="74" r="4.5" fill="#565656"/>
+  <text x="20" y="90" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="start">Speed</text>
+  <line x1="20" y1="98" x2="120" y2="98" stroke="#cccccc" stroke-width="3"/>
+  <circle cx="50" cy="98" r="4.5" fill="#565656"/>
+  <rect x="140" y="12" width="148" height="106" rx="6" fill="#ffffff" stroke="#cccccc" stroke-width="1"/>
+  <text x="148" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#2b2b2b" text-anchor="start" font-weight="bold">What happens</text>
+  <rect x="146" y="36" width="136" height="14" rx="2" fill="#CFE3F5"/>
+  <text x="150" y="46" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="start">Points/m</text>
+  <text x="278" y="46" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="end" font-weight="bold">clearly more</text>
+  <rect x="146" y="51" width="136" height="14" rx="2" fill="#CFE3F5"/>
+  <text x="150" y="61" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="start">CV</text>
+  <text x="278" y="61" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="end" font-weight="bold">clearly lower</text>
+  <rect x="146" y="66" width="136" height="14" rx="2" fill="#E1EDF8"/>
+  <text x="150" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="start">Stability 1.0</text>
+  <text x="278" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="end">probably higher</text>
+  <rect x="146" y="81" width="136" height="14" rx="2" fill="#E8F3EA"/>
+  <text x="150" y="91" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="start">Tension T2</text>
+  <text x="278" y="91" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="end">about the same</text>
+  <rect x="146" y="96" width="136" height="14" rx="2" fill="#ffffff"/>
+  <text x="150" y="106" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#2b2b2b" text-anchor="start">Stability 0.3</text>
+  <text x="278" y="106" font-family="Segoe UI, Arial, sans-serif" font-size="7" fill="#565656" text-anchor="end">unclear</text>
+</svg>

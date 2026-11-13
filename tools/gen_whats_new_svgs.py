@@ -952,3 +952,25 @@ for i, (k, v) in enumerate((("Total den", "300"), ("Filaments", "96"), ("den/f",
     s.text(164, 70 + i * 12, k, 7, MUTED)
     s.text(280, 70 + i * 12, v, 8, INK, True, "end")
 save(s, "wn_yarn_count.svg")
+
+# ── Tools: Process Playground ───────────────────────────────────────────
+s = new("Process Playground")
+s.rect(12, 12, 118, 106, "#ffffff", LINE, 6)
+s.text(20, 28, "Change", 9, INK, True)
+for i, (lab, kx) in enumerate((("Air pressure", 104), ("Overfeed", 62), ("Speed", 50))):
+    y = 46 + i * 24
+    s.text(20, y - 4, lab, 7, MUTED)
+    s.line(20, y + 4, 120, y + 4, "#39a650" if i == 0 else LINE, 3)
+    s.circle(kx, y + 4, 4.5, "#39a650" if i == 0 else MUTED)
+s.rect(140, 12, 148, 106, "#ffffff", LINE, 6)
+s.text(148, 28, "What happens", 9, INK, True)
+for i, (lab, verdict, bg) in enumerate((("Points/m", "clearly more", "#CFE3F5"),
+                                        ("CV", "clearly lower", "#CFE3F5"),
+                                        ("Stability 1.0", "probably higher", "#E1EDF8"),
+                                        ("Tension T2", "about the same", "#E8F3EA"),
+                                        ("Stability 0.3", "unclear", "#ffffff"))):
+    y = 36 + i * 15
+    s.rect(146, y, 136, 14, bg, None, 2)
+    s.text(150, y + 10, lab, 7, INK)
+    s.text(278, y + 10, verdict, 7, INK if bg != "#ffffff" else MUTED, bg in ("#CFE3F5",), "end")
+save(s, "wn_process_playground.svg")

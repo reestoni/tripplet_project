@@ -103,6 +103,8 @@ open_help_search = None    # callable or None
 open_dashboards = None     # callable or None
 # Yarn Count Converter (Sidebar Tools, ui/screen_yarn_count.py) - von MainWindow gesetzt.
 open_yarn_count = None     # callable or None
+# Process Playground (Sidebar Tools, ui/screen_process_playground.py) - von MainWindow gesetzt.
+open_process_playground = None     # callable or None
 
 # Onboarding (Sidebar "Onboarding" unter Help, ui/screen_onboarding.py) - von MainWindow gesetzt.
 open_onboarding = None     # callable or None

@@ -315,9 +315,17 @@ window.TEXTS = {
     "t": "FDY-Spinnanlagen",
     "d": "Spinnen, Verstrecken, Fixieren und Wickeln in einem Schritt: Varianten, Layouts, Hersteller, Vergleich, Markt."
    },
+   "filament_jets": {
+    "t": "Düsen in der Filamentspinnerei",
+    "d": "Grundkurs: Spinnlinie mit allen Düsen, Fachung und Teilung, was im Fadenkanal passiert, Luftverbrauch, Begriffe."
+   },
    "dty_machines": {
     "t": "DTY-Maschinen",
     "d": "Fadenlauf einer DTY-Position, Varianten, Maschinenprofile, Hersteller und Modelle, Markt."
+   },
+   "dty_friction_unit": {
+    "t": "Friktionsaggregat",
+    "d": "Scheibenstapel als Animation mit D/Y und Drehzahl, PU gegen Keramik, Wahl je Faserstoff, Scheibenhersteller, Kennzahlen und Alternativen."
    },
    "aty_machines": {
     "t": "ATY-Maschinen",
@@ -673,9 +681,17 @@ window.TEXTS = {
     "t": "FDY spinning plants",
     "d": "Spinning, drawing, setting and winding in one step: variants, layouts, manufacturers, comparison, market."
    },
+   "filament_jets": {
+    "t": "Jets in filament spinning",
+    "d": "Basics: spinning line with all jets, ends and pitch, what happens in the yarn channel, air consumption, terms."
+   },
    "dty_machines": {
     "t": "DTY machines",
     "d": "Yarn path of a DTY position, variants, machine profiles, manufacturers and models, market."
+   },
+   "dty_friction_unit": {
+    "t": "Friction unit",
+    "d": "Disc stack animation with D/Y and disc speed, PU vs. ceramic, choice per fibre, disc manufacturers, key figures and alternatives."
    },
    "aty_machines": {
     "t": "ATY machines",
@@ -1031,9 +1047,17 @@ window.TEXTS = {
     "t": "Plantas de hilatura FDY",
     "d": "Hilar, estirar, fijar y bobinar en un paso: variantes, layouts, fabricantes, comparación, mercado."
    },
+   "filament_jets": {
+    "t": "Toberas en la hilatura de filamento",
+    "d": "Curso básico: línea de hilatura con todas las toberas, cabos y paso, qué pasa en el canal del hilo, consumo de aire, términos."
+   },
    "dty_machines": {
     "t": "Máquinas DTY",
     "d": "Recorrido del hilo de una posición DTY, variantes, perfiles de máquina, fabricantes y modelos, mercado."
+   },
+   "dty_friction_unit": {
+    "t": "Grupo de fricción",
+    "d": "Animación de la pila de discos con D/Y y velocidad, PU frente a cerámica, elección según la fibra, fabricantes de discos, indicadores y alternativas."
    },
    "aty_machines": {
     "t": "Máquinas ATY",
@@ -1389,9 +1413,17 @@ window.TEXTS = {
     "t": "FDY 纺丝设备",
     "d": "纺丝、拉伸、定型和卷绕一步完成：类型、布局、制造商、对比、市场。"
    },
+   "filament_jets": {
+    "t": "长丝纺丝中的喷嘴",
+    "d": "基础课程：带全部喷嘴的纺丝线、头数与间距、纱道内的过程、耗气量、术语。"
+   },
    "dty_machines": {
     "t": "DTY 加弹机",
     "d": "DTY 锭位的走纱路线、类型、机器剖面、制造商与型号、市场。"
+   },
+   "dty_friction_unit": {
+    "t": "摩擦假捻器",
+    "d": "摩擦盘叠动画（含 D/Y 与转速）、PU 与陶瓷对比、按纤维选型、摩擦盘制造商、关键参数与替代方案。"
    },
    "aty_machines": {
     "t": "ATY 空气变形机",
