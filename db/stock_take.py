@@ -367,6 +367,141 @@ def close_round(round_id: int) -> None:
     _log("stock_take_round_close", str(round_id))
 
 
+# ── spool corrections during a check (written at once, logged) ───────────
+def move_spool(spool_id: int, new_location: str, old_location: Any) -> None:
+    """Spool found here but registered elsewhere -> moved to ``new_location`` (logged)."""
+    from db.connection import execute
+    from db import yarn_spool_log
+    new = norm_location(new_location)
+    execute("UPDATE tblYarnSpool SET [Location] = ? WHERE [ID] = ?", [new, int(spool_id)])
+    yarn_spool_log.log_spool_changes([{"SpoolID": int(spool_id), "Action": yarn_spool_log.UPDATED,
+                                       "Field": "Location", "Old": old_location, "New": f"{new} (stock take)"}])
+
+
+def restock_spool(spool_id: int, new_location: str, old_location: Any) -> None:
+    """Discarded spool found -> back in stock at ``new_location`` (logged)."""
+    from db.connection import execute
+    from db import yarn_spool_log
+    new = norm_location(new_location)
+    execute("UPDATE tblYarnSpool SET [Status] = 'in stock', [DiscardedDate] = NULL, [Location] = ? WHERE [ID] = ?",
+            [new, int(spool_id)])
+    yarn_spool_log.log_spool_changes([
+        {"SpoolID": int(spool_id), "Action": yarn_spool_log.UPDATED, "Field": "Status",
+         "Old": "discarded", "New": "in stock (stock take)"},
+        {"SpoolID": int(spool_id), "Action": yarn_spool_log.UPDATED, "Field": "Location",
+         "Old": old_location, "New": f"{new} (stock take)"},
+    ])
+
+
+def discard_missing(spool_ids: Sequence[int]) -> int:
+    """Missing spools discarded at Finish (only on an explicit click; logged)."""
+    from db.connection import execute
+    from db import yarn_spool_log
+    today = datetime.date.today().isoformat()
+    n = 0
+    for sid in spool_ids:
+        n += execute("UPDATE tblYarnSpool SET [Status] = 'discarded', [DiscardedDate] = ? WHERE [ID] = ?",
+                     [today, int(sid)]) or 0
+    yarn_spool_log.log_spool_changes(
+        {"SpoolID": int(sid), "Action": yarn_spool_log.DISCARDED, "Field": "Status",
+         "Old": "in stock", "New": "discarded (stock take)"} for sid in spool_ids)
+    return n
+
+
+# ── overview layout + Excel (shared by the desktop dialog and the web app) ─
+def when_text(v) -> str:
+    return v.strftime("%d.%m.%Y %H:%M") if hasattr(v, "strftime") else str(v or "")
+
+
+def tile_columns(locs: List[str]) -> List[Tuple[str, int]]:
+    """Column per location within one level: by slot number (C21 -> 0, C23 -> 2), so the slots of all
+    levels line up even with gaps; locations without a plain slot number follow after the numbered ones."""
+    out, used = [], set()
+    rest_locs = []
+    for loc in locs:
+        _r, _lv, slot = parse_location(loc)
+        if slot.isdigit() and 0 < int(slot) <= 40 and int(slot) - 1 not in used:
+            out.append((loc, int(slot) - 1))
+            used.add(int(slot) - 1)
+        else:
+            rest_locs.append(loc)
+    nxt = max(used) + 1 if used else 0
+    for loc in rest_locs:
+        out.append((loc, nxt))
+        nxt += 1
+    return out
+
+
+def export_excel_bytes(rnd: Dict, locs: List[Dict], items: List[Dict],
+                       spools: Dict[int, Dict], yarn_names: Dict[int, str]) -> bytes:
+    """Three sheets: Summary, Locations, Results (every spool, not only differences)."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    wb = Workbook()
+    bold = Font(bold=True)
+    summary = summarize(locs, items)
+    ws = wb.active
+    ws.title = "Summary"
+    rows = [("Round", rnd["Name"]), ("Started", when_text(rnd.get("StartedAt"))),
+            ("Started by", rnd.get("StartedByName") or ""), ("Closed", when_text(rnd.get("ClosedAt")) or "open"),
+            ("", ""), ("Locations in round", summary["to_check"]), ("Locations checked", summary["checked"]),
+            ("  all fine", summary[ST_OK]), ("  with differences", summary[ST_DEVIATION]),
+            ("Locations not checked", summary[ST_OPEN]), ("Locations left out", summary[ST_EXCLUDED]),
+            ("", "")]
+    rows += [(RESULT_LABELS[c], summary[c]) for c in RESULT_LABELS]
+    rows.append(("Missing, but seen at another location", summary["missing_seen_elsewhere"]))
+    rows.append(("Found, marked by hand (not scanned)", summary["found_by_hand"]))
+    for r in rows:
+        ws.append(list(r))
+    for c in ws["A"]:
+        c.font = bold
+    ws.column_dimensions["A"].width = 44
+    ws.column_dimensions["B"].width = 28
+
+    by_loc: Dict[str, List[Dict]] = {}
+    for it in items:
+        by_loc.setdefault(it["Location"], []).append(it)
+    label = {ST_OPEN: "not checked", ST_OK: "all fine", ST_DEVIATION: "differences", ST_EXCLUDED: "left out"}
+    fills = {ST_OK: "EAF3DE", ST_DEVIATION: "FAEEDA", ST_OPEN: "F2F2F2"}
+    ws2 = wb.create_sheet("Locations")
+    ws2.append(["Location", "Status", "Expected", "Found", "Differences", "Checked by", "Checked at"])
+    for l in locs:
+        its = by_loc.get(l["Location"], [])
+        state = location_status(l, its)
+        ws2.append([l["Location"], label[state],
+                    l.get("Expected") if l.get("CheckedAt") else None, l.get("Found") if l.get("CheckedAt") else None,
+                    sum(1 for i in its if is_deviation(i.get("Result") or "")) if l.get("CheckedAt") else None,
+                    l.get("CheckedByName") or "", when_text(l.get("CheckedAt"))])
+        if state in fills:
+            ws2.cell(ws2.max_row, 2).fill = PatternFill("solid", fgColor=fills[state])
+
+    resolved = resolve_missing(items)
+    ws3 = wb.create_sheet("Results")
+    ws3.append(["Location", "Spool", "Yarn", "Batch", "Weight (kg)", "Result", "Detail", "Checked by", "Checked at"])
+    for n, it in enumerate(items):
+        sid = it.get("SpoolID")
+        s = spools.get(int(sid)) if sid is not None else None
+        detail = it.get("Detail") or ""
+        if n in resolved:
+            detail = (detail + "; " if detail else "") + resolved[n]
+        w = s.get("WeightKg") if s else None
+        ws3.append([it["Location"], sid, yarn_names.get(int(s.get("YarnID") or -1), "") if s else "",
+                    (s.get("Charge") or "") if s else "", float(w) if w is not None else None,
+                    RESULT_LABELS.get(it["Result"], it["Result"]), detail,
+                    it.get("CheckedByName") or "", when_text(it.get("CheckedAt"))])
+    for sheet in (ws2, ws3):
+        for c in sheet[1]:
+            c.font = bold
+        for col in sheet.columns:
+            width = max(len(str(c.value or "")) for c in col)
+            sheet.column_dimensions[col[0].column_letter].width = min(max(10, width + 2), 50)
+        sheet.freeze_panes = "A2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def _log(name: str, detail: str) -> None:
     try:
         from db.usage_log import log_usage_event

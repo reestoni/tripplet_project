@@ -53,8 +53,7 @@ def _is_superuser() -> bool:
         return False
 
 
-def _when(v) -> str:
-    return v.strftime("%d.%m.%Y %H:%M") if hasattr(v, "strftime") else str(v or "")
+_when = st.when_text
 
 
 def _tile_qss(state: str) -> str:
@@ -63,24 +62,7 @@ def _tile_qss(state: str) -> str:
             f"font-size:11px; padding:2px;}} QToolButton:hover{{border:2px {line} {border};}}")
 
 
-def tile_columns(locs: List[str]) -> List[Tuple[str, int]]:
-    """Column per location within one level: by slot number (C21 -> 0,
-    C23 -> 2), so the slots of all levels line up even with gaps; locations
-    without a plain slot number follow after the numbered ones."""
-    out, used = [], set()
-    rest_locs = []
-    for loc in locs:
-        _r, _lv, slot = st.parse_location(loc)
-        if slot.isdigit() and 0 < int(slot) <= 40 and int(slot) - 1 not in used:
-            out.append((loc, int(slot) - 1))
-            used.add(int(slot) - 1)
-        else:
-            rest_locs.append(loc)
-    nxt = max(used) + 1 if used else 0
-    for loc in rest_locs:
-        out.append((loc, nxt))
-        nxt += 1
-    return out
+tile_columns = st.tile_columns   # db/stock_take (shared with the web app)
 
 
 # ── start a round ────────────────────────────────────────────────────────
@@ -668,67 +650,6 @@ class StockTakeRoundDialog(QDialog):
 
 def export_excel(path: str, rnd: Dict, locs: List[Dict], items: List[Dict],
                  spools: Dict[int, Dict], yarn_names: Dict[int, str]) -> None:
-    """Three sheets: Summary, Locations, Results (every spool, not only differences)."""
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill
-    wb = Workbook()
-    bold = Font(bold=True)
-    summary = st.summarize(locs, items)
-    ws = wb.active
-    ws.title = "Summary"
-    rows = [("Round", rnd["Name"]), ("Started", _when(rnd.get("StartedAt"))),
-            ("Started by", rnd.get("StartedByName") or ""), ("Closed", _when(rnd.get("ClosedAt")) or "open"),
-            ("", ""), ("Locations in round", summary["to_check"]), ("Locations checked", summary["checked"]),
-            ("  all fine", summary[st.ST_OK]), ("  with differences", summary[st.ST_DEVIATION]),
-            ("Locations not checked", summary[st.ST_OPEN]), ("Locations left out", summary[st.ST_EXCLUDED]),
-            ("", "")]
-    rows += [(st.RESULT_LABELS[c], summary[c]) for c in st.RESULT_LABELS]
-    rows.append(("Missing, but seen at another location", summary["missing_seen_elsewhere"]))
-    rows.append(("Found, marked by hand (not scanned)", summary["found_by_hand"]))
-    for r in rows:
-        ws.append(list(r))
-    for c in ws["A"]:
-        c.font = bold
-    ws.column_dimensions["A"].width = 44
-    ws.column_dimensions["B"].width = 28
-
-    by_loc: Dict[str, List[Dict]] = {}
-    for it in items:
-        by_loc.setdefault(it["Location"], []).append(it)
-    label = {st.ST_OPEN: "not checked", st.ST_OK: "all fine", st.ST_DEVIATION: "differences",
-             st.ST_EXCLUDED: "left out"}
-    fills = {st.ST_OK: "EAF3DE", st.ST_DEVIATION: "FAEEDA", st.ST_OPEN: "F2F2F2"}
-    ws2 = wb.create_sheet("Locations")
-    ws2.append(["Location", "Status", "Expected", "Found", "Differences", "Checked by", "Checked at"])
-    for l in locs:
-        its = by_loc.get(l["Location"], [])
-        state = st.location_status(l, its)
-        ws2.append([l["Location"], label[state],
-                    l.get("Expected") if l.get("CheckedAt") else None, l.get("Found") if l.get("CheckedAt") else None,
-                    sum(1 for i in its if st.is_deviation(i.get("Result") or "")) if l.get("CheckedAt") else None,
-                    l.get("CheckedByName") or "", _when(l.get("CheckedAt"))])
-        if state in fills:
-            ws2.cell(ws2.max_row, 2).fill = PatternFill("solid", fgColor=fills[state])
-
-    resolved = st.resolve_missing(items)
-    ws3 = wb.create_sheet("Results")
-    ws3.append(["Location", "Spool", "Yarn", "Batch", "Weight (kg)", "Result", "Detail", "Checked by", "Checked at"])
-    for n, it in enumerate(items):
-        sid = it.get("SpoolID")
-        s = spools.get(int(sid)) if sid is not None else None
-        detail = it.get("Detail") or ""
-        if n in resolved:
-            detail = (detail + "; " if detail else "") + resolved[n]
-        w = s.get("WeightKg") if s else None
-        ws3.append([it["Location"], sid, yarn_names.get(int(s.get("YarnID") or -1), "") if s else "",
-                    (s.get("Charge") or "") if s else "", float(w) if w is not None else None,
-                    st.RESULT_LABELS.get(it["Result"], it["Result"]), detail,
-                    it.get("CheckedByName") or "", _when(it.get("CheckedAt"))])
-    for sheet in (ws2, ws3):
-        for c in sheet[1]:
-            c.font = bold
-        for col in sheet.columns:
-            width = max(len(str(c.value or "")) for c in col)
-            sheet.column_dimensions[col[0].column_letter].width = min(max(10, width + 2), 50)
-        sheet.freeze_panes = "A2"
-    wb.save(path)
+    """Three sheets: Summary, Locations, Results - db/stock_take.export_excel_bytes (shared with the web app)."""
+    with open(path, "wb") as fh:
+        fh.write(st.export_excel_bytes(rnd, locs, items, spools, yarn_names))

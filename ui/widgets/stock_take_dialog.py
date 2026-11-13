@@ -324,7 +324,7 @@ class StockTakeDialog(QDialog):
 
     # ── Scannen ──────────────────────────────────────────────────────
     def _on_scan(self) -> None:
-        from ui.screen_yarn_stock import parse_spool_input  # lazy: Zirkelimport vermeiden
+        from db.yarn_stock import parse_spool_input
         raw = self.txt_scan.text()
         self.txt_scan.clear()
         if not raw.strip():
@@ -377,13 +377,10 @@ class StockTakeDialog(QDialog):
             self._set_feedback("warn", f"#{sid} is registered at {old} - left unchanged.")
             return
         try:
-            execute(f"UPDATE {self.SPOOL_TABLE} SET [Location] = ? WHERE [ID] = ?", [new, sid])
+            st.move_spool(sid, new, s.get("Location"))
         except Exception as e:
             show_error(self, "Stock take", f"Spool #{sid} could not be moved.", e)
             return
-        yarn_spool_log.log_spool_changes([{"SpoolID": sid, "Action": yarn_spool_log.UPDATED,
-                                           "Field": "Location", "Old": s.get("Location"),
-                                           "New": f"{new} (stock take)"}])
         s["Location"] = new
         self.changed = True
         here = new == self._prefix
@@ -400,17 +397,10 @@ class StockTakeDialog(QDialog):
             self._set_feedback("warn", f"#{sid} is discarded - left unchanged.")
             return
         try:
-            execute(f"UPDATE {self.SPOOL_TABLE} SET [Status] = 'in stock', [DiscardedDate] = NULL, "
-                    f"[Location] = ? WHERE [ID] = ?", [new, sid])
+            st.restock_spool(sid, new, s.get("Location"))
         except Exception as e:
             show_error(self, "Stock take", f"Spool #{sid} could not be put back in stock.", e)
             return
-        yarn_spool_log.log_spool_changes([
-            {"SpoolID": sid, "Action": yarn_spool_log.UPDATED, "Field": "Status",
-             "Old": "discarded", "New": "in stock (stock take)"},
-            {"SpoolID": sid, "Action": yarn_spool_log.UPDATED, "Field": "Location",
-             "Old": s.get("Location"), "New": f"{new} (stock take)"},
-        ])
         s["Status"], s["Location"] = "in stock", new
         self.changed = True
         self._add_other(sid, s, "discarded", f"Put back in stock at {new}", st.RESTOCKED, f"at {new}")
@@ -474,18 +464,11 @@ class StockTakeDialog(QDialog):
         self.accept()
 
     def _discard(self, ids: List[int]) -> Optional[int]:
-        today = date.today().isoformat()
-        n = 0
         try:
-            for sid in ids:
-                n += execute(f"UPDATE {self.SPOOL_TABLE} SET [Status] = 'discarded', [DiscardedDate] = ? "
-                             f"WHERE [ID] = ?", [today, sid]) or 0
+            n = st.discard_missing(ids)
         except Exception as e:
             show_error(self, "Stock take", "The missing spools could not be discarded.", e)
             return None
-        yarn_spool_log.log_spool_changes(
-            {"SpoolID": sid, "Action": yarn_spool_log.DISCARDED, "Field": "Status",
-             "Old": "in stock", "New": "discarded (stock take)"} for sid in ids)
         self.changed = True
         return n
 
