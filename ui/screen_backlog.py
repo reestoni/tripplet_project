@@ -2959,73 +2959,17 @@ class BacklogScreen(QWidget):
                 QMessageBox.warning(parent, title, msg)
 
         user_id = self._get_effective_user_id()
-
-        if user_id is None:
-            _deny(
-                self,
-                "No permission",
-                "You are not logged in. Please log in first.",
-            )
-            return False
-
         access_level = self._effective_access_level()
-        is_super = access_level >= 4
 
-        # Ausnahme: "To Be Cleaned" (4) -> "Archived" (5) darf von JEDEM Write-User
-        # (AccessLevel >= 2) ausgeführt werden, unabhängig vom Owner.
-        is_tbc_to_archived = (old_status_id == 4 and new_status_id == 5 and access_level >= 2)
-
-        # Statuswechsel-Regel:
-        # - Ausnahme: Wenn ein Item aktuell im Backlog ist (old_status_id == 1), darf auch ein Nicht-Owner den Status ändern.
-        # - Sonst dürfen Statusänderungen nur durch den Owner oder einen Superuser erfolgen.
-        if old_status_id != 1 and not is_super and not is_tbc_to_archived:
+        # Regeln gemeinsam mit der Web-App: db/backlog_moves.py
+        from db import backlog_moves
+        owner_id = None
+        if user_id is not None and old_status_id != 1 and access_level < 4:
             owner_id = self._get_series_backlog_owner_id(series_id)
-            try:
-                is_owner = (owner_id is not None) and (int(owner_id) == int(user_id))
-            except Exception:
-                is_owner = False
-
-            if not is_owner:
-                _deny(
-                    self,
-                    "No permission",
-                    "Only the owner or a superuser may change the status. "
-                    "Exception: Items with status 'Backlog' may be taken in progress by all users.",
-                )
-                return False
-
-
-        # Wechsel nach/von Archived (5) nur für Superuser.
-        # Ausnahme: "To Be Cleaned" -> "Archived" ist für alle Write-User erlaubt.
-        if (old_status_id == 5 or new_status_id == 5) and not is_tbc_to_archived:
-            if not is_super:
-                _deny(
-                    self,
-                    "No permission",
-                    "Only superusers may set or remove the 'Archived' status.",
-                )
-                return False
-
-        # -> To Be Cleaned (4): always superuser-only, regardless of the old status.
-        # Important for retest flags (db/retest_flags.py): a flagged series lands
-        # in "Backlog" (1); the old rule only checked old==3 here and let a direct
-        # jump 1 -> 4 slip through under the "Backlog" exception above - exactly
-        # the checkpoint where open flags get resolved must stay superuser-exclusive.
-        if new_status_id == 4 and old_status_id != 4 and not is_super:
-            _deny(
-                self,
-                "No permission",
-                "Only superusers may move a series to 'To Be Cleaned'.",
-            )
-            return False
-
-        # To Be Cleaned (4) → Backlog/In Progress/Done: nur Superuser
-        if old_status_id == 4 and new_status_id in (1, 2, 3) and not is_super:
-            _deny(
-                self,
-                "No permission",
-                "Only superusers may move a series back from 'To Be Cleaned'.",
-            )
+        reason = backlog_moves.check_move(old_status_id, new_status_id, user_id=user_id,
+                                          access_level=access_level, owner_id=owner_id)
+        if reason:
+            _deny(self, "No permission", backlog_moves.DENY_MESSAGES[reason])
             return False
 
         # Joker-Maschine Regel: von Backlog weg nur mit Nicht-Joker-Maschine
@@ -3042,129 +2986,19 @@ class BacklogScreen(QWidget):
         self._update_backlog_status(
             series_id, new_status_id, old_status_id, user_id, new_machine_id)
 
-        if new_status_id == 4:
-            # "To Be Cleaned" is already superuser-exclusive (see check above) -
-            # this step counts as sign-off on any open retest flags of this series.
-            try:
-                resolve_retest_flags_for_series(series_id, user_id)
-            except Exception:
-                pass
+        backlog_moves.after_move(series_id, new_status_id, user_id)
 
         if reload:
             self.reload_all()
         return True
 
     def _series_has_joker_machine(self, series_id) -> bool:
-        sql = """
-            SELECT
-                s.[ID]           AS [SeriesID],
-                m.[ID]           AS [MachineID],
-                m.[IsJoker]      AS [IsJoker]
-            FROM tblTrialSeries AS s
-            LEFT JOIN tblMaschine AS m
-                ON m.[ID] = s.[MachineID]
-            WHERE s.[ID] = ?;
-        """
-        try:
-            rows = fetch_all(sql, [series_id])
-        except Exception:
-            return False
-        if not rows:
-            return False
-        val = rows[0].get("IsJoker")
-        try:
-            return bool(int(val))
-        except Exception:
-            return bool(val)
+        from db.backlog_moves import series_has_joker_machine   # gemeinsam mit der Web-App
+        return series_has_joker_machine(series_id)
 
     def _update_backlog_status(self, series_id, new_status, old_status, user_id, new_machine_id=None):
-        # Wenn zurück in Backlog und Joker → OriginalJoker wieder setzen
-        if new_status == 1 and old_status != 1:
-            try:
-                rows = fetch_all(
-                    "SELECT [IsJoker], [OriginalJoker] FROM tblTrialSeries WHERE [ID] = ?;",
-                    [series_id],
-                )
-                if rows:
-                    row = rows[0]
-                    val = row.get("IsJoker")
-                    try:
-                        is_joker = bool(int(val))
-                    except Exception:
-                        is_joker = bool(val)
-                    orig = row.get("OriginalJoker")
-                    if is_joker and orig is not None:
-                        new_machine_id = orig
-            except Exception:
-                pass
-
-        set_owner = (old_status == 1 and new_status !=
-                     1 and user_id is not None)
-
-        if set_owner and new_machine_id is not None:
-            sql = """
-                UPDATE tblTrialSeries
-                SET [BacklogStatusID] = ?, [BacklogOwner] = ?, [MachineID] = ?
-                WHERE [ID] = ?;
-            """
-            params = [new_status, user_id, new_machine_id, series_id]
-        elif set_owner:
-            sql = """
-                UPDATE tblTrialSeries
-                SET [BacklogStatusID] = ?, [BacklogOwner] = ?
-                WHERE [ID] = ?;
-            """
-            params = [new_status, user_id, series_id]
-        elif new_machine_id is not None:
-            sql = """
-                UPDATE tblTrialSeries
-                SET [BacklogStatusID] = ?, [MachineID] = ?
-                WHERE [ID] = ?;
-            """
-            params = [new_status, new_machine_id, series_id]
-        else:
-            sql = """
-                UPDATE tblTrialSeries
-                SET [BacklogStatusID] = ?
-                WHERE [ID] = ?;
-            """
-            params = [new_status, series_id]
-
-        execute(sql, params)
-
-        # Timestamp-Fallback beim Erreichen von "Done": tblTrial.Timestamp wird
-        # eigentlich beim Editieren des jeweils letzten Tension-Feldes gestempelt
-        # (siehe screen_show_experiment.py::_save_all(), YarnTensionAfterJet/
-        # W3Tension) - Trials, bei denen das nie passiert ist, bleiben sonst
-        # dauerhaft NULL und fallen aus jeder zeitbasierten Auswertung (Stats
-        # Suite etc.) heraus. Nur NULL-Zeilen heilen, ein bereits gesetzter
-        # (echter) Tension-Timestamp wird nie überschrieben. (2026-08-20,
-        # explizite Nutzeranfrage)
-        if new_status == 3 and old_status != 3:
-            try:
-                execute(
-                    "UPDATE tblTrial SET [Timestamp] = NOW() "
-                    "WHERE [TrialSeriesID] = ? AND [Timestamp] IS NULL;",
-                    [series_id],
-                )
-            except Exception as e:
-                import traceback
-                print(f"[Timestamp-Fallback] Fehler fuer series_id={series_id}: {e}")
-                traceback.print_exc()
-
-        # Notifications erstellen wenn Status → Done (ID 3)
-        if new_status == 3 and old_status != 3:
-            try:
-                from ui.notifications import create_done_notifications
-                n = create_done_notifications(
-                    series_id=series_id,
-                    sender_user_id=user_id,
-                )
-                print(f"[Notification] {n} notification(s) created for series_id={series_id}")
-            except Exception as e:
-                import traceback
-                print(f"[Notification] Fehler: {e}")
-                traceback.print_exc()
+        from db.backlog_moves import update_backlog_status       # gemeinsam mit der Web-App
+        update_backlog_status(series_id, new_status, old_status, user_id, new_machine_id)
 
 
 class MachineSelectDialog(QDialog):
