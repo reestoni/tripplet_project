@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDoubleSpinBox, QFr
                                QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 from ui import dty_whatif as w
+from ui import process_playground_core as ppc
 from ui.pathutil import resource_path
 from ui.widgets import sidebar_nav
 
@@ -57,6 +58,14 @@ _STATUS_BG = {w.MET: QColor("#DCEFE0"), w.VIOLATED: QColor("#F6D5CF"), w.UNKNOWN
 # start ranges for typing (wider than any data - the check says what was measured)
 _START_RANGE = {"pressure": (0.0, 15.0), "of": (-20.0, 40.0), "speed": (0.0, 3000.0)}
 
+_WARN_TEXT = {
+    ppc.WARN_START_OUTSIDE: "The start conditions are outside what we ran with this yarn and jet - see the red notes under 2.",
+    ppc.WARN_START_NEVER: "These start conditions were never run together - the statements combine what we saw when "
+                          "the values were changed separately.",
+    ppc.WARN_NEW_NEVER: "The new settings were never run together - the statement combines what we saw when the "
+                        "values were changed separately.",
+    ppc.WARN_MOVE: "Move a setting to see what happens.",
+}
 # result table columns
 C_LABEL, C_START, C_CHANGE, C_STMT, C_BASED, C_GOAL = range(6)
 
@@ -496,17 +505,10 @@ class ProcessPlaygroundScreen(QWidget):
         self.cb_trial.blockSignals(True)
         self.cb_trial.clear()
         self.cb_trial.addItem("Take from a trial…", None)
-        best, best_n = None, -1
-        for i, s in enumerate(self._settings):
-            parts = [("OF " if p == "of" else "") + f"{_fmt(s[p], w.PARAMS[p][4]) or '-'} {w.PARAMS[p][2]}"
-                     for p in w.PARAMS]
-            nos = ", ".join(f"V{n}" for n in sorted(x for x in s["trials"] if x is not None))
-            n_tr = len(s["trials"])
-            self.cb_trial.addItem(" · ".join(parts) + f"  ({n_tr} trial{'s' if n_tr != 1 else ''})  -  "
-                                  f"{s['series_name']}", i)
-            self.cb_trial.setItemData(i + 1, f"{s['series_name']}" + chr(10) + f"Trials {nos}", Qt.ToolTipRole)
-            if n_tr > best_n and all(s[p] is not None for p in w.PARAMS):
-                best, best_n = i, n_tr
+        opts, best = ppc.settings_options(self._combo)      # ui/process_playground_core.py
+        for i, o in enumerate(opts):
+            self.cb_trial.addItem(o["label"], i)
+            self.cb_trial.setItemData(i + 1, o["tooltip"], Qt.ToolTipRole)
         self.cb_trial.setCurrentIndex(0)
         self.cb_trial.blockSignals(False)
         self._set_enabled(True)
@@ -515,15 +517,13 @@ class ProcessPlaygroundScreen(QWidget):
             self._set_start({p: self._settings[best][p] for p in w.PARAMS})
 
     def _setup_sliders(self) -> None:
-        rows = self._combo.rows
         self._filling = True
-        for p, (label, _step, unit, sstep, dec) in w.PARAMS.items():
-            vals = [r[p] for r in rows if r.get(p) is not None]
-            lo, hi = (min(vals), max(vals)) if vals else (0.0, 0.0)
+        for p, r in ppc.slider_ranges(self._combo).items():
+            lo, hi, sstep, dec, unit = r["lo"], r["hi"], r["step"], r["dec"], r["unit"]
             sp, sl = self._spins[p], self._sliders[p]
             sp.setRange(lo, hi)
             sl.setRange(0, max(1, int(round((hi - lo) / sstep))))
-            on = p in self._combo.varied
+            on = r["varied"]
             sp.setEnabled(on)
             sl.setEnabled(on)
             self._why_lbls[p].setText(f"measured {_fmt(lo, dec)} to {_fmt(hi, dec)} {unit}" if on else
@@ -594,16 +594,8 @@ class ProcessPlaygroundScreen(QWidget):
     def _new(self) -> Dict[str, float]:
         """Slider values; a parameter whose slider never moved away from the
         clamped start keeps the typed start value."""
-        new = dict(self._start)
-        for p in w.PARAMS:
-            sp = self._spins[p]
-            if not sp.isEnabled():
-                continue
-            v = round(sp.value(), 6)
-            clamped = min(max(self._start[p], sp.minimum()), sp.maximum())
-            if abs(v - clamped) > 1e-9:
-                new[p] = v
-        return new
+        return ppc.new_settings(self._combo, self._start,                # ui/process_playground_core.py
+                                {p: self._spins[p].value() for p in w.PARAMS})
 
     # ── results ───────────────────────────────────────────────────────
     def _recompute(self) -> None:
@@ -611,21 +603,9 @@ class ProcessPlaygroundScreen(QWidget):
             return
         new = self._new()
         changed = [p for p in w.PARAMS if abs(new[p] - self._start[p]) > 1e-9]
-        rows = self._combo.rows
-        self._changes = {t: w.change(rows, t, self._ds.margins[t], self._start, new, self._fits) for t in w.TARGETS}
-        warn = []
-        if any(not ok for ok, _t in w.start_notes(rows, self._start).values()):
-            warn.append("The start conditions are outside what we ran with this yarn and jet - "
-                        "see the red notes under 2.")
-        elif w.never_run(rows, self._start):
-            warn.append("These start conditions were never run together - the statements combine what we "
-                        "saw when the values were changed separately.")
-        if changed and w.never_run(rows, new):
-            warn.append("The new settings were never run together - the statement combines what we saw "
-                        "when the values were changed separately.")
-        if not changed and not warn:
-            warn.append("Move a setting to see what happens.")
-        self.lbl_warn.setText("  ".join(warn))
+        ev = ppc.evaluate(self._ds, self._combo, self._start, new, self._fits)     # ui/process_playground_core.py
+        self._changes = ev["changes"]
+        self.lbl_warn.setText("  ".join(_WARN_TEXT[k] for k in ev["warnings"]))
         if changed and self._logged_key != self._combo.key:
             self._log("change")
         self._fill_results(changed)
@@ -642,35 +622,10 @@ class ProcessPlaygroundScreen(QWidget):
         except Exception:
             pass
 
-    @staticmethod
-    def _based_on(ch: w.Change) -> str:
-        based = []
-        if ch.verdict in (w.CLEAR, w.PROBABLE, w.TENDENCY, w.SAME, w.NO_CLEAR):
-            for p, (agree, n) in ch.series.items():
-                if n:
-                    based.append(f"{w.PARAMS[p][0]}: {agree} of {n} series same direction"
-                                 if ch.verdict in w.SIGNIFICANT else f"{w.PARAMS[p][0]}: {n} series")
-            if ch.one_series:
-                based.append("only 1 series - check it")
-            if ch.curved:
-                based.append("not linear - depends on the start")
-        elif ch.reason:
-            based.append(ch.reason)
-        return ";  ".join(based)
-
-    @staticmethod
-    def _statement(ch: w.Change) -> str:
-        if ch.verdict == w.NO_CHANGE:
-            return ""
-        arrow = {1: "↑ ", -1: "↓ "}.get(ch.direction, "≈ " if ch.verdict == w.SAME else "")
-        return arrow + w.verdict_text(ch)
-
-    @staticmethod
-    def _change_txt(ch: w.Change, dec: int) -> str:
-        if ch.delta is None or ch.ci is None or ch.verdict in (w.OUTSIDE, w.NOT_VARIED):
-            return ""
-        lo, hi = ch.ci
-        return f"{ch.delta:+.{dec}f}  ({lo:+.{dec}f} to {hi:+.{dec}f})"
+    # texts: ui/process_playground_core.py (shared with the web version)
+    _based_on = staticmethod(ppc.based_on)
+    _statement = staticmethod(ppc.statement)
+    _change_txt = staticmethod(ppc.change_text)
 
     def _fill_results(self, changed: List[str]) -> None:
         tbl = self.tbl_res
