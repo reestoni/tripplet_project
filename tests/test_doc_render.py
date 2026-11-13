@@ -66,3 +66,13 @@ def test_db_helpers():
     assert ic.build_full_path({"RelativePath": "a", "StoredFilename": "b.png"}) == os.path.join("a", "b.png")
     assert ic.build_full_path({"_local": True, "FullPath": "c:/x.png"}) == "c:/x.png"
     assert ic.fetch_aty_radar_for_image({"_local": True}) is None
+
+
+def test_canvas_db_helpers():
+    from db import image_compare as ic
+    g = ic.fetch_canvas_series_groups()
+    assert all({"has_images", "has_pdfs", "TrialSeriesID"} <= set(r) for r in g)
+    pdf_series = next((r for r in g if r["has_pdfs"]), None)
+    if pdf_series:
+        rows = ic.fetch_pdfs_for_series(pdf_series["TrialSeriesID"])
+        assert rows and rows[0]["_is_db_pdf"] and ic.build_full_path(rows[0]) == rows[0]["FullPath"]

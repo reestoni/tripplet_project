@@ -90,8 +90,65 @@ def fetch_aty_radar_for_image(meta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def build_full_path(row: Dict[str, Any]) -> str:
     """Full path of an image row (RelativePath + StoredFilename; local files: FullPath)."""
-    if row.get("_local"):
+    if row.get("_local") or row.get("_is_db_pdf"):
         return str(row.get("FullPath") or "")
     rel = str(row.get("RelativePath") or "")
     stored = str(row.get("StoredFilename") or "")
     return os.path.join(rel, stored) if rel else stored
+
+
+# ── Canvas (ui/screen_canvas.py): series with images OR PDFs, and their PDFs ──
+def fetch_canvas_series_groups() -> List[Dict[str, Any]]:
+    """Series with images or PDFs: TrialSeriesID, SeriesName, ExperimentID, has_images, has_pdfs."""
+    from db.connection import get_connection
+    rows: List[Dict[str, Any]] = []
+    try:
+        with get_connection() as cn:
+            cur = cn.cursor()
+            cur.execute("SELECT DISTINCT TrialSeriesID FROM tblTrialSeriesImage")
+            ids_imgs = {r[0] for r in (cur.fetchall() or [])}
+            try:
+                cur.execute("SELECT DISTINCT TrialSeriesID FROM tblTrialSeriesPDF")
+                ids_pdfs = {r[0] for r in (cur.fetchall() or [])}
+            except Exception:
+                ids_pdfs = set()
+            all_ids = ids_imgs | ids_pdfs
+            if not all_ids:
+                return rows
+            placeholders = ",".join("?" * len(all_ids))
+            cur.execute(
+                f"SELECT s.ID AS TrialSeriesID, s.SeriesName, e.[Experiment ID] AS ExperimentID "
+                f"FROM tblTrialSeries s LEFT JOIN tblExperimente e ON e.ID = s.ExperimentID "
+                f"WHERE s.ID IN ({placeholders}) ORDER BY e.[Experiment ID] DESC, s.SeriesName",
+                list(all_ids))
+            cols = [d[0] for d in (cur.description or [])]
+            for row in cur.fetchall() or []:
+                d = dict(zip(cols, row))
+                d["has_images"] = d["TrialSeriesID"] in ids_imgs
+                d["has_pdfs"] = d["TrialSeriesID"] in ids_pdfs
+                rows.append(d)
+    except Exception:
+        pass
+    return rows
+
+
+def fetch_pdfs_for_series(series_id: int) -> List[Dict[str, Any]]:
+    """The PDFs of one series (tblTrialSeriesPDF) with FullPath and _is_db_pdf."""
+    from db.connection import get_connection
+    rows: List[Dict[str, Any]] = []
+    try:
+        with get_connection() as cn:
+            cur = cn.cursor()
+            cur.execute("SELECT ID, TrialSeriesID, RelativePath, StoredFilename, OriginalFilename "
+                        "FROM tblTrialSeriesPDF WHERE TrialSeriesID = ? ORDER BY ID", (series_id,))
+            cols = [d[0] for d in (cur.description or [])]
+            for row in cur.fetchall() or []:
+                r = dict(zip(cols, row))
+                rel, stor = str(r.get("RelativePath") or ""), str(r.get("StoredFilename") or "")
+                r["FullPath"] = os.path.join(rel, stor) if rel else stor
+                r["_is_db_pdf"] = True
+                rows.append(r)
+    except Exception:
+        pass
+    return rows
+
