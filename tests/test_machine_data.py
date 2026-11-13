@@ -208,3 +208,53 @@ def test_real_rd_series_all_view_modes():
         assert d["spans"] and d["trial_hdr"] and d["same_cols"] and d["rows_ok"] and d["json"]
         assert d["fixed"] == ["Housing", "Jet", "Jet Plate Number", "Air Pressure (bar)"]
         assert d["keys0"] == md.RD_FIXED_KEYS
+
+
+def _rd_series_with_groups():
+    try:
+        from db.connection import fetch_all
+        rows = fetch_all(
+            "SELECT DISTINCT S.ID AS S FROM tblTrialSeries S "
+            "JOIN tblMachineFields MF ON MF.MachineID = S.MachineID AND COALESCE(MF.RDSetting, 0) = 1 "
+            "AND COALESCE(MF.StorageTable, 'tbltrial') = 'tbltrialsettings' "
+            "JOIN tblTrial T ON T.TrialSeriesID = S.ID JOIN tblTrialSettings TS ON TS.TrialID = T.ID "
+            "ORDER BY S.ID DESC LIMIT 5")
+        return [int(r["S"]) for r in rows]
+    except Exception:
+        return []
+
+
+def test_rd_groups_bind_all_plies_of_the_group():
+    """2026-11-13 (Nutzerwunsch): R&D ply fields in the Groups view write all plies of the group."""
+    import pytest
+    from db import machine_data as mdm, series_tables as stb
+    sids = _rd_series_with_groups()
+    if not sids:
+        pytest.skip("no R&D series with yarn-use groups on dev_local")
+    for sid in sids:
+        st = stb.load_trials(sid)
+        md = mdm.build_machine_data(st, "groups")
+        rd = mdm.build_rd_machine_data(md, reference_names=st.reference_names)
+        for c, cs in enumerate(rd.col_specs):
+            if not cs.get("is_group"):
+                continue
+            ids = sorted(int(s["ID"]) for s in (cs.get("sr_all") or []) if s)
+            for r, f in enumerate(rd.field_map, start=len(rd.titles_fixed)):
+                if f.get("StorageTable") == "tbltrialsettings":
+                    b = rd.cells[r][c][1]
+                    assert isinstance(b, stb.GroupCellBinding) and sorted(b.id_values) == ids
+                    return
+    pytest.skip("no grouped R&D ply cell found")
+
+
+def test_rd_jet_plate_rows_are_not_jet_rows():
+    """2026-11-13: "Jet Plate Number" holds a plate number - no jet geometry tooltip there."""
+    import pytest
+    from db import machine_data as mdm, series_tables as stb
+    sids = _rd_series_with_groups()
+    if not sids:
+        pytest.skip("no R&D series on dev_local")
+    st = stb.load_trials(sids[0])
+    rd = mdm.build_rd_machine_data(mdm.build_machine_data(st, "single"), reference_names=st.reference_names)
+    titles = {rd.row_titles[i] for i in rd.jet_rows}
+    assert "Jet" in titles and not any("plate" in t.lower() for t in titles)

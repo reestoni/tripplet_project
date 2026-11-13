@@ -1463,11 +1463,11 @@ class RDMachineData:
     header_rows: List[Dict[str, Any]] = field(default_factory=list)  # trial row + ply row (index 0 = title column)
     cells: List[List[Tuple[Any, Any]]] = field(default_factory=list)  # [row][col] = (raw value, CellBinding | None)
     cell_tooltips: Dict[Tuple[int, int], str] = field(default_factory=dict)  # always empty
-    cell_alerts: Dict[Tuple[int, int], str] = field(default_factory=dict)    # always empty
+    cell_alerts: Dict[Tuple[int, int], str] = field(default_factory=dict)    # orange = plies of a group disagree (Groups view)
     trial_spans: List[Tuple[int, int]] = field(default_factory=list)  # (first data col, number of cols)
     trial_wide_rows: List[int] = field(default_factory=list)         # one cell per trial (spanned)
     housing_rows: Set[int] = field(default_factory=set)              # rows whose title contains "housing"
-    jet_rows: Set[int] = field(default_factory=set)                  # rows whose title contains "jet"
+    jet_rows: Set[int] = field(default_factory=set)                  # rows holding a JetID (title has "jet", not "plate")
     of_row: Optional[int] = None                                     # "W0-W1 OF" row (speed tooltip)
     of_speed_tooltips: Dict[int, str] = field(default_factory=dict)  # col -> "Speed: N m/min" (stored values)
 
@@ -1724,9 +1724,13 @@ def rd_machine_data_from(fields_rd: List[Dict], col_specs: List[Dict], settings_
     rd.housing_rows = housing_rows
     rd.of_row = of_row_idx
 
+    # jet rows = rows holding a JetID ("Jet", "PreIntermingling Jet", "W3 Jet" ...). Not the plate
+    # number rows: their value is a plate number, looking it up as JetID showed a wrong jet
+    # geometry tooltip (fixed 2026-11-13, Nutzerwunsch).
     jet_rows = set()
     for i, title in enumerate(row_titles):
-        if "jet" in title.lower():
+        tl = title.lower()
+        if "jet" in tl and "plate" not in tl:
             jet_rows.add(i)
     rd.jet_rows = jet_rows
     return rd
@@ -1808,7 +1812,10 @@ def _fill_rd_cells(rd: RDMachineData, cache: Dict[str, Any], col_specs: List[Dic
             CellBinding("tblTrial", "ID", trow.get("ID"), ap_field) if (ap_field and trow.get("ID")) else None,
         )
 
-    # Dynamische Felder (ply fields: the column's first ply "sr", also in the Groups view)
+    # Dynamische Felder. Ply fields: one ply per column; in the Groups view a column stands for
+    # all plies of its yarn-use group - same rule as Machine Data (2026-11-13, Nutzerwunsch: before,
+    # R&D bound only the group's first ply, so an edit there changed just that ply): first value
+    # shown, GroupCellBinding writes all plies, orange when the plies disagree.
     start_row = len(titles_fixed)
     for offset, fdef in enumerate(field_map):
         r_idx = start_row + offset
@@ -1819,6 +1826,16 @@ def _fill_rd_cells(rd: RDMachineData, cache: Dict[str, Any], col_specs: List[Dic
             real_col = settings_cols_map.get(colname.lower()) or colname
             for c_idx, cs in enumerate(col_specs):
                 sr = cs["sr"]
+                if cs.get("is_group"):
+                    sr_all = cs.get("sr_all") or ([sr] if sr else [])
+                    vals = [s.get(real_col) for s in sr_all if s and s.get(real_col) is not None]
+                    val = vals[0] if vals else None
+                    settings_ids = [int(s["ID"]) for s in sr_all if s]
+                    binding = GroupCellBinding("tblTrialSettings", "ID", settings_ids, real_col)                         if settings_ids else None
+                    set_cell(r_idx, c_idx, val, binding)
+                    if len(set(str(v) for v in vals)) > 1:
+                        rd.cell_alerts[(r_idx, c_idx)] = "orange"
+                    continue
                 val = sr.get(real_col) if sr else None
                 binding = CellBinding("tblTrialSettings", "ID", sr["ID"], real_col) if sr else None
                 set_cell(r_idx, c_idx, val, binding)
