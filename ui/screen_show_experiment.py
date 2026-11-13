@@ -873,21 +873,10 @@ def fetch_all(sql: str, params: list | tuple = ()):
         return rows
 
 
-def execute_non_query(sql: str, params: list | tuple = ()) -> int:
-    """INSERT/UPDATE/DELETE-Wrapper: gibt rowcount zurück.
-    Gibt mindestens 1 zurück wenn kein Exception, da MySQL rowcount bei
-    UPDATE ohne Wertänderung 0 zurückgibt (CLIENT_FOUND_ROWS nicht gesetzt).
-    """
-    with get_connection() as cn:
-        cur = cn.cursor()
-        cur.execute(sql, params)
-        rc = getattr(cur, "rowcount", -1)
-        # rowcount = -1: Treiber kann es nicht bestimmen → als Erfolg werten
-        # rowcount =  0: kein Treffer (falsche ID) oder Wert unverändert
-        # rowcount >  0: Zeilen betroffen
-        if rc == -1:
-            return 1
-        return rc or 0
+# Saving edited cells (validation, UPDATEs, change history, Itemat recompute,
+# fill row): db/series_save.py (Qt-free, shared with the web app).
+import db.series_save as _series_save  # noqa: E402
+from db.series_save import execute_non_query  # noqa: E402,F401  (moved there, still imported from here)
 
 
 def table_exists(name: str) -> bool:
@@ -1356,58 +1345,17 @@ class PivotEditModel(QAbstractTableModel):
         return (Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable) if has_binding \
             else (Qt.ItemIsEnabled | Qt.ItemIsSelectable)
 
-    # ---- Validation helpers ----
-    _re_int = re.compile(r"^[+-]?\d+$")
-    # akzeptiert: 123 | 123. | 123, | .5 | ,5 | 123.45 | 123,45 | +.7 | -0,8
-    _re_float_like = re.compile(r"^[+-]?((\d+([.,]\d*)?)|([.,]\d+))$")
-    _re_float_2dp = re.compile(r"^[+-]?(\d+([.,]\d{0,2})?|[.,]\d{1,2})$")
+    # ---- Validation helpers (rules: db/series_save.normalize_value / normalize_input) ----
+    _re_int = _series_save.RE_INT
+    _re_float_like = _series_save.RE_FLOAT_LIKE
+    _re_float_2dp = _series_save.RE_FLOAT_2DP
 
     def _validate_and_normalize(self, row: int, text_in: Any) -> Optional[str]:
-        """Validiert und normalisiert einen Eingabewert je nach Zeilentyp.
-
-        Returns:
-            Normalisierter Wert als String, oder None bei ungültigem Wert.
-        """
-        """
-        Gibt normalisierten String zurück, "" wenn leer (-> NULL), oder None wenn invalid.
-        - onlySZ: nur S, Z, SZ (case-insensitiv), Ausgabe uppercase
-        - onlyInteger: Ganzzahl (Vorzeichen ok), Ausgabe ohne führende Nullen
-        - onlyDoubles: Ganzzahl oder Dezimal (Punkt/Komma), Ausgabe mit Punkt, Ganzzahl ohne .0
-        """
-        if text_in is None:
-            return ""
-        s = str(text_in).strip()
-        if s == "":
-            return ""  # leeren Wert erlauben
-
+        """Normalisierter String, "" wenn leer (-> NULL), None wenn invalid -
+        nach der Regel der Zeile (db/series_save.normalize_value)."""
         rule = self._validators[row] if 0 <= row < len(
             self._validators) else None
-        rule = canon_rule(rule)
-        if not rule:
-            return s  # keine Regel
-
-        if rule == "onlySZ":
-            up = s.upper().replace(" ", "")
-            return up if up in ("S", "Z", "SZ") else None
-
-        if rule == "onlyInteger":
-            if self._re_int.fullmatch(s):
-                try:
-                    return str(int(s))
-                except Exception:
-                    return None
-            return None
-
-        if rule == "onlyDoubles":
-            if not self._re_float_like.fullmatch(s):
-                return None
-            try:
-                v = float(s.replace(",", "."))
-                return str(int(v)) if v.is_integer() else f"{v}"
-            except Exception:
-                return None
-
-        return s
+        return _series_save.normalize_value(rule, text_in)
 
     def data(self, index: QModelIndex, role=Qt.DisplayRole):  # type: ignore[override]
         """Liefert Zelldaten: Wert, Hintergrundfarbe (Ply-abhängig + Alerts), Alignment."""
@@ -1546,17 +1494,9 @@ class PivotEditModel(QAbstractTableModel):
         if normalized is None:
             return False
         title = self._row_titles[r] if 0 <= r < len(self._row_titles) else None
-        if title == "Air Pressure (bar)":
-            s2 = normalized.strip()
-            if s2 != "":
-                if not self._re_float_2dp.fullmatch(s2):
-                    return False
-                try:
-                    v = float(s2.replace(",", "."))
-                    s2n = f"{v:.2f}".rstrip("0").rstrip(".")
-                    normalized = s2n
-                except Exception:
-                    return False
+        normalized = _series_save.apply_row_title_rule(title, normalized)  # "Air Pressure (bar)": 2 decimals
+        if normalized is None:
+            return False
 
         r, c = index.row() - self._n_hdr, index.column() - 1
         if self._matrix[r][c] == normalized:
@@ -1599,16 +1539,9 @@ class PivotEditModel(QAbstractTableModel):
         return notes_for_binding(by_key, self.get_binding(r - self._n_hdr, c - 1))
 
     def save_dirty(self) -> int:
-        """Schreibt alle geänderten Zellen in die DB.
-
-        Spezialfall für Labortabellen (tblLaborXXX):
-        - neben dem geänderten Feld werden, falls vorhanden,
-          auch [User] und [Timestamp] aktualisiert:
-            * [User]      = aktueller User (app_meta.current_user)
-            * [Timestamp] = NOW() (Serverzeit in Access)
-        """
-        n = 0
-
+        """Schreibt alle geänderten Zellen in die DB (db/series_save.save_cells:
+        GroupCellBinding, Labortabellen mit [User]/[Timestamp], Einheiten-
+        Umrechnung, Änderungsprotokoll, DYRatio)."""
         # einfacher Cache pro Modellinstanz, damit get_columns_map()
         # nicht für jede einzelne Zelle erneut aufgerufen wird
         cache = getattr(self, "_lab_audit_cache", None)
@@ -1616,166 +1549,22 @@ class PivotEditModel(QAbstractTableModel):
             cache = {}
             self._lab_audit_cache = cache
 
-        # aktuellen User einmalig ermitteln
-        user_id = None
         try:
             user = getattr(app_meta, "current_user", {}) or {}
         except Exception:
             user = {}
-        if isinstance(user, dict):
-            for k in ("ID", "Id", "id"):
-                if k in user:
-                    user_id = user[k]
-                    break
+        if not isinstance(user, dict):
+            user = {}
 
-        dy_ratio_ids: set = set()  # tblTrialSettings rows whose T1/T2 changed
-
-        # Change history (db/change_log.py): old DB values of all changed
-        # cells, one query per (table, field), read before writing
-        from db import change_log as _chlog
-        _log_on = _chlog.table_ready()
-        _old_vals: Dict[Tuple[str, str], Dict[int, Dict[str, Any]]] = {}
-        _log_new: Dict[Tuple[str, int, str], Any] = {}
-        if _log_on:
-            _want: Dict[Tuple[str, str], set] = {}
-            for _r, _c, _t in self._dirty:
-                _b = self._binding[_r][_c]
-                if not _b:
-                    continue
-                _ids = _b.id_values if isinstance(_b, GroupCellBinding) else [_b.id_value]
-                _want.setdefault((str(_b.table), str(_b.field)), set()).update(_ids)
-            for (_tb, _fd), _ids in _want.items():
-                try:
-                    _old_vals[(_tb, _fd)] = _chlog.read_current(_tb, _fd, list(_ids))
-                except Exception:
-                    _old_vals[(_tb, _fd)] = {}
-
-        for r, c, new_text in self._dirty:
-            bind = self._binding[r][c]
-            if not bind:
-                continue
-            if str(bind.table).lower() == "tbltrialsettings" \
-                    and str(bind.field).lower() in ("yarntensiont1", "yarntensiont2"):
-                if isinstance(bind, GroupCellBinding):
-                    dy_ratio_ids.update(bind.id_values)
-                else:
-                    dy_ratio_ids.add(bind.id_value)
-
-            # ── GroupCellBinding: alle IDs der Gruppe updaten ─────────────
-            if isinstance(bind, GroupCellBinding):
-                text_str = "" if new_text is None else str(new_text).strip()
-                for gid in bind.id_values:
-                    _log_new[(str(bind.table), int(gid), str(bind.field))] = text_str
-                    if text_str == "":
-                        sql = (
-                            f"UPDATE {bind.table} SET "
-                            f"`{bind.field}` = NULL WHERE `{bind.id_field}` = ?"
-                        )
-                        params: list[Any] = [gid]
-                    else:
-                        sql = (
-                            f"UPDATE {bind.table} SET "
-                            f"`{bind.field}` = ? WHERE `{bind.id_field}` = ?"
-                        )
-                        params = [text_str, gid]
-                    n += execute_non_query(sql, params)
-                continue
-
-            table_name = str(bind.table)
-            is_lab_table = table_name.lower().startswith("tbllabor")
-
-            user_col = None
-            ts_col = None
-            if is_lab_table:
-                # Spaltennamen für User/Timestamp pro Tabelle cachen
-                if table_name in cache:
-                    user_col, ts_col = cache[table_name]
-                else:
-                    try:
-                        cols = get_columns_map(table_name)
-                    except Exception:
-                        cols = {}
-                    user_col = cols.get("user")
-                    ts_col = cols.get("timestamp")
-                    cache[table_name] = (user_col, ts_col)
-
-            text_str = "" if new_text is None else str(new_text).strip()
-
-            # Einheiten-Umrechnung: Anzeige-Einheit -> DB-Einheit (z.B. l/min -> Nm3/h)
-            if text_str != "" and self._unit_scale != 1.0 and bind.field == self._unit_scale_field:
-                try:
-                    _disp_val = float(text_str.replace(",", "."))
-                    text_str = repr(_disp_val / self._unit_scale)
-                except Exception:
-                    pass
-
-            if text_str == "":
-                # Wert -> NULL
-                if is_lab_table and (user_col or ts_col):
-                    set_parts = [f"[{bind.field}] = NULL"]
-                    params: list[Any] = []
-                    if user_col:
-                        set_parts.append(f"[{user_col}] = ?")
-                        params.append(user_id)
-                    if ts_col:
-                        set_parts.append(f"[{ts_col}] = NOW()")
-                    sql = (
-                            f"UPDATE {bind.table} SET "
-                            + ", ".join(set_parts)
-                            + f" WHERE [{bind.id_field}] = ?"
-                    )
-                    params.append(bind.id_value)
-                else:
-                    sql = (
-                        f"UPDATE {bind.table} SET "
-                        f"[{bind.field}] = NULL WHERE [{bind.id_field}] = ?"
-                    )
-                    params = [bind.id_value]
-            else:
-                # normaler UPDATE mit neuem Wert
-                if is_lab_table and (user_col or ts_col):
-                    set_parts = [f"[{bind.field}] = ?"]
-                    params = [text_str]
-                    if user_col:
-                        set_parts.append(f"[{user_col}] = ?")
-                        params.append(user_id)
-                    if ts_col:
-                        set_parts.append(f"[{ts_col}] = NOW()")
-                    sql = (
-                            f"UPDATE {bind.table} SET "
-                            + ", ".join(set_parts)
-                            + f" WHERE [{bind.id_field}] = ?"
-                    )
-                    params.append(bind.id_value)
-                else:
-                    sql = (
-                        f"UPDATE {bind.table} SET "
-                        f"[{bind.field}] = ? WHERE [{bind.id_field}] = ?"
-                    )
-                    params = [text_str, bind.id_value]
-
-            n += execute_non_query(sql, params)
-            try:
-                _log_new[(str(bind.table), int(bind.id_value), str(bind.field))] = text_str
-            except (TypeError, ValueError):
-                pass
-
-        if _log_on and _log_new:
-            _entries = []
-            for (_tb, _rid, _fd), _new in _log_new.items():
-                _cur = _old_vals.get((_tb, _fd), {}).get(_rid, {})
-                _tid = _rid if _tb.lower() == "tbltrial" else _cur.get("trial_id")
-                _entries.append({"table": _tb, "row_id": _rid, "field": _fd,
-                                 "old": _cur.get("value"), "new": _new, "trial_id": _tid})
-            _chlog.log_changes(_entries, series_id=getattr(self, "_log_series_id", None),
-                               source=getattr(self, "_log_source", "edit"))
-
-        if dy_ratio_ids:
-            from db.dy_ratio import recompute
-            try:
-                recompute(dy_ratio_ids)
-            except Exception as e:
-                logging.getLogger(__name__).warning("DYRatio recompute failed: %s", e)
+        n = _series_save.save_cells(
+            [(self._binding[r][c], new_text) for r, c, new_text in self._dirty],
+            user=user,
+            series_id=getattr(self, "_log_series_id", None),
+            source=getattr(self, "_log_source", "edit"),
+            unit_scale=self._unit_scale,
+            unit_field=self._unit_scale_field,
+            audit_cache=cache,
+        )
 
         self._dirty.clear()
         self.dataChangedExternally.emit()
@@ -1919,14 +1708,10 @@ class MachinePivotModel(PivotEditModel):
         ):
             # Housing row
             if index.row() == self._n_hdr + self._housing_row_index:
-                try:
-                    hid = int(value)
-                except Exception:
-                    hid = None if value in (None, "", " ") else value
+                new_val = _series_save.normalize_input(None, None, value, kind="housing")
                 r = index.row() - self._n_hdr
                 c = index.column() - 1
                 if 0 <= r < len(self._matrix) and 0 <= c < len(self._matrix[r]):
-                    new_val = "" if hid is None else str(hid)
                     if self._matrix[r][c] == new_val:
                         return True
                     self._set_dirty_value(r, c, new_val)
@@ -1935,18 +1720,13 @@ class MachinePivotModel(PivotEditModel):
                 return False
             # Jet row
             if index.row() == self._n_hdr + self._jet_row_index:
-                try:
-                    jet_id = int(value)
-                except Exception:
-                    if value in (None, "", " "):
-                        jet_id = None
-                    else:
-                        return False
+                new_val = _series_save.normalize_input(None, None, value, kind="jet")
+                if new_val is None:
+                    return False
                 r = index.row() - self._n_hdr
                 c = index.column() - 1
                 if 0 <= r < len(self._matrix) and 0 <= c < len(self._matrix[r]):
                     current = self._matrix[r][c]
-                    new_val = "" if jet_id is None else str(jet_id)
                     if current == new_val:
                         return True
                     self._set_dirty_value(r, c, new_val)
@@ -4089,25 +3869,13 @@ class ShowExperimentScreen(QWidget):
         return True
 
     def _stamp_trial_timestamp(self, trial_id: int) -> int:
-        """Setzt NOW() in tblTrial.[Timestamp] **und** den aktuellen User in tblTrial.[User] für die angegebene Trial-ID."""
+        """Setzt NOW() in tblTrial.[Timestamp] **und** den aktuellen User in tblTrial.[User]
+        für die angegebene Trial-ID (db/series_save.stamp_trial_timestamp)."""
         try:
-            # aktuellen User aus app_meta lesen (Key kann 'ID' / 'Id' / 'id' heissen)
             user = getattr(app_meta, "current_user", {}) or {}
-            user_id = None
-            if isinstance(user, dict):
-                for k in ("ID", "Id", "id"):
-                    if k in user:
-                        user_id = user[k]
-                        break
-
-            # Timestamp und User in EINEM Update schreiben
-            return execute_non_query(
-                "UPDATE tblTrial SET [Timestamp]=NOW(), [User]=? WHERE [ID]=?",
-                [user_id, trial_id],
-            )
         except Exception:
-            # Falls Spalte mal nicht existiert o.ä., fehlerfrei weitermachen
-            return 0
+            user = {}
+        return _series_save.stamp_trial_timestamp(trial_id, user if isinstance(user, dict) else {})
 
     def _open_help(self):
         from ui.widgets.multilang_help import show_help
@@ -4224,37 +3992,14 @@ class ShowExperimentScreen(QWidget):
             return
 
         # Vor dem Speichern: betroffene Trial-IDs sammeln, falls Tension-Felder geändert wurden
+        # (Tension-Felder: db/series_save.stamp_trial_ids)
         trial_ids_to_stamp = set()
         try:
             if hasattr(self, "model_machine") and self.model_machine:
-                def _n(x: str) -> str:
-                    return (x or "").lower().replace(" ", "").replace("_", "").replace("(", "").replace(")",
-                                                                                                        "").replace("°",
-                                                                                                                    "").replace(
-                        "/", "").replace("-", "").strip()
-
-                targets = {
-                    _n("Yarn Tension before Jet (cN)"),
-                    _n("Yarn Tension after Jet (cN)"),
-                    _n("YarnTensionBeforeJet"),
-                    _n("YarnTensionAfterJet"),
-                    # W3Tension ("Tension W3 (cN)"): the SSM/draw-machine equivalent
-                    # of the jet machines' after-jet tension above - the last tension
-                    # reading taken on those machines, so its edit time is the closest
-                    # available proxy for "this trial's machine data is complete"
-                    # (2026-08-20, explicit user request; see also the Done-status
-                    # fallback in screen_backlog.py's _update_backlog_status()).
-                    _n("W3Tension"),
-                }
-                for (rr, cc, _newtext) in list(getattr(self.model_machine, "_dirty", [])):
-                    try:
-                        bind = self.model_machine.get_binding(rr, cc)
-                    except Exception:
-                        bind = None
-                    if bind and getattr(bind, "table", None) == "tblTrial":
-                        f_norm = _n(getattr(bind, "field", ""))
-                        if f_norm in targets:
-                            trial_ids_to_stamp.add(getattr(bind, "id_value", None))
+                _mm = self.model_machine
+                trial_ids_to_stamp = _series_save.stamp_trial_ids(
+                    [(_mm.get_binding(rr, cc), _newtext)
+                     for (rr, cc, _newtext) in list(getattr(_mm, "_dirty", []))])
         except Exception:
             trial_ids_to_stamp = set()
 
@@ -4327,58 +4072,18 @@ class ShowExperimentScreen(QWidget):
         if not col_specs or not model:
             return
 
-        # Baue pro Trial eine Liste von (ply_label, col_index) auf
-        from collections import defaultdict
-        trial_cols: Dict[int, List[Tuple[str, int]]] = defaultdict(list)
-        for c_idx, cs in enumerate(col_specs):
-            trial_cols[cs["trial_id"]].append((cs["ply"], c_idx))
-
-        # Anzahl der Daten-Zeilen im Modell
-        n_rows = len(getattr(model, "_row_titles", []))
-        n_hdr = getattr(model, "_n_hdr", 0)
-
-        found_diff = False
-        for tid, ply_cols in trial_cols.items():
-            if len(ply_cols) < 2:
-                continue  # nur ein Ply -> kein Multi-Ply-Vergleich moeglich
-            # Ply 1 ist der erste Eintrag
-            _, c_ply1 = ply_cols[0]
-            for r_idx in range(n_rows):
-                # Nur tblTrialSettings-Bindings sind Ply-spezifisch
-                try:
-                    bind1 = model.get_binding(r_idx, c_ply1)
-                except Exception:
-                    bind1 = None
-                if not bind1 or getattr(bind1, "table", None) != "tblTrialSettings":
-                    continue
-                val_ply1 = model._matrix[r_idx][c_ply1] if 0 <= c_ply1 < len(model._matrix[r_idx]) else None
-                for _, c_plyx in ply_cols[1:]:
-                    val_plyx = model._matrix[r_idx][c_plyx] if 0 <= c_plyx < len(model._matrix[r_idx]) else None
-
-                    # Leere Werte (None/"") gelten als gleich wie None
-                    def _norm_val(v):
-                        if v is None:
-                            return ""
-                        return str(v).strip()
-
-                    if _norm_val(val_ply1) != _norm_val(val_plyx):
-                        found_diff = True
-                        break
-                if found_diff:
-                    break
-            if found_diff:
-                break
-
+        # rule: db/series_save.multi_ply_differs (shared with the web app)
+        matrix = model._matrix
+        found_diff = _series_save.multi_ply_differs(
+            col_specs, len(getattr(model, "_row_titles", [])), model.get_binding,
+            lambda r, c: matrix[r][c] if 0 <= c < len(matrix[r]) else None)
         if not found_diff:
             return
 
         user_id = app_meta.current_user.get("id") if app_meta.current_user else None
         if user_id is None:
             return
-        _db_execute(
-            "INSERT INTO tblFeatureUsage (FeatureID, UserID, ExtraInfo) VALUES (?, ?, ?)",
-            [2, user_id, str(getattr(self, "_series_pk", None))],
-        )
+        _series_save.log_multi_ply(user_id, getattr(self, "_series_pk", None))
 
     # ---------- Daten laden ----------
 
@@ -7393,68 +7098,18 @@ class ShowExperimentScreen(QWidget):
     def _recompute_itemat_intermingling(self) -> int:
         """
         Für jede Spannung t>0: IP(t) = IP(0) * Stability(t) / 100
-        -> Update nur, wenn der neue Wert sich vom aktuellen DB-Wert unterscheidet.
+        -> Update nur, wenn der neue Wert sich vom aktuellen DB-Wert unterscheidet
+        (db/series_save.recompute_itemat_intermingling).
         """
         if not self.model_itemat or not self._itemat_tensions:
             return 0
-
-        updates = 0
-        # Gleicher Offset-Bug wie in _recompute_itemat_plus() (siehe dort) -
+        # Gleicher Offset wie in _recompute_itemat_plus() (siehe dort) -
         # insert_readonly_rows_at_top(self._get_jet_info_rows()) verschiebt
         # die echten Datenzeilen um die Jet-Info-Kopfzeilen nach unten.
         n_header = len(self._get_jet_info_rows())
-        ROW_IP0 = n_header + _series_tables.ITEMAT_ROW_IP0
-        ROW_STAB_START = n_header + _series_tables.ITEMAT_ROW_STAB_START
-
-        # Kandidaten sammeln
-        cand_ids: List[Any] = []
-        cand_vals: Dict[Any, float] = {}
-
-        for c_idx in range(len(self._trial_labels)):
-            ip0_txt = self.model_itemat.get_cell_value(ROW_IP0, c_idx)
-            ip0 = self._to_float(ip0_txt)
-            if ip0 is None:
-                continue
-            for t_idx, _tval in enumerate(self._itemat_tensions):
-                row = ROW_STAB_START + t_idx
-                stab_txt = self.model_itemat.get_cell_value(row, c_idx)
-                stab = self._to_float(stab_txt)
-                if stab is None:
-                    continue
-                bind = self.model_itemat.get_binding(row, c_idx)
-                if not bind:
-                    continue
-                rec_id = bind.id_value
-                new_val = _series_tables.itemat_ip_at_tension(ip0, stab)
-                cand_ids.append(rec_id)
-                cand_vals[rec_id] = new_val
-
-        if not cand_ids:
-            return 0
-
-        # Aktuelle DB-Werte lesen
-        placeholders = ",".join(["?"] * len(cand_ids))
-        rows = fetch_all(
-            f"SELECT ID, [Intermingling Points (FP/m)] AS V FROM tblLaborItematLab WHERE ID IN ({placeholders})",
-            cand_ids,
-        )
-        cur_vals: Dict[Any, Optional[float]] = {
-            r["ID"]: self._to_float(r.get("V")) for r in rows}
-
-        # Nur schreiben, wenn Delta
-        EPS = 1e-9
-        for rec_id, new_v in cand_vals.items():
-            old_v = cur_vals.get(rec_id)
-            if (old_v is None and new_v is None):
-                continue
-            if (old_v is not None and abs(old_v - new_v) <= EPS):
-                continue
-            updates += execute_non_query(
-                "UPDATE tblLaborItematLab SET [Intermingling Points (FP/m)] = ? WHERE ID = ?",
-                [new_v, rec_id],
-            )
-
-        return updates
+        return _series_save.recompute_itemat_intermingling(
+            self.model_itemat.get_cell_value, self.model_itemat.get_binding,
+            len(self._trial_labels), self._itemat_tensions, row_offset=n_header)
 
     # ---------- Itemat Plus (sichtbar nur bei Daten) ----------
 
@@ -7527,7 +7182,7 @@ class ShowExperimentScreen(QWidget):
 
     def _recompute_itemat_plus(self) -> int:
         """
-        Zwei Dinge:
+        Zwei Dinge (db/series_save.recompute_itemat_plus):
         1) Für jede Spannung t>0: IP(t) = IP(0) * Stability(t) / 100
            -> schreibe in den Datensatz mit Stability(t) (nur bei echter Änderung).
         2) CV@0: ((KL S)^2 + (OL S)^2)^0.5 / (KL X + OL X)
@@ -7535,110 +7190,16 @@ class ShowExperimentScreen(QWidget):
         """
         if not self.model_itemat_plus:
             return 0
-
-        updates = 0
-
         # insert_readonly_rows_at_top(self._get_jet_info_rows()) schiebt beim
         # Populaten des Tabs (siehe _build_itemat_plus_tab) die Jet/Jet Plate/
         # Air Pressure-Kopfzeilen VOR die eigentlichen Datenzeilen - die
         # Row-Konstanten muessen deshalb um diese Kopfzeilen-Anzahl versetzt
-        # werden, sonst liest _f() hier die Jet-Info-Zeilen (Text, kein float)
-        # statt OLX/OLS/KLX/KLS, "if None in (...)" greift dann immer und
-        # FPmCV wird nie mehr neu berechnet.
+        # werden, sonst werden die Jet-Info-Zeilen (Text, kein float) statt
+        # OLX/OLS/KLX/KLS gelesen und FPmCV wird nie mehr neu berechnet.
         n_header = len(self._get_jet_info_rows())
-        ROW_IP0 = n_header + _series_tables.ITEMAT_PLUS_ROW_IP0
-        ROW_OLX0 = n_header + _series_tables.ITEMAT_PLUS_ROW_OLX0
-        ROW_OLS0 = n_header + _series_tables.ITEMAT_PLUS_ROW_OLS0
-        ROW_KLX0 = n_header + _series_tables.ITEMAT_PLUS_ROW_KLX0
-        ROW_KLS0 = n_header + _series_tables.ITEMAT_PLUS_ROW_KLS0
-        ROW_STAB_START = n_header + _series_tables.ITEMAT_PLUS_ROW_STAB_START
-        EPS = 1e-9
-
-        # -------- Teil 1: IP(t) für t>0 --------
-        cand_ids_ip: List[Any] = []
-        cand_vals_ip: Dict[Any, float] = {}
-
-        for c_idx in range(len(self._trial_labels)):
-            ip0 = self._to_float(
-                self.model_itemat_plus.get_cell_value(ROW_IP0, c_idx))
-            if ip0 is None:
-                continue
-            for t_idx, _ in enumerate(self._itemat_plus_tensions):
-                row = ROW_STAB_START + t_idx
-                stab = self._to_float(
-                    self.model_itemat_plus.get_cell_value(row, c_idx))
-                if stab is None:
-                    continue
-                bind = self.model_itemat_plus.get_binding(row, c_idx)
-                if not bind:
-                    continue
-                rec_id = bind.id_value
-                new_val = _series_tables.itemat_ip_at_tension(ip0, stab)
-                cand_ids_ip.append(rec_id)
-                cand_vals_ip[rec_id] = new_val
-
-        if cand_ids_ip:
-            placeholders = ",".join(["?"] * len(cand_ids_ip))
-            rows_ip = fetch_all(
-                f"SELECT ID, [Intermingling Points (FP/m)] AS V FROM tblLaborItematPlus WHERE ID IN ({placeholders})",
-                cand_ids_ip,
-            )
-            cur_vals_ip: Dict[Any, Optional[float]] = {
-                r["ID"]: self._to_float(r.get("V")) for r in rows_ip}
-
-            for rec_id, new_v in cand_vals_ip.items():
-                old_v = cur_vals_ip.get(rec_id)
-                if (old_v is None and new_v is None):
-                    continue
-                if (old_v is not None and abs(old_v - new_v) <= EPS):
-                    continue
-                updates += execute_non_query(
-                    "UPDATE tblLaborItematPlus SET [Intermingling Points (FP/m)] = ? WHERE ID = ?",
-                    [new_v, rec_id],
-                )
-
-        # -------- Teil 2: CV@0 --------
-        cand_ids_cv: List[Any] = []
-        cand_vals_cv: Dict[Any, float] = {}
-
-        for c_idx in range(len(self._trial_labels)):
-            def _f(row_idx):
-                return self._to_float(self.model_itemat_plus.get_cell_value(row_idx, c_idx))
-
-            olx, ols, klx, kls = _f(ROW_OLX0), _f(ROW_OLS0), _f(ROW_KLX0), _f(ROW_KLS0)
-            # rule shared with the web app (db/series_tables.itemat_plus_cv0)
-            cv0 = _series_tables.itemat_plus_cv0(olx, ols, klx, kls)
-            if cv0 is None:
-                continue
-
-            bind0 = self.model_itemat_plus.get_binding(ROW_IP0, c_idx)
-            if not bind0:
-                continue
-            rec0_id = bind0.id_value
-            cand_ids_cv.append(rec0_id)
-            cand_vals_cv[rec0_id] = cv0
-
-        if cand_ids_cv:
-            placeholders = ",".join(["?"] * len(cand_ids_cv))
-            rows_cv = fetch_all(
-                f"SELECT ID, [Intermingling Points CV (%)] AS V FROM tblLaborItematPlus WHERE ID IN ({placeholders})",
-                cand_ids_cv,
-            )
-            cur_vals_cv: Dict[Any, Optional[float]] = {
-                r["ID"]: self._to_float(r.get("V")) for r in rows_cv}
-
-            for rec_id, new_v in cand_vals_cv.items():
-                old_v = cur_vals_cv.get(rec_id)
-                if (old_v is None and new_v is None):
-                    continue
-                if (old_v is not None and abs(old_v - new_v) <= EPS):
-                    continue
-                updates += execute_non_query(
-                    "UPDATE tblLaborItematPlus SET [Intermingling Points CV (%)] = ? WHERE ID = ?",
-                    [new_v, rec_id],
-                )
-
-        return updates
+        return _series_save.recompute_itemat_plus(
+            self.model_itemat_plus.get_cell_value, self.model_itemat_plus.get_binding,
+            len(self._trial_labels), self._itemat_plus_tensions, row_offset=n_header)
 
     # ---------- DTYoMat (sichtbar nur bei vorhandenen Daten) ----------
 

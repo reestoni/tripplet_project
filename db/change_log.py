@@ -115,15 +115,23 @@ def upsert_entries(table: str, rec_id: Any, before: Dict[str, Any], after: Dict[
              "trial_id": trial_id} for f, v in after.items()]
 
 
-def log_changes(entries: Iterable[Dict[str, Any]], series_id: Any = None, source: str = "edit") -> int:
+_APP_USER = object()
+
+
+def log_changes(entries: Iterable[Dict[str, Any]], series_id: Any = None, source: str = "edit",
+                user_id: Any = _APP_USER) -> int:
     """entries: dicts with table, row_id, field, old, new, trial_id.
-    Unchanged values are skipped. Never raises."""
+    Unchanged values are skipped. Never raises. user_id: default =
+    app_meta.current_user["id"] (desktop); the web passes its user."""
     rows: List[Tuple] = []
-    try:
-        import app_meta
-        uid = (app_meta.current_user or {}).get("id")
-    except Exception:
-        uid = None
+    if user_id is not _APP_USER:
+        uid = user_id
+    else:
+        try:
+            import app_meta
+            uid = (app_meta.current_user or {}).get("id")
+        except Exception:
+            uid = None
     now = datetime.datetime.now().replace(microsecond=0)
     for e in entries:
         if same_value(e.get("old"), e.get("new")):

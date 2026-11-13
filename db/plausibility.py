@@ -113,17 +113,56 @@ def fmt(x: float) -> str:
     return f"{x:.3g}" if abs(x) < 1000 else f"{x:.0f}"
 
 
-def find_unusual(model, machine_id) -> List[Dict[str, Any]]:
-    """Unusual values among the model's unsaved changes:
-    [{"row": data row, "col": col, "text": "V3 · Air Pressure (bar): 35 (usually 2 - 8)"}]."""
-    if model is None or not getattr(model, "_dirty", None):
+def check(items: List[Dict[str, Any]], machine_id) -> List[Dict[str, Any]]:
+    """Qt-free rule evaluation (desktop and web). items = the edited cells,
+    one per cell (newest value), each a dict with
+        "binding": CellBinding/GroupCellBinding (table, field),
+        "value":   the edited text,
+        "labels":  column labels for the message, e.g. ["V3"] or ["V3", "Ply 1"]
+                   (trial-wide tblTrial values: only the trial label),
+        "title":   the row title,
+    plus any keys of the caller (row, col, ...), which are passed through.
+    Returns the unusual ones in input order, each = the item's extra keys +
+    "text": "V3 · Air Pressure (bar): 35   (usually 2 – 8)", "lo", "hi", "p01", "p99".
+    Only numeric machine fields with enough earlier values are checked
+    (ranges_for_machine); [] if there is nothing to check."""
+    if not items:
         return []
     ranges = ranges_for_machine(machine_id)
     if not ranges:
         return []
-    from PySide6.QtCore import Qt
+    out = []
+    for it in items:
+        b = it.get("binding")
+        if b is None:
+            continue
+        rg = ranges.get((str(b.table).lower(), str(b.field).lower()))
+        val = it.get("value")
+        if not is_unusual(rg, val):
+            continue
+        where = " · ".join(list(it.get("labels") or []) + [str(it.get("title") or "")])
+        e = {k: v for k, v in it.items() if k not in ("binding", "value", "labels", "title")}
+        e.update({"text": f"{where}: {val}   (usually {fmt(rg['p01'])} – {fmt(rg['p99'])})",
+                  "lo": rg["lo"], "hi": rg["hi"], "p01": rg["p01"], "p99": rg["p99"]})
+        out.append(e)
+    return out
+
+
+def _header_text(model, h: int, c: int) -> str:
+    """Text of header row h above data column c (as PivotEditModel.data shows it)."""
+    vals = (model._header_rows[h] or {}).get("values", []) if h < len(model._header_rows) else []
+    v = vals[c + 1] if c + 1 < len(vals) else ""
+    return str(v or "").strip()
+
+
+def find_unusual(model, machine_id) -> List[Dict[str, Any]]:
+    """Unusual values among the unsaved changes of a desktop PivotEditModel
+    (duck-typed, no Qt needed): [{"row": data row, "col": col,
+    "text": "V3 · Air Pressure (bar): 35 (usually 2 - 8)"}], sorted by column/row."""
+    if model is None or not getattr(model, "_dirty", None):
+        return []
     n_hdr = getattr(model, "_n_hdr", 0)
-    out, seen = [], set()
+    items, seen = [], set()
     for r, c, _txt in reversed(model._dirty):  # newest edit of a cell counts
         if (r, c) in seen:
             continue
@@ -131,18 +170,14 @@ def find_unusual(model, machine_id) -> List[Dict[str, Any]]:
         b = model.get_binding(r, c)
         if b is None:
             continue
-        rg = ranges.get((str(b.table).lower(), str(b.field).lower()))
-        val = model.get_cell_value(r, c)
-        if not is_unusual(rg, val):
-            continue
         hdr = []
         # trial-wide values (tblTrial): only the trial number, not the ply
         for h in range(1 if str(b.table).lower() == "tbltrial" else n_hdr):
-            t = str(model.data(model.index(h, c + 1), Qt.DisplayRole) or "").strip()
+            t = _header_text(model, h, c)
             if t and t not in hdr:
                 hdr.append(t)
-        where = " · ".join(hdr + [model._row_titles[r]])
-        out.append({"row": r, "col": c,
-                    "text": f"{where}: {val}   (usually {fmt(rg['p01'])} – {fmt(rg['p99'])})"})
+        items.append({"binding": b, "value": model.get_cell_value(r, c), "labels": hdr,
+                      "title": model._row_titles[r], "row": r, "col": c})
+    out = [{"row": e["row"], "col": e["col"], "text": e["text"]} for e in check(items, machine_id)]
     out.sort(key=lambda e: (e["col"], e["row"]))
     return out
