@@ -41,6 +41,7 @@ from ui.widgets.label_printing import (
 )
 from db.connection import fetch_all, execute, execute_insert, new_global_id, get_columns_map, table_exists
 from db import yarn_spool_log
+from db import yarn_stock
 from db.usage_log import log_usage_event
 import app_meta
 from ui.widgets.friendly_error import show_error
@@ -85,85 +86,14 @@ def _resolve_field(cands: List[str], cmap: Dict[str, str]) -> Optional[str]:
     return None
 
 
-# Spulennummer am Ende des QR-Inhalts ("...;S:213", siehe _qr_content()).
-# Bewusst tolerant beim Trennzeichen: Handscanner senden meist mit US-Layout,
-# auf CH/DE-Tastaturen kommt ":" dann z.B. als anderes Zeichen an ("SÖ213").
-_QR_SPOOL_RE = re.compile(r"[sS][^0-9A-Za-z]{1,3}#?(\d+)\s*$")
-
-
-def parse_spool_input(text: str) -> Optional[int]:
-    """Spulen-ID aus "Go to spool #"-Eingabe: "213", "#213" oder kompletter
-    QR-Inhalt eines Etiketts ("Y:...;B:...;L:...;S:213", z.B. per Scanner).
-    None, wenn nichts Brauchbares erkannt wird."""
-    raw = (text or "").strip()
-    plain = raw.lstrip("#").strip()
-    if plain.isascii() and plain.isdigit():
-        return int(plain)
-    m = _QR_SPOOL_RE.search(raw)
-    return int(m.group(1)) if m else None
-
-
-def _qr_content(item: Dict) -> str:
-    """Kompakter QR-Inhalt: Grossbuchstaben, kurze Kuerzel statt ausgeschriebener
-    Woerter - haelt den Code trotz mehr Infos klein (siehe Chat: 25x25 statt
-    37x37 Module). Gewicht bewusst NICHT drin, da es sich laufend aendert."""
-    yarn = str(item.get("Yarn") or "").upper()
-    batch = str(item.get("Batch") or "").upper()
-    loc = str(item.get("Location") or "").upper()
-    return f"Y:{yarn};B:{batch};L:{loc};S:{item['SpoolID']}"
-
-
-def _draw_yarn_label_cell(page, x0: float, y0: float, lw: float, lh: float, item: Dict) -> None:
-    """Zeichnet ein Spulen-Label (Garnname fett oben, QR + Location/Spule-ID
-    gross + Batch dezent) - der Cell-Renderer fuer generate_label_sheet_pdf."""
-    header_max_w = lw - 4
-    HEADER_FS = 9.0
-    yarn_lines = wrap_text_lines(str(item.get("Yarn") or ""), HEADER_FS, header_max_w, max_lines=2, fontname="hebo")
-    ty = y0 + 5.0
-    for yl in yarn_lines:
-        page.insert_text(((x0 + 2) * MM, ty * MM), yl, fontsize=HEADER_FS, fontname="hebo")
-        ty += HEADER_FS * 0.48
-
-    divider_y = ty + 0.5
-    page.draw_line(
-        ((x0 + 2) * MM, divider_y * MM),
-        ((x0 + lw - 2) * MM, divider_y * MM),
-        color=(0.75, 0.75, 0.75), width=0.4)
-
-    content_top = divider_y + 1.2
-    content_h = (y0 + lh) - content_top - 1.5
-    qr_size = min(content_h, lw * 0.42)
-    draw_qr(page, x0 + 2, content_top, qr_size, _qr_content(item))
-
-    rx = x0 + 2 + qr_size + 3
-    r_max_w = max(4.0, (x0 + lw) - rx - 2)
-
-    # Der Loc/ID/Batch-Textblock braucht bei voller Groesse ~20.5mm Hoehe.
-    # Ist weniger Platz uebrig (z.B. 2-zeiliger Garnname), wird proportional
-    # runterskaliert, damit der Block IMMER innerhalb der Zelle bleibt.
-    IDEAL_BLOCK_H = 20.5
-    scale = min(1.0, max(0.55, content_h / IDEAL_BLOCK_H)) if content_h > 0 else 0.55
-    big_fs = max(8.0, 15.0 * scale)
-    batch_fs = max(5.0, 8.0 * scale)
-    off1, off2, off3 = 6.5 * scale, 7.5 * scale, 6.5 * scale
-
-    loc_txt = fit_text(str(item.get("Location") or "-"), big_fs, r_max_w, fontname="hebo")
-    id_txt = fit_text(f"#{item['SpoolID']}", big_fs, r_max_w, fontname="hebo")
-    batch_txt = fit_text(str(item.get("Batch") or "-"), batch_fs, r_max_w)
-
-    ry = content_top + off1
-    page.insert_text((rx * MM, ry * MM), loc_txt, fontsize=big_fs, fontname="hebo")
-    ry += off2
-    page.insert_text((rx * MM, ry * MM), id_txt, fontsize=big_fs, fontname="hebo")
-    ry += off3
-    page.insert_text((rx * MM, ry * MM), batch_txt, fontsize=batch_fs, color=(0.45, 0.45, 0.45))
+# Spool input, QR content and the label cell renderer: db/yarn_stock (shared with the web app).
+parse_spool_input = yarn_stock.parse_spool_input
+_qr_content = yarn_stock.qr_content
+_draw_yarn_label_cell = yarn_stock.draw_yarn_label_cell
 
 
 def _has_write_rights() -> bool:
-    try:
-        return int(app_meta.access_level() or 0) >= 2
-    except Exception:
-        return False
+    return yarn_stock.can_write()
 
 
 def _current_user_id() -> Optional[int]:
@@ -179,16 +109,8 @@ def _current_user_id() -> Optional[int]:
 
 
 def create_producer(name: str) -> Optional[int]:
-    """Legt einen neuen Producer in tblYarnProducer an und gibt die neue ID zurück."""
-    name = (name or "").strip()
-    if not name or not table_exists("tblYarnProducer"):
-        return None
-    execute(
-        "INSERT INTO tblYarnProducer ([Name],[GlobalID]) VALUES (?,?)",
-        [name, new_global_id()],
-    )
-    rows = fetch_all("SELECT ID FROM tblYarnProducer WHERE [Name] = ? ORDER BY ID DESC LIMIT 1", [name])
-    return int(rows[0]["ID"]) if rows else None
+    """New producer in tblYarnProducer: db/yarn_stock.create_producer."""
+    return yarn_stock.create_producer(name)
 
 
 def populate_producer_combo(cb: QComboBox, current_id: Optional[int] = None) -> None:
@@ -447,23 +369,7 @@ class UsedInDialog(QDialog):
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
-        rows = []
-        if spool_ids and table_exists("tbltrialsettings") and table_exists("tbltrial"):
-            ph = ",".join(["?"] * len(spool_ids))
-            try:
-                rows = fetch_all(
-                    f"SELECT ts.SpoolID, ts.Ply, t.Versuchsnummer, t.TrialSeriesID, "
-                    f"e.ExperimentID AS ExperimentIDTxt "
-                    f"FROM tbltrialsettings ts "
-                    f"JOIN tbltrial t ON t.ID = ts.TrialID "
-                    f"LEFT JOIN tbltrialseries s ON s.ID = t.TrialSeriesID "
-                    f"LEFT JOIN tblexperimente e ON e.ID = s.ExperimentID "
-                    f"WHERE ts.SpoolID IN ({ph}) "
-                    f"ORDER BY ts.SpoolID, t.Versuchsnummer",
-                    spool_ids,
-                )
-            except Exception:
-                rows = []
+        rows = yarn_stock.used_in(spool_ids)
 
         if not rows:
             root.addWidget(QLabel("No trials found using the selected spool(s)."))
@@ -504,10 +410,7 @@ class SpoolHistoryDialog(QDialog):
             root.addWidget(QLabel("The change history is not available in this database yet."))
             rows = []
         else:
-            try:
-                rows = yarn_spool_log.fetch_spool_history(spool_ids)
-            except Exception:
-                rows = []
+            rows = yarn_stock.history(spool_ids)
             if not rows:
                 root.addWidget(QLabel(
                     "No changes recorded for these spools. Changes are recorded since the "
@@ -535,14 +438,7 @@ class SpoolHistoryDialog(QDialog):
 
     @staticmethod
     def _describe(r: Dict) -> str:
-        action = r.get("Action")
-        if action == yarn_spool_log.CREATED:
-            return f"Created: {r.get('NewValue') or ''}".rstrip(": ")
-        if action == yarn_spool_log.DISCARDED:
-            new = (r.get("NewValue") or "").strip()
-            note = new[len("discarded"):].strip() if new.lower().startswith("discarded") else ""
-            return f"Discarded {note}".strip()
-        return f"{r.get('FieldName') or 'Value'}: {r.get('OldValue') or '–'} → {r.get('NewValue') or '–'}"
+        return yarn_stock.describe_history(r)
 
 
 class NewSpoolDialog(QDialog):
@@ -1013,122 +909,28 @@ class YarnStockScreen(QWidget):
         self._yarn_source_trial_col = _resolve_field(["SourceTrialID"], cmap)
 
     def reload_data(self):
-        if not table_exists(self.YARN_TABLE) or not table_exists(self.SPOOL_TABLE):
+        stock = yarn_stock.load_stock()
+        if stock is None:
+            self._resolve_yarn_cols()
             QMessageBox.warning(
                 self, "Yarn Stock",
-                f"Table {self.YARN_TABLE} or {self.SPOOL_TABLE} is missing in the database.")
+                f"Table {self.YARN_TABLE} or {self.SPOOL_TABLE} is missing in the database, or the "
+                "name field of tblYarn could not be determined.")
             return
-        self._resolve_yarn_cols()
-        if not self._yarn_name_col:
-            QMessageBox.warning(self, "Yarn Stock", "Could not determine the name field of tblYarn.")
-            return
-
-        # Halbfabrikat-"Schatten"-Garne (Multimaschinen-Ply-Verknüpfung) sind
-        # kein echter Lagerbestand und sollen hier nicht auftauchen.
-        _where = f" WHERE [{self._yarn_source_trial_col}] IS NULL" if self._yarn_source_trial_col else ""
-        yrows = fetch_all(
-            f"SELECT [{self._yarn_id_col}] AS YarnID, [{self._yarn_name_col}] AS YarnName"
-            + (f", [{self._yarn_minstock_col}] AS MinStock" if self._yarn_minstock_col else "")
-            + f" FROM {self.YARN_TABLE}{_where} ORDER BY [{self._yarn_name_col}]"
-        )
-        yarn_name_map: Dict[int, str] = {}
-        yarn_minstock_map: Dict[int, float] = {}
-        self._yarn_choices = []
-        for r in yrows:
-            yid = int(r["YarnID"])
-            yname = str(r.get("YarnName") or f"Yarn {yid}")
-            yarn_name_map[yid] = yname
-            self._yarn_choices.append((yid, yname))
-            ms = r.get("MinStock")
-            if ms is not None:
-                try:
-                    yarn_minstock_map[yid] = float(ms)
-                except Exception:
-                    pass
-
-        self._producer_choices: List[Tuple[int, str]] = []
-        self._producer_map: Dict[int, str] = {}
-        if table_exists("tblYarnProducer"):
-            try:
-                for pr in fetch_all("SELECT ID, Name FROM tblYarnProducer ORDER BY Name"):
-                    pid, pname = int(pr["ID"]), str(pr.get("Name") or "")
-                    self._producer_choices.append((pid, pname))
-                    self._producer_map[pid] = pname
-            except Exception:
-                pass
-
-        spool_cmap = get_columns_map(self.SPOOL_TABLE)
-        extra_cols = ""
-        if "colour" in spool_cmap:
-            extra_cols += ", [Colour]"
-        if "producerid" in spool_cmap:
-            extra_cols += ", [ProducerID]"
-        srows = fetch_all(
-            f"SELECT [ID], [YarnID], [Charge], [WeightKg], [Status], [Location], "
-            f"[ReceivedDate], [DiscardedDate]{extra_cols} FROM {self.SPOOL_TABLE}"
-        )
-
-        groups: Dict[Tuple[int, str], List[Dict]] = {}
-        for r in srows:
-            yid = r.get("YarnID")
-            if yid is None:
-                continue
-            yid = int(yid)
-            charge = r.get("Charge") or ""
-            groups.setdefault((yid, charge), []).append(r)
-
-        self._all_spools = srows
-        self._yarn_name_map = yarn_name_map
+        # Data + overview (yarn x batch, status per yarn): db/yarn_stock.load_stock (shared with the web app)
+        self._stock = stock
+        self._yarn_minstock_col = stock["minstock_col"]
+        self._yarn_id_col = stock["id_col"]
+        self._yarn_choices = stock["yarn_choices"]
+        self._producer_choices = stock["producers"]
+        self._producer_map = stock["producer_map"]
+        self._all_spools = stock["spools"]
+        self._yarn_name_map = stock["yarn_names"]
         self._yarn_colours, _ = load_yarn_colours()
-        self._yarn_minstock_map = yarn_minstock_map
-
-        # Status gilt PRO GARN (Summe ueber alle Batches), nicht pro Batch
-        # (Nutzerentscheid 2026-10-13, "muss global in TrippleT so sein").
-        yarn_total_kg: Dict[int, float] = {}
-        for (yid, _charge), spools in groups.items():
-            yarn_total_kg[yid] = yarn_total_kg.get(yid, 0.0) + sum(
-                float(s.get("WeightKg") or 0) for s in spools if s.get("Status") == "in stock")
-        yarn_status: Dict[int, str] = {}
-        for yid, ykg in yarn_total_kg.items():
-            ms = yarn_minstock_map.get(yid)
-            if ykg <= 0:
-                yarn_status[yid] = "Empty"
-            elif ms is not None and ykg < ms:
-                yarn_status[yid] = "Low"
-            else:
-                yarn_status[yid] = "OK"
-        status_color = {"Empty": "#FCEBEB", "Low": "#FAEEDA", "OK": "#EAF3DE"}
-        self._yarn_status = yarn_status
-        self._yarn_total_kg = yarn_total_kg
-
-        self._overview = []
-        for (yid, charge), spools in sorted(
-                groups.items(), key=lambda kv: (yarn_name_map.get(kv[0][0], ""), kv[0][1])):
-            active = [s for s in spools if s.get("Status") == "in stock"]
-            if not active:
-                # Aufgebrauchte Batch (keine Spule mehr am Lager) - nicht anzeigen
-                # (Nutzerentscheid 2026-10-13). Ein komplett leeres Garn
-                # verschwindet damit ganz aus der Uebersicht; Hinweis kommt dann
-                # nur noch ueber die Glocke und Manage Yarn (0 kg).
-                continue
-            total_kg = sum(float(s.get("WeightKg") or 0) for s in active)
-            locations = sorted({(s.get("Location") or "").strip() for s in active if s.get("Location")})
-            locations_disp = " / ".join(locations) if locations else "–"
-            producer_ids = sorted({int(s["ProducerID"]) for s in active if s.get("ProducerID")})
-            producers_disp = " / ".join(
-                self._producer_map.get(pid, f"#{pid}") for pid in producer_ids) if producer_ids else "–"
-            status = yarn_status[yid]
-            self._overview.append({
-                "YarnID": yid, "Charge": charge,
-                "YarnName": yarn_name_map.get(yid, f"Yarn {yid}"),
-                "Count": len(active), "TotalKg": total_kg,
-                "YarnTotalKg": yarn_total_kg[yid],
-                "MinStock": yarn_minstock_map.get(yid),
-                "Locations": locations_disp,
-                "Producers": producers_disp,
-                "ProducerIDs": set(producer_ids),
-                "Status": status, "Color": status_color[status],
-            })
+        self._yarn_minstock_map = stock["minstock"]
+        self._yarn_status = stock["yarn_status"]
+        self._yarn_total_kg = stock["yarn_total"]
+        self._overview = stock["overview"]
 
         prev_selected = self._selected_group
         self._render_overview()
@@ -1165,32 +967,7 @@ class YarnStockScreen(QWidget):
 
         self._reload_label_queue()
         self._apply_rack_filter()
-
-        try:
-            from ui.notifications import (
-                create_yarn_stock_notifications,
-                expire_yarn_stock_notifications_for_yarns,
-                remove_legacy_batch_yarn_stock_notifications,
-            )
-            # Einmalige Umstellung: alte Meldungen pro Garn/Batch (vor
-            # 2026-10-13) entfernen - ab jetzt gibt es eine Meldung pro Garn.
-            remove_legacy_batch_yarn_stock_notifications()
-            low_or_empty = [yid for yid, st in yarn_status.items() if st in ("Low", "Empty")]
-            ok_now = [yid for yid, st in yarn_status.items() if st == "OK"]
-            if low_or_empty:
-                create_yarn_stock_notifications([
-                    {"YarnID": yid, "YarnName": yarn_name_map.get(yid, f"Yarn {yid}"),
-                     "Charge": None, "Status": yarn_status[yid]}
-                    for yid in low_or_empty
-                ])
-            if ok_now:
-                # Räumt Notifications für inzwischen wieder aufgefüllte Garne
-                # weg, sonst würde ein erneuter Rückgang unter den Schwellwert
-                # nie wieder benachrichtigen (Dedup über die Message, siehe
-                # create_yarn_stock_notifications()).
-                expire_yarn_stock_notifications_for_yarns(ok_now)
-        except Exception:
-            pass  # Notification-Feature ist optional, darf reload_data nie blockieren
+        yarn_stock.refresh_notifications(stock)   # optional, never blocks
 
     def _render_overview(self):
         search = getattr(self, "txt_search", None)
@@ -1241,38 +1018,8 @@ class YarnStockScreen(QWidget):
         self._render_overview()
 
     def _apply_rack_filter(self):
-        prefix = self.txt_rack.text().strip().upper()
-        self._rack_filtered: List[Dict] = []
-        if prefix:
-            groups: Dict[Tuple[int, str], Dict] = {}
-            for s in getattr(self, "_all_spools", []):
-                if s.get("Status") != "in stock":
-                    continue
-                loc = (s.get("Location") or "").strip().upper()
-                if not loc.startswith(prefix):
-                    continue
-                yid = s.get("YarnID")
-                if yid is None:
-                    continue
-                key = (int(yid), s.get("Charge") or "")
-                g = groups.setdefault(key, {
-                    "YarnID": int(yid),
-                    "Yarn": self._yarn_name_map.get(int(yid), f"Yarn {yid}"),
-                    "Batch": s.get("Charge") or "",
-                    "Count": 0, "Weight": 0.0, "Locations": set(), "ProducerIDs": set(),
-                })
-                g["Count"] += 1
-                g["Weight"] += float(s.get("WeightKg") or 0)
-                if s.get("Location"):
-                    g["Locations"].add(s["Location"].strip())
-                if s.get("ProducerID"):
-                    g["ProducerIDs"].add(int(s["ProducerID"]))
-
-            for g in groups.values():
-                g["LocationsDisp"] = " / ".join(sorted(g["Locations"]))
-                g["ProducersDisp"] = " / ".join(
-                    self._producer_map.get(pid, f"#{pid}") for pid in sorted(g["ProducerIDs"])) or "–"
-            self._rack_filtered = sorted(groups.values(), key=lambda g: (g["Yarn"], g["Batch"]))
+        stock = getattr(self, "_stock", None)
+        self._rack_filtered: List[Dict] = yarn_stock.rack_groups(stock, self.txt_rack.text()) if stock else []
 
         self._render_guard = True
         self.tbl_rack.setRowCount(len(self._rack_filtered))
@@ -1308,54 +1055,19 @@ class YarnStockScreen(QWidget):
         if not rows:
             QMessageBox.information(self, "Export to Excel", f"No spools found in rack '{prefix}'.")
             return
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "Save rack overview", f"rack_{prefix}.xlsx", "Excel Files (*.xlsx)")
+        if not out_path:
+            return
         try:
-            import openpyxl
-            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            data = yarn_stock.rack_xlsx(rows, prefix)
+            with open(out_path, "wb") as fh:
+                fh.write(data)
         except ImportError:
             QMessageBox.critical(
                 self, "Export to Excel",
                 "The 'openpyxl' package is not installed. Run:\npip install openpyxl")
             return
-
-        out_path, _ = QFileDialog.getSaveFileName(
-            self, "Save rack overview", f"rack_{prefix}.xlsx", "Excel Files (*.xlsx)")
-        if not out_path:
-            return
-
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = f"Rack {prefix}"
-        headers = ["Yarn", "Batch", "Producer", "Spools", "Total (kg)", "Locations"]
-        ws.append(headers)
-        hdr_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
-        for cell in ws[1]:
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = hdr_fill
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-
-        thin = Side(style="thin", color="CCCCCC")
-        border = Border(left=thin, right=thin, top=thin, bottom=thin)
-        for it in rows:
-            ws.append([it["Yarn"], it["Batch"] or "–", it["ProducersDisp"], it["Count"],
-                       round(it["Weight"], 2), it["LocationsDisp"]])
-            for c in range(1, len(headers) + 1):
-                cell = ws.cell(row=ws.max_row, column=c)
-                cell.border = border
-                if c in (4, 5):
-                    cell.alignment = Alignment(horizontal="right")
-
-        widths = [30, 16, 20, 10, 12, 24]
-        for c, w in enumerate(widths, start=1):
-            ws.column_dimensions[chr(64 + c)].width = w
-        ws.freeze_panes = "A2"
-        ws.print_options.horizontalCentered = True
-        ws.page_setup.orientation = "landscape"
-        ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
-        ws.sheet_properties.pageSetUpPr.fitToPage = True
-
-        try:
-            wb.save(out_path)
         except Exception as e:
             show_error(self, "Export to Excel", "The Excel file could not be saved.", e)
             return
@@ -1395,36 +1107,15 @@ class YarnStockScreen(QWidget):
         # sonst wird die Tabelle noch waehrend der Delegate-Ausfuehrung neu
         # aufgebaut und der zweite setData-Aufruf (Anzeigetext) laeuft ins Leere.
         self._render_guard = True
-        # Betroffene Spulen (inkl. ausgebuchter) fuers Protokoll VOR dem Update merken
-        affected = [sp for sp in getattr(self, "_all_spools", [])
-                    if int(sp.get("YarnID") or -1) == int(yarn_id) and (sp.get("Charge") or "") == old_charge]
         try:
             if col == 1:
                 new_charge = item.text().strip()
                 if new_charge == "–":
                     new_charge = ""
-                execute(
-                    f"UPDATE {self.SPOOL_TABLE} SET [Charge] = ? "
-                    f"WHERE [YarnID] = ? AND ([Charge] = ? OR (? = '' AND ([Charge] IS NULL OR [Charge] = '')))",
-                    [new_charge or None, yarn_id, old_charge, old_charge],
-                )
-                if new_charge != old_charge:
-                    yarn_spool_log.log_spool_changes(
-                        {"SpoolID": sp["ID"], "Action": yarn_spool_log.UPDATED, "Field": "Batch",
-                         "Old": old_charge or None, "New": new_charge or None} for sp in affected)
+                yarn_stock.update_group_batch(yarn_id, old_charge, new_charge, getattr(self, "_all_spools", []))
             else:
-                new_pid = item.data(Qt.EditRole)
-                execute(
-                    f"UPDATE {self.SPOOL_TABLE} SET [ProducerID] = ? "
-                    f"WHERE [YarnID] = ? AND ([Charge] = ? OR (? = '' AND ([Charge] IS NULL OR [Charge] = '')))",
-                    [new_pid, yarn_id, old_charge, old_charge],
-                )
-                pmap = getattr(self, "_producer_map", {})
-                yarn_spool_log.log_spool_changes(
-                    {"SpoolID": sp["ID"], "Action": yarn_spool_log.UPDATED, "Field": "Producer",
-                     "Old": pmap.get(sp.get("ProducerID")) if sp.get("ProducerID") else None,
-                     "New": pmap.get(new_pid) if new_pid else None}
-                    for sp in affected if sp.get("ProducerID") != new_pid)
+                yarn_stock.update_group_producer(yarn_id, old_charge, item.data(Qt.EditRole),
+                                                 getattr(self, "_all_spools", []), getattr(self, "_producer_map", {}))
         except Exception as e:
             show_error(self, "Edit", "The change could not be saved.", e)
         QTimer.singleShot(0, self._finish_group_edit)
@@ -1459,11 +1150,7 @@ class YarnStockScreen(QWidget):
             return
         self._render_guard = True
         try:
-            execute(
-                f"UPDATE {self.YARN_TABLE} SET [{self._yarn_minstock_col}] = ? "
-                f"WHERE [{self._yarn_id_col}] = ?",
-                [new_val, g["YarnID"]],
-            )
+            yarn_stock.set_min_stock(g["YarnID"], new_val)
             log_usage_event("feature", "yarn_stock_edit_min_stock")
         except Exception as e:
             show_error(self, "Min. stock", "The minimum stock could not be saved.", e)
@@ -1478,68 +1165,19 @@ class YarnStockScreen(QWidget):
         if not rows:
             QMessageBox.information(self, "Export to Excel", "Nothing to export.")
             return
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "Save yarn stock overview", "yarn_stock_overview.xlsx", "Excel Files (*.xlsx)")
+        if not out_path:
+            return
         try:
-            import openpyxl
-            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            data = yarn_stock.overview_xlsx(rows)
+            with open(out_path, "wb") as fh:
+                fh.write(data)
         except ImportError:
             QMessageBox.critical(
                 self, "Export to Excel",
                 "The 'openpyxl' package is not installed. Run:\npip install openpyxl")
             return
-
-        out_path, _ = QFileDialog.getSaveFileName(
-            self, "Save yarn stock overview", "yarn_stock_overview.xlsx", "Excel Files (*.xlsx)")
-        if not out_path:
-            return
-
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Yarn Stock"
-
-        headers = list(self.OV_HEADERS)
-        ws.append(headers)
-        hdr_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
-        for c, cell in enumerate(ws[1], start=1):
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = hdr_fill
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-
-        status_fill = {
-            "OK": PatternFill(start_color="EAF3DE", end_color="EAF3DE", fill_type="solid"),
-            "Low": PatternFill(start_color="FAEEDA", end_color="FAEEDA", fill_type="solid"),
-            "Empty": PatternFill(start_color="FCEBEB", end_color="FCEBEB", fill_type="solid"),
-        }
-        thin = Side(style="thin", color="CCCCCC")
-        border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-        for g in rows:
-            ws.append([
-                g["YarnName"], g["Charge"] or "–", g["Producers"], g["Count"],
-                round(g["TotalKg"], 2), round(g["YarnTotalKg"], 2), g.get("MinStock"),
-                g["Status"], g["Locations"],
-            ])
-            r = ws.max_row
-            fill = status_fill.get(g["Status"])
-            for c in range(1, len(headers) + 1):
-                cell = ws.cell(row=r, column=c)
-                cell.border = border
-                if fill:
-                    cell.fill = fill
-                if c in (4, 5, 6, 7):
-                    cell.alignment = Alignment(horizontal="right")
-
-        widths = [30, 16, 20, 10, 12, 14, 14, 10, 24]
-        for c, w in enumerate(widths, start=1):
-            ws.column_dimensions[chr(64 + c)].width = w
-        ws.freeze_panes = "A2"
-        ws.print_options.horizontalCentered = True
-        ws.page_setup.orientation = "landscape"
-        ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
-        ws.sheet_properties.pageSetUpPr.fitToPage = True
-
-        try:
-            wb.save(out_path)
         except Exception as e:
             show_error(self, "Export to Excel", "The Excel file could not be saved.", e)
             return
@@ -1863,44 +1501,14 @@ class YarnStockScreen(QWidget):
         if vals["YarnID"] is None:
             self._restore_overview_selection(prev_group)
             return
-        user_id = _current_user_id()
-        today = date.today().isoformat()
-        spool_cmap = get_columns_map(self.SPOOL_TABLE)
-        cols = ["YarnID", "Charge", "WeightKg", "Status", "Location", "ReceivedDate", "UserID"]
-        base_vals: List[Any] = [vals["YarnID"], vals["Charge"], vals["WeightKg"], "in stock",
-                                 vals["Location"], today, user_id]
-        if "colour" in spool_cmap:
-            cols.append("Colour")
-            base_vals.append(vals.get("Colour"))
-        if "producerid" in spool_cmap:
-            cols.append("ProducerID")
-            base_vals.append(vals.get("ProducerID"))
-        cols.append("GlobalID")
-        ph = ",".join(["?"] * len(cols))
-        inserted = 0
-        new_ids: List[int] = []
-        try:
-            for _ in range(vals["Count"]):
-                new_id = execute_insert(
-                    f"INSERT INTO {self.SPOOL_TABLE} ({','.join('['+c+']' for c in cols)}) "
-                    f"VALUES ({ph})",
-                    base_vals + [new_global_id()],
-                )
-                inserted += 1
-                if new_id:
-                    new_ids.append(int(new_id))
-        except Exception as e:
-            show_error(self, "New spool(s)", "The new spools could not be created.", e)
-            if inserted == 0:
+        new_ids, err = yarn_stock.new_spools(vals, _current_user_id())
+        if err is not None:
+            show_error(self, "New spool(s)", "The new spools could not be created.", err)
+            if not new_ids:
                 self._restore_overview_selection(prev_group)
                 return
-            # Teilweise angelegt: trotzdem neu laden und zur Gruppe springen,
-            # damit die bereits angelegten Spulen sichtbar sind.
-        log_usage_event("feature", "yarn_stock_new_spools", str(inserted))
-        summary = (f"{float(vals['WeightKg']):.2f} kg, location {vals['Location'] or '–'}, "
-                   f"batch {vals['Charge'] or '–'}")
-        yarn_spool_log.log_spool_changes(
-            {"SpoolID": sid, "Action": yarn_spool_log.CREATED, "New": summary} for sid in new_ids)
+            # partially created: still reload and jump to the group so the created spools are visible
+        log_usage_event("feature", "yarn_stock_new_spools", str(len(new_ids)))
         if vals.get("AddToLabelQueue") and new_ids:
             queued = self._queue_labels(new_ids, "New spool(s)")
             if queued:
@@ -1952,22 +1560,12 @@ class YarnStockScreen(QWidget):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if resp != QMessageBox.Yes:
             return
-        today = date.today().isoformat()
-        n = 0
         try:
-            for sid in ids:
-                n += execute(
-                    f"UPDATE {self.SPOOL_TABLE} SET [Status] = 'discarded', [DiscardedDate] = ? "
-                    f"WHERE [ID] = ?",
-                    [today, sid],
-                )
+            n = yarn_stock.discard_spools(ids)
         except Exception as e:
             show_error(self, "Discard", "The spools could not be discarded.", e)
             return
         log_usage_event("feature", "yarn_stock_discard", str(n))
-        yarn_spool_log.log_spool_changes(
-            {"SpoolID": sid, "Action": yarn_spool_log.DISCARDED, "Field": "Status",
-             "Old": "in stock", "New": "discarded"} for sid in ids)
         QMessageBox.information(self, "Discard", f"{n} spool(s) discarded.")
         self.reload_data()
 
@@ -1987,93 +1585,22 @@ class YarnStockScreen(QWidget):
         """Schreibt die offenen Aenderungen des Spools-Bereichs in die DB.
         Anzahl geaenderter Felder, oder None bei Fehler (Meldung bereits gezeigt).
         Laedt NICHT neu - das entscheidet der Aufrufer."""
-        weight_updates = self.model_detail.dirty_weight_updates()
-        loc_updates = self.model_detail.dirty_location_updates()
-        colour_updates = self.model_detail.dirty_colour_updates()
-        producer_updates = self.model_detail.dirty_producer_updates()
-        n = 0
         try:
-            for sid, w in weight_updates.items():
-                n += execute(
-                    f"UPDATE {self.SPOOL_TABLE} SET [WeightKg] = ? WHERE [ID] = ?",
-                    [w, sid],
-                )
-            for sid, loc in loc_updates.items():
-                n += execute(
-                    f"UPDATE {self.SPOOL_TABLE} SET [Location] = ? WHERE [ID] = ?",
-                    [loc or None, sid],
-                )
-            for sid, col in colour_updates.items():
-                n += execute(
-                    f"UPDATE {self.SPOOL_TABLE} SET [Colour] = ? WHERE [ID] = ?",
-                    [col or None, sid],
-                )
-            for sid, pid in producer_updates.items():
-                n += execute(
-                    f"UPDATE {self.SPOOL_TABLE} SET [ProducerID] = ? WHERE [ID] = ?",
-                    [pid, sid],
-                )
+            n = yarn_stock.save_spool_changes(
+                self.model_detail.dirty_weight_updates(), self.model_detail.dirty_location_updates(),
+                self.model_detail.dirty_colour_updates(), self.model_detail.dirty_producer_updates(),
+                {r["ID"]: r for r in self.model_detail._rows}, getattr(self, "_producer_map", {}))
         except Exception as e:
             show_error(self, "Save Changes", "The changes could not be saved.", e)
             return None
-        self._log_pending_changes(weight_updates, loc_updates, colour_updates, producer_updates)
         self.model_detail.clear_pending_changes()
         log_usage_event("feature", "yarn_stock_save_changes", str(n))
         return n
 
-    def _log_pending_changes(self, weight_updates, loc_updates, colour_updates, producer_updates) -> None:
-        """Protokolliert gespeicherte Feldaenderungen (nur echte Aenderungen)."""
-        rows_by_id = {r["ID"]: r for r in self.model_detail._rows}
-        pmap = getattr(self, "_producer_map", {})
-        entries = []
-
-        def add(sid, field, old, new):
-            if (old or None) == (new or None):
-                return
-            entries.append({"SpoolID": sid, "Action": yarn_spool_log.UPDATED,
-                            "Field": field, "Old": old, "New": new})
-
-        for sid, w in weight_updates.items():
-            old = rows_by_id.get(sid, {}).get("WeightKg")
-            old_f = float(old) if old is not None else None
-            if old_f is None or abs(old_f - float(w)) > 1e-9:
-                entries.append({"SpoolID": sid, "Action": yarn_spool_log.UPDATED,
-                                "Field": "Weight (kg)", "Old": old_f, "New": float(w)})
-        for sid, loc in loc_updates.items():
-            add(sid, "Location", rows_by_id.get(sid, {}).get("Location"), loc)
-        for sid, col in colour_updates.items():
-            add(sid, "Tube Colour", rows_by_id.get(sid, {}).get("Colour"), col)
-        for sid, pid in producer_updates.items():
-            old_pid = rows_by_id.get(sid, {}).get("ProducerID")
-            if old_pid != pid:
-                entries.append({"SpoolID": sid, "Action": yarn_spool_log.UPDATED, "Field": "Producer",
-                                "Old": pmap.get(old_pid) if old_pid else None,
-                                "New": pmap.get(pid) if pid else None})
-        yarn_spool_log.log_spool_changes(entries)
-
     # ---------------- Label queue ----------------
 
     def _reload_label_queue(self):
-        self._queue_items: List[Dict] = []
-        if not table_exists(LABEL_QUEUE_TABLE):
-            self.tbl_queue.setRowCount(0)
-            return
-        rows = fetch_all(
-            f"SELECT q.[ID] AS QueueID, q.[SpoolID], s.[YarnID], s.[Charge], s.[WeightKg], s.[Location] "
-            f"FROM {LABEL_QUEUE_TABLE} q "
-            f"JOIN {self.SPOOL_TABLE} s ON s.[ID] = q.[SpoolID] "
-            f"WHERE q.[PrintedDate] IS NULL "
-            f"ORDER BY q.[QueuedDate]"
-        )
-        for r in rows:
-            yid = r.get("YarnID")
-            self._queue_items.append({
-                "QueueID": r["QueueID"], "SpoolID": r["SpoolID"],
-                "Yarn": self._yarn_name_map.get(int(yid), f"Yarn {yid}") if yid is not None else "",
-                "Batch": r.get("Charge") or "",
-                "Weight": float(r.get("WeightKg") or 0),
-                "Location": r.get("Location") or "",
-            })
+        self._queue_items: List[Dict] = yarn_stock.queue_items(getattr(self, "_yarn_name_map", {}))
         self.tbl_queue.setRowCount(len(self._queue_items))
         for row, it in enumerate(self._queue_items):
             vals = [f"#{it['SpoolID']}", it["Yarn"], it["Batch"] or "–", f"{it['Weight']:.2f}"]
@@ -2100,22 +1627,9 @@ class YarnStockScreen(QWidget):
     def _queue_labels(self, ids: List[int], title: str) -> Optional[int]:
         """Legt Spulen in die Label queue (bereits wartende werden uebersprungen)
         und laedt die Queue-Anzeige neu. None bei Fehler (Meldung gezeigt)."""
-        if not table_exists(LABEL_QUEUE_TABLE):
-            return 0
-        already_queued = {it["SpoolID"] for it in getattr(self, "_queue_items", [])}
-        user_id = _current_user_id()
-        now = datetime.now().isoformat(sep=" ", timespec="seconds")
-        added = 0
         try:
-            for sid in ids:
-                if sid in already_queued:
-                    continue
-                execute(
-                    f"INSERT INTO {LABEL_QUEUE_TABLE} ([SpoolID],[QueuedDate],[UserID],[GlobalID]) "
-                    f"VALUES (?,?,?,?)",
-                    [sid, now, user_id, new_global_id()],
-                )
-                added += 1
+            added = yarn_stock.queue_labels(ids, _current_user_id(),
+                                            {it["SpoolID"] for it in getattr(self, "_queue_items", [])})
         except Exception as e:
             show_error(self, title, "The spools could not be added to the label queue.", e)
             self._reload_label_queue()
@@ -2132,8 +1646,7 @@ class YarnStockScreen(QWidget):
             return
         queue_ids = [self.tbl_queue.item(r.row(), 0).data(Qt.UserRole) for r in rows]
         try:
-            for qid in queue_ids:
-                execute(f"DELETE FROM {LABEL_QUEUE_TABLE} WHERE [ID] = ?", [qid])
+            yarn_stock.remove_from_queue(queue_ids)
         except Exception as e:
             show_error(self, "Remove selected", "The spools could not be removed from the label queue.", e)
             return
@@ -2172,10 +1685,8 @@ class YarnStockScreen(QWidget):
             return
 
         printed_ids = [it["QueueID"] for it in self._queue_items[:placed]]
-        now = datetime.now().isoformat(sep=" ", timespec="seconds")
         try:
-            for qid in printed_ids:
-                execute(f"UPDATE {LABEL_QUEUE_TABLE} SET [PrintedDate] = ? WHERE [ID] = ?", [now, qid])
+            yarn_stock.mark_printed(printed_ids)
         except Exception as e:
             show_error(self, "Print Labels", "The PDF was created, but the labels could not be marked as printed.", e, warning=True)
 
