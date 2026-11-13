@@ -165,3 +165,17 @@ def test_pdf_value_notes_text():
         {"trial": "V9", "what": "whole trial", "t": "cleaned", "by": "", "at": ""},
     ])
     assert txt.split("\n") == ["V7 · Tenacity: knots (Ann Lab, 30.10.2026)", "V9 · whole trial: cleaned"]
+
+
+def test_notes_for_binding_single_and_group():
+    from db import cell_notes as cn
+    from db.series_tables import CellBinding, GroupCellBinding
+    n1 = {"TableName": "tblTrialSettings", "RowID": 5, "FieldName": "T1Temp", "NoteText": "a"}
+    n2 = {"TableName": "tbltrialsettings", "RowID": 6, "FieldName": "t1temp", "NoteText": "b"}
+    by_key = cn.by_cell([n1, n2])
+    assert cn.notes_for_binding(by_key, CellBinding("tblTrialSettings", "ID", 5, "T1Temp")) == [n1]
+    assert cn.notes_for_binding(by_key, GroupCellBinding("tblTrialSettings", "ID", [5, 6], "T1Temp")) == [n1, n2]
+    assert cn.notes_for_binding(by_key, None) == []
+    assert cn.notes_for_binding({}, CellBinding("x", "ID", 1, "y")) == []
+    assert cn.is_trial_note({"TableName": "tblTrial", "FieldName": ""})
+    assert not cn.is_trial_note({"TableName": "tblTrial", "FieldName": "AirPressure"})

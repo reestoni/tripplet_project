@@ -131,6 +131,29 @@ def by_cell(notes: Iterable[Dict[str, Any]]) -> Dict[CellKey, List[Dict[str, Any
     return out
 
 
+def notes_for_binding(by_key: Optional[Dict[CellKey, List[Dict[str, Any]]]], binding: Any) -> List[Dict[str, Any]]:
+    """Notes of one table cell, given its binding (db/series_tables.CellBinding or
+    GroupCellBinding = several tblTrialSettings rows). Shared by the desktop model
+    (PivotEditModel.notes_at) and the web app."""
+    if not by_key or binding is None:
+        return []
+    ids = getattr(binding, "id_values", None)
+    if ids is None:
+        ids = [binding.id_value]
+    out: List[Dict[str, Any]] = []
+    for i in ids:
+        try:
+            out += by_key.get((str(binding.table).lower(), int(i), str(binding.field).lower()), [])
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def is_trial_note(note: Dict[str, Any]) -> bool:
+    """A note on the whole trial (not on a value)."""
+    return str(note.get("TableName") or "").lower() == "tbltrial" and not note.get("FieldName")
+
+
 def add_note(table: str, row_id: Any, field: str, text: str,
              trial_id: Optional[int] = None, series_id: Any = None) -> int:
     """Insert a note, returns its ID. Raises on DB errors (caller shows them)."""

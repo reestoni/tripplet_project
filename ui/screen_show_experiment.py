@@ -1782,17 +1782,9 @@ class PivotEditModel(QAbstractTableModel):
             return []
         if r < self._n_hdr:
             return list((self._note_trial_cols or {}).get(c - 1, [])) if r == 0 else []
-        b = self.get_binding(r - self._n_hdr, c - 1)
-        if b is None or not by_key:
-            return []
-        ids = b.id_values if isinstance(b, GroupCellBinding) else [b.id_value]
-        out: list = []
-        for i in ids:
-            try:
-                out += by_key.get((str(b.table).lower(), int(i), str(b.field).lower()), [])
-            except (TypeError, ValueError):
-                pass
-        return out
+        # rule shared with the web app (db/cell_notes.notes_for_binding)
+        from db.cell_notes import notes_for_binding
+        return notes_for_binding(by_key, self.get_binding(r - self._n_hdr, c - 1))
 
     def save_dirty(self) -> int:
         """Schreibt alle geänderten Zellen in die DB.
