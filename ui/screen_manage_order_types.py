@@ -12,6 +12,7 @@ from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.text_normalize import canon_simple as _canon
 from db.connection import fetch_all, execute, execute_insert
+from db import master_tables as _mt   # Qt-free, shared with the web
 
 # Wiederverwendet statt dupliziert (analog zu screen_manage_yarn.py/
 # screen_manage_material.py) - vollstaendig generisch (kein Jets-spezifischer
@@ -251,7 +252,7 @@ class ManageOrderTypeScreen(QWidget):
 
     # ---- data layer ----
     def _load_rows(self) -> List[Dict]:
-        return fetch_all(f'SELECT * FROM [{self.TABLE}]', [])
+        return _mt.load_rows(_mt.KINDS['order_types'])
 
     def _infer_id_col(self, headers: List[str]) -> str:
         for h in headers:
@@ -329,22 +330,8 @@ class ManageOrderTypeScreen(QWidget):
         if not dirty_rows:
             self._set_status('No changes to save.')
             return
-        id_col = self.model.id_column() or 'ID'
-        total = 0
         try:
-            for r in dirty_rows:
-                if id_col not in r:
-                    raise ValueError(
-                        f"Row has no '{id_col}' field; cannot save.")
-                rid = r[id_col]
-                cols = [c for c in self.model.headers() if c !=
-                        id_col and c in r]
-                if not cols:
-                    continue
-                set_sql = ', '.join([f'[{c}] = ?' for c in cols])
-                sql = f'UPDATE [{self.TABLE}] SET {set_sql} WHERE [{id_col}] = ?'
-                params = [r[c] for c in cols] + [rid]
-                total += execute(sql, params) or 0
+            total = _mt.save_changes(_mt.KINDS['order_types'], dirty_rows)   # db/master_tables.py
             self._set_status(f'Saved {total} update(s).')
             self.model.clear_dirty()
         except Exception as e:
@@ -355,21 +342,7 @@ class ManageOrderTypeScreen(QWidget):
         if self._read_only:
             return
         try:
-            rows = self._load_rows()
-            headers = list(rows[0].keys()) if rows else [
-                'ID', 'Bestellungstyp']
-            cols = [h for h in headers if h.lower() != 'id']
-
-            # very simple defaults
-            values = []
-            for c in cols:
-                values.append('' if _canon(c) in {
-                              'bestellungstyp', 'name', 'bezeichnung'} else None)
-
-            placeholders = ','.join(['?'] * len(cols))
-            cols_sql = ', '.join([f'[{c}]' for c in cols])
-            sql = f'INSERT INTO [{self.TABLE}] ({cols_sql}) VALUES ({placeholders})'
-            new_id = execute_insert(sql, values)
+            new_id = _mt.create(_mt.KINDS['order_types'])          # db/master_tables.py
 
             self.reload_data()
             if new_id is not None:
@@ -402,9 +375,7 @@ class ManageOrderTypeScreen(QWidget):
         if QMessageBox.question(self, 'Confirm Delete', f'Delete {len(ids)} row(s)?') != QMessageBox.Yes:
             return
         try:
-            placeholders = ','.join(['?'] * len(ids))
-            sql = f'DELETE FROM [{self.TABLE}] WHERE [{id_col}] IN ({placeholders})'
-            execute(sql, ids)
+            _mt.delete(_mt.KINDS['order_types'], ids)
             self.reload_data()
             self._set_status(f'Deleted {len(ids)} row(s).')
         except Exception as e:

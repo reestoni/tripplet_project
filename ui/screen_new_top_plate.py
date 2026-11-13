@@ -20,13 +20,8 @@ from ui.widgets.friendly_error import show_error
 
 # ── File storage ─────────────────────────────────────────────────────────────
 def _top_plate_files_root() -> str:
-    try:
-        from db.connection import is_dev_mode
-        if is_dev_mode():
-            return "C:\\ttt\\TopPlateFiles"
-    except Exception:
-        pass
-    return "H:\\Technik\\TrippleT\\TopPlateFiles"
+    from db import master_tables
+    return master_tables.files_root()
 
 _FILE_ICONS = {
     ".pdf":  "📄",
@@ -414,15 +409,8 @@ class NewTopPlateScreen(QWidget):
         self._preview_meta.setText("")
         if not self._current_top_plate_id:
             return
-        try:
-            from db.connection import fetch_all
-            rows = fetch_all(
-                "SELECT ID, FileName, StoredName, RelativePath, FileType, FileSizeKB, Notes "
-                "FROM tblTopPlateFile WHERE TopPlateID = %s ORDER BY UploadedAt DESC",
-                [self._current_top_plate_id]
-            )
-        except Exception:
-            return
+        from db import master_tables
+        rows = master_tables.list_files(self._current_top_plate_id)
         for r in rows:
             fname = r.get("FileName") or r.get("StoredName") or ""
             icon  = _file_icon(fname)
@@ -446,11 +434,8 @@ class NewTopPlateScreen(QWidget):
         )
         if not paths:
             return
-        root = _top_plate_files_root()
-        top_plate_folder = os.path.join(root, str(self._current_top_plate_id))
-        os.makedirs(top_plate_folder, exist_ok=True)
         try:
-            from db.connection import execute
+            from db import master_tables
             import app_meta
             uid = (app_meta.current_user or {}).get("id")
         except Exception as e:
@@ -459,22 +444,8 @@ class NewTopPlateScreen(QWidget):
         errors = []
         for path in paths:
             try:
-                fname  = os.path.basename(path)
-                ts     = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                stored = f"{ts}_{fname}"
-                dest   = os.path.join(top_plate_folder, stored)
-                shutil.copy2(path, dest)
-                rel    = os.path.join(str(self._current_top_plate_id), stored)
-                kb     = max(1, os.path.getsize(dest) // 1024)
-                ext    = os.path.splitext(fname)[1].lower()
-                ftype  = ("image" if ext in (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff")
-                          else "pdf" if ext == ".pdf" else "other")
-                execute(
-                    "INSERT INTO tblTopPlateFile "
-                    "(TopPlateID, FileName, StoredName, RelativePath, FileType, FileSizeKB, UploadedBy) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    [self._current_top_plate_id, fname, stored, rel, ftype, kb, uid]
-                )
+                with open(path, "rb") as fh:
+                    master_tables.add_file(self._current_top_plate_id, os.path.basename(path), fh.read(), uid)
             except Exception as e:
                 errors.append(f"{os.path.basename(path)}: {e}")
         self._load_files()
@@ -519,8 +490,8 @@ class NewTopPlateScreen(QWidget):
         if reply != QMessageBox.Yes:
             return
         try:
-            from db.connection import execute
-            execute("DELETE FROM tblTopPlateFile WHERE ID = %s", [r["ID"]])
+            from db import master_tables
+            master_tables.remove_file(r["ID"])
         except Exception as e:
             QMessageBox.critical(self, "Delete failed", str(e))
             return

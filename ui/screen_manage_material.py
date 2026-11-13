@@ -13,6 +13,7 @@ from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.text_normalize import canon_simple as _canon
 from db.connection import fetch_all, execute, execute_insert, get_columns_map
+from db import master_tables as _mt   # Qt-free, shared with the web
 
 # Wiederverwendet statt dupliziert (analog zu screen_manage_yarn.py) - die drei
 # Klassen sind vollstaendig generisch (kein Jets-spezifischer State), siehe
@@ -395,67 +396,14 @@ class ManageMaterialScreen(QWidget):
 
     # ---- data layer ----
     def _load_rows(self) -> List[Dict]:
-        # UsedInYarn ist eine reine Anzeige-Spalte (keine echte tblMaterial-
-        # Spalte, analog zu UsedInTrial bei Yarn/Jets): ob mindestens ein
-        # Katalog-Garn (Halbfabrikat-Schattengarne ausgenommen, siehe
-        # ManageYarnScreen._load_yarn) dieses Material verwendet.
-        src_col = _resolve_field(['SourceTrialID'], get_columns_map('tblYarn'))
-        exclude_shadow = f' AND y.{src_col} IS NULL' if src_col else ''
-        sql = (
-            'SELECT m.*, '
-            f'CASE WHEN EXISTS (SELECT 1 FROM tblYarn y WHERE y.Material = m.ID{exclude_shadow}) '
-            'THEN 1 ELSE 0 END AS UsedInYarn '
-            f'FROM {self.TABLE} m'
-        )
-        return fetch_all(sql, [])
+        # + UsedInYarn (shown only): db/master_tables.load_rows
+        return _mt.load_rows(_mt.KINDS['material'])
 
     def _fetch_material_usage(self, material_id) -> List[Dict]:
-        """Alle Katalog-Garne (Halbfabrikat-Schattengarne ausgenommen), die
-        dieses Material verwenden. Spaltenliste wird dynamisch anhand von
-        get_columns_map() zusammengestellt, da Kurzname/ColourID/SourceTrialID
-        nicht auf jeder Umgebung existieren (dev z.B. hat kein tblColour/
-        SourceTrialID, siehe CLAUDE.md)."""
-        cols_map = get_columns_map('tblYarn')
-        select_cols = ['ID', 'Name']
-        for cand, real in (('kurzname', 'Kurzname'), ('garntyp', 'Garntyp'),
-                            ('titer', 'Titer'), ('numberoffilaments', 'NumberOfFilaments'),
-                            ('colourid', 'ColourID')):
-            if cand in cols_map:
-                select_cols.append(real)
-        src_col = _resolve_field(['SourceTrialID'], cols_map)
-        where = f' AND {src_col} IS NULL' if src_col else ''
-        order_by = ("ORDER BY COALESCE(NULLIF(Kurzname, ''), Name)"
-                    if 'Kurzname' in select_cols else 'ORDER BY Name')
-        sql = (f"SELECT {', '.join(select_cols)} FROM tblYarn "
-               f"WHERE Material = ?{where} {order_by}")
-        rows = fetch_all(sql, [material_id])
-
-        try:
-            garntyp_id2name, _ = load_garntyp_map()
-        except Exception:
-            garntyp_id2name = {}
-        try:
-            colour_id2name, _ = load_colour_map()
-        except Exception:
-            colour_id2name = {}
-
-        out = []
-        for r in rows:
-            garntyp_id = r.get('Garntyp')
-            colour_id = r.get('ColourID')
-            out.append({
-                'id': r.get('ID'),
-                'name': r.get('Name'),
-                'kurzname': r.get('Kurzname'),
-                'garntyp': garntyp_id2name.get(garntyp_id) if garntyp_id is not None else None,
-                'titer': r.get('Titer'),
-                'filaments': r.get('NumberOfFilaments'),
-                'colour': colour_id2name.get(colour_id) if colour_id is not None else None,
-            })
-        return out
+        return _mt.material_usage(material_id)
 
     @staticmethod
-    def _fmt_num(v) -> Optional[str]:
+    def _fmt_num(v) -> Optional[str]:   # kept for callers; same as db/master_tables._fmt_num
         """Kompakte Zahlendarstellung fuers Yarn-Detail-Label (800.00 -> '800',
         3.50 -> '3.5') - siehe ManageYarnScreen._fmt_num fuer dasselbe Muster."""
         if v is None:
@@ -468,20 +416,7 @@ class ManageMaterialScreen(QWidget):
 
     @classmethod
     def _yarn_label(cls, y: Dict) -> str:
-        name = y.get('kurzname') or y.get('name') or f"Yarn {y.get('id')}"
-        parts = []
-        if y.get('garntyp'):
-            parts.append(str(y['garntyp']))
-        titer = cls._fmt_num(y.get('titer'))
-        if titer is not None:
-            parts.append(f'{titer} dtex')
-        fils = cls._fmt_num(y.get('filaments'))
-        if fils not in (None, '0'):
-            parts.append(f'{fils}f')
-        if y.get('colour'):
-            parts.append(str(y['colour']))
-        suffix = f" - {', '.join(parts)}" if parts else ''
-        return f"      •  {name}{suffix}"
+        return "      •  " + _mt.yarn_label(y)
 
     def _load_fk_maps(self) -> Dict[str, Dict]:
         # The former lookup table for ratings has been removed.
@@ -568,28 +503,9 @@ class ManageMaterialScreen(QWidget):
         if not dirty_rows:
             self._set_status('No changes to save.')
             return
-        id_col = self.model.id_column() or 'ID'
-        usedinyarn_col = self.model.usedinyarn_column_name()
-        total = 0
         try:
-            for r in dirty_rows:
-                if id_col not in r:
-                    raise ValueError(
-                        f"Row has no '{id_col}' field; cannot save.")
-                rid = r[id_col]
-                cols = [c for c in self.model.headers() if c !=
-                        id_col and c in r]
-                # UsedInYarn ist keine echte tblMaterial-Spalte (siehe
-                # _load_rows) - muss zwingend raus, sonst schlägt das UPDATE
-                # mit "Unknown column" fehl.
-                if usedinyarn_col and usedinyarn_col in cols:
-                    cols.remove(usedinyarn_col)
-                if not cols:
-                    continue
-                set_sql = ', '.join([f'[{c}] = ?' for c in cols])
-                sql = f'UPDATE [{self.TABLE}] SET {set_sql} WHERE [{id_col}] = ?'
-                params = [r[c] for c in cols] + [rid]
-                total += execute(sql, params) or 0
+            # UsedInYarn is no real column - db/master_tables.save_changes drops it
+            total = _mt.save_changes(_mt.KINDS['material'], dirty_rows)
             self._set_status(f'Saved {total} update(s).')
             self.model.clear_dirty()
         except Exception as e:
@@ -600,24 +516,7 @@ class ManageMaterialScreen(QWidget):
         if self._read_only:
             return
         try:
-            rows = self._load_rows()
-            headers = list(rows[0].keys()) if rows else [
-                'ID', 'Material'] + FK_COLS
-            cols = [h for h in headers if h.lower() != 'id' and _canon(h) != 'usedinyarn']
-
-            values = []
-            for c in cols:
-                if _canon(c) in {'material', 'name', 'bezeichnung'}:
-                    values.append('')
-                elif c in FK_COLS:
-                    values.append(None)  # no default FK
-                else:
-                    values.append(None)
-
-            placeholders = ','.join(['?'] * len(cols))
-            cols_sql = ', '.join([f'[{c}]' for c in cols])
-            sql = f'INSERT INTO [{self.TABLE}] ({cols_sql}) VALUES ({placeholders})'
-            new_id = execute_insert(sql, values)
+            new_id = _mt.create(_mt.KINDS['material'])        # db/master_tables.py
 
             self.reload_data()
             if new_id is not None:
@@ -650,9 +549,7 @@ class ManageMaterialScreen(QWidget):
         if QMessageBox.question(self, 'Confirm Delete', f'Delete {len(ids)} row(s)?') != QMessageBox.Yes:
             return
         try:
-            placeholders = ','.join(['?'] * len(ids))
-            sql = f'DELETE FROM [{self.TABLE}] WHERE [{id_col}] IN ({placeholders})'
-            execute(sql, ids)
+            _mt.delete(_mt.KINDS['material'], ids)
             self.reload_data()
             self._set_status(f'Deleted {len(ids)} row(s).')
         except Exception as e:

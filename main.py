@@ -950,129 +950,40 @@ class MainWindow(QMainWindow):
 
     # --- Data functions for Manage Top Plates ---------------------------------
     def _load_top_plates_data(self, limit: Optional[int] = None) -> List[Dict]:
-        """Lädt Top-Plate-Daten aus tblTopPlates mit has_files-Flag (0/1)."""
-        sql = """
-            SELECT p.*,
-                   CASE WHEN COUNT(f.ID) > 0 THEN 1 ELSE 0 END AS has_files
-            FROM tblTopPlates p
-            LEFT JOIN tblTopPlateFile f ON f.TopPlateID = p.ID
-            GROUP BY p.ID
-        """
-        try:
-            return fetch_all(sql, [])
-        except Exception:
-            # Fallback wenn tblTopPlateFile noch nicht existiert
-            return fetch_all("SELECT * FROM [tblTopPlates]", [])
+        """tblTopPlates rows with has_files (db/master_tables.py, shared with the web)."""
+        from db import master_tables as mt
+        return mt.load_rows(mt.KINDS["top_plates"])
 
     def _save_top_plates_changes(self, rows: List[Dict]) -> int:
-        """Schreibt geänderte Top-Plate-Zeilen via UPDATE in die DB.
-
-        Returns:
-            Anzahl erfolgreich aktualisierter Zeilen.
-        """
         _require_admin_box_write()
-        if not rows:
-            return 0
-        id_col = self._top_plates_id_col or "ID"
-        total = 0
-        _SYNTHETIC = {"__has_files__", "has_files"}
-        for r in rows:
-            if id_col not in r:
-                raise ValueError(f"Row has no '{id_col}' field; cannot save.")
-            row_id = r[id_col]
-            cols = [c for c in r.keys() if c != id_col and c not in _SYNTHETIC]
-            if not cols:
-                continue
-            set_access = ", ".join([f"[{c}] = ?" for c in cols])
-            sql = f"UPDATE [tblTopPlates] SET {set_access} WHERE [{id_col}] = ?"
-            params = [r[c] for c in cols] + [row_id]
-            total += execute(sql, params) or 0
-        return total
+        from db import master_tables as mt
+        return mt.save_changes(mt.KINDS["top_plates"], rows or [])
 
     def _create_top_plate(self) -> int:
-        """Legt eine neue Top Plate mit Default-Werten in der DB an und gibt die neue ID zurück."""
+        """New top plate "New Top Plate" with a fresh GlobalID."""
         _require_admin_box_write()
-        cols = ["Name", "GlobalID"]
-        vals = ["New Top Plate", new_global_id()]
-
-        placeholders = ",".join(["?"] * len(cols))
-        cols_sql = ", ".join([f"[{c}]" for c in cols])
-        sql = f"INSERT INTO [tblTopPlates] ({cols_sql}) VALUES ({placeholders})"
-        return execute_insert(sql, vals)
+        from db import master_tables as mt
+        return mt.create(mt.KINDS["top_plates"])
 
     def _insert_top_plate_full(self, data: Dict) -> int:
-        """Fügt eine neue Top Plate mit vollständigen Daten (Kopie) in die DB ein.
-
-        Returns:
-            Neue Top-Plate-ID (execute_insert()/lastrowid).
-        """
+        """New top plate from the form / a copy (ID and has_files dropped, GlobalID set fresh)."""
         _require_admin_box_write()
-        id_col = self._top_plates_id_col or "ID"
-        _SYNTHETIC = {"__has_files__", "has_files"}
-
-        if id_col in data:
-            data = {k: v for k, v in data.items() if k.lower() !=
-                    id_col.lower()}
-
-        data = {k: v for k, v in data.items() if k not in _SYNTHETIC}
-
-        has_global = False
-        for k in data.keys():
-            if k.lower() == "globalid":
-                has_global = True
-                break
-        if not has_global:
-            data["GlobalID"] = new_global_id()
-
+        from db import master_tables as mt
         if not data:
             raise ValueError("No data passed for saving.")
-
-        cols = list(data.keys())
-        vals = [data[c] for c in cols]
-        cols_sql = ", ".join(f"[{c}]" for c in cols)
-        placeholders = ", ".join("?" for _ in cols)
-        sql = f"INSERT INTO [tblTopPlates] ({cols_sql}) VALUES ({placeholders})"
-        new_id = execute_insert(sql, vals)
+        new_id = mt.create(mt.KINDS["top_plates"], dict(data))
         if new_id is None:
             raise RuntimeError("Could not determine the new ID after the insert.")
         return new_id
 
     def _delete_top_plates(self, ids: List[int]) -> int:
-        """Löscht Top Plates mit den gegebenen IDs aus tblTopPlates.
-
-        Returns:
-            Anzahl gelöschter Zeilen.
-        """
         _require_admin_box_write()
-        if not ids:
-            return 0
-        placeholders = ",".join(["?"] * len(ids))
-        sql = f"DELETE FROM [tblTopPlates] WHERE [ID] IN ({placeholders})"
-        return execute(sql, ids) or 0
+        from db import master_tables as mt
+        return mt.delete(mt.KINDS["top_plates"], ids)
 
     def _is_top_plate_name_available(self, top_plate_name: str) -> bool:
-        """Prüft, ob es den Top-Plate-Namen in tblTopPlates bereits gibt."""
-        if not top_plate_name:
-            return False
-        try:
-            rows = fetch_all(
-                "SELECT COUNT(*) AS n FROM [tblTopPlates] WHERE [Name] = ?", [top_plate_name])
-        except Exception:
-            return True  # im Zweifel nicht blockieren
-        if not rows:
-            return True
-        row = rows[0]
-        count = row.get("n")
-        if count is None:
-            # Fallback, falls der Key anders heisst
-            try:
-                count = list(row.values())[0]
-            except Exception:
-                count = 0
-        try:
-            return int(count) == 0
-        except Exception:
-            return True
+        from db import master_tables as mt
+        return mt.name_available(mt.KINDS["top_plates"], top_plate_name)
 
     # --- Navigation and existing flow ----------------------------------------
     def _on_login_success(self, user: dict):
