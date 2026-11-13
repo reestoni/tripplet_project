@@ -95,6 +95,9 @@ def fakedb(monkeypatch):
                         lambda cur, rid: calls.append(("archive", rid)))
     monkeypatch.setattr(er.request_changes, "create_or_update_pending_change",
                         lambda **kw: calls.append(("proposal", kw)) or 99)
+    # default: an existing live request (status 1, owner 12) - not a draft
+    monkeypatch.setattr(er, "fetch_request", lambda rid: {"ID": rid, "RequestStatus": 1, "CreatedBy": 12,
+                                                          "ChangeOfRequestID": None, "PriorVersionOfID": None})
     return log, calls
 
 
@@ -206,7 +209,8 @@ def test_save_without_change_tracking_updates_directly(fakedb, monkeypatch):
 
 def test_save_web_path_reads_row_and_checks_owner(fakedb, monkeypatch):
     log, calls = fakedb
-    row = dict(FULL, ID=5, CreatedBy=12, ChangeOfRequestID=None, Wunschtermin=datetime.datetime(2026, 1, 2))
+    row = dict(FULL, ID=5, CreatedBy=12, ChangeOfRequestID=None, RequestStatus=1,
+               Wunschtermin=datetime.datetime(2026, 1, 2))
     monkeypatch.setattr(er, "fetch_request", lambda rid: dict(row))
     assert _save(NU, 5, dict(FULL)).kind == "unchanged"     # datetime in DB == date in form
     with pytest.raises(PermissionError):
@@ -336,3 +340,15 @@ def test_rename_image_only_uploader_or_superuser(monkeypatch):
     assert ei.rename_image({"id": 1, "access_level": 4}, 4, 3, "new") == "new.png"   # superuser
     images[0]["CreatedBy"] = 1
     assert ei.rename_image({"id": 1, "access_level": 2}, 4, 3, "new") == "new.png"   # uploader
+
+
+def test_save_finalises_draft_instead_of_proposal(fakedb, monkeypatch):
+    """2026-11-13: a draft (images uploaded before the first save) becomes a normal request (status 1)."""
+    log, calls = fakedb
+    monkeypatch.setattr(er, "fetch_request", lambda rid: {"ID": rid, "RequestStatus": None, "CreatedBy": 12,
+                                                          "ChangeOfRequestID": None, "PriorVersionOfID": None})
+    r = _save(NU, 40, dict(FULL), loaded_values={}, change_of_id=None)
+    assert r.kind == "inserted" and r.request_id == 40 and calls == []          # no proposal, no archive
+    sql, params = log[-1]
+    assert sql.startswith("UPDATE [tblExperimentRequests] SET [Titel]=?") and "[RequestStatus]=?" in sql
+    assert params[-1] == 40 and params[-2] == 1 and params[-3] == 12

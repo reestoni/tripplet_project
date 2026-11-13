@@ -353,8 +353,12 @@ class MyRequestsScreen(QWidget):
 
                         def _on_status_changed(
                             _index: int, *, _req_id=req_id, _cb=combo,
-                            _owner_id=owner_id, _titel=titel_val,
+                            _owner_id=owner_id, _titel=titel_val, _state=_state,
                         ):
+                            # _state as default argument = THIS row's dict. Before
+                            # 2026-11-13 the closure saw the last row's dict, so every
+                            # row compared against the last row's status (wrong
+                            # confirmations, ignored changes, wrong reset after cancel).
                             new_id = _cb.currentData()
                             old_id = _state["old_id"]
 
@@ -611,7 +615,10 @@ class MyRequestsScreen(QWidget):
             for c in range(col_count)
         ]
         status_col = headers.index("RequestStatus") if "RequestStatus" in headers else None
-        project_col = headers.index("Projekt") if "Projekt" in headers else None
+        # the visible project column is "Project" (ProjektText); "Projekt" (the ID) is hidden -
+        # filtering on the hidden one never matched (fixed 2026-11-13)
+        project_col = (headers.index("Project") if "Project" in headers
+                       else headers.index("Projekt") if "Projekt" in headers else None)
         owner_col = headers.index("Owner") if "Owner" in headers else None
 
         for r in range(self._tbl.rowCount()):

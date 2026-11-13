@@ -874,6 +874,33 @@ def save_request(user: dict, request_id: Any, values: Dict[str, Any], *,
 
     is_insert = request_id in (None, "")
 
+    # A draft (RequestStatus NULL, created only so images could be uploaded before the
+    # first save - create_draft()) is finalised like a new request: form values +
+    # Timestamp/CreatedBy + RequestStatus 1. Before 2026-11-13 it took the "edit" path:
+    # a normal user got a change proposal on the draft, a superuser an archived update -
+    # and the draft stayed NULL, so the login cleanup later deleted it with its images.
+    if not is_insert:
+        draft = fetch_request(request_id)
+        if (draft is not None and draft.get("RequestStatus") is None
+                and draft.get("ChangeOfRequestID") in (None, "")
+                and draft.get("PriorVersionOfID") in (None, "")):
+            if not can_open(user, draft):
+                raise PermissionError("You can only edit your own requests.")
+            vals = with_auto_fields(user, cols, values, STATUS_REQUEST)
+            if vals.get("CreatedBy") in (None, ""):
+                return SaveResult("no_user", None, "Login missing",
+                                  "CreatedBy could not be set because no user ID was found. Please log in again.")
+            set_cols = [k for k in vals if k != "ID"]
+            sql = f"UPDATE [{TABLE}] SET " + ",".join(f"[{c}]=?" for c in set_cols) + " WHERE [ID]=?"
+            with get_connection() as cn:
+                cur = cn.cursor()
+                cur.execute(sql, [vals[c] for c in set_cols] + [request_id])
+                try:
+                    cn.commit()
+                except Exception:
+                    pass
+            return SaveResult("inserted", request_id, "Saved", "Experiment request saved.")
+
     if is_insert:
         values = with_auto_fields(user, cols, values, STATUS_REQUEST)
         # CreatedBy muss beim Insert vorhanden sein
