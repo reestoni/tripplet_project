@@ -73,10 +73,7 @@ class RecyclePreview:
                 QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Ok) != QMessageBox.Ok:
             return False
         try:
-            self.info = recycle_bin.entry_info(self.bin_id)
-            if not self.info:
-                raise recycle_bin.RecycleBinError("Entry not found.")
-            recycle_bin.restore(self.bin_id)
+            self.info = recycle_bin.preview_start(self.bin_id)    # db/recycle_bin.py (shared with the web)
         except Exception as e:
             show_error(parent, "Open in Show Experiment", "The series could not be opened.", e, warning=True)
             return False
@@ -156,10 +153,7 @@ class RecyclePreview:
             return None
         info = self.info or {}
         try:
-            new_id = recycle_bin.delete_series(
-                int(info["ObjectID"]), str(info.get("Label") or ""),
-                deleted_at=info.get("DeletedAt") if isinstance(info.get("DeletedAt"), datetime.datetime) else None,
-                deleted_by=info.get("DeletedBy"), replaces_bin_id=self.bin_id)
+            new_id = recycle_bin.preview_back(info, self.bin_id)   # same date / user as before
         except Exception as e:
             if not silent or self.screen is not None:
                 try:

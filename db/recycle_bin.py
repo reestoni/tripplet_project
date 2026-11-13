@@ -506,3 +506,30 @@ def _check_trials_restorable(cur, series_id: int, data: Dict[str, Any]) -> None:
 def delete_permanently(bin_id: int) -> None:
     from db.connection import execute
     execute("DELETE FROM tblRecycleBin WHERE ID = ?", [int(bin_id)])
+
+
+# ── preview: take a series out for a look (ui/recycle_preview.py, web /superuser/recycle-bin) ──
+def preview_start(bin_id: int) -> Dict[str, Any]:
+    """Restores a deleted series for the time being; returns entry_info() (needed to put it back
+    with the ORIGINAL deletion date and user). Raises RecycleBinError."""
+    info = entry_info(bin_id)
+    if not info:
+        raise RecycleBinError("Entry not found.")
+    restore(bin_id)
+    return info
+
+
+def preview_back(info: Dict[str, Any], bin_id: int) -> int:
+    """Puts a previewed series back - same deletion date / user, the 90 days do not start again.
+    Returns the new recycle bin ID."""
+    when = info.get("DeletedAt")
+    return delete_series(int(info["ObjectID"]), str(info.get("Label") or ""),
+                         deleted_at=when if isinstance(when, datetime.datetime) else None,
+                         deleted_by=info.get("DeletedBy"), replaces_bin_id=int(bin_id))
+
+
+def preview_delete(info: Dict[str, Any], bin_id: int) -> None:
+    """Delete permanently from a preview: back into the bin, then the entry is removed."""
+    new_id = preview_back(info, bin_id)
+    if new_id:
+        delete_permanently(new_id)
