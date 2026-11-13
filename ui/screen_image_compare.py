@@ -42,562 +42,75 @@ from ui.widgets import sidebar_nav
 
 
 # ---------------------------------------------------------------------------
-# VK4 file support (Keyence laser profilometer)
+# Files as images + DB: Qt-free since 2026-11-13 (ui/doc_render.py, db/image_compare.py - the web uses them too)
 # ---------------------------------------------------------------------------
-
-VK4_CH_HEIGHT_PEAK   = "height_peak"
-VK4_CH_HEIGHT_LIGHT  = "height_light"
-VK4_CH_COLOR_PEAK    = "color_peak"
-VK4_CH_COLOR_LIGHT   = "color_light"
-VK4_CH_LIGHT_INT     = "light_int"
-
-VK4_CH_LABELS = {
-    VK4_CH_HEIGHT_PEAK:  "Height (laser)",
-    VK4_CH_HEIGHT_LIGHT: "Height (light)",
-    VK4_CH_COLOR_PEAK:   "Laser (Farbe)",
-    VK4_CH_COLOR_LIGHT:  "Licht (Farbe)",
-    VK4_CH_LIGHT_INT:    "Intensity (grey)",
-}
-VK4_CH_ORDER = [VK4_CH_HEIGHT_PEAK, VK4_CH_HEIGHT_LIGHT,
-                VK4_CH_COLOR_PEAK, VK4_CH_COLOR_LIGHT, VK4_CH_LIGHT_INT]
-_VK4_IDX = {VK4_CH_HEIGHT_PEAK:4, VK4_CH_HEIGHT_LIGHT:5,
-            VK4_CH_COLOR_PEAK:1, VK4_CH_COLOR_LIGHT:2, VK4_CH_LIGHT_INT:3}
-
-
-def _is_vk4(path: str) -> bool:
-    """Gibt True zurück wenn der Pfad auf eine VK4-Datei zeigt."""
-    return path.lower().endswith(".vk4")
-
-
-def _vk4_available_channels(path: str) -> list:
-    """Gibt eine Liste der verfügbaren Datenkanäle einer VK4-Datei zurück."""
-    import struct
-    try:
-        with open(path, "rb") as f:
-            if f.read(4) != b"VK4_": return []
-            f.seek(12)
-            offsets = struct.unpack("<12I", f.read(48))
-        return [ch for ch in VK4_CH_ORDER if offsets[_VK4_IDX[ch]] != 0]
-    except Exception:
-        return []
-
-
-def _load_vk4_channel(path: str, channel: str) -> Optional[QPixmap]:
-    import struct, numpy as np
-    def _np_to_pixmap(arr_rgb):
-        from PIL import Image
-        import tempfile, os as _os
-        img = Image.fromarray(arr_rgb, "RGB")
-        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-        tmp.close(); img.save(tmp.name)
-        pm = QPixmap(tmp.name)
-        try: _os.unlink(tmp.name)
-        except Exception: pass
-        return pm if not pm.isNull() else None
-    def _jet(arr):
-        r = np.clip(1.5 - np.abs(arr*4.0-3.0), 0, 1)
-        g = np.clip(1.5 - np.abs(arr*4.0-2.0), 0, 1)
-        b = np.clip(1.5 - np.abs(arr*4.0-1.0), 0, 1)
-        return np.stack([(r*255).astype(np.uint8),(g*255).astype(np.uint8),(b*255).astype(np.uint8)], axis=-1)
-    try:
-        with open(path, "rb") as f:
-            if f.read(4) != b"VK4_": return None
-            f.seek(12); offsets = struct.unpack("<12I", f.read(48))
-            idx = _VK4_IDX.get(channel)
-            if idx is None: return None
-            off = offsets[idx]
-            if off == 0: return None
-            f.seek(off); blk = f.read(20)
-            w = struct.unpack_from("<I", blk, 0)[0]
-            h = struct.unpack_from("<I", blk, 4)[0]
-            bpp = struct.unpack_from("<I", blk, 8)[0]
-            if w == 0 or h == 0: return None
-            if channel in (VK4_CH_HEIGHT_PEAK, VK4_CH_HEIGHT_LIGHT):
-                if bpp not in (16, 32): return None
-                raw = f.read(w * h * (bpp // 8))
-                if len(raw) < w * h * (bpp // 8): return None
-                dtype = "<u2" if bpp == 16 else "<u4"
-                arr = np.frombuffer(raw, dtype=dtype).reshape((h, w)).astype(np.float32)
-                invalid = arr == (0xFFFF if bpp == 16 else 0xFFFFFFFF)
-                valid = arr[~invalid]
-                if valid.size == 0: return None
-                lo = float(np.percentile(valid, 1)); hi = float(np.percentile(valid, 99))
-                if hi <= lo: hi = lo + 1.0
-                norm = np.clip((arr - lo) / (hi - lo), 0.0, 1.0); norm[invalid] = 0.0
-                rgb = _jet(norm); rgb[invalid] = 0
-                return _np_to_pixmap(rgb)
-            if channel in (VK4_CH_COLOR_PEAK, VK4_CH_COLOR_LIGHT):
-                if bpp != 24: return None
-                raw = f.read(w * h * 3)
-                if len(raw) < w * h * 3: return None
-                arr = np.frombuffer(raw, dtype=np.uint8).reshape((h, w, 3))
-                return _np_to_pixmap(arr[:, :, ::-1].copy())
-            if channel == VK4_CH_LIGHT_INT:
-                if bpp not in (8, 16): return None
-                dtype = np.uint8 if bpp == 8 else "<u2"
-                raw = f.read(w * h * (bpp // 8))
-                if len(raw) < w * h * (bpp // 8): return None
-                arr = np.frombuffer(raw, dtype=dtype).reshape((h, w)).astype(np.float32)
-                norm = (arr - arr.min()) / max(arr.max() - arr.min(), 1)
-                g8 = (norm * 255).astype(np.uint8)
-                return _np_to_pixmap(np.stack([g8, g8, g8], axis=-1))
-            return None
-    except Exception:
-        return None
-
-
-def _load_vk4_as_pixmap(path: str) -> Optional[QPixmap]:
-    """Lädt den ersten verfügbaren VK4-Kanal als QPixmap."""
-    for ch in _vk4_available_channels(path):
-        pm = _load_vk4_channel(path, ch)
-        if pm is not None: return pm
-    return None
-
-
-
-# ---------------------------------------------------------------------------
-# PDF / Excel / Word helpers  (geteilt mit screen_canvas.py)
-# ---------------------------------------------------------------------------
-
-def _is_pdf(path: str) -> bool:
-    """Gibt True zurück wenn der Pfad auf eine PDF-Datei zeigt."""
-    return path.lower().endswith(".pdf")
-
-def _is_excel(path: str) -> bool:
-    """Gibt True zurück wenn der Pfad auf eine Excel-Datei zeigt (.xlsx/.xlsm/.xls)."""
-    return path.lower().endswith((".xlsx", ".xlsm", ".xls"))
-
-def _is_word(path: str) -> bool:
-    """Gibt True zurück wenn der Pfad auf eine Word-Datei zeigt (.docx/.doc)."""
-    return path.lower().endswith((".docx", ".doc"))
+from ui import doc_render as _dr  # noqa: E402
+from ui.doc_render import (  # noqa: E402,F401
+    VK4_CH_COLOR_LIGHT, VK4_CH_COLOR_PEAK, VK4_CH_HEIGHT_LIGHT, VK4_CH_HEIGHT_PEAK, VK4_CH_LABELS, VK4_CH_LIGHT_INT,
+    VK4_CH_ORDER, excel_sheet_names as _excel_sheet_names, is_excel as _is_excel, is_pdf as _is_pdf,
+    is_vk4 as _is_vk4, is_word as _is_word, pdf_page_count as _pdf_page_count, vk4_channels as _vk4_available_channels,
+    word_page_count as _word_page_count, word_to_pdf_buf as _word_to_pdf_buf, xlsx_read_rows as _xlsx_read_rows,
+)
+from db.image_compare import (  # noqa: E402,F401
+    build_full_path as _build_full_path, fetch_aty_radar_for_image as _fetch_aty_radar_for_image,
+    fetch_images_for_series as _fetch_images_for_series, fetch_series_groups as _fetch_series_groups,
+)
 
 
 def _pil_to_pixmap(img) -> "Optional[QPixmap]":
-    """Konvertiert ein PIL-Image zu QPixmap via temporärer PNG-Datei."""
-    from PIL import Image as _Image
-    import tempfile, os as _os
-    if img.mode not in ("RGB", "RGBA"):
-        img = img.convert("RGB")
-    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-    tmp.close()
-    img.save(tmp.name)
-    pm = QPixmap(tmp.name)
-    try: _os.unlink(tmp.name)
-    except Exception: pass
+    """PIL image -> QPixmap (via PNG bytes)."""
+    if img is None:
+        return None
+    pm = QPixmap()
+    pm.loadFromData(_dr.to_png(img), "PNG")
     return pm if not pm.isNull() else None
 
 
-def _pdf_page_count(path: str) -> int:
-    """Gibt die Seitenanzahl eines PDFs zurück (pymupdf, Fallback pypdf)."""
-    try:
-        import fitz
-        doc = fitz.open(path); n = len(doc); doc.close(); return n
-    except Exception:
-        try:
-            from pypdf import PdfReader
-            return len(PdfReader(path).pages)
-        except Exception:
-            return 1
+def _load_vk4_channel(path: str, channel: str) -> Optional[QPixmap]:
+    return _pil_to_pixmap(_dr.vk4_image(path, channel))
+
+
+def _load_vk4_as_pixmap(path: str) -> Optional[QPixmap]:
+    return _pil_to_pixmap(_dr.vk4_image(path, ""))
+
+
+def _wrap(res) -> "tuple":
+    img, err = res
+    if img is None:
+        return None, err
+    pm = _pil_to_pixmap(img)
+    return (pm, None) if pm is not None else (None, "The image could not be converted.")
 
 
 def _load_pdf_as_pixmap(path: str, page: int = 0) -> "tuple":
-    """Rendert eine PDF-Seite als QPixmap via pymupdf.
-
-    Returns:
-        (QPixmap, None) bei Erfolg oder (None, Fehlermeldung) bei Fehler.
-    """
-    try:
-        import fitz
-        doc = fitz.open(path)
-        if page >= len(doc):
-            return None, "Page %d does not exist." % page
-        pix = doc[page].get_pixmap(matrix=fitz.Matrix(150/72, 150/72), alpha=False)
-        doc.close()
-        from PIL import Image as _Image
-        img = _Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-        pm = _pil_to_pixmap(img)
-        return (pm, None) if pm and not pm.isNull() else (None, "The image could not be converted.")
-    except ImportError:
-        return None, "pymupdf is not installed. Please run: pip install pymupdf"
-    except Exception as e:
-        return None, str(e)
-
-
-# Zipfile-basierter Excel-Reader
-_XLSX_NS     = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-_XLSX_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
-_XLSX_OFF_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-
-
-def _excel_sheet_names(path: str) -> list:
-    """Gibt die Sheet-Namen einer Excel-Datei zurück."""
-    if path.lower().endswith(".xls"):
-        try:
-            import pandas as pd
-            return pd.ExcelFile(path, engine="xlrd").sheet_names
-        except Exception:
-            return ["Sheet1"]
-    try:
-        import zipfile, xml.etree.ElementTree as ET
-        with zipfile.ZipFile(path) as z:
-            with z.open("xl/workbook.xml") as f:
-                tree = ET.parse(f)
-        sheets = tree.findall(".//{%s}sheet" % _XLSX_NS)
-        return [s.get("name", "Sheet%d" % (i+1)) for i, s in enumerate(sheets)]
-    except Exception:
-        return []
-
-
-def _xlsx_read_rows(path: str, sheet_idx: int = 0, max_rows: int = 50):
-    """Liest Zeilen aus einer xlsx-Datei (ZIP/XML, kein openpyxl nötig).
-
-    Returns:
-        (rows_data, sheet_name): rows_data = List[List[str]].
-    """
-    import zipfile, xml.etree.ElementTree as ET
-    with zipfile.ZipFile(path) as z:
-        znames = z.namelist()
-        with z.open("xl/workbook.xml") as f:
-            wb_tree = ET.parse(f)
-        sheet_els = wb_tree.findall(".//{%s}sheet" % _XLSX_NS)
-        if not sheet_els: return [], "?"
-        idx = min(sheet_idx, len(sheet_els)-1)
-        sheet_el = sheet_els[idx]
-        sname = sheet_el.get("name", "Sheet%d" % (idx+1))
-        rid   = sheet_el.get("{%s}id" % _XLSX_OFF_NS, "")
-        sheet_file = None
-        rels_path = "xl/_rels/workbook.xml.rels"
-        if rels_path in znames:
-            with z.open(rels_path) as f:
-                rels = ET.parse(f)
-            for rel in rels.findall(".//{%s}Relationship" % _XLSX_REL_NS):
-                if rel.get("Id") == rid:
-                    target = rel.get("Target", "")
-                    sheet_file = target.lstrip("/") if target.startswith("/") else "xl/" + target
-                    break
-        if not sheet_file or sheet_file not in znames:
-            sheet_file = next((n for n in znames if n.startswith("xl/worksheets/sheet")), None)
-        if sheet_file is None: return [], sname
-        shared = []
-        if "xl/sharedStrings.xml" in znames:
-            with z.open("xl/sharedStrings.xml") as f:
-                ss = ET.parse(f)
-            for si in ss.findall(".//{%s}si" % _XLSX_NS):
-                t = "".join(e.text or "" for e in si.iter("{%s}t" % _XLSX_NS))
-                shared.append(t)
-        with z.open(sheet_file) as f:
-            ws_tree = ET.parse(f)
-        rows_data = []
-        for row_el in ws_tree.findall(".//{%s}row" % _XLSX_NS):
-            row = []
-            for cell in row_el.findall("{%s}c" % _XLSX_NS):
-                ct = cell.get("t", "")
-                v_el = cell.find("{%s}v" % _XLSX_NS)
-                val = ""
-                if v_el is not None and v_el.text:
-                    if ct == "s":
-                        try: val = shared[int(v_el.text)]
-                        except: val = v_el.text
-                    elif ct == "b":
-                        val = "TRUE" if v_el.text == "1" else "FALSE"
-                    else:
-                        try:
-                            fv = float(v_el.text)
-                            val = str(int(fv)) if fv == int(fv) else "%.4g" % fv
-                        except: val = v_el.text
-                row.append(val)
-            if row: rows_data.append(row)
-            if len(rows_data) >= max_rows: break
-    return rows_data, sname
+    return _wrap(_dr.pdf_image(path, page))
 
 
 def _load_excel_as_pixmap(path: str, sheet: int = 0) -> "tuple":
-    """Rendert ein Excel-Sheet als QPixmap (PIL-Renderer, kein matplotlib).
-
-    Returns:
-        (QPixmap, None) bei Erfolg oder (None, Fehlermeldung) bei Fehler.
-    """
-    try:
-        import matplotlib; matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        from PIL import Image as _Image
-        import io, os as _os
-        if path.lower().endswith(".xls"):
-            try:
-                import pandas as pd
-                df = pd.read_excel(path, sheet_name=sheet, nrows=50, header=None, engine="xlrd")
-                rows_data = [list(map(str, r)) for r in df.values.tolist()]
-                sname = str(sheet)
-            except Exception as e:
-                return None, ".xls Ladefehler: " + str(e)
-        else:
-            rows_data, sname = _xlsx_read_rows(path, sheet_idx=sheet, max_rows=50)
-        if not rows_data: rows_data = [["(no content)"]]
-        max_cols = max(len(r) for r in rows_data)
-        rows_data = [r + [""] * (max_cols - len(r)) for r in rows_data]
-        from PIL import ImageDraw as _IDraw, ImageFont as _IFont
-        FONT_SIZE = 13; PAD_X = 8; PAD_Y = 5; ROW_H = FONT_SIZE + PAD_Y * 2
-        try:
-            font = _IFont.truetype("arial.ttf", FONT_SIZE)
-            font_bold = _IFont.truetype("arialbd.ttf", FONT_SIZE)
-        except Exception:
-            font = _IFont.load_default(); font_bold = font
-        dummy = _IDraw.Draw(_Image.new("RGB", (1,1)))
-        col_widths = []
-        for c in range(max_cols):
-            max_w = 40
-            for r_idx, row in enumerate(rows_data):
-                txt = row[c] if c < len(row) else ""
-                f = font_bold if r_idx == 0 else font
-                try:
-                    bb = dummy.textbbox((0,0), txt, font=f); w = bb[2]-bb[0]
-                except: w = len(txt) * (FONT_SIZE//2)
-                max_w = max(max_w, w)
-            col_widths.append(min(max_w + PAD_X*2, 300))
-        title_h = ROW_H + 4
-        total_w = sum(col_widths) + 1
-        total_h = title_h + len(rows_data) * ROW_H + 1
-        img = _Image.new("RGB", (total_w, total_h), (20,20,20))
-        draw = _IDraw.Draw(img)
-        draw.text((PAD_X, PAD_Y), _os.path.basename(path) + "  –  " + sname,
-                  fill=(160,160,160), font=font)
-        for r_idx, row in enumerate(rows_data):
-            y = title_h + r_idx * ROW_H
-            bg = (45,106,63) if r_idx==0 else ((30,30,30) if r_idx%2==0 else (40,40,40))
-            fg = (255,255,255) if r_idx==0 else (220,220,220)
-            f  = font_bold if r_idx==0 else font
-            draw.rectangle([0, y, total_w, y+ROW_H], fill=bg)
-            x = 0
-            for c_idx, cw in enumerate(col_widths):
-                txt = row[c_idx] if c_idx < len(row) else ""
-                draw.text((x+PAD_X, y+PAD_Y), txt, fill=fg, font=f)
-                draw.line([(x+cw, y),(x+cw, y+ROW_H)], fill=(70,70,70), width=1)
-                x += cw
-            draw.line([(0, y+ROW_H),(total_w, y+ROW_H)], fill=(70,70,70), width=1)
-        pm = _pil_to_pixmap(img)
-        return (pm, None) if pm and not pm.isNull() else (None, "The image could not be converted.")
-    except Exception as e:
-        return None, str(e)
-
-
-def _word_to_pdf_buf(path: str) -> "tuple":
-    """Konvertiert ein Word-Dokument zu PDF (BytesIO-Buffer).
-
-    Versucht zuerst docx2pdf (MS Word), dann mammoth+fitz als Fallback.
-
-    Returns:
-        (BytesIO, None) bei Erfolg oder (None, Fehlermeldung) bei Fehler.
-    """
-    import io, tempfile, os as _os
-    try:
-        from docx2pdf import convert as _d2p
-        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
-        tmp.close()
-        try:
-            _d2p(path, tmp.name)
-            with open(tmp.name, "rb") as f:
-                buf = io.BytesIO(f.read())
-            buf.seek(0); return buf, None
-        finally:
-            try: _os.unlink(tmp.name)
-            except Exception: pass
-    except Exception:
-        pass
-    try:
-        import mammoth as _mammoth, fitz
-        _CSS = """
-        body{font-family:Arial,sans-serif;font-size:11pt;line-height:1.55;color:#111;}
-        h1{font-size:18pt;color:#1f3864;margin:14pt 0 5pt;}
-        h2{font-size:14pt;color:#2e5094;margin:12pt 0 4pt;}
-        h3{font-size:12pt;color:#2e5094;margin:9pt 0 3pt;}
-        p{margin:0 0 6pt;}
-        table{border-collapse:collapse;width:100%;font-size:10pt;}
-        td,th{border:1px solid #aaa;padding:3pt 6pt;}
-        th{background:#dce6f1;font-weight:bold;}
-        strong{font-weight:bold;} em{font-style:italic;}
-        """
-        with open(path, "rb") as f:
-            html_body = _mammoth.convert_to_html(f).value
-        html = "<html><head><style>" + _CSS + "</style></head><body>" + html_body + "</body></html>"
-        W, H = 595, 842
-        story = fitz.Story(html=html)
-        buf = io.BytesIO()
-        writer = fitz.DocumentWriter(buf, "pdf")
-        more = 1
-        while more:
-            dev = writer.begin_page(fitz.Rect(0,0,W,H))
-            more, _ = story.place(fitz.Rect(50,50,W-50,H-50))
-            story.draw(dev); writer.end_page()
-        writer.close(); buf.seek(0); return buf, None
-    except Exception as e:
-        return None, "The image could not be read: " + str(e)
-
-
-def _word_page_count(path: str) -> int:
-    """Gibt die Seitenanzahl eines Word-Dokuments zurück."""
-    try:
-        import fitz
-        buf, err = _word_to_pdf_buf(path)
-        if buf is None: return 1
-        pdf = fitz.open("pdf", buf.read()); n = len(pdf); pdf.close(); return max(1, n)
-    except Exception:
-        return 1
+    return _wrap(_dr.excel_image(path, sheet))
 
 
 def _load_word_as_pixmap(path: str, page: int = 0) -> "tuple":
-    """Rendert eine Word-Seite als QPixmap.
+    return _wrap(_dr.word_image(path, page))
 
-    Returns:
-        (QPixmap, None) bei Erfolg oder (None, Fehlermeldung) bei Fehler.
-    """
-    try:
-        import fitz
-        from PIL import Image as _Image
-        buf, err = _word_to_pdf_buf(path)
-        if buf is None: return None, err
-        pdf = fitz.open("pdf", buf.read())
-        idx = min(page, len(pdf)-1)
-        pix = pdf[idx].get_pixmap(matrix=fitz.Matrix(2.0, 2.0), alpha=False)
-        pdf.close()
-        img = _Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-        pm = _pil_to_pixmap(img)
-        return (pm, None) if pm and not pm.isNull() else (None, "The image could not be converted.")
-    except Exception as e:
-        return None, str(e)
 
 def _make_pixmap(path: str, size: int = 0, vk4_channel: str = "",
-    # Lädt ein Bild/Dokument als QPixmap, optional mit Skalierung und VK4-Kanal.
-    # Returns (QPixmap, page_count, sheet_names).
                  pdf_page: int = 0, excel_sheet: int = 0,
                  word_page: int = 0) -> Optional[QPixmap]:
+    """Image / document as QPixmap (optionally scaled), VK4 channel, PDF / Word page, Excel sheet."""
     try:
-        if _is_vk4(path):
-            pm = _load_vk4_channel(path, vk4_channel) if vk4_channel else _load_vk4_as_pixmap(path)
-        elif _is_pdf(path):
-            pm, _ = _load_pdf_as_pixmap(path, page=pdf_page)
-        elif _is_excel(path):
-            pm, _ = _load_excel_as_pixmap(path, sheet=excel_sheet)
-        elif _is_word(path):
-            pm, _ = _load_word_as_pixmap(path, page=word_page)
+        if _is_vk4(path) or _is_pdf(path) or _is_excel(path) or _is_word(path):
+            img, _err = _dr.render(path, vk4_channel, pdf_page, excel_sheet, word_page)
+            pm = _pil_to_pixmap(img)
         else:
-            pm = QPixmap(path)
+            pm = QPixmap(path)                 # ordinary images: Qt reads them itself (full size, sharp zoom)
         if pm is None or pm.isNull():
             return None
         if size > 0:
             pm = pm.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        elif _is_excel(path) or _is_word(path) or _is_pdf(path):
-            # Dokumente: weiterhin auf 2400px begrenzen (werden ohnehin gerendert)
-            if max(pm.width(), pm.height()) > 2400:
-                pm = pm.scaled(2400, 2400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        # Normale Bilder / VK4: kein Downscaling → volles Original behalten für scharfen Zoom
         return pm
     except Exception:
         return None
-
-
-
-# ---------------------------------------------------------------------------
-# DB helpers
-# ---------------------------------------------------------------------------
-
-def _fetch_series_groups() -> List[Dict]:
-    """Lädt alle Serien mit Bildern oder PDFs aus der DB (mit has_images/has_pdfs-Flags)."""
-    rows: List[Dict] = []
-    try:
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(
-                "SELECT DISTINCT s.ID AS TrialSeriesID, s.SeriesName, e.[Experiment ID] AS ExperimentID "
-                "FROM tblTrialSeries s "
-                "INNER JOIN tblTrialSeriesImage i ON i.TrialSeriesID = s.ID "
-                "LEFT JOIN tblExperimente e ON e.ID = s.ExperimentID "
-                "ORDER BY e.[Experiment ID] DESC, s.SeriesName"
-            )
-            cols = [d[0] for d in (cur.description or [])]
-            for row in cur.fetchall() or []:
-                rows.append(dict(zip(cols, row)))
-    except Exception:
-        pass
-    return rows
-
-
-def _fetch_images_for_series(series_id: int) -> List[Dict]:
-    """Lädt alle Bilder einer Serie aus tblTrialSeriesImage."""
-    rows: List[Dict] = []
-    try:
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(
-                "SELECT ID, TrialSeriesID, RelativePath, StoredFilename, OriginalFilename "
-                "FROM tblTrialSeriesImage WHERE TrialSeriesID = ? ORDER BY ID",
-                (series_id,),
-            )
-            cols = [d[0] for d in (cur.description or [])]
-            for row in cur.fetchall() or []:
-                rows.append(dict(zip(cols, row)))
-    except Exception:
-        pass
-    return rows
-
-
-def _fetch_aty_radar_for_image(meta: Dict) -> Optional[Dict]:
-    """Resolves a DB image (Garnspiegel wrap-test photo) to the ATY radar
-    scores of the trial it was taken for, if that data exists.
-
-    Chain: OriginalFilename "V<n>..." (same lab convention already gated on
-    in ui/yarnscope/garnspiegel_analysis.py) -> Versuchsnummer -> tblTrial row
-    for that TrialSeriesID -> its saved tblLaborATYoMat row (must have real
-    values, not just a Timestamp - see CLAUDE.md's note on legacy NULL rows)
-    -> aty_core_analysis.compute_radar_scores(). Returns None at any step
-    that doesn't resolve (local file, non-Garnspiegel filename, no matching
-    trial, no saved ATY analysis) - callers should treat that as "nothing to
-    show", not an error.
-    """
-    if not isinstance(meta, dict) or meta.get("_local"):
-        return None
-    series_id = meta.get("TrialSeriesID")
-    if not series_id:
-        return None
-    try:
-        from ui.yarnscope.garnspiegel_analysis import parse_versuchsnummer
-        vno = parse_versuchsnummer(meta.get("OriginalFilename") or "")
-        if vno is None:
-            return None
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(
-                "SELECT ID FROM tblTrial WHERE TrialSeriesID = ? AND Versuchsnummer = ?",
-                (series_id, vno),
-            )
-            row = cur.fetchone()
-            if not row:
-                return None
-            trial_id = row[0]
-            cur.execute(
-                "SELECT * FROM tblLaborATYoMat WHERE TrialID = ? AND BulkIndexPct IS NOT NULL "
-                "ORDER BY Timestamp DESC",
-                (trial_id,),
-            )
-            cols = [d[0] for d in (cur.description or [])]
-            data_row = cur.fetchone()
-            if not data_row:
-                return None
-            row_dict = dict(zip(cols, data_row))
-        from ui.yarnscope.aty_core_analysis import from_db_row, compute_radar_scores
-        stats = from_db_row(row_dict)
-        scores = compute_radar_scores(stats)
-        return {"vno": vno, "trial_id": trial_id, "scores": scores}
-    except Exception:
-        return None
-
-
-def _build_full_path(row: Dict) -> str:
-    """Baut den vollständigen Dateipfad aus einem Bild-Dict (RelativePath + StoredFilename)."""
-    if row.get("_local"):
-        return str(row.get("FullPath") or "")
-    rel    = str(row.get("RelativePath") or "")
-    stored = str(row.get("StoredFilename") or "")
-    return os.path.join(rel, stored) if rel else stored
 
 
 # ---------------------------------------------------------------------------
