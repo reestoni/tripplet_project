@@ -283,15 +283,8 @@ class AllExperimentsScreen(QWidget):
         self._offline_gated_buttons: list = []
 
         # Maschinenfilter-Map
-        self._filter_map = {
-            "All": None,
-            "AFK": 2,
-            "eAFK": 1,
-            "Aalidhra": 6,
-            "Zinser": 3,
-            "SSM DP2T": 4,
-            "SSM Xeno": 5,
-        }
+        from db.series_overview import MACHINE_FILTERS   # gemeinsam mit der Web-App
+        self._filter_map = dict(MACHINE_FILTERS)
         self._filter_buttons = []
         self._active_filter = "All"
 
@@ -514,9 +507,10 @@ class AllExperimentsScreen(QWidget):
         Args:
             maschine_id: Optional – filtert nach einer bestimmten Maschine.
         """
-        # Daten holen (ggf. Maschinenfilter bereits DB-seitig)
+        # Daten holen (gemeinsam mit der Web-App: db/series_overview.py)
+        from db import series_overview
         try:
-            rows = fetch_experiments_with_series(maschine_id)
+            rows = series_overview.all_experiments_rows(maschine_id, getattr(self, '_exp_req_field', None))
         except Exception as e:
             self.table.setRowCount(1)
             self.table.setItem(0, 0, QTableWidgetItem("DB error"))
@@ -525,16 +519,8 @@ class AllExperimentsScreen(QWidget):
             return
 
         # Bulk-Lookup: welche TrialSeries haben gespeicherte Smart-Chart-
-        # Reports (RE-Icon-Spalte, 2026-08-27) - eine Abfrage statt einer
-        # pro Zeile, gleiches Muster wie Backlogs _retest_flags_map.
-        try:
-            _report_rows = fetch_all(
-                "SELECT SeriesPK, COUNT(*) AS n FROM tblSmartChartReport "
-                "WHERE IsTemplate=0 AND SeriesPK IS NOT NULL GROUP BY SeriesPK"
-            )
-            self._series_report_map = {int(r["SeriesPK"]): int(r["n"]) for r in _report_rows}
-        except Exception:
-            self._series_report_map = {}
+        # Reports (RE-Icon-Spalte, 2026-08-27)
+        self._series_report_map = series_overview.series_report_map()
 
         # Textfilter anwenden
         sf = (self._series_filter or "").strip().lower()
@@ -551,90 +537,6 @@ class AllExperimentsScreen(QWidget):
                 return ok_series and ok_expid
 
             rows = [r for r in rows if _keep(r)]
-
-        # Experiment-Request IDs (einmalig laden)
-        er_map = {}
-        try:
-            fld = getattr(self, '_exp_req_field', None)
-            if fld:
-                q = f"SELECT [ID] AS exp_id_pk, [{fld}] AS experiment_request_id FROM tblExperimente;"
-                er_rows = fetch_all(q, [])
-                for rr in er_rows or []:
-                    er_map[rr.get('exp_id_pk')] = rr.get('experiment_request_id')
-        except Exception:
-            er_map = {}
-
-        # in Records einhaengen (fuer Sortierung + Anzeige)
-        if er_map:
-            for rec in rows:
-                try:
-                    rec['experiment_request_id'] = er_map.get(rec.get('exp_id_pk'))
-                except Exception:
-                    pass
-        else:
-            for rec in rows:
-                rec['experiment_request_id'] = None
-
-        # -------------------------------------------------
-        # Attachments (Image/PDF) pro TrialSeries ermitteln
-        # -------------------------------------------------
-        series_ids = []
-        try:
-            series_ids = [int(r.get('series_id_pk')) for r in rows if r.get('series_id_pk') is not None]
-        except Exception:
-            series_ids = []
-
-        has_attach_set: set[int] = set()
-        if series_ids:
-            # Access hat Grenzen bei IN(...). Darum in Chunks.
-            def _chunks(lst, n=200):
-                for i in range(0, len(lst), n):
-                    yield lst[i:i + n]
-
-            def _fetch_series_ids(tbl_name: str) -> set[int]:
-                out: set[int] = set()
-                try:
-                    for ch in _chunks(series_ids, 200):
-                        ph = ",".join(["?"] * len(ch))
-                        q = f"SELECT [TrialSeriesID] FROM {tbl_name} WHERE [TrialSeriesID] IN ({ph}) GROUP BY [TrialSeriesID];"
-                        rr = fetch_all(q, ch)
-                        for rrr in rr or []:
-                            try:
-                                out.add(int(rrr.get('TrialSeriesID')))
-                            except Exception:
-                                continue
-                except Exception:
-                    return set()
-                return out
-
-            img_ids = _fetch_series_ids("tblTrialSeriesImage")
-            pdf_ids = _fetch_series_ids("tblTrialSeriesPDF")
-            has_attach_set = set(img_ids) | set(pdf_ids)
-
-        # Notes: fetch series IDs that have non-empty Notes
-        has_notes_set: set[int] = set()
-        if series_ids:
-            try:
-                for ch in _chunks(series_ids, 200):
-                    ph = ",".join(["?"] * len(ch))
-                    q = f"SELECT ID FROM tblTrialSeries WHERE ID IN ({ph}) AND Notes IS NOT NULL AND Notes <> '';"
-                    rr = fetch_all(q, ch)
-                    for rrr in rr or []:
-                        try:
-                            has_notes_set.add(int(rrr.get('ID')))
-                        except Exception:
-                            continue
-            except Exception:
-                pass
-
-        for rec in rows:
-            try:
-                sid = rec.get('series_id_pk')
-                rec['has_attach'] = bool(sid is not None and int(sid) in has_attach_set)
-                rec['has_notes'] = bool(sid is not None and int(sid) in has_notes_set)
-            except Exception:
-                rec['has_attach'] = False
-                rec['has_notes'] = False
 
         # Sortierung anwenden
         def _sort_key(rec):

@@ -14,7 +14,7 @@ Desktop-App (PySide6) für Textil-/Garnlabor-Tests (Heberlein). MySQL-Backend, h
 - **dev_local** = lokale MySQL-Instanz (`tripplet_dev_local`, localhost) – hier darf frei getestet/geschrieben werden. `dev`/`prod` liegen auf einem Remote-Server (10.50.212.60) – **niemals** ungefragt Schreiboperationen dort ausführen.
 - Headless-Test: `QT_QPA_PLATFORM=offscreen` setzen, dann normal `QApplication`/Screens instanziieren.
 - Tests: `python -m pytest tests/` (861 Tests, ~1.5-2 min, alle grün).
-- **Web-Version** (`C:\python\tripplet_web`, seit 2026-11-13, eigene `CLAUDE.md`): importiert `db/` und Qt-freie Logik direkt von hier. Logik, die beide Apps brauchen, gehört in Qt-freie Module (bisher `db/nav_counts.py`, `db/user_profile.py`, `feature_access.rules_for()`) - beim Ändern dieser Module an die Web-App denken (deren Tests laufen mit).
+- **Web-Version** (`C:\python\tripplet_web`, seit 2026-11-13, eigene `CLAUDE.md`): importiert `db/` und Qt-freie Logik direkt von hier. Logik, die beide Apps brauchen, gehört in Qt-freie Module (bisher `db/nav_counts.py`, `db/user_profile.py`, `feature_access.rules_for()`, `db/series_overview.py` = Listen von All Experiments/Backlog inkl. `MACHINE_FILTERS`) - beim Ändern dieser Module an die Web-App denken (deren Tests laufen mit).
 
 ## Aktuell offene Threads (Codewords)
 

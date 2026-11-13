@@ -2736,21 +2736,10 @@ class BacklogScreen(QWidget):
     # -------------------------------------------------
     def reload_all(self):
         """Lädt alle fünf Status-Boxen neu."""
-        try:
-            self._retest_flags_map = get_open_retest_flags_by_series()
-        except Exception:
-            self._retest_flags_map = {}
-        # Bulk-Lookup: welche TrialSeries haben gespeicherte Smart-Chart-
-        # Reports (Report-Icon auf den Karten, 2026-08-27) - eine Abfrage
-        # statt einer pro Karte, gleiches Muster wie _retest_flags_map.
-        try:
-            _report_rows = fetch_all(
-                "SELECT SeriesPK, COUNT(*) AS n FROM tblSmartChartReport "
-                "WHERE IsTemplate=0 AND SeriesPK IS NOT NULL GROUP BY SeriesPK"
-            )
-            self._series_report_map = {int(r["SeriesPK"]): int(r["n"]) for r in _report_rows}
-        except Exception:
-            self._series_report_map = {}
+        # gemeinsam mit der Web-App: db/series_overview.py
+        from db import series_overview
+        self._retest_flags_map = series_overview.retest_flags_map()
+        self._series_report_map = series_overview.series_report_map()
         self._load_status_into(self.tbl_backlog["table"], 1)
         self._load_status_into(self.tbl_inprogress["table"], 2)
         self._load_status_into(self.tbl_done["table"], 3)
@@ -2759,41 +2748,8 @@ class BacklogScreen(QWidget):
 
     def _load_archived(self):
         """Lädt Archived-Daten (BacklogStatusID=5) und befüllt ArchivedPanel — sortiert nach Experiment ID absteigend."""
-        er_select = ''
-        if getattr(self, '_exp_req_field', None):
-            try:
-                er_select = f", e.[{self._exp_req_field}] AS [ExperimentRequestID]"
-            except Exception:
-                er_select = ''
-        if not er_select:
-            er_select = ', NULL AS [ExperimentRequestID]'
-
-        sql = f"""
-            SELECT
-                s.[ID]              AS [TrialSeriesID],
-                e.[ID]              AS [ExperimentPK],
-                e.[Experiment ID]   AS [Experiment ID],
-                s.[SeriesName]      AS [TrialSeries Name],
-                m.[Maschine]        AS [Maschine]
-                {er_select}
-            FROM
-                (((tblExperimente AS e
-                  INNER JOIN tblTrialSeries AS s
-                    ON e.[ID] = s.[ExperimentID])
-                  LEFT JOIN tblMaschine AS m
-                    ON m.[ID] = s.[MachineID])
-                  LEFT JOIN tblBacklogStatus AS bs
-                    ON bs.[ID] = s.[BacklogStatusID])
-            WHERE
-                s.[BacklogStatusID] = 5
-            ORDER BY
-                e.[Experiment ID] DESC,
-                s.[ID] DESC
-        """
-        try:
-            rows = fetch_all(sql, [])
-        except Exception:
-            rows = []
+        from db import series_overview   # gemeinsam mit der Web-App
+        rows = series_overview.archived_rows(getattr(self, '_exp_req_field', None))
         self._archived_panel.load(rows)
 
     def _open_experiment_from_archived(self, series_id, exp_pk, exp_id_txt):
@@ -2818,76 +2774,8 @@ class BacklogScreen(QWidget):
 
     def _load_status_into(self, table: BacklogDnDTable, status_id: int):
         """Lädt alle TrialSeries für einen Status in die gegebene Tabelle."""
-
-        # Sortierung (alle Boxen):
-        # - Prio zuerst (1 ganz oben), hohe Zahl unten
-        # - NULL-Prio immer ganz unten
-        # - Danach nach Experiment-ID (neueste oben) und stabil nach Series-ID
-        #
-        # Hinweis: Access kennt IIF(...), MySQL (und die meisten anderen SQL-Dialekte) nicht.
-        # Da das Backend bei dir MySQL ist, verwenden wir ein portables CASE WHEN.
-        order_by = """
-            ORDER BY
-                CASE WHEN s.[BacklogPrio] IS NULL THEN 1 ELSE 0 END,
-                s.[BacklogPrio] ASC,
-                e.[Experiment ID] DESC,
-                s.[ID] DESC
-        """
-
-        er_select = ''
-        if getattr(self, '_exp_req_field', None):
-            try:
-                er_select = f", e.[{self._exp_req_field}] AS [ExperimentRequestID]"
-            except Exception:
-                er_select = ''
-        if not er_select:
-            er_select = ', NULL AS [ExperimentRequestID]'
-
-        sql = f"""
-            SELECT
-                s.[ID]              AS [TrialSeriesID],
-                e.[ID]              AS [ExperimentPK],
-                e.[Experiment ID]   AS [Experiment ID],
-                s.[SeriesName]      AS [TrialSeries Name],
-                m.[Maschine]        AS [Maschine],
-                bs.[BacklogStatus]  AS [Status],
-                s.[BacklogPrio]     AS [Prio],
-                u.[Username]        AS [Owner],
-                u.[Colour]          AS [OwnerColour]
-                , CASE WHEN tsi.[TrialSeriesID] IS NULL THEN 0 ELSE 1 END AS [HasImage]
-                , CASE WHEN tsp.[TrialSeriesID] IS NULL THEN 0 ELSE 1 END AS [HasPDF]
-                , CASE WHEN (s.[Notes] IS NOT NULL AND s.[Notes] <> '') THEN 1 ELSE 0 END AS [HasNotes]
-                {er_select}
-            FROM
-                (((((tblExperimente AS e
-                  INNER JOIN tblTrialSeries AS s
-                    ON e.[ID] = s.[ExperimentID])
-                  LEFT JOIN tblMaschine AS m
-                    ON m.[ID] = s.[MachineID])
-                  LEFT JOIN tblBacklogStatus AS bs
-                    ON bs.[ID] = s.[BacklogStatusID])
-                  LEFT JOIN tblUser AS u
-                    ON u.[ID] = s.[BacklogOwner])
-                  LEFT JOIN (
-                        SELECT [TrialSeriesID]
-                        FROM tblTrialSeriesImage
-                        GROUP BY [TrialSeriesID]
-                  ) AS tsi
-                    ON tsi.[TrialSeriesID] = s.[ID])
-                  LEFT JOIN (
-                        SELECT [TrialSeriesID]
-                        FROM tblTrialSeriesPDF
-                        GROUP BY [TrialSeriesID]
-                  ) AS tsp
-                    ON tsp.[TrialSeriesID] = s.[ID]
-            WHERE
-                s.[BacklogStatusID] = {int(status_id)}
-            {order_by}
-        """
-        try:
-            rows = fetch_all(sql, [])
-        except Exception:
-            rows = []
+        from db import series_overview   # gemeinsam mit der Web-App (SQL dort unverändert)
+        rows = series_overview.backlog_rows(status_id, getattr(self, '_exp_req_field', None))
 
         self._fill_table(table, rows, status_id)
 
