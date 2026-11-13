@@ -2693,8 +2693,8 @@ class MainWindow(QMainWindow):
         # und ein späterer Superuser würde sie nie zu sehen bekommen
         # (set_audit_fields_visible steuert nur die Sichtbarkeit, nicht ob die
         # Felder überhaupt existieren).
-        all_cols_sample = fetch_all('SELECT * FROM [tblYarn] LIMIT 1', [])
-        all_columns = list(all_cols_sample[0].keys()) if all_cols_sample else ['ID', 'Name']
+        from db import yarn_admin
+        all_columns = yarn_admin.all_columns()
         self.new_yarn = NewYarnScreen(
             columns=all_columns, fk_maps=fk_maps, id_column='ID',
             on_back_home=self._go_back_manage_yarn,
@@ -2727,28 +2727,9 @@ class MainWindow(QMainWindow):
                 match = find_duplicate_yarn(data, exclude_id=None)
                 if match and not confirm_save_despite_duplicate(self.new_yarn, *match):
                     return None
-            data = dict(data)
-            if not data.get("Name"):
-                data["Name"] = "New Yarn"
-            data["GlobalID"] = new_global_id()
-            data["CreatedBy"] = (app_meta.current_user or {}).get("id")
-            data["CreationDate"] = datetime.datetime.now()
-            cols = list(data.keys())
-            cols_sql = ", ".join(f"[{c}]" for c in cols)
-            placeholders = ", ".join(["?"] * len(cols))
-            sql = f"INSERT INTO [tblYarn] ({cols_sql}) VALUES ({placeholders})"
-            # EINE Connection für Insert + lastrowid statt execute()+fetch_all(
-            # 'SELECT @@IDENTITY') - Letzteres ziehen sich unabhängig eine
-            # (nicht notwendigerweise dieselbe) Verbindung aus dem Pool, siehe
-            # quick_add_colour()'s Docstring in screen_manage_yarn.py für den
-            # empirisch nachgewiesenen Bug dahinter.
-            from db.connection import get_connection
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute(sql, [data[c] for c in cols])
-                cn.commit()
-                new_id = cur.lastrowid
-            return int(new_id) if new_id else None
+            from db import yarn_admin
+            return yarn_admin.insert_yarn(data, (app_meta.current_user or {}).get("id"),
+                                          app_meta.can_edit_min_stock())
 
         def _on_created(new_id):
             try:
@@ -2798,12 +2779,8 @@ class MainWindow(QMainWindow):
                 match = find_duplicate_yarn(data, exclude_id=yarn_id)
                 if match and not confirm_save_despite_duplicate(self.new_yarn, *match):
                     return None
-            cols = list(data.keys())
-            if not cols:
-                return yarn_id
-            set_sql = ", ".join(f"[{c}] = ?" for c in cols)
-            sql = f"UPDATE [tblYarn] SET {set_sql} WHERE [ID] = ?"
-            execute(sql, [data[c] for c in cols] + [yarn_id])
+            from db import yarn_admin
+            yarn_admin.update_yarn(yarn_id, data, app_meta.can_edit_min_stock())
             return yarn_id
 
         def _on_saved(_new_id=None):

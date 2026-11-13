@@ -35,116 +35,38 @@ def _canon_noparen(s: str) -> str:
 
 
 
-# ---------- FK loaders (ohne Aliasse wegen Access-ODBC-Quirk) ----------------
+# ---------- FK loaders: db/yarn_admin (Qt-free, shared with the web app) ----------
 def load_garntyp_map() -> Tuple[Dict[int, str], Dict[str, int]]:
-    rows = fetch_all(
-        'SELECT [ID], [Garntyp] FROM [tblGarntyp] ORDER BY [Garntyp]', [])
-    id2name: Dict[int, str] = {}
-    name2id: Dict[str, int] = {}
-    for r in rows:
-        i = r.get('ID')
-        n = r.get('Garntyp')
-        try:
-            i = int(i)
-        except Exception:
-            pass
-        id2name[i] = n
-        name2id[str(n)] = i
-    return id2name, name2id
+    from db import yarn_admin
+    return yarn_admin.garntyp_map()
 
 
 def load_material_map() -> Tuple[Dict[int, str], Dict[str, int]]:
-    rows = fetch_all(
-        'SELECT [ID], [Material] FROM [tblMaterial] ORDER BY [Material]', [])
-    id2name: Dict[int, str] = {}
-    name2id: Dict[str, int] = {}
-    for r in rows:
-        i = r.get('ID')
-        n = r.get('Material')
-        try:
-            i = int(i)
-        except Exception:
-            pass
-        id2name[i] = n
-        name2id[str(n)] = i
-    return id2name, name2id
+    from db import yarn_admin
+    return yarn_admin.material_map()
 
 
 def load_colour_map() -> Tuple[Dict[int, str], Dict[str, int]]:
-    rows = fetch_all(
-        'SELECT [ID], [Colour] FROM [tblColour] ORDER BY [Colour]', [])
-    id2name: Dict[int, str] = {}
-    name2id: Dict[str, int] = {}
-    for r in rows:
-        i = r.get('ID')
-        n = r.get('Colour')
-        try:
-            i = int(i)
-        except Exception:
-            pass
-        id2name[i] = n
-        name2id[str(n)] = i
-    return id2name, name2id
-
-
-_COLOUR_SIMILARITY_CUTOFF = 0.75  # siehe CLAUDE.md: an "blak"/"black", "grey"/"gray" kalibriert,
-# löst bei genuinely unterschiedlichen kurzen Farbnamen (red/blue/green/...) nicht aus
+    from db import yarn_admin
+    return yarn_admin.colour_map()
 
 
 def quick_add_colour(parent=None) -> Optional[Tuple[int, str]]:
-    """Kleiner Eingabedialog für eine neue Farbe (Nutzerwunsch: "wie kann ich
-    das schnell hinzufügen, ohne dass ich alles was ich bereits beim Garn
-    eingegeben habe wieder löschen muss?") - es gibt (bewusst, siehe CLAUDE.md)
-    keinen eigenen "Manage Colours"-Screen, tblColour wurde nur per Einweg-
-    Skript befüllt. Legt die Farbe in tblColour an und gibt (ID, Colour)
-    zurück, oder None bei Abbruch/leerer Eingabe. Wird sowohl aus dem
-    NewYarnScreen-Formular als auch aus der Inline-Tabelle in ManageYarnScreen
-    aufgerufen (siehe ComboMapDelegate add_new_callback) - reine DB-Logik
-    hier, kein UI-State dieser Datei.
-
-    Zwei Dublettenschutz-Stufen (Nutzerwunsch: "dass derselbe (oder ähnliche
-    Name 'black' 'blak' etc.) nicht nochmal angelegt werden kann"):
-    1. Exakter Treffer (case-insensitiv, z.B. "Blau"/"blau") -> gibt still die
-       vorhandene ID zurück, kein Dialog.
-    2. Ähnlicher, aber nicht identischer Name (`difflib.get_close_matches()`,
-       `_COLOUR_SIMILARITY_CUTOFF` empirisch gegen echte Tippfehler-Paare
-       kalibriert, nicht geraten - siehe CLAUDE.md) -> Rückfrage per
-       QMessageBox mit drei echten Optionen (vorhandene Farbe verwenden / neue
-       trotzdem anlegen / abbrechen), damit ein Tippfehler nicht stillschweigend
-       eine Fast-Dublette erzeugt, aber ein bewusst gewollter ähnlicher Name
-       (z.B. "grey" UND "gray" parallel) weiterhin möglich bleibt.
-
-    Insert + ID-Ermittlung laufen bewusst auf EINER `get_connection()`-Session
-    statt (wie an mehreren bestehenden Stellen im Projekt üblich, z.B.
-    main.py's _create_top_plate()/_insert_top_plate_full()) über getrennte
-    execute()/fetch_all()-Aufrufe mit abschliessendem `SELECT @@IDENTITY` –
-    @@IDENTITY ist reine
-    Session-State pro MySQL-Verbindung, und execute()/fetch_all() ziehen sich
-    JEWEILS unabhängig eine (nicht notwendigerweise dieselbe) Verbindung aus
-    dem Pool (siehe db/connection.py get_connection()). Empirisch geprüft statt
-    angenommen: ein Testlauf mit mehreren schnell aufeinanderfolgenden
-    execute()+fetch_all(@@IDENTITY)-Paaren lieferte dabei tatsächlich einmal 0
-    zurück - der bestehende Pool-Mustercode ist also nicht zuverlässig, auch
-    wenn er in der Praxis meist "funktioniert" (Einzelthread, wenig Kontention).
-    Hier stattdessen `cur.lastrowid` auf demselben Cursor/derselben Connection
-    wie der INSERT selbst - dadurch unabhängig vom Pool-Verhalten korrekt."""
+    """Small input dialog for a new colour (no "Manage Colours" screen on purpose). Exact name
+    (case-insensitive) -> the existing colour silently; similar name -> ask (use existing /
+    create anyway / cancel); else insert. Data: db/yarn_admin.colour_exact/colour_similar/
+    insert_colour (shared with the web app). Returns (ID, Colour) or None."""
+    from db import yarn_admin
     name, ok = QInputDialog.getText(parent, 'New Colour', 'Colour name:')
     name = (name or '').strip()
     if not ok or not name:
         return None
-
-    existing_rows = fetch_all('SELECT ID, Colour FROM tblColour', [])
-    name_lower = name.lower()
-    for row in existing_rows:
-        if (row.get('Colour') or '').strip().lower() == name_lower:
-            return int(row['ID']), row['Colour']
-
-    import difflib
-    existing_names = [row['Colour'] for row in existing_rows if row.get('Colour')]
-    close = difflib.get_close_matches(
-        name_lower, [n.lower() for n in existing_names], n=1, cutoff=_COLOUR_SIMILARITY_CUTOFF)
-    if close:
-        match_name = next(n for n in existing_names if n.lower() == close[0])
+    exact = yarn_admin.colour_exact(name)
+    if exact:
+        return exact
+    similar = yarn_admin.colour_similar(name)
+    if similar:
+        match_id, match_name = similar
         box = QMessageBox(parent)
         box.setWindowTitle('Similar colour exists')
         box.setText(
@@ -159,136 +81,36 @@ def quick_add_colour(parent=None) -> Optional[Tuple[int, str]]:
         if clicked is btn_cancel:
             return None
         if clicked is btn_use:
-            match_row = next(r for r in existing_rows if r['Colour'] == match_name)
-            return int(match_row['ID']), match_row['Colour']
-        # sonst: "Create anyway" -> unten wie gewohnt anlegen
-
-    from db.connection import get_connection
-    with get_connection() as cn:
-        cur = cn.cursor()
-        gid = new_global_id()
-        cur.execute('INSERT INTO tblColour (Colour, GlobalID) VALUES (?, ?)', [name, gid])
-        cn.commit()
-        new_id = cur.lastrowid
+            return match_id, match_name
+    new_id = yarn_admin.insert_colour(name)
     if not new_id:
         return None
     return int(new_id), name
 
 
-# ---------- Duplicate-Yarn-Check (Nutzerwunsch: "so gut wie möglich verhindern,
-# dass zwei mal dasselbe garn aufgenommen wird") ------------------------------
-# Felder auf Nutzeranweisung: "die wichtigen felder sind garntyp, material,
-# titer, endtiter, numberoffilaments und colour". Titer/Endtiter/Garntyp/
-# Material/NumberOfFilaments sind in der Praxis so gut wie immer befüllt (per
-# echter dev_local-Zählung: 0 von 94 NULL ausser Titer mit 4/94) - Colour dagegen
-# oft nicht (65 von 94 NULL, siehe tblColour-Rollout oben) und wird deshalb nur
-# verglichen, wenn BEIDE Seiten einen Wert haben (sonst weder "gleich" noch
-# "verschieden" - neutral ausgeklammert statt False-Positives durch zwei
-# zufällig beide leere Colour-Felder).
-_DUP_CHECK_CORE_FIELDS = ['Garntyp', 'Material', 'Titer', 'Endtiter', 'NumberOfFilaments']
-_DUP_CHECK_COLOUR_FIELD = 'ColourID'
-_DUP_FIELD_LABELS = {
-    'Garntyp': 'Garntyp', 'Material': 'Material', 'Titer': 'Titer',
-    'Endtiter': 'Endtiter', 'NumberOfFilaments': 'Number of Filaments',
-    'ColourID': 'Colour',
-}
-
-
-def _values_equal(a, b) -> bool:
-    """Robuster Vergleich für DB-Werte, die je nach Quelle als Decimal/int
-    (frisch aus der DB) oder als str (aus einem QLineEdit/_collect_values())
-    ankommen können."""
-    if a in (None, '') or b in (None, ''):
-        return a in (None, '') and b in (None, '')
-    try:
-        return float(a) == float(b)
-    except (TypeError, ValueError):
-        return str(a).strip() == str(b).strip()
-
-
+# ---------- Duplicate-Yarn-Check: db/yarn_admin.find_duplicate_yarn (shared with the web app) ----
 def find_duplicate_yarn(fields: Dict[str, object], exclude_id: Optional[int] = None):
-    """Sucht unter den bestehenden Katalog-Garnen (Shadow-Yarns/`SourceTrialID`
-    ausgenommen, siehe Halbfabrikat-Feature) nach dem ähnlichsten Treffer zu
-    `fields` (ein dict mit mind. den 5 Kernfeldern + optional ColourID - siehe
-    _DUP_CHECK_CORE_FIELDS/_DUP_CHECK_COLOUR_FIELD). Läuft NICHT, solange nicht
-    alle 5 Kernfelder gesetzt sind (bei einem frisch per "New Yarn" angelegten,
-    noch leeren Datensatz z.B. sinnlos - kein False-Positive-Risiko, aber auch
-    keine Aussage möglich).
-
-    Rückgabe `None` (kein Treffer mit 0 oder 1 abweichendem Feld) oder
-    `(row, diff_count, diff_fields, compared_fields)`:
-      - diff_count == 0: exakte Dublette (alle verglichenen Felder identisch)
-      - diff_count == 1: "sehr ähnlich" (genau ein Feld weicht ab)
-    Bei mehreren Kandidaten wird der mit der geringsten Abweichung gewählt."""
-    if any(fields.get(c) in (None, '') for c in _DUP_CHECK_CORE_FIELDS):
-        return None
-    candidate_colour = fields.get(_DUP_CHECK_COLOUR_FIELD)
-
-    rows = fetch_all(
-        'SELECT ID, Name, Garntyp, Material, Titer, Endtiter, NumberOfFilaments, ColourID '
-        'FROM tblYarn WHERE SourceTrialID IS NULL', [])
-    best = None
-    for row in rows:
-        rid = row.get('ID')
-        if exclude_id is not None and _values_equal(rid, exclude_id):
-            continue
-        compared_fields = list(_DUP_CHECK_CORE_FIELDS)
-        diff_fields = [c for c in _DUP_CHECK_CORE_FIELDS
-                        if not _values_equal(fields.get(c), row.get(c))]
-        colour_compared = (candidate_colour not in (None, '')
-                            and row.get(_DUP_CHECK_COLOUR_FIELD) is not None)
-        if colour_compared:
-            compared_fields.append(_DUP_CHECK_COLOUR_FIELD)
-            if not _values_equal(candidate_colour, row.get(_DUP_CHECK_COLOUR_FIELD)):
-                diff_fields.append(_DUP_CHECK_COLOUR_FIELD)
-        diff_count = len(diff_fields)
-        if diff_count > 1:
-            continue
-        if best is None or diff_count < best[1]:
-            best = (row, diff_count, diff_fields, compared_fields)
-    return best
+    from db import yarn_admin
+    return yarn_admin.find_duplicate_yarn(fields, exclude_id)
 
 
 def confirm_save_despite_duplicate(parent, match_row: Dict, diff_count: int,
                                     diff_fields: List[str], compared_fields: List[str]) -> bool:
-    """Warn-Dialog vor dem tatsächlichen Speichern (Nutzerwunsch: "sehr
-    ähnliche Garne ... eine Warnung ala wirklich speichern? Garn xy ist sehr
-    ähnlich"). Default-Button ist bewusst "No" - ein versehentlicher Enter-
-    Druck legt keine Dublette an. Gibt True zurück, wenn der Nutzer trotzdem
-    speichern will."""
-    name = match_row.get('Name') or f"yarn ID {match_row.get('ID')}"
-    rid = match_row.get('ID')
-    same_fields = [c for c in compared_fields if c not in diff_fields]
-    same_labels = ', '.join(_DUP_FIELD_LABELS.get(c, c) for c in same_fields)
-    if diff_count == 0:
-        text = (f'An identical yarn already exists: "{name}" (ID {rid}) - '
-                f'same {same_labels}.\n\nSave anyway?')
-    else:
-        diff_label = _DUP_FIELD_LABELS.get(diff_fields[0], diff_fields[0])
-        text = (f'This yarn is very similar to "{name}" (ID {rid}) - only '
-                f'{diff_label} differs (rest matches: {same_labels}).\n\nSave anyway?')
+    """Warning before saving a duplicate / very similar yarn; default button "No"."""
+    from db import yarn_admin
+    info = yarn_admin.duplicate_info((match_row, diff_count, diff_fields, compared_fields))
     box = QMessageBox(parent)
     box.setWindowTitle('Possible duplicate yarn')
     box.setIcon(QMessageBox.Warning)
-    box.setText(text)
+    box.setText(info["text"])
     box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     box.setDefaultButton(QMessageBox.No)
     return box.exec() == QMessageBox.Yes
 
 
 def _resolve_field(cands: List[str], cols_map: Dict[str, str]) -> Optional[str]:
-    # exakter lowercase-match
-    for cand in cands:
-        lc = (cand or "").lower()
-        if lc in cols_map:
-            return cols_map[lc]
-    # normalisierter match
-    inv = {_norm(k): v for k, v in cols_map.items()}
-    for cand in cands:
-        nk = _norm(cand)
-        if nk in inv:
-            return inv[nk]
-    return None
+    from db import yarn_admin
+    return yarn_admin.resolve_field(cands, cols_map)
 
 
 def _id_key_variants(v) -> List[object]:
@@ -317,48 +139,9 @@ def _id_key_variants(v) -> List[object]:
 
 
 def load_yarngroup_map() -> Tuple[Dict[object, str], Dict[str, object]]:
-    """YarnGroup (tblyarngroup) mapping: ID -> DisplayName.
-
-    Achtung: In deiner DB kann das Feld fuer den Namen auch z.B. GroupName heissen.
-    Darum wird es ueber information_schema aufgeloest.
-    """
-    table = 'tblyarngroup'
-    cols_map = get_columns_map(table)
-    col_id = _resolve_field(['ID'], cols_map) or 'ID'
-    col_name = _resolve_field(['Name', 'GroupName', 'GruppenName', 'Bezeichnung'], cols_map) or 'Name'
-    col_no = _resolve_field(['GroupNumber', 'GroupNo', 'GruppenNummer', 'Number', 'Nummer'], cols_map)
-
-    sel = [f'[{col_id}] AS ID', f'[{col_name}] AS Name']
-    if col_no:
-        sel.append(f'[{col_no}] AS GroupNo')
-
-    order = f'ORDER BY [{col_no}]' if col_no else f'ORDER BY [{col_name}]'
-    rows = fetch_all(f'SELECT {", ".join(sel)} FROM [{table}] {order}', [])
-
-    id2name: Dict[object, str] = {}
-    name2id: Dict[str, object] = {}
-
-    for r in rows:
-        raw_id = r.get('ID')
-        raw_name = r.get('Name')
-        raw_no = r.get('GroupNo') if 'GroupNo' in r else None
-
-        # Display label: "<no> - <name>" oder nur name
-        name = '' if raw_name is None else str(raw_name).strip()
-        try:
-            gno = int(str(raw_no).strip()) if raw_no not in (None, '') else None
-        except Exception:
-            gno = None
-        label = f'{gno} - {name}' if (gno is not None and name) else (name or (str(gno) if gno is not None else ''))
-
-        # Map: sowohl int als auch str keys ablegen (robust gegen Typenmix)
-        for k in _id_key_variants(raw_id):
-            id2name[k] = label
-        if label:
-            # letztes gewinnt (bei Duplikaten egal)
-            name2id[label] = raw_id
-
-    return id2name, name2id
+    """YarnGroup mapping ID -> "<no> - <name>": db/yarn_admin.yarngroup_map."""
+    from db import yarn_admin
+    return yarn_admin.yarngroup_map()
 
 
 # ---------- Delegates for FK columns -----------------------------------------
@@ -1071,26 +854,9 @@ class ManageYarnScreen(QWidget):
 
     # --- Data layer ---
     def _load_yarn(self) -> List[Dict]:
-        # Automatisch angelegte Halbfabrikat-"Schatten"-Garne (Multimaschinen-
-        # Ply-Verknüpfung, siehe screen_create_experiment.get_or_create_shadow_yarn)
-        # sollen den Katalog nicht zuschwemmen.
-        src_col = _resolve_field(['SourceTrialID'], get_columns_map('tblYarn'))
-        where = f' WHERE y.{src_col} IS NULL' if src_col else ''
-        # UsedInTrial/StockKg sind reine Anzeige-Spalten (keine echten tblYarn-
-        # Felder, analog zu has_files bei Jets): ob dieses Garn in mindestens
-        # einer Ply-Zeile (tbltrialsettings.YarnID) verwendet wurde, und wie
-        # viel kg aktuell auf Lager sind (Summe tblYarnSpool.WeightKg über alle
-        # Spulen mit Status='in stock' - dieselbe Logik wie screen_yarn_stock.py,
-        # nur serverseitig statt python-seitig aufsummiert).
-        sql = (
-            'SELECT y.*, '
-            'CASE WHEN EXISTS (SELECT 1 FROM tbltrialsettings ts WHERE ts.YarnID = y.ID) '
-            'THEN 1 ELSE 0 END AS UsedInTrial, '
-            "COALESCE((SELECT SUM(sp.WeightKg) FROM tblYarnSpool sp "
-            "WHERE sp.YarnID = y.ID AND sp.Status = 'in stock'), 0) AS StockKg "
-            f'FROM tblYarn y{where}'
-        )
-        return fetch_all(sql, [])
+        """Catalogue yarns + UsedInTrial + StockKg: db/yarn_admin.load_yarns (shared with the web app)."""
+        from db import yarn_admin
+        return yarn_admin.load_yarns()
 
     def reload_data(self):
         # Vor dem Modell-Austausch alle inline aufgeklappten Zeilen sauber
@@ -1288,10 +1054,6 @@ class ManageYarnScreen(QWidget):
             self._set_status('No changes to save.')
             return
         id_col = self.model.id_column() or 'ID'
-        dpf_col = self.model.dpf_column_name()
-        minstock_col = self.model.minstock_column_name()
-        usedintrial_col = self.model.usedintrial_column_name()
-        stockkg_col = self.model.stockkg_column_name()
 
         # Duplicate-Check VOR jedem Schreiben (Nutzerwunsch: "es soll bei jedem
         # speichern/aktualisieren geprüft werden"). Bricht die GESAMTE
@@ -1307,39 +1069,13 @@ class ManageYarnScreen(QWidget):
                 self._set_status('Save cancelled (possible duplicate yarn).', error=True)
                 return
 
-        # Defense-in-depth: der Model-Flag-Guard verhindert schon, dass
-        # MinStock überhaupt dirty werden kann, aber ein frischer Live-Check
-        # hier stellt sicher, dass nie ein MinStock-Wert geschrieben wird,
-        # wenn der eingeloggte User dafuer (inzwischen) keine Rechte hat.
-        can_edit_minstock = app_meta.can_edit_min_stock()
-        total = 0
+        # Writing: db/yarn_admin.save_changes (never DPF / UsedInTrial / StockKg / audit, MinStock only
+        # with a fresh live right check - defense in depth next to the model lock).
+        from db import yarn_admin
+        headers = self.model.headers()
         try:
-            for r in dirty_rows:
-                if id_col not in r:
-                    raise ValueError(
-                        f"Row has no '{id_col}' field; cannot save.")
-                rid = r[id_col]
-                cols = [c for c in self.model.headers() if c !=
-                        id_col and c in r]
-                # exclude computed DPF column from updates
-                if dpf_col and dpf_col in cols:
-                    cols.remove(dpf_col)
-                if minstock_col and not can_edit_minstock and minstock_col in cols:
-                    cols.remove(minstock_col)
-                # UsedInTrial/StockKg sind keine echten tblYarn-Felder (siehe
-                # _load_yarn) - müssen zwingend raus, sonst schlägt das UPDATE
-                # mit "Unknown column" fehl, sobald irgendeine Zelle der Zeile
-                # dirty ist.
-                if usedintrial_col and usedintrial_col in cols:
-                    cols.remove(usedintrial_col)
-                if stockkg_col and stockkg_col in cols:
-                    cols.remove(stockkg_col)
-                if not cols:
-                    continue
-                set_sql = ', '.join([f'[{c}] = ?' for c in cols])
-                sql = f'UPDATE [tblYarn] SET {set_sql} WHERE [{id_col}] = ?'
-                params = [r[c] for c in cols] + [rid]
-                total += execute(sql, params) or 0
+            total = yarn_admin.save_changes([{c: r[c] for c in headers if c in r} for r in dirty_rows],
+                                            app_meta.can_edit_min_stock())
             self._set_status(f'Saved {total} update(s).')
             self.model.clear_dirty()
         except Exception as e:
@@ -1490,68 +1226,9 @@ class ManageYarnScreen(QWidget):
         return f'{f:.0f}' if f == int(f) else f'{f:.1f}'
 
     def _fetch_yarn_usage(self, yarn_id) -> List[Dict]:
-        """Alle TrialSeries (+ deren Versuchsnummern inkl. Jet/Overfeed/Speed),
-        die dieses Garn über eine Ply-Zeile (tbltrialsettings.YarnID) verwenden.
-        Jet/OF%/Speed sind die "primären" Prozessparameter, die auch der ATY-
-        Advisor (advisor_worker.py) als Hauptvergleichsachse behandelt - aber
-        ATY-Maschinen (tblmaschine.Maschinentyp -> tblmaschinentypen 'ATY',
-        z.B. 'SSM DP2T') führen Overfeed getrennt nach Core/Effect-Schaft
-        (`Shaft1,1Core_OF`/`Shaft1,2Effect_OF`) und die Geschwindigkeit unter
-        `Shaft2Speed` statt `SpeedShaft2` - per Cross-Check gegen echte Daten
-        verifiziert (dev_local: `SpeedShaft2` ist bei ATY-Trials zu 0% befüllt,
-        `Shaft2Speed` zu 96%; umgekehrt bei DTY/AC). Für alle anderen
-        Maschinentypen bleibt das bisherige `Shaft2x_OF`/`SpeedShaft2`-Paar
-        unverändert massgeblich."""
-        sql = (
-            'SELECT s.ID AS SeriesID, s.ExperimentID AS ExpPK, '
-            'e.ExperimentID AS ExperimentIdText, s.SeriesName, m.Maschine AS MachineName, '
-            'mt.Maschinentyp AS MachineType, '
-            't.Versuchsnummer, j.Jet AS JetName, t.Shaft2x_OF AS OverfeedPct, '
-            't.SpeedShaft2 AS SpeedMMin, t.`Shaft1,1Core_OF` AS CoreOfPct, '
-            't.`Shaft1,2Effect_OF` AS EffectOfPct, t.Shaft2Speed AS AtySpeedMMin '
-            'FROM tbltrialsettings ts '
-            'JOIN tbltrial t ON t.ID = ts.TrialID '
-            'JOIN tbltrialseries s ON s.ID = t.TrialSeriesID '
-            'JOIN tblexperimente e ON e.ID = s.ExperimentID '
-            'LEFT JOIN tblmaschine m ON m.ID = s.MachineID '
-            'LEFT JOIN tblmaschinentypen mt ON mt.ID = m.Maschinentyp '
-            'LEFT JOIN tbljets j ON j.ID = t.JetID '
-            'WHERE ts.YarnID = ? '
-            'ORDER BY e.ExperimentID, s.SeriesName, t.Versuchsnummer'
-        )
-        rows = fetch_all(sql, [yarn_id])
-        series_map: Dict[object, Dict] = {}
-        for r in rows:
-            sid = r.get('SeriesID')
-            if sid not in series_map:
-                exp_txt = r.get('ExperimentIdText') or ''
-                series_name = r.get('SeriesName') or ''
-                label = f"{exp_txt}.{series_name}" if exp_txt else series_name
-                series_map[sid] = {
-                    'series_id': sid,
-                    'exp_pk': r.get('ExpPK'),
-                    'experiment_id_text': exp_txt,
-                    'label': label,
-                    'machine_name': r.get('MachineName'),
-                    'trial_numbers': [],
-                }
-            vno = r.get('Versuchsnummer')
-            if vno is None:
-                continue
-            existing_vnos = {t['vno'] for t in series_map[sid]['trial_numbers']}
-            if vno not in existing_vnos:
-                is_aty = r.get('MachineType') == 'ATY'
-                speed_val = r.get('AtySpeedMMin') if is_aty else r.get('SpeedMMin')
-                series_map[sid]['trial_numbers'].append({
-                    'vno': vno,
-                    'jet': r.get('JetName'),
-                    'is_aty': is_aty,
-                    'of_pct': self._fmt_num(r.get('OverfeedPct')),
-                    'core_of': self._fmt_num(r.get('CoreOfPct')),
-                    'effect_of': self._fmt_num(r.get('EffectOfPct')),
-                    'speed': self._fmt_num(speed_val),
-                })
-        return list(series_map.values())
+        """Series (+ trials with jet / OF / speed) using this yarn: db/yarn_admin.yarn_usage."""
+        from db import yarn_admin
+        return yarn_admin.yarn_usage(yarn_id)
 
     def _find_source_row_for_id(self, yarn_id) -> Optional[int]:
         if not self.model:
@@ -1779,9 +1456,8 @@ class ManageYarnScreen(QWidget):
         if QMessageBox.question(self, 'Confirm Delete', f'Delete {len(ids)} yarn(s)?') != QMessageBox.Yes:
             return
         try:
-            placeholders = ','.join(['?'] * len(ids))
-            sql = f'DELETE FROM [tblYarn] WHERE [{id_col}] IN ({placeholders})'
-            execute(sql, ids)
+            from db import yarn_admin
+            yarn_admin.delete_yarns(ids)
             self.reload_data()
             self._set_status(f'Deleted {len(ids)} yarn(s).')
         except Exception as e:
