@@ -4111,14 +4111,6 @@ class ShowExperimentScreen(QWidget):
         cu = getattr(app_meta, "current_user", {}) or {}
         return cu.get("id")
 
-    def _series_images_dir(self, series_id: Any) -> str:
-        """Gibt den Zielordner fuer Bilder einer TrialSeries zurueck."""
-        return os.path.join(TRIALSERIES_IMAGES_BASE_DIR, str(series_id))
-
-    def _series_images_relative_path_for_db(self, series_id: Any) -> str:
-        """Gibt den Pfad so zurueck, wie er in RelativePath gespeichert werden soll."""
-        return TRIALSERIES_IMAGES_BASE_DIR + "\\" + str(series_id) + "\\"
-
     def _series_has_images(self, series_id: Any) -> bool:
         """True if at least one image row exists for this TrialSeries."""
         if series_id in (None, ""):
@@ -4173,81 +4165,10 @@ class ShowExperimentScreen(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Images", str(e))
 
-    def _insert_trialseries_image_row(
-            self,
-            *,
-            series_id: Any,
-            relative_path: str,
-            stored_filename: str,
-            original_filename: str,
-    ) -> Optional[int]:
-        """Erzeugt einen Datensatz in tblTrialSeriesImage. Gibt die neue ID
-        zurueck (fuer die anschliessende Garnspiegel-Analyse, siehe
-        _analyze_and_save_garnspiegel)."""
-        created_by = self._current_user_id()
-        if created_by in (None, ""):
-            raise RuntimeError("CreatedBy/UserID could not be determined.")
-
-        sql = (
-            "INSERT INTO [tblTrialSeriesImage] "
-            "([TrialSeriesID],[RelativePath],[StoredFilename],[OriginalFilename],[CreatedAt],[CreatedBy]) "
-            "VALUES (?,?,?,?,?,?)"
-        )
-        params = [
-            series_id,
-            relative_path,
-            stored_filename,
-            original_filename,
-            datetime.datetime.now(),
-            created_by,
-        ]
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(sql, params)
-            new_id = cur.lastrowid
-            try:
-                cn.commit()
-            except Exception:
-                pass
-        return new_id
-
-    def _analyze_and_save_garnspiegel(self, image_id: Optional[int], file_path: str, original_filename: str) -> None:
-        """Best-effort: berechnet die Garnspiegel-Breiten-CV% (siehe
-        ui/yarnscope/garnspiegel_analysis.py) fuer ein frisch hochgeladenes
-        TrialSeries-Bild und speichert das Ergebnis in
-        tblTrialSeriesImageAnalysis. Laeuft synchron beim Upload (Analyse
-        eines einzelnen Fotos dauert <1s) - ein Fehler hier darf den Upload
-        selbst nie verhindern, deshalb komplett stumm abgefangen (gleiches
-        Muster wie das Feature-Tracking direkt darunter).
-
-        Nicht jedes hochgeladene Bild ist ein Garnspiegel (Defekt-/Setup-
-        Fotos laufen ueber denselben Dialog) - nur Dateien nach der
-        bestehenden Labor-Namenskonvention "V<n>.jpg" werden ueberhaupt
-        versucht, sonst gar kein Eintrag (kein falsch-positives Ergebnis auf
-        einem zufaellig streifig aussehenden, unrelated Foto)."""
-        if image_id is None or not _db_table_exists("tblTrialSeriesImageAnalysis"):
-            return
-        try:
-            from ui.yarnscope.garnspiegel_analysis import (
-                analyze_image, to_db_row, PARAMS_VERSION, looks_like_garnspiegel_filename,
-            )
-            if not looks_like_garnspiegel_filename(original_filename):
-                return
-            stats = analyze_image(file_path)
-            db_row = to_db_row(stats)
-            user_id = self._current_user_id()
-            cols = ["TrialSeriesImageID", "GlobalID", "UserID", "Timestamp", "ParamsVersion"] + list(db_row.keys())
-            vals = [image_id, new_global_id(), user_id, datetime.datetime.now(), PARAMS_VERSION] + list(db_row.values())
-            placeholders = ",".join(["?"] * len(cols))
-            _db_execute(
-                f"INSERT INTO tblTrialSeriesImageAnalysis ({','.join(cols)}) VALUES ({placeholders})",
-                vals,
-            )
-        except Exception as e:
-            logger.warning("_analyze_and_save_garnspiegel: %s", e)
-
     def _upload_series_images(self) -> None:
-        """Button-Handler: Bilder waehlen, speichern, DB-Records anlegen.
+        """Button-Handler: Bilder waehlen, speichern, DB-Records anlegen
+        (db/series_uploads.upload_paths, shared with the web app: copy under a
+        random name, tblTrialSeriesImage row, Garnspiegel analysis, tracking).
 
         Upload is allowed for read-only users too (AccessLevel 1) - only
         deleting is reserved for the owner/superuser (see
@@ -4267,63 +4188,8 @@ class ShowExperimentScreen(QWidget):
             if not files:
                 return
 
-            target_dir = self._series_images_dir(sid)
-            db_rel_path = self._series_images_relative_path_for_db(sid)
-
-            try:
-                os.makedirs(target_dir, exist_ok=True)
-            except PermissionError as e:
-                raise RuntimeError(
-                    "[WinError 5] Access denied while creating the target folder. "
-                    "This is a permission problem on the share/NTFS.\n\n"
-                    f"Path: {target_dir}\n\n"
-                    "Please ensure that the Windows user (or the account running TrippleT) "
-                    f"has write permission on {TRIALSERIES_IMAGES_BASE_DIR}.\n\n"
-                    f"Original error: {e}"
-                )
-            except Exception as e:
-                raise RuntimeError(f"Target folder could not be created: {target_dir}\n{e}")
-
-            stored_any = 0
-            errors: List[str] = []
-
-            for src in files:
-                try:
-                    orig_name = os.path.basename(src)
-                    _, ext = os.path.splitext(orig_name)
-                    ext = ext or ""
-
-                    stored_name = f"{uuid.uuid4().hex}{ext}"
-                    dst = os.path.join(target_dir, stored_name)
-
-                    with open(src, "rb") as fsrc:
-                        data = fsrc.read()
-                    with open(dst, "wb") as fdst:
-                        fdst.write(data)
-
-                    new_image_id = self._insert_trialseries_image_row(
-                        series_id=sid,
-                        relative_path=db_rel_path,
-                        stored_filename=stored_name,
-                        original_filename=orig_name,
-                    )
-                    self._analyze_and_save_garnspiegel(new_image_id, dst, orig_name)
-
-                    stored_any += 1
-                except Exception as e:
-                    errors.append(f"{os.path.basename(src)}: {e}")
-
-            # Feature-Tracking: upload_image (stealth)
-            if stored_any >= 1:
-                try:
-                    user_id = app_meta.current_user.get("id") if app_meta.current_user else None
-                    if user_id is not None:
-                        _db_execute(
-                            "INSERT INTO tblFeatureUsage (FeatureID, UserID, ExtraInfo) VALUES (?, ?, ?)",
-                            [4, user_id, str(getattr(self, "_series_pk", None))],
-                        )
-                except Exception:
-                    pass
+            from db.series_uploads import upload_paths
+            stored_any, errors = upload_paths("image", self._current_user_id(), sid, files)
 
             msg = f"{stored_any} image(s) uploaded."
             if errors:
@@ -4356,14 +4222,6 @@ class ShowExperimentScreen(QWidget):
         """
         from ui.screen_show_experiment_pdf_import import itemat_import_impl
         itemat_import_impl(self)
-
-    def _series_pdfs_dir(self, series_id: Any) -> str:
-        """Gibt den Zielordner fuer PDFs einer TrialSeries zurueck."""
-        return os.path.join(TRIALSERIES_PDFS_BASE_DIR, str(series_id))
-
-    def _series_pdfs_relative_path_for_db(self, series_id: Any) -> str:
-        """Gibt den Pfad so zurueck, wie er in RelativePath gespeichert werden soll."""
-        return TRIALSERIES_PDFS_BASE_DIR + "\\" + str(series_id) + "\\"
 
     def _series_has_pdfs(self, series_id: Any) -> bool:
         if series_id in (None, ""):
@@ -4514,41 +4372,11 @@ class ShowExperimentScreen(QWidget):
             except Exception:
                 pass
 
-    def _insert_trialseries_pdf_row(
-            self,
-            *,
-            series_id: Any,
-            relative_path: str,
-            stored_filename: str,
-            original_filename: str,
-    ) -> None:
-        created_by = self._current_user_id()
-        if created_by in (None, ""):
-            raise RuntimeError("CreatedBy/UserID could not be determined.")
-
-        sql = (
-            "INSERT INTO [tblTrialSeriesPDF] "
-            "([TrialSeriesID],[RelativePath],[StoredFilename],[OriginalFilename],[CreatedAt],[CreatedBy]) "
-            "VALUES (?,?,?,?,?,?)"
-        )
-        params = [
-            series_id,
-            relative_path,
-            stored_filename,
-            original_filename,
-            datetime.datetime.now(),
-            created_by,
-        ]
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(sql, params)
-            try:
-                cn.commit()
-            except Exception:
-                pass
-
     def _upload_series_pdfs(self) -> None:
-        """Upload is allowed for read-only users too (AccessLevel 1) - only
+        """PDFs waehlen und speichern (db/series_uploads.upload_paths, shared
+        with the web app).
+
+        Upload is allowed for read-only users too (AccessLevel 1) - only
         deleting is reserved for the owner/superuser (see
         ExperimentRequestPdfsDialog._can_delete())."""
         sid = self._series_pk
@@ -4566,62 +4394,8 @@ class ShowExperimentScreen(QWidget):
             if not files:
                 return
 
-            target_dir = self._series_pdfs_dir(sid)
-            db_rel_path = self._series_pdfs_relative_path_for_db(sid)
-
-            try:
-                os.makedirs(target_dir, exist_ok=True)
-            except PermissionError as e:
-                raise RuntimeError(
-                    "[WinError 5] Access denied while creating the target folder. "
-                    "This is a permission problem on the share/NTFS.\n\n"
-                    f"Path: {target_dir}\n\n"
-                    "Please ensure that the Windows user (or the account running TrippleT) "
-                    f"has write permission on {TRIALSERIES_PDFS_BASE_DIR}.\n\n"
-                    f"Original error: {e}"
-                )
-            except Exception as e:
-                raise RuntimeError(f"Target folder could not be created: {target_dir}\n{e}")
-
-            stored_any = 0
-            errors: List[str] = []
-
-            for src in files:
-                try:
-                    orig_name = os.path.basename(src)
-                    _, ext = os.path.splitext(orig_name)
-                    ext = ext or ".pdf"
-
-                    stored_name = f"{uuid.uuid4().hex}{ext}"
-                    dst = os.path.join(target_dir, stored_name)
-
-                    with open(src, "rb") as fsrc:
-                        data = fsrc.read()
-                    with open(dst, "wb") as fdst:
-                        fdst.write(data)
-
-                    self._insert_trialseries_pdf_row(
-                        series_id=sid,
-                        relative_path=db_rel_path,
-                        stored_filename=stored_name,
-                        original_filename=orig_name,
-                    )
-
-                    stored_any += 1
-                except Exception as e:
-                    errors.append(f"{os.path.basename(src)}: {e}")
-
-            # Feature-Tracking: upload_pdf (stealth)
-            if stored_any >= 1:
-                try:
-                    user_id = app_meta.current_user.get("id") if app_meta.current_user else None
-                    if user_id is not None:
-                        _db_execute(
-                            "INSERT INTO tblFeatureUsage (FeatureID, UserID, ExtraInfo) VALUES (?, ?, ?)",
-                            [3, user_id, str(getattr(self, "_series_pk", None))],
-                        )
-                except Exception:
-                    pass
+            from db.series_uploads import upload_paths
+            stored_any, errors = upload_paths("pdf", self._current_user_id(), sid, files)
 
             msg = f"{stored_any} PDF(s) uploaded."
             if errors:

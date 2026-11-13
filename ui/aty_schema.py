@@ -1,7 +1,7 @@
 """aty_schema.py - ATY machine path above Machine Data in Show Experiment
 (Nutzerwunsch 2026-11-11, "wie DTY"). Panel, button, table highlighting and
 Knowledge Base links are shared with DTY in ui/dty_schema_panel.py; this
-module only builds the data of one trial and paints it.
+module paints one trial; its data comes from db/machine_schema.build_aty_path.
 
 One lane per ply (core, effect, elastane, plies without yarn use), each
 with its draw zone and feed roll. Only the core is wetted (Nutzerangabe
@@ -11,11 +11,12 @@ winder.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 
+from db import machine_schema as _ms
 from ui import aty_stations as st
 
 # lane colours: core green like DTY, effect amber like the Knowledge Base page
@@ -27,100 +28,14 @@ C_WATER = QColor("#2386C8")
 ROLE_COLOUR = {"core": C_CORE, "effect": C_EFFECT, "elastane": C_ELASTANE}
 
 
-def _helpers():
-    from ui import dty_schema_panel as dsp
-    return dsp
-
-
-def _summary(model, keys, station: str, c: int) -> Optional[str]:
-    dsp = _helpers()
-    parts = []
-    for key, fmt in st.SUMMARY.get(station, []):
-        if key in keys:
-            v = dsp._display(model, keys.index(key), c)
-            if st.filled(v):
-                parts.append(fmt.format(v))
-    return "\n".join(parts[:2]) or None
-
-
-def _tip(model, keys, station: str, c: int) -> Optional[str]:
-    dsp = _helpers()
-    lines = []
-    for r in st.rows_of_station(keys, station):
-        v = dsp._display(model, r, c)
-        if st.filled(v):
-            lines.append(f"{model._row_titles[r]}: {v}")
-    return "\n".join(lines) or None
-
-
-def _add_line(tips: Dict[str, Any], station: str, line: str) -> None:
-    tips[station] = (tips.get(station) + "\n" if tips.get(station) else "") + line
-
-
 def build_path(screen, col: int) -> Dict[str, Any]:
-    """Path data of the trial in model column `col` (0-based data column)."""
-    dsp = _helpers()
-    model = getattr(screen, "model_machine", None)
-    specs = getattr(screen, "_machine_col_specs", None) or []
-    keys = list(getattr(screen, "_machine_row_keys", None) or [])
-    if model is None or not specs or not (0 <= col < len(specs)):
+    """Path data of the trial in model column `col` (0-based data column) -
+    rules in db/machine_schema.build_aty_path (shared with the web app)."""
+    from ui import dty_schema_panel as dsp
+    src = dsp._ModelSource(screen)
+    if src.model is None or not src.specs or not (0 <= col < len(src.specs)):
         return {}
-    tid = specs[col]["trial_id"]
-    cols = [i for i, cs in enumerate(specs) if cs["trial_id"] == tid]
-    c0 = cols[0]
-
-    lw2 = dsp._num(dsp._cell(model, keys, "shaft2speed", c0))
-    plies: List[Dict[str, Any]] = []
-    for i in cols:
-        cs = specs[i]
-        sr = cs.get("sr") or {}
-        use = cs.get("yarn_use_id") if cs.get("is_group") else sr.get("YarnUseID")
-        role = st.role_of(use)
-        pos = dsp._display(model, keys.index("position"), i) if "position" in keys else ""
-        values = {s: _summary(model, keys, s, i) for s in st.PER_PLY}
-        tips = {s: _tip(model, keys, s, i) for s in st.PER_PLY}
-        # feed roll: speed from LW 2 and the overfeed, draw-in speed from DR
-        of = dsp._num(dsp._cell(model, keys, "of", i))
-        dr = dsp._num(dsp._cell(model, keys, "dr", i))
-        temps = [dsp._display(model, keys.index(k), i) for k in ("temp0", "temp1") if k in keys]
-        temps = [t for t in temps if st.filled(t)]
-        if dr is not None and st.filled(dr):
-            values["draw"] = f"DR {dsp._short(dr)}" + (f"\n{' / '.join(temps)} °C" if temps else "")
-        elif temps:
-            values["draw"] = f"{' / '.join(temps)} °C"
-        v_feed = st.feed_speed(lw2, of)
-        if v_feed is not None:
-            values["feed"] = dsp._speed_text(v_feed) + f"\nOF {dsp._short(of)} %"
-            _add_line(tips, "feed", f"Speed (LW 2 x (1 + OF %)): {dsp._speed_text(v_feed)}")
-            v0 = st.draw_in_speed(v_feed, dr)
-            if v0 is not None and dr != 1:
-                _add_line(tips, "draw", f"Draw-in speed (feed roll / DR): {dsp._speed_text(v0)}")
-        elif of is not None:
-            values["feed"] = f"OF {dsp._short(of)} %"
-        label = st.ROLE_LABEL.get(role or "", "")
-        plies.append({"idx": i, "label": label or (cs.get("ply") or ""), "ply": cs.get("ply") or "",
-                      "pos": pos if st.filled(pos) else "", "yarn": cs.get("yarn_name") or "",
-                      "role": role, "values": values, "tips": tips})
-
-    values = {s: _summary(model, keys, s, c0) for s, _l, pp in st.STATIONS if not pp}
-    tips = {s: _tip(model, keys, s, c0) for s, _l, pp in st.STATIONS if not pp}
-    if lw2:
-        values["lw2"] = dsp._speed_text(lw2) + "\ntake-off"
-    show_draw = any(pl["values"].get("draw") for pl in plies) or \
-        any(st.station_of(k) == "draw" for k in keys)
-    stations = [s for s, _l, _pp in st.STATIONS if s != "draw" or show_draw]
-    vno = specs[c0].get("vno")
-    unset = [pl["ply"] for pl in plies if pl["role"] is None]
-    warnings = []
-    if unset and len(plies) > 1:
-        warnings.append("no yarn use (core/effect) for " + ", ".join(str(u) for u in unset)
-                        + " - set it in the Yarn Use row")
-    return {
-        "profile": "aty", "title": f"V{vno}" if vno is not None and int(vno) > 0 else "Ref",
-        "trial_id": tid, "process": "Air texturing", "plies": plies,
-        "order": st.lane_order([pl["role"] for pl in plies]),
-        "stations": stations, "values": values, "tips": tips, "warnings": warnings,
-    }
+    return _ms.build_aty_path(src, col)
 
 
 def paint(w, p: QPainter, d: Dict[str, Any], f: QFont, fb: QFont, fs: QFont) -> None:

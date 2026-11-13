@@ -20,7 +20,6 @@ tbldtyprocess table exists (db/dty_process.py).
 """
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from PySide6.QtCore import QPointF, QRectF, QSettings, Qt, QTimer, Signal
@@ -29,8 +28,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QToolButton, QToolTip, QVBoxLayout, QWidget,
 )
 
-from db import dty_process as dp
 from db.machine_data import SINGLE_PLY_TIP as _SINGLE_PLY_TIP
+from db import machine_schema as _ms
 from ui import dty_stations as ds
 
 _SETTINGS = ("TrippleT", "ShowExperiment")
@@ -51,30 +50,10 @@ C_MUTED = QColor("#7A847A")
 C_SEL = QColor(255, 193, 7, 150)
 C_BG = QColor("#F4F6F3")
 
-SHORT = {"lw0": "LW 0", "prejet": "Pre-jet", "lw1": "LW 1", "heater1": "Heater",
-         "cooling": "Cooling", "friction": "Friction", "lw2": "LW 2", "mainjet": "Main jet",
-         "lw2x": "LW 2.x", "setheater": "Set heater", "jet3": "Jet 3", "lw3": "LW 3",
-         "winder": "Winder", "elastane": "Elastane"}
-
-# (row key, format) for the short text under a station - first filled wins,
-# jets join jet + pressure
-_SUMMARY = {
-    "creel": [("position", "Pos {}")],
-    "lw0": [("w0_w1_of", "OF {} %")],
-    "prejet": [("preinterminglingjets", "{}"), ("preinterminglingairpressure", "{} bar")],
-    "lw1": [("shaft1_dr", "DR {}")],
-    "heater1": [("1stheatert1", "{} °C")],
-    "friction": [("dyvalue", "D/Y {}"), ("discconfiguration", "{}")],
-    "lw2": [("speedshaft2", "{} m/min")],
-    "mainjet": [("jet", "{}"), ("airpressure", "{} bar")],
-    "lw2x": [("shaft2x_of", "OF {} %")],
-    "setheater": [("2ndheaterset", "{} °C"), ("setheatertemperature", "{} °C")],
-    "jet3": [("w3_jet", "{}"), ("w3_airpressure", "{} bar")],
-    "lw3": [("shaft3", "{} %")],
-    "winder": [("winder", "{} %")],
-    "elastane": [("draftelastane", "Draft {}")],
-}
-_JOINED = {"prejet", "mainjet", "jet3"}
+# station names and value summaries: db/machine_schema.py (shared with the web app)
+SHORT = _ms.SHORT
+_SUMMARY = _ms.SUMMARY
+_JOINED = _ms.JOINED
 
 # ATY stations drawn with a DTY shape (ui/aty_stations.py)
 _SHAPE = {"draw": "heater1", "feed": "lw", "jet": "mainjet", "stabilise": "setheater"}
@@ -82,10 +61,7 @@ _SHAPE = {"draw": "heater1", "feed": "lw", "jet": "mainjet", "stabilise": "sethe
 
 def _mod(profile: Optional[str]):
     """Station module of a schema profile: ui/dty_stations or ui/aty_stations."""
-    if profile == "aty":
-        from ui import aty_stations
-        return aty_stations
-    return ds
+    return _ms.station_module(profile)
 
 
 from db.machine_data import filled as _filled  # noqa: E402  (shared rule, db/machine_data.py)
@@ -411,206 +387,45 @@ def _display(model, r: int, c: int) -> str:
     return "" if v is None else str(v).strip()
 
 
-def _summary(model, keys: List[Optional[str]], station: str, c: int) -> Optional[str]:
-    parts = []
-    for key, fmt in _SUMMARY.get(station, []):
-        if key not in keys:
-            continue
-        v = _display(model, keys.index(key), c)
-        if _filled(v):
-            parts.append(fmt.format(v))
-            if station not in _JOINED:
-                break
-    return " · ".join(parts) or None
+class _ModelSource:
+    """Cells of the Machine Data model for db/machine_schema.py."""
 
+    def __init__(self, screen):
+        self.model = getattr(screen, "model_machine", None)
+        self.specs = getattr(screen, "_machine_col_specs", None) or []
+        self.keys = list(getattr(screen, "_machine_row_keys", None) or [])
+        self.titles = list(getattr(self.model, "_row_titles", None) or [])
+        self.hidden = getattr(screen, "_process_hidden_rows", set())
 
-def _tip(model, keys: List[Optional[str]], station: str, c: int) -> Optional[str]:
-    lines = []
-    for r in ds.rows_of_station(keys, station):
-        v = _display(model, r, c)
-        if _filled(v):
-            lines.append(f"{model._row_titles[r]}: {v}")
-    return "\n".join(lines) or None
+    def display(self, r: int, c: int) -> str:
+        return _display(self.model, r, c)
+
+    def value(self, r: int, c: int):
+        return self.model.get_cell_value(r, c)
 
 
 def build_path(screen, col: int) -> Dict[str, Any]:
-    """Path data of the trial in model column `col` (0-based data column)."""
-    model = getattr(screen, "model_machine", None)
-    specs = getattr(screen, "_machine_col_specs", None) or []
-    keys = list(getattr(screen, "_machine_row_keys", None) or [])
-    if model is None or not specs or not (0 <= col < len(specs)):
+    """Path data of the trial in model column `col` (0-based data column) -
+    rules in db/machine_schema.build_dty_path (shared with the web app)."""
+    src = _ModelSource(screen)
+    if src.model is None or not src.specs or not (0 <= col < len(src.specs)):
         return {}
-    tid = specs[col]["trial_id"]
-    cols = [i for i, cs in enumerate(specs) if cs["trial_id"] == tid]
-    c0 = cols[0]
-    yarn_types = _yarn_types(screen, specs)
-
-    plies = []
-    for i in cols:
-        cs = specs[i]
-        sr = cs.get("sr") or {}
-        yid = sr.get("YarnID")
-        try:
-            ytype, material = yarn_types.get(int(yid or 0)) or (None, None)
-        except Exception:
-            ytype, material = None, None
-        use = cs.get("yarn_use_id") if cs.get("is_group") else sr.get("YarnUseID")
-        pos = _display(model, keys.index("position"), i) if "position" in keys else ""
-        values, tips = {}, {}
-        for s in ds.PER_PLY:
-            values[s] = _summary(model, keys, s, i)
-            tips[s] = _tip(model, keys, s, i)
-        auto_path = ds.ply_path(use, ytype, material)
-        route = dp.ROUTE_CODE.get(_int(_cell(model, keys, "dtyrouteid", i)))
-        at = dp.MERGE_CODE.get(_int(_cell(model, keys, "mergepointid", i)))
-        m_no = re.search(r"\d+", str(cs.get("ply") or ""))
-        plies.append({"idx": i, "label": cs.get("ply") or "", "pos": pos,
-                      "yarn": cs.get("yarn_name") or "", "path": route or auto_path,
-                      "auto_path": auto_path, "route_set": route,
-                      "is_elastane": auto_path == "elastane",
-                      "no": int(m_no.group()) if m_no else None,
-                      "into_raw": _cell(model, keys, "mergeintoply", i), "at_raw": at,
-                      "values": values, "tips": tips})
-    for pl in plies:
-        if pl["path"] == "elastane" and not pl["values"].get("elastane") and pl["values"].get("lw1"):
-            # the elastane draft sits in the ply's "Shaft 1 DR" cell
-            pl["values"]["elastane"] = pl["values"]["lw1"].replace("DR", "Draft", 1)
-
-    proc_id = model.get_cell_value(keys.index("dtyprocessid"), c0) if "dtyprocessid" in keys else None
-    proc_name = _display(model, keys.index("dtyprocessid"), c0) if "dtyprocessid" in keys else ""
-    hidden = getattr(screen, "_process_hidden_rows", set())
-    show_pre = any(k in ds.PREJET_KEYS and r not in hidden for r, k in enumerate(keys))
-    show_jet3 = any(k in ds.JET3_KEYS and r not in hidden for r, k in enumerate(keys))
-    has_el = any(pl["path"] == "elastane" for pl in plies)
-    values = {s: _summary(model, keys, s, c0) for s, _l, pp in ds.STATIONS if not pp}
-    tips = {s: _tip(model, keys, s, c0) for s, _l, pp in ds.STATIONS if not pp}
-    _add_speeds(model, keys, c0, plies, values, tips)
-    topo = ds.resolve_topology(
-        [{"no": pl["no"], "path": pl["route_set"], "auto_path": pl["auto_path"],
-          "into": pl["into_raw"], "at": pl["at_raw"]} for pl in plies], proc_id)
-    for pl, t in zip(plies, topo["plies"]):
-        pl.update(path=t["path"], into=t["into"], at=t["at"], auto=t["auto"])
-    main = topo["main"] if topo["main"] is not None else 0
-    order = _lane_order(plies, main)
-    hdr = specs[c0]
-    vno = hdr.get("vno")
-    title = f"V{vno}" if vno is not None and int(vno) > 0 else "Ref"
-    return {
-        "title": title, "trial_id": tid, "process": proc_name if _filled(proc_name) else "",
-        "process_id": proc_id, "plies": plies, "has_elastane": has_el,
-        "main": main, "order": order, "warnings": topo["warnings"],
-        "stations": ds.visible_stations(show_pre, show_jet3, False),
-        "values": values, "tips": tips,
-    }
+    return _ms.build_dty_path(src, col, _yarn_types(screen, src.specs))
 
 
-def _num(v) -> Optional[float]:
-    try:
-        return float(str(v).replace(",", ".").strip())
-    except Exception:
-        return None
-
-
-def _speed_text(v: Optional[float]) -> str:
-    return "" if v is None else (f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}") + " m/min"
-
-
-def _add_speeds(model, keys, c0, plies, values, tips) -> None:
-    """Speeds of the feed rolls and the winder, calculated from LW 2
-    (Speed Shaft 2 = 100 %, Nutzerangabe 2026-11-07):
-      LW 1   = LW 2 / Shaft 1 DR (per ply; for elastane = feed speed from its draft)
-      LW 2.x = LW 2 x (1 - Shaft 2x OF % / 100)
-      LW 3   = LW 2 x (1 - Shaft 3 % / 100)
-      Winder = LW 2 x (1 - Winder % / 100)
-      LW 0   = LW 1 / (1 - W0-W1 OF % / 100) (per ply)"""
-    sp = ds.speeds(_num(_cell(model, keys, "speedshaft2", c0)),
-                   of_2x=_num(_cell(model, keys, "shaft2x_of", c0)),
-                   shaft3=_num(_cell(model, keys, "shaft3", c0)),
-                   winder=_num(_cell(model, keys, "winder", c0)))
-    for st, setting_key, fmt in (("lw2", None, None), ("lw2x", "shaft2x_of", "OF {} %"),
-                                 ("lw3", "shaft3", "{} %"), ("winder", "winder", "{} %")):
-        if sp.get(st) is None:
-            continue
-        line2 = "main speed" if st == "lw2" else ""
-        if setting_key:
-            raw = _num(_cell(model, keys, setting_key, c0))
-            line2 = fmt.format(_short(raw)) if raw is not None else ""
-        values[st] = _speed_text(sp[st]) + (f"\n{line2}" if line2 else "")
-        tips[st] = (tips.get(st) or "") + ("\n" if tips.get(st) else "") + \
-            f"Speed (calculated from LW 2): {_speed_text(sp[st])}"
-    for pl in plies:
-        dr = _num(_cell(model, keys, "shaft1_dr", pl["idx"]))
-        v1 = ds.lw1_speed(sp.get("lw2"), dr)
-        if v1 is None:
-            continue
-        if pl.get("auto_path") == "elastane" or pl.get("path") == "elastane":
-            pl["values"]["elastane"] = f"Draft {_short(dr)} · {_speed_text(v1)}"
-        pl["values"]["lw1"] = _speed_text(v1) + f"\nDR {_short(dr)}"
-        pl["tips"]["lw1"] = (pl["tips"].get("lw1") or "") + \
-            f"\nSpeed (LW 2 / DR): {_speed_text(v1)}"
-        of0 = _num(_cell(model, keys, "w0_w1_of", pl["idx"]))
-        v0 = ds.lw0_speed(v1, of0)
-        if v0 is not None:
-            pl["values"]["lw0"] = _speed_text(v0) + f"\nOF {_short(of0)} %"
-            pl["tips"]["lw0"] = (pl["tips"].get("lw0") or "") + \
-                f"\nSpeed (LW 1 / (1 - OF %)): {_speed_text(v0)}"
-
-
-def _short(v: Optional[float]) -> str:
-    if v is None:
-        return ""
-    return f"{v:.0f}" if abs(v - round(v)) < 1e-9 else f"{v:.2f}".rstrip("0").rstrip(".")
+_num = _ms.num
+_speed_text = _ms.speed_text
+_short = _ms.short
+_int = _ms.as_int
+_lane_order = _ms.lane_order
 
 
 def _cell(model, keys, key, col):
     return model.get_cell_value(keys.index(key), col) if key in keys else None
 
 
-def _int(v) -> int:
-    try:
-        return int(float(v))
-    except Exception:
-        return 0
-
-
-def _lane_order(plies, main: int) -> List[int]:
-    """Main ply on top, every ply directly below the ply it runs into
-    (sorted by merge point), separate sources last in their group."""
-    children: Dict[int, List[int]] = {}
-    for k, pl in enumerate(plies):
-        if k != main and pl.get("into") is not None:
-            children.setdefault(pl["into"], []).append(k)
-    out: List[int] = []
-
-    def visit(k):
-        if k in out:
-            return
-        out.append(k)
-        for c in sorted(children.get(k, []),
-                        key=lambda c: (plies[c]["path"] == "elastane", ds._pos(plies[c].get("at") or "lw2"))):
-            visit(c)
-    visit(main)
-    for k in range(len(plies)):
-        visit(k)
-    return out
-
-
 def _yarn_types(screen, specs) -> Dict[int, Any]:
-    ids = sorted({int((cs.get("sr") or {}).get("YarnID") or 0) for cs in specs} - {0})
-    cache = getattr(screen, "_dty_yarn_types", None)
-    if cache is not None and set(ids) <= set(cache):
-        return cache
-    out: Dict[int, Any] = dict(cache or {})
-    if ids:
-        try:
-            from db.connection import fetch_all
-            ph = ",".join(["?"] * len(ids))
-            for r in fetch_all(f"SELECT ID, Garntyp, Material FROM tblyarn WHERE ID IN ({ph})", ids):
-                out[int(r["ID"])] = (r.get("Garntyp"), r.get("Material"))
-        except Exception:
-            pass
-        for i in ids:
-            out.setdefault(i, (None, None))
+    out = _ms.load_yarn_types(specs, getattr(screen, "_dty_yarn_types", None))
     screen._dty_yarn_types = out
     return out
 
@@ -625,24 +440,12 @@ def _is_active(screen) -> bool:
 
 
 def _profile(screen) -> Optional[str]:
-    """'dty' / 'aty' / None - which schema the Machine Data of this series gets."""
+    """'dty' / 'aty' / None - which schema the Machine Data of this series gets
+    (db/machine_schema.profile)."""
     if _is_active(screen):
         return "dty"
-    cache = getattr(screen, "_machine_cache", None)
-    if cache is None:
-        return None
-    if "is_aty" not in cache:
-        cache["is_aty"] = False
-        mid = cache.get("machine_id")
-        if mid:
-            try:
-                from db.connection import fetch_all
-                from ui.aty_stations import ATY_MACHINE_TYPE
-                rows = fetch_all("SELECT Maschinentyp FROM tblmaschine WHERE ID = ?", [mid])
-                cache["is_aty"] = bool(rows) and int(rows[0].get("Maschinentyp") or 0) == ATY_MACHINE_TYPE
-            except Exception:
-                pass
-    return "aty" if cache["is_aty"] and getattr(screen, "_machine_row_keys", None) else None
+    return _ms.profile(getattr(screen, "_machine_cache", None),
+                       getattr(screen, "_machine_row_keys", None) or [])
 
 
 def install(screen, layout, toolbar_layout) -> None:
@@ -846,8 +649,7 @@ def _station_target(screen, station: str, ply: int) -> Tuple[List[int], List[int
     model = screen.model_machine
     keys = list(getattr(screen, "_machine_row_keys", None) or [])
     mod = _mod(_profile(screen))
-    stations = ("creel", "lw1", "elastane") if station == "elastane" and mod is ds else (station,)
-    rows = sorted(model._n_hdr + r for st in stations for r in mod.rows_of_station(keys, st))
+    rows = [model._n_hdr + r for r in _ms.station_rows(keys, station, _profile(screen))]
     specs = getattr(screen, "_machine_col_specs", None) or []
     tid = getattr(screen, "_dty_schema_trial", None)
     if station in mod.PER_PLY and ply >= 0:
@@ -859,8 +661,7 @@ def _station_target(screen, station: str, ply: int) -> Tuple[List[int], List[int
 
 def kb_target(station: Optional[str], profile: Optional[str] = None):
     """Knowledge Base target of a schema station, or None (e.g. elastane feed)."""
-    from ui.kb_links import ATY_STATION_TARGET, DTY_STATION_TARGET
-    return (ATY_STATION_TARGET if profile == "aty" else DTY_STATION_TARGET).get(station or "")
+    return _ms.kb_target(station, profile)
 
 
 def _update_kb_link(screen) -> None:

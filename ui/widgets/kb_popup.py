@@ -18,21 +18,8 @@ from ui import onboarding_catalog as cat
 from ui import screen_onboarding as so
 
 
-_SCENE_BASE: dict = {}
-
-
-def scene_param_base(key: str) -> int:
-    """1 if the page reads ?scene= 1-based (go((+params.get('scene')||1)-1)),
-    0 if 0-based (parseInt(params.get('scene')||'0')) - both styles exist."""
-    if key not in _SCENE_BASE:
-        mod = next((m for m in cat.MODULES if m.key == key), None)
-        try:
-            from ui.pathutil import resource_path
-            src = open(resource_path(mod.file), encoding="utf-8").read() if mod else ""
-        except Exception:
-            src = ""
-        _SCENE_BASE[key] = 1 if "(+params.get('scene')||1)-1" in src else 0
-    return _SCENE_BASE[key]
+# moved to ui/onboarding_catalog.py (Qt-free, shared with the web app)
+scene_param_base = cat.scene_param_base
 
 
 class KBPopup(QDialog):
