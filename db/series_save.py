@@ -711,6 +711,13 @@ def fill_range_columns(col_specs: Sequence[Dict], start_trial: int, end_trial: i
     return out
 
 
+def _same_number(a: str, b: str) -> bool:
+    try:
+        return float(a.replace(",", ".")) == float(b.replace(",", "."))
+    except ValueError:
+        return False
+
+
 def fill_range_edits(col_specs: Sequence[Dict], start_trial: int, end_trial: int, value: Any, *,
                      cells: Sequence[Tuple[Any, Any]], rule: Optional[str], row_title: Optional[str],
                      kind: str = FILL_TEXT, selected_plies: Optional[Iterable[str]] = None,
@@ -736,8 +743,8 @@ def fill_range_edits(col_specs: Sequence[Dict], start_trial: int, end_trial: int
         if new is None:
             continue
         cur_txt = "" if cur is None else str(cur)
-        if cur_txt == new:
-            continue
+        if cur_txt == new or (cur_txt and new and _same_number(cur_txt, new)):
+            continue      # unchanged (3.0 stored, 3 typed) - not an edit
         out.append((c, binding, new))
     return out
 

@@ -70,30 +70,11 @@ import app_meta
 import re
 
 
-def insert_waterbath_rows(cur, tbl, col_trial, trial_id):
-    """Fügt Waterbath-Zeilen für einen neuen Trial in die DB ein."""
-    """Fügt drei Waterbath-Datensätze für einen Trial hinzu.
+# insert_waterbath_rows: db/trial_actions.py (Qt-free, shared with the web app)
+from db.trial_actions import insert_waterbath_rows  # noqa: E402,F401
+import db.trial_actions as _trial_actions  # noqa: E402
 
-    Falls die Tabelle eine Spalte 'GlobalID' besitzt, wird für jede neue Zeile
-    eine frische GUID vergeben.
-    Erwartet vorhandene Tabelle und Spaltennamen; führt keine Existenzprüfung aus.
-    """
-    # MySQL: Information-Schema
-    cols_map = _db_get_columns_map(tbl.lower())
-    global_col = cols_map.get("globalid")
-    has_global = bool(global_col)
 
-    for _ in range(3):
-        if has_global and global_col:
-            cur.execute(
-                f"INSERT INTO {tbl} ([{col_trial}],[{global_col}]) VALUES (?,?)",
-                [trial_id, new_global_id()],
-            )
-        else:
-            cur.execute(
-                f"INSERT INTO {tbl} ([{col_trial}]) VALUES (?)",
-                [trial_id],
-            )
 # -->-->-->-->-->-->-->-->-->- DB Helpers -->-->-->-->-->-->-->-->-->-
 
 def fetch_all(sql: str, params: list | tuple = ()):
@@ -2283,69 +2264,19 @@ class CreateExperimentScreen(QWidget):
         self.cmbMachine.setCurrentIndex(-1)
 
     def _load_lab_machines(self):
-        # _lab_machines ist ein dict: LMID -> Meta
+        # _lab_machines ist ein dict: LMID -> Meta (db/trial_actions.load_lab_machines)
         self._lab_machines.clear()
         self.cmbLabMachine.clear()
 
-        table = "tblLabMachines"
-        if not table_exists(table):
+        rows = _trial_actions.load_lab_machines()
+        if rows is None:
             QMessageBox.warning(self, "Lab Machines",
                                 "Table 'tblLabMachines' not found.")
             return
 
-        cmap = get_columns_map(table)
-        col_id = resolve_field(["ID"], cmap) or "ID"
-        col_name = resolve_field(["LabMachineName", "LabMachine", "Name"], cmap) or "LabMachineName"
-
-        # optionale Spalten (können im MySQL-Schema fehlen)
-        col_add = resolve_field(["AdditionalField", "AdditinalField"], cmap)
-        col_unit = resolve_field(["AdditionalFieldUnit", "Unit"], cmap)
-        col_tbl = resolve_field(["TableName", "LaborTable", "Table"], cmap)
-        col_src = resolve_field(["AdditionalFieldSource", "AddFieldSource", "Source"], cmap)
-        col_rowmode = resolve_field(["RowMode"], cmap)
-
-        def _sel(col, alias, default_sql="NULL"):
-            # Erzeugt " [col] AS alias " oder " NULL AS alias "
-            if col:
-                return f"[{col}] AS {alias}"
-            return f"{default_sql} AS {alias}"
-
-        rowmode_default = "'PerTrial'"
-        sql = (
-            f"SELECT [{col_id}] AS LMID, "
-            f"[{col_name}] AS LMName, "
-            f"{_sel(col_add, 'AddField')}, "
-            f"{_sel(col_unit, 'AddUnit')}, "
-            f"{_sel(col_tbl, 'Tbl')}, "
-            f"{_sel(col_src, 'Src')}, "
-            f"{_sel(col_rowmode, 'RowMode', rowmode_default)} "
-            f"FROM {table} ORDER BY [{col_name}]"
-        )
-
-        rows = fetch_all(sql)
         for r in rows:
-            lm_id = r.get("LMID")
-            if lm_id is None:
-                continue
-
-            name = str(r.get("LMName") or "").strip()
-
-            # Robust: Itemat braucht praktisch immer ein Additional Field (Tension).
-            # Wenn im Schema/Datensatz nichts gepflegt ist, setzen wir Defaults.
-            add_field = (r.get("AddField") or "").strip() if isinstance(r.get("AddField"), str) else (r.get("AddField") or "")
-            add_unit = (r.get("AddUnit") or "").strip() if isinstance(r.get("AddUnit"), str) else (r.get("AddUnit") or "")
-
-            if (not add_field) and self._is_itemat(r, name):
-                add_field = "Tension"
-                # Einheit nur setzen, wenn nichts vorgegeben ist
-                if not add_unit:
-                    add_unit = "cN/dtex"
-                r["AddField"] = add_field
-                r["AddUnit"] = add_unit
-
-            self.cmbLabMachine.addItem(name, lm_id)
-            r["Unit"] = add_unit
-            self._lab_machines[int(lm_id)] = r
+            self.cmbLabMachine.addItem(str(r.get("LMName") or "").strip(), r.get("LMID"))
+            self._lab_machines[int(r.get("LMID"))] = r
 
         self.cmbLabMachine.setCurrentIndex(-1)
 
@@ -2836,6 +2767,7 @@ class CreateExperimentScreen(QWidget):
         """Erstellt neue Trials in der gewählten TrialSeries.
         Gleiche Logik wie create, aber Experiment + Series bereits vorhanden.
         Anzahl Trials = Jets × Platten (identisch mit normalem Create).
+        Schreiben: db/trial_actions.add_trials (Qt-free, shared with the web app).
         """
         if self.cmbExistingExperiment.currentIndex() < 0 or self.cmbExistingSeries.currentIndex() < 0:
             QMessageBox.information(self, "Save", "Please select experiment and series.")
@@ -2857,13 +2789,6 @@ class CreateExperimentScreen(QWidget):
             QMessageBox.critical(self, "Save", "Table 'tblTrial' not found.")
             return
         tr_cols = get_columns_map(trial_table)
-        tr_sid     = resolve_field(["TrialSeriesID", "SerieID", "SeriesID"], tr_cols) or "TrialSeriesID"
-        tr_no      = resolve_field(["Versuchsnummer", "TrialNumber", "Nr"], tr_cols) or "Versuchsnummer"
-        tr_jetid   = resolve_field(["JetID", "Jet Id", "Jet"], tr_cols) or "JetID"
-        tr_plate   = resolve_field(["Jet Plate Number", "JetPlate", "Jet Plate", "JetPlateNumber"], tr_cols) or "Jet Plate Number"
-        tr_press   = resolve_field(["Air Pressure (bar)", "AirPressure", "Air Pressure"], tr_cols) or "Air Pressure (bar)"
-        tr_housing = resolve_field(["HousingID"], tr_cols)
-        tr_gid     = resolve_field(["GlobalID"], tr_cols)
 
         # Dynamische Machine-Felder aus _machine_field_widgets lesen
         ts_cols_map: Dict[str, str] = get_columns_map("tblTrialSettings") \
@@ -2893,160 +2818,10 @@ class CreateExperimentScreen(QWidget):
                 if real:
                     machine_dynamic_cols_trial.append((real, val))
 
-        jetplate_is_numeric = self._col_is_numeric(trial_table, tr_plate)
-
         try:
-            with get_connection() as cn:
-                cn.autocommit = False
-                cur = cn.cursor()
-
-                # Letzter Trial der Serie für Lab-Klon
-                cur.execute(
-                    f"SELECT MAX([{tr_no}]) AS mx, "
-                    f"MAX(CASE WHEN {exclude_references_sql('')} THEN [ID] END) AS lid "
-                    f"FROM [{trial_table}] WHERE [{tr_sid}] = ?", [ts_id])
-                row = cur.fetchone()
-                # next_trial_number(): clamped at 0 - reference samples have
-                # negative numbers (db/trial_reference.py)
-                trial_counter = next_trial_number(row[0] if row else None)
-                last_trial_id = int(row[1]) if row and row[1] is not None else None
-
-                new_trial_ids: List[int] = []
-
-                for j in self._jets_data:
-                    try:
-                        plates_list = [p.strip() for p in str(j["PlateList"]).split(",") if p.strip()]
-                    except Exception:
-                        plates_list = []
-                    if not plates_list:
-                        try:
-                            nn = int(j.get("Plates") or 0)
-                        except Exception:
-                            nn = 0
-                        plates_list = [str(k+1) for k in range(max(0, nn))]
-
-                    for plate in plates_list:
-                        press_val   = self._to_float_or_none(j["Pressure"])
-                        plate_value = self._to_int_or_none(plate) if jetplate_is_numeric else str(plate)
-                        housing_id  = j.get("HousingID")
-
-                        cols = [tr_sid, tr_no, tr_jetid, tr_plate, tr_press]
-                        vals: List[Any] = [ts_id, trial_counter, int(j["JetID"]), plate_value, press_val]
-
-                        if tr_housing and housing_id is not None:
-                            cols.append(tr_housing)
-                            vals.append(int(housing_id))
-                        for col, val in machine_dynamic_cols_trial:
-                            cols.append(col)
-                            vals.append(val)
-                        if tr_gid:
-                            cols.append(tr_gid)
-                            vals.append(new_global_id())
-
-                        ph = ",".join(["?"] * len(cols))
-                        sql = f"INSERT INTO {trial_table} ({','.join('['+c+']' for c in cols)}) VALUES ({ph})"
-                        tid = self._insert_and_identity(cur, sql, vals)
-                        new_trial_ids.append(tid)
-
-                        # tblTrialSettings: pro Garn eine Zeile
-                        if table_exists("tblTrialSettings") and self._materials_data:
-                            ts_set_cols_map = get_columns_map("tblTrialSettings")
-                            has_yuse = "yarnuseid" in ts_set_cols_map
-                            has_spool = "spoolid" in ts_set_cols_map
-                            for idx_m, m in enumerate(self._materials_data):
-                                s_cols = ["TrialID", "YarnID", "Ply"]
-                                s_vals: List[Any] = [tid, int(m["YarnID"]), m.get("Ply") or f"Ply {idx_m+1}"]
-                                if has_yuse and m.get("YarnUseID") is not None:
-                                    real_yuse = ts_set_cols_map.get("yarnuseid") or "YarnUseID"
-                                    s_cols.append(real_yuse)
-                                    s_vals.append(m["YarnUseID"])
-                                if has_spool and m.get("SpoolID") is not None:
-                                    real_spool = ts_set_cols_map.get("spoolid") or "SpoolID"
-                                    s_cols.append(real_spool)
-                                    s_vals.append(m["SpoolID"])
-                                for s_col, s_val in machine_dynamic_cols_settings:
-                                    real_s = ts_set_cols_map.get(s_col.lower()) or s_col
-                                    s_cols.append(real_s)
-                                    s_vals.append(s_val)
-                                append_ratio_column(s_cols, s_vals, ts_set_cols_map)
-                                s_gid = resolve_field(["GlobalID"], ts_set_cols_map)
-                                if s_gid:
-                                    s_cols.append(s_gid)
-                                    s_vals.append(new_global_id())
-                                s_ph = ",".join(["?"] * len(s_cols))
-                                cur.execute(
-                                    f"INSERT INTO tblTrialSettings "
-                                    f"({','.join('['+c+']' for c in s_cols)}) VALUES ({s_ph})",
-                                    s_vals)
-
-                        trial_counter += 1
-
-                # Lab Machines -> FRISCH aus _lab_data schreiben (wie im
-                # regulaeren Create-Flow in _on_save), NICHT vom letzten
-                # Trial klonen. _clone_lab_rows() legt nur dann eine Zeile
-                # an, wenn der LETZTE Trial der Serie bereits einen Eintrag
-                # in genau dieser Tabelle hat - fehlt der (z.B. weil fuer
-                # Statimat DS/Itemat Lab dort noch nichts gemessen wurde),
-                # wird gar keine Zeile erzeugt. _lab_data wird beim Oeffnen
-                # dieses Screens ueber _prefill_lab_from_series() anhand der
-                # GANZEN Serie ermittelt und ist daher zuverlaessig.
-                default_user_id = None
-                if table_exists("tbluser"):
-                    try:
-                        urows = fetch_all("SELECT MIN([ID]) AS uid FROM tbluser")
-                        if urows and urows[0].get("uid") is not None:
-                            default_user_id = int(urows[0]["uid"])
-                    except Exception:
-                        default_user_id = None
-
-                for lm in self._lab_data:
-                    if str(lm.get("RowMode") or "").strip().lower() == "seriesfreeform":
-                        # Jet Air Consumption & Co: keine Zeile pro Trial -
-                        # wird unten einmal pro Series (physische Duese x Druck) angelegt.
-                        continue
-                    tbl = (lm.get("TableName") or "").strip()
-                    if not tbl or not table_exists(tbl):
-                        continue
-                    lcols = get_columns_map(tbl)
-                    col_trial = resolve_field(["TrialID"], lcols) or "TrialID"
-                    add_src = (lm.get("AdditionalFieldSource") or "").strip()
-                    add_real = resolve_field([add_src], lcols) if add_src else None
-                    add_val = lm.get("AdditionalVal", None)
-                    if isinstance(add_val, str):
-                        add_val = self._to_float_or_none(add_val) or add_val
-                    for tid in new_trial_ids:
-                        if 'waterbath' in (tbl or '').lower():
-                            insert_waterbath_rows(cur, tbl, col_trial, tid)
-                            continue
-                        # optionale GlobalID-Spalte im Labor-Table
-                        col_gid = resolve_field(["GlobalID"], lcols)
-                        cols_sql_parts = [f"[{col_trial}]"]
-                        params: List[Any] = [tid]
-                        if col_gid:
-                            cols_sql_parts.append(f"[{col_gid}]")
-                            params.append(new_global_id())
-                        if add_real:
-                            cols_sql_parts.append(f"[{add_real}]")
-                            params.append(add_val)
-
-                        # optionaler UserID (FK auf tbluser) - falls vorhanden, sauber setzen
-                        col_user = resolve_field(["UserID", "User"], lcols)
-                        if col_user:
-                            if default_user_id is None:
-                                # Ohne gueltigen User koennen wir diese Lab-Row nicht anlegen (sonst FK-Fehler)
-                                continue
-                            cols_sql_parts.append(f"[{col_user}]")
-                            params.append(default_user_id)
-
-                        placeholders = ",".join(["?"] * len(params))
-                        cur.execute(
-                            f"INSERT INTO {tbl} (" + ",".join(cols_sql_parts) +
-                            ") VALUES (" + placeholders + ")",
-                            params,
-                        )
-
-                self._save_jet_air_consumption_rows(cur, ts_id)
-                cn.commit()
+            new_trial_ids = _trial_actions.add_trials(
+                ts_id, self._jets_data, self._materials_data, self._lab_data,
+                machine_dynamic_cols_trial, machine_dynamic_cols_settings)
 
             if callable(self.on_open_experiment):
                 num = exp_data[5]
@@ -3059,10 +2834,6 @@ class CreateExperimentScreen(QWidget):
                     f"{len(new_trial_ids)} trial(s) created.")
 
         except Exception as e:
-            try:
-                cn.rollback()
-            except Exception:
-                pass
             show_error(self, "Error", "The trials could not be created.", e)
 
 
@@ -4213,15 +3984,8 @@ class CreateExperimentScreen(QWidget):
             return True
 
     def _is_itemat(self, meta: dict, fallback_name: str = "") -> bool:
-        """
-        Erkenne Itemat-Maschinen robust (DB-Name kann 'Itemat Lab', 'ITEMATLAB', etc. sein).
-        """
-        name = str(meta.get("LMName") or fallback_name or "").strip(
-        ).lower().replace(" ", "")
-        # exakte matches + robuste startswith/endswith
-        if name in ("itematlab", "itematplus"):
-            return True
-        return name.startswith("itemat") and (name.endswith("lab") or name.endswith("plus"))
+        """Erkenne Itemat-Maschinen robust: db/trial_actions.is_itemat."""
+        return _trial_actions.is_itemat(meta, fallback_name)
 
     def _is_series_freeform(self, meta: dict) -> bool:
         """
@@ -5147,103 +4911,27 @@ class CreateExperimentScreen(QWidget):
 
     # -->-->-->- addSeries/addTrials Helper -->-->-->-
     def _prefill_lab_from_series(self, series_id: int) -> None:
-        """Befüllt tblLabMachines mit den Lab Machines der bestehenden Trials der Serie.
-
-        Geht durch alle bekannten Lab Machine-Einträge (_lab_machines) und prüft,
-        ob die jeweilige TableName Einträge für diese Serie hat. Wenn ja → hinzufügen.
-        Für Itemat zusätzlich die DISTINCT AdditionalVal (Tension) aus der Lab-Tabelle laden.
+        """Befüllt tblLabMachines mit den Lab Machines der bestehenden Trials der Serie
+        (Daten: db/trial_actions.series_lab_data, Qt-free, shared with the web app).
         """
         if not self._lab_machines:
             return
 
-        # Alle Trial-IDs der Serie
-        try:
-            trial_rows = fetch_all(
-                "SELECT ID FROM tblTrial WHERE TrialSeriesID = ? ORDER BY Versuchsnummer",
-                [series_id])
-            if not trial_rows:
-                return
-            trial_ids = [int(r["ID"]) for r in trial_rows]
-        except Exception:
+        lab_data = _trial_actions.series_lab_data(series_id, self._lab_machines)
+        if lab_data is None:
             return
-
-        placeholders = ",".join(["?"] * len(trial_ids))
 
         # _lab_data + tblLabMachines leeren (Prefill von Grund auf)
         self._lab_data.clear()
         while self.tblLabMachines.rowCount():
             self.tblLabMachines.removeRow(0)
 
-        added_keys: set = set()  # (lm_id, add_val_norm)
-
-        for lm_id, meta in self._lab_machines.items():
-            tbl = str(meta.get("Tbl") or "").strip()
-            src = str(meta.get("Src") or "").strip()
-            lm_name = str(meta.get("LMName") or "").strip()
-            unit = str(meta.get("Unit") or "").strip()
-            if not tbl or not table_exists(tbl):
-                continue
-
-            try:
-                # Prüfen ob Einträge für diese Serie existieren
-                lcols = get_columns_map(tbl)
-                col_trial = resolve_field(["TrialID"], lcols)
-                if not col_trial:
-                    continue
-
-                if src and resolve_field([src], lcols):
-                    # Mit AdditionalField (z.B. Itemat Tension): DISTINCT Werte laden
-                    src_col = resolve_field([src], lcols)
-                    rows = fetch_all(
-                        f"SELECT DISTINCT [{src_col}] AS AV "
-                        f"FROM [{tbl}] WHERE [{col_trial}] IN ({placeholders})"
-                        f" AND [{src_col}] IS NOT NULL",
-                        trial_ids)
-                    for row in rows:
-                        add_val = row.get("AV")
-                        try:
-                            add_val = float(add_val)
-                        except Exception:
-                            pass
-                        key = (lm_id, str(add_val) if add_val is not None else None)
-                        if key in added_keys:
-                            continue
-                        added_keys.add(key)
-                        disp = (f"{add_val} {unit}".strip() if add_val is not None else "")
-                        r = self.tblLabMachines.rowCount()
-                        self.tblLabMachines.insertRow(r)
-                        self.tblLabMachines.setItem(r, 0, QTableWidgetItem(lm_name))
-                        self.tblLabMachines.setItem(r, 1, QTableWidgetItem(disp))
-                        self._lab_data.append({
-                            "LMID": lm_id, "Name": lm_name,
-                            "AdditionalDisp": disp, "AdditionalVal": add_val,
-                            "TableName": tbl, "AdditionalFieldSource": src,
-                            "Unit": unit,
-                        })
-                else:
-                    # Ohne AdditionalField: einmal hinzufügen falls Einträge vorhanden
-                    cnt_rows = fetch_all(
-                        f"SELECT COUNT(*) AS C FROM [{tbl}] WHERE [{col_trial}] IN ({placeholders})",
-                        trial_ids)
-                    cnt = int(cnt_rows[0]["C"]) if cnt_rows and cnt_rows[0].get("C") else 0
-                    if cnt == 0:
-                        continue
-                    key = (lm_id, None)
-                    if key in added_keys:
-                        continue
-                    added_keys.add(key)
-                    r = self.tblLabMachines.rowCount()
-                    self.tblLabMachines.insertRow(r)
-                    self.tblLabMachines.setItem(r, 0, QTableWidgetItem(lm_name))
-                    self.tblLabMachines.setItem(r, 1, QTableWidgetItem(""))
-                    self._lab_data.append({
-                        "LMID": lm_id, "Name": lm_name,
-                        "AdditionalDisp": "", "AdditionalVal": None,
-                        "TableName": tbl, "AdditionalFieldSource": src,
-                        "Unit": unit,
-                    })
-            except Exception:
-                continue
+        for entry in lab_data:
+            r = self.tblLabMachines.rowCount()
+            self.tblLabMachines.insertRow(r)
+            self.tblLabMachines.setItem(r, 0, QTableWidgetItem(entry["Name"]))
+            self.tblLabMachines.setItem(r, 1, QTableWidgetItem(entry["AdditionalDisp"]))
+            self._lab_data.append(entry)
 
         self._check_lab()
         self._check_safe()
@@ -5431,29 +5119,7 @@ class CreateExperimentScreen(QWidget):
         self.cmbExistingSeries.setEnabled(False)
 
         # Höchste existierende Ply-Nummer der Serie ermitteln → Offset für neue Plies
-        self._ply_offset = 0
-        try:
-            rows = fetch_all(
-                "SELECT MAX(CAST(REPLACE(Ply, 'Ply ', '') AS UNSIGNED)) AS MaxPly "
-                "FROM tblTrialSettings ts "
-                "JOIN tblTrial t ON t.ID = ts.TrialID "
-                "WHERE t.TrialSeriesID = ?",
-                [trialseries_id])
-            if rows and rows[0].get("MaxPly") is not None:
-                self._ply_offset = int(rows[0]["MaxPly"])
-        except Exception:
-            # Fallback: COUNT DISTINCT Ply
-            try:
-                rows2 = fetch_all(
-                    "SELECT COUNT(DISTINCT ts.Ply) AS C "
-                    "FROM tblTrialSettings ts "
-                    "JOIN tblTrial t ON t.ID = ts.TrialID "
-                    "WHERE t.TrialSeriesID = ?",
-                    [trialseries_id])
-                if rows2 and rows2[0].get("C"):
-                    self._ply_offset = int(rows2[0]["C"])
-            except Exception:
-                pass
+        self._ply_offset = _trial_actions.series_ply_offset(trialseries_id)
 
     def closeEvent(self, event):
         """Qt close hook: make sure auxiliary popups are closed."""
@@ -5606,133 +5272,15 @@ class CreateExperimentScreen(QWidget):
             })
 
     def _get_physical_jets_for_series(self, series_id: int) -> List[Dict[str, Any]]:
-        """Ermittelt die distinkten 'physischen Duesen' (JetID + JetPlate) einer Series.
-
-        JetID sitzt normalerweise auf tbltrialsettings (pro Ply/Material);
-        manche Series haben aber (noch/nur) ein JetID direkt auf tbltrial
-        gepflegt (aeltere Datensaetze / andere Erfassungswege). Um das nicht
-        stillschweigend zu verpassen, wird beides abgefragt und kombiniert:
-        COALESCE(ts.JetID, t.JetID). JetPlate (Plaettchennummer) sitzt auf
-        tbltrial.
-        """
-        if not table_exists("tbltrialsettings") or not table_exists("tbltrial"):
-            return []
-        ts_cols = get_columns_map("tbltrialsettings")
-        t_cols = get_columns_map("tbltrial")
-        col_jet_ts = resolve_field(["JetID"], ts_cols)
-        col_jet_t = resolve_field(["JetID"], t_cols)
-        col_plate = resolve_field(
-            ["Jet Plate Number", "JetPlate", "Jet Plate", "JetPlateNumber"], t_cols) or "Jet Plate Number"
-
-        if not col_jet_ts and not col_jet_t:
-            return []
-
-        if col_jet_ts and col_jet_t:
-            jet_expr = f"COALESCE(ts.[{col_jet_ts}], t.[{col_jet_t}])"
-        elif col_jet_ts:
-            jet_expr = f"ts.[{col_jet_ts}]"
-        else:
-            jet_expr = f"t.[{col_jet_t}]"
-
-        try:
-            rows = fetch_all(
-                f"SELECT DISTINCT {jet_expr} AS JetID, t.[{col_plate}] AS JetPlate "
-                f"FROM tbltrialsettings ts "
-                f"JOIN tbltrial t ON t.ID = ts.TrialID "
-                f"WHERE t.TrialSeriesID = ? AND {jet_expr} IS NOT NULL",
-                [series_id],
-            )
-        except Exception:
-            return []
-        out = []
-        for r in rows:
-            out.append({"JetID": int(r["JetID"]), "JetPlate": r.get("JetPlate")})
-        return out
+        """Distinkte 'physische Duesen' (JetID + JetPlate) einer Series:
+        db/trial_actions.physical_jets_for_series."""
+        return _trial_actions.physical_jets_for_series(series_id)
 
     def _save_jet_air_consumption_rows(self, cur, series_id: int) -> Dict[str, int]:
-        """Legt fuer alle SeriesFreeform-Lab-Machine-Eintraege (Jet Air Consumption)
-        die Kreuzprodukt-Zeilen (physische Duese x Druckstufe) an.
-
-        Wird EINMAL pro Series aufgerufen (nicht pro Trial). Bereits vorhandene
-        Kombinationen (Duese+Druck) werden nicht doppelt angelegt - so kann das
-        auch beim addtrials-Speichern erneut aufgerufen werden, ohne Duplikate
-        zu erzeugen, falls durch neue Trials neue physische Duesen dazukommen.
-
-        Gibt Statistiken zurueck (fuer die Erfolgsmeldung / Diagnose), da diese
-        Zeilen nicht im normalen inserted/skipped-Zaehler der Pro-Trial-Schleife
-        auftauchen.
-        """
-        stats = {"created": 0, "skipped_exists": 0, "physical_jets": 0, "no_user": 0}
-
-        freeform_entries = [
-            lm for lm in self._lab_data
-            if str(lm.get("RowMode") or "").strip().lower() == "seriesfreeform"
-        ]
-        if not freeform_entries:
-            return stats
-
-        physical_jets = self._get_physical_jets_for_series(series_id)
-        stats["physical_jets"] = len(physical_jets)
-        if not physical_jets:
-            return stats
-
-        for lm in freeform_entries:
-            tbl = (lm.get("TableName") or "").strip()
-            if not tbl or not table_exists(tbl):
-                continue
-            pressure = lm.get("AdditionalVal")
-            if pressure is None:
-                continue
-            lcols = get_columns_map(tbl)
-            col_series = resolve_field(["TrialSeriesID"], lcols) or "TrialSeriesID"
-            col_jet = resolve_field(["JetID"], lcols) or "JetID"
-            col_plate = resolve_field(["JetPlate"], lcols) or "JetPlate"
-            col_press = resolve_field(["AirPressure"], lcols) or "AirPressure"
-            col_gid = resolve_field(["GlobalID"], lcols)
-            col_user = resolve_field(["UserID", "User"], lcols)
-            default_user_id = None
-            if col_user and table_exists("tbluser"):
-                try:
-                    urows = fetch_all("SELECT MIN([ID]) AS uid FROM tbluser")
-                    if urows and urows[0].get("uid") is not None:
-                        default_user_id = int(urows[0]["uid"])
-                except Exception:
-                    default_user_id = None
-
-            for pj in physical_jets:
-                # Bereits vorhanden? (Duese+Druck fuer diese Series)
-                try:
-                    existing = fetch_all(
-                        f"SELECT [ID] FROM {tbl} WHERE [{col_series}] = ? AND [{col_jet}] = ? "
-                        f"AND ([{col_plate}] = ? OR (? IS NULL AND [{col_plate}] IS NULL)) "
-                        f"AND [{col_press}] = ?",
-                        [series_id, pj["JetID"], pj["JetPlate"], pj["JetPlate"], pressure],
-                    )
-                except Exception:
-                    existing = []
-                if existing:
-                    stats["skipped_exists"] += 1
-                    continue
-
-                cols = [col_series, col_jet, col_plate, col_press]
-                vals: List[Any] = [series_id, pj["JetID"], pj["JetPlate"], pressure]
-                if col_gid:
-                    cols.append(col_gid)
-                    vals.append(new_global_id())
-                if col_user:
-                    if default_user_id is None:
-                        stats["no_user"] += 1
-                        continue  # kann ohne gueltigen User nicht anlegen (NOT NULL FK)
-                    cols.append(col_user)
-                    vals.append(default_user_id)
-                ph = ",".join(["?"] * len(cols))
-                cur.execute(
-                    f"INSERT INTO {tbl} (" + ",".join(f"[{c}]" for c in cols) + f") VALUES ({ph})",
-                    vals,
-                )
-                stats["created"] += 1
-
-        return stats
+        """Jet Air Consumption rows (physische Duese x Druckstufe) der
+        SeriesFreeform-Lab-Machines in _lab_data, einmal pro Series:
+        db/trial_actions.save_jet_air_consumption_rows."""
+        return _trial_actions.save_jet_air_consumption_rows(cur, series_id, self._lab_data)
 
     def _get_checked_trial_ids(self) -> list[int]:
         """Collect TrialIDs from checkboxes (General tab)."""
@@ -5789,35 +5337,10 @@ class CreateExperimentScreen(QWidget):
             pass
 
     def _prefill_jets_from_trialseries(self, series_id: int):
-        """Query tblTrial for JetID, Jet Plate, Air Pressure and HousingID for the
-        given series and aggregate into Jet rows for the Jet tab."""
-        # Resolve columns from tblTrial
-        if not table_exists("tblTrial"):
-            return
-        cmap_t = get_columns_map("tblTrial")
-        col_sid = resolve_field(
-            ["TrialSeriesID", "SeriesID", "SerieID"], cmap_t) or "TrialSeriesID"
-        col_jet = resolve_field(["JetID", "Jet"], cmap_t) or "JetID"
-        col_plate = resolve_field(
-            ["Jet Plate", "JetPlate", "JetPlates", "Plate"], cmap_t) or "Jet Plate"
-        col_press = resolve_field(["Air Pressure (bar)", "Air Pressure",
-                                  "Pressure (bar)", "Pressure"], cmap_t) or "Air Pressure (bar)"
-        col_housing = resolve_field(["HousingID", "Housing"], cmap_t)
-
-        if col_housing:
-            select_housing = f", [{col_housing}] AS JHOUSING"
-        else:
-            select_housing = ""
-
-        rows = fetch_all(
-            f"SELECT [{col_jet}] AS JID, [{col_plate}] AS JPLATE, [{col_press}] AS JPRESS"
-            f"{select_housing} "
-            f"FROM [tblTrial] WHERE [{col_sid}] = ?",
-            [series_id]
-        )
-        if not rows:
-            return
-
+        """Jet rows of the given series into the Jet tab (JetID, Jet Plate,
+        Air Pressure, HousingID aggregated per jet + pressure). Data:
+        db/series_actions.series_jet_groups (Qt-free, shared with the web app)."""
+        from db.series_actions import series_jet_groups
         # Build HousingID -> HousingName mapping from already-loaded cmbHousing
         housing_name_by_id: dict = {}
         try:
@@ -5833,91 +5356,15 @@ class CreateExperimentScreen(QWidget):
         except Exception:
             pass
 
-        # Build JetID -> JetName mapping
-        jet_name_by_id = {}
-        try:
-            if table_exists("tblDTYJets"):
-                cmap_j = get_columns_map("tblDTYJets")
-                col_j_id = resolve_field(["ID"], cmap_j) or "ID"
-                col_j_name = resolve_field(
-                    ["Jet", "Name", "Bezeichnung"], cmap_j) or "Jet"
-                for r in fetch_all(f"SELECT [{col_j_id}] AS JID, [{col_j_name}] AS JName FROM [tblDTYJets]"):
-                    try:
-                        jet_name_by_id[int(r['JID'])] = str(r['JName'])
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-        # Group by (JetID, Pressure)
-        from collections import defaultdict
-        groups = defaultdict(lambda: set())
-        pressure_by_key = {}
-        housing_by_key: dict = {}
-        for r in rows:
-            try:
-                jid = int(r.get("JID") or r.get("JetID"))
-            except Exception:
-                jid = r.get("JID") or r.get("JetID")
-            plate = r.get("JPLATE") or r.get("JetPlate")
-            # parse plate to int if possible
-            try:
-                plate = int(str(plate).strip())
-            except Exception:
-                try:
-                    plate = int(float(str(plate).strip()))
-                except Exception:
-                    plate = str(plate).strip()
-            pres_raw = str(r.get("JPRESS", "") or r.get("Pressure", "")).replace(",", ".").strip()
-            try:
-                pres_val = float(pres_raw)
-            except Exception:
-                pres_val = pres_raw  # keep as string
-            key = (jid, pres_val)
-            if plate not in (None, ""):
-                groups[key].add(plate)
-            pressure_by_key[key] = pres_val
-            # Housing: erstes gefundenes Housing pro Gruppe übernehmen
-            if key not in housing_by_key and col_housing:
-                raw_hid = r.get("JHOUSING")
-                if raw_hid is not None:
-                    try:
-                        housing_by_key[key] = int(raw_hid)
-                    except Exception:
-                        housing_by_key[key] = raw_hid
-
-        # Insert aggregated rows
-        for (jid, pres_val), plates in groups.items():
-            plates_list = sorted([int(x) for x in plates if isinstance(x, (int, float))] + [int(float(x))
-                                 for x in plates if isinstance(x, str) and x.replace('.', '', 1).isdigit()]) if plates else []
-            # normalize pressure display
-            if isinstance(pres_val, (int, float)):
-                p_disp = f"{float(pres_val):.2f}".rstrip("0").rstrip(".")
-            else:
-                p_disp = str(pres_val)
-            # jet name
-            jname = jet_name_by_id.get(jid, "")
-            # housing
-            housing_id = housing_by_key.get((jid, pres_val))
-            housing_name = ""
-            if housing_id is not None:
-                try:
-                    housing_name = housing_name_by_id.get(int(housing_id), "")
-                except Exception:
-                    housing_name = housing_name_by_id.get(housing_id, "")
+        for row in series_jet_groups(series_id, housing_name_by_id):
             # Add to UI table
             rix = self.tblJets.rowCount()
             self.tblJets.insertRow(rix)
-            self.tblJets.setItem(rix, 0, QTableWidgetItem(housing_name))
-            self.tblJets.setItem(rix, 1, QTableWidgetItem(jname))
+            self.tblJets.setItem(rix, 0, QTableWidgetItem(row["HousingName"]))
+            self.tblJets.setItem(rix, 1, QTableWidgetItem(row["JetName"]))
             self.tblJets.setItem(
-                rix, 2, QTableWidgetItem(str(len(plates_list))))
-            self.tblJets.setItem(rix, 3, QTableWidgetItem(p_disp))
-            self.tblJets.setItem(rix, 4, QTableWidgetItem(
-                ",".join(str(x) for x in plates_list)))
+                rix, 2, QTableWidgetItem(str(row["Plates"])))
+            self.tblJets.setItem(rix, 3, QTableWidgetItem(row["Pressure"]))
+            self.tblJets.setItem(rix, 4, QTableWidgetItem(row["PlateList"]))
             # Track internal structure
-            self._jets_data.append({
-                "JetID": jid, "JetName": jname, "Plates": len(plates_list),
-                "Pressure": p_disp, "PlateList": ",".join(str(x) for x in plates_list),
-                "HousingID": housing_id, "HousingName": housing_name
-            })
+            self._jets_data.append(row)

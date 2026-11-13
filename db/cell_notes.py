@@ -174,6 +174,16 @@ def add_note(table: str, row_id: Any, field: str, text: str,
          int(series_id) if series_id not in (None, "") else None, text, now, uid]))
 
 
+def get_note(note_id: Any) -> Optional[Dict[str, Any]]:
+    """One note (with UserName) or None."""
+    from db.connection import fetch_all
+    try:
+        rows = fetch_all(_SELECT + "WHERE n.ID = ?", [int(note_id)])
+    except Exception:
+        return None
+    return rows[0] if rows else None
+
+
 def update_note(note_id: int, text: str) -> None:
     text = (text or "").strip()
     if not text:

@@ -147,60 +147,8 @@ from ui.widgets.friendly_error import show_error
 from db.series_attachments import TRIALSERIES_IMAGES_BASE_DIR, TRIALSERIES_PDFS_BASE_DIR  # noqa: E402,F401
 
 
-def _draw_trial_label_cell(page, x0: float, y0: float, lw: float, lh: float, item: Dict) -> None:
-    """Zeichnet ein Trial-Label: kleine Kopfzeile 'ExperimentID.Serie' oben,
-    darunter die Versuchsnummer (z.B. 'V23') gross - beides zentriert.
-    Cell-Renderer fuer generate_label_sheet_pdf."""
-    import fitz
-    fontname = "hebo"
-    max_w = lw - 4
-
-    header_txt = str(item.get("Header") or "").strip()
-    header_fs = 9.0
-    if header_txt:
-        while header_fs > 6.0 and fitz.get_text_length(header_txt, fontname=fontname, fontsize=header_fs) > max_w * MM:
-            header_fs -= 0.5
-        header_txt = fit_text(header_txt, header_fs, max_w, fontname=fontname)
-
-    v_text = f"V{item['TrialNr']}"
-    v_fs = 20.0
-    while v_fs > 8.0 and fitz.get_text_length(v_text, fontname=fontname, fontsize=v_fs) > max_w * MM:
-        v_fs -= 1.0
-    v_text = fit_text(v_text, v_fs, max_w, fontname=fontname)
-
-    # Block (Kopfzeile + V-Nummer) vertikal in der Zelle zentrieren.
-    # Wichtig: Schriftgroesse ist in PUNKT, nicht mm - Umrechnung ueber MM
-    # (Punkt pro mm) nicht vergessen, sonst wird die Zeilenhoehe massiv
-    # unterschaetzt und die beiden Zeilen ueberlappen sich (siehe Chat).
-    # Ascent/Descent grob als 0.75/0.25 der Schriftgroesse angenommen.
-    def _ascent_mm(fs):
-        return (fs * 0.75) / MM
-
-    def _descent_mm(fs):
-        return (fs * 0.25) / MM
-
-    header_ascent = _ascent_mm(header_fs) if header_txt else 0.0
-    header_descent = _descent_mm(header_fs) if header_txt else 0.0
-    gap_mm = 1.8 if header_txt else 0.0
-    v_ascent = _ascent_mm(v_fs)
-    v_descent = _descent_mm(v_fs)
-
-    block_h = header_ascent + header_descent + gap_mm + v_ascent + v_descent
-    block_top = y0 + (lh - block_h) / 2
-
-    if header_txt:
-        tw_mm = fitz.get_text_length(header_txt, fontname=fontname, fontsize=header_fs) / MM
-        tx = x0 + (lw - tw_mm) / 2
-        ty = block_top + header_ascent
-        page.insert_text((tx * MM, ty * MM), header_txt, fontsize=header_fs,
-                          fontname=fontname, color=(0.4, 0.4, 0.4))
-        v_baseline = block_top + header_ascent + header_descent + gap_mm + v_ascent
-    else:
-        v_baseline = block_top + v_ascent
-
-    tw_mm2 = fitz.get_text_length(v_text, fontname=fontname, fontsize=v_fs) / MM
-    tx2 = x0 + (lw - tw_mm2) / 2
-    page.insert_text((tx2 * MM, v_baseline * MM), v_text, fontsize=v_fs, fontname=fontname)
+# Trial label cell renderer: db/trial_labels.py (Qt-free, shared with the web app)
+from db.trial_labels import draw_trial_label_cell as _draw_trial_label_cell  # noqa: E402,F401
 
 
 class _FillRowRangeDialog(QDialog):
@@ -912,26 +860,14 @@ def _retest_flag_dot_icon() -> QIcon:
     return _RETEST_FLAG_DOT_ICON
 
 
-# Measured yarn tensions before/after the jet (tblTrial and, on the ATY
-# machines, tblTrialSettings) - results of the run, not settings, so a trial
-# copy starts with them empty (Nutzerwunsch 2026-10-15). Lower-case names.
-_TENSION_COLS_NOT_COPIED = {
-    "yarntensionbeforejet",
-    "yarntensionafterjet",
-    "tensionbeforejet_core",
-    "tensionafterjetinside",
-    "tensionafterjetoutside",
-}
-# Comments (tblTrialSettings.Comment, comment2..4, per ply) belong to the run
-# they were written for - a copy starts with them empty (Nutzerwunsch
-# 2026-10-16). Any column "comment" / "commentN" in tblTrial or tblTrialSettings.
-_COMMENT_COL_RE = re.compile(r"^comment\d*$")
-
-
-def _col_not_copied(col: str) -> bool:
-    """True for columns a trial copy starts with empty (tensions, comments)."""
-    cl = str(col).lower()
-    return cl in _TENSION_COLS_NOT_COPIED or bool(_COMMENT_COL_RE.match(cl))
+# Columns a trial copy starts with empty (measured tensions, comments):
+# db/trial_actions.py (Qt-free, shared with the web app), re-exported here.
+from db.trial_actions import (  # noqa: E402,F401
+    COMMENT_COL_RE as _COMMENT_COL_RE,
+    TENSION_COLS_NOT_COPIED as _TENSION_COLS_NOT_COPIED,
+    col_not_copied as _col_not_copied,
+)
+import db.trial_actions as _trial_actions  # noqa: E402
 
 
 # CellBinding / GroupCellBinding: db/series_tables.py (shared with the web app), re-exported here
@@ -4505,10 +4441,8 @@ class ShowExperimentScreen(QWidget):
             current = self.txt_notes.toPlainText()
             if current == self._notes_last_saved:
                 return
-            _db_execute(
-                "UPDATE tblTrialSeries SET Notes = ? WHERE ID = ?",
-                [current or None, self._series_pk],
-            )
+            from db.series_actions import save_notes   # Qt-free, shared with the web app
+            save_notes(self._series_pk, current)
             self._notes_last_saved = current
         except Exception:
             pass
@@ -5054,9 +4988,7 @@ class ShowExperimentScreen(QWidget):
             bool(cache.get("has_groups")),
         )
         source = load_source_values([t["id"] for t in trials], fields)
-        rows = fetch_all("SELECT MAX(Versuchsnummer) AS mx FROM tblTrial WHERE TrialSeriesID = ?",
-                         [self._series_pk])
-        next_no = next_trial_number(rows[0]["mx"] if rows else None)
+        next_no = _trial_actions.next_trial_number_of_series(self._series_pk)
         real_ids = {t["id"] for t in trials}
         dlg = CopyTrialsDialog(self, trials, fields, source, next_no,
                                [int(t) for t in (preselected_trial_ids or []) if int(t) in real_ids])
@@ -5067,76 +4999,11 @@ class ShowExperimentScreen(QWidget):
             self._copy_trials_with_plan(plan, fields)
 
     def _insert_trial_copy(self, cur, src_trial_id: int, series_id: Any, new_versuchsnummer: int) -> int:
-        """Inserts one new tblTrial row as a copy of src_trial_id (machine
-        params 1:1, lab rows structurally cloned but nulled, ply settings
-        cloned) at new_versuchsnummer within series_id. Shared by the
-        single-trial "N copies" flow and the "copy a range of trials, once
-        each" flow so both stay behaviorally identical. Returns the new
-        trial's ID."""
-        cur.execute("SELECT * FROM tblTrial WHERE ID = ?", (src_trial_id,))
-        src_row = cur.fetchone()
-        if not src_row:
-            raise RuntimeError("Source trial not found.")
-
-        col_names = [c[0] for c in cur.description]
-        src_map = dict(zip(col_names, src_row))
-
-        # ID / TrialSeriesID / Versuchsnummer are set explicitly below.
-        # Also skip computed/read-only fields (e.g. "D/Y Ratio (T2/T1)").
-        skip_lower = {
-            "id",  # never copy the primary key
-            # TrialSeriesID and Versuchsnummer are set explicitly, so they
-            # are NOT skipped here.
-            "d/y ratio (t2/t1)",  # computed field in Access
-            # never copy DATETIME/TIMESTAMP columns 1:1 (MySQL rejects '0')
-            "timestamp",
-            "createdat",
-            "updatedat",
-        }
-        # don't copy an existing GlobalID column directly
-        gid_col = None
-        for c in col_names:
-            if c.lower() == "globalid":
-                gid_col = c
-                skip_lower.add("globalid")
-                break
-        insert_cols = [c for c in col_names if c.lower() not in skip_lower]
-
-        values = []
-        for col in insert_cols:
-            cl = col.lower()
-            if cl == "trialseriesid":
-                values.append(series_id)
-            elif cl == "versuchsnummer":
-                values.append(new_versuchsnummer)
-            elif _col_not_copied(cl):
-                values.append(None)  # measured / commented on the new run
-            else:
-                values.append(src_map.get(col))
-
-        cols_for_insert = list(insert_cols)
-        vals_for_insert = list(values)
-        if gid_col:
-            cols_for_insert.append(gid_col)
-            vals_for_insert.append(new_global_id())
-        cols_sql = ", ".join(f"[{c}]" for c in cols_for_insert)
-        ph = ", ".join("?" for _ in cols_for_insert)
-        cur.execute(
-            f"INSERT INTO tblTrial ({cols_sql}) VALUES ({ph})",
-            vals_for_insert,
-        )
-        # fetch the new ID (Access-ODBC idiom)
-        cur.execute("SELECT @@IDENTITY")
-        new_id_row = cur.fetchone()
-        new_trial_id = int(new_id_row[0]) if new_id_row else None
-        if not new_trial_id:
-            raise RuntimeError("Could not determine the new trial ID.")
-
-        # copy the lab records for this trial
-        self._clone_lab_rows_for_trial(cur, src_trial_id, new_trial_id)
-        # copy the tblTrialSettings rows (ply data)
-        self._clone_trial_settings_rows(cur, src_trial_id, new_trial_id)
-        return new_trial_id
+        """One new tblTrial row as a copy of src_trial_id (machine params 1:1,
+        lab rows structurally cloned but nulled, ply settings cloned):
+        db/trial_actions.insert_trial_copy. Returns the new trial's ID."""
+        return _trial_actions.insert_trial_copy(cur, src_trial_id, series_id, new_versuchsnummer,
+                                                self._current_user_id())
 
     def _reload_after_trial_copy(self) -> None:
         """Reloads/rebuilds every tab that can show newly-inserted trials -
@@ -5285,14 +5152,7 @@ class ShowExperimentScreen(QWidget):
                     "(in To Be Cleaned: superusers only).")
         return ""
 
-    _TABLE_NAMES = {"tbltrial": "trials", "tbltrialsettings": "ply settings", "tblnote": "notes",
-                    "tbltrialretestflag": "retest flags", "tbllabortiter": "Titer",
-                    "tbllaboratyomat": "ATYoMat", "tbllaboratyshrinkage": "ATY shrinkage",
-                    "tbllabordtyomat": "DTYoMat", "tbllaborekb": "EKB",
-                    "tbllaborheissluftschrumpf": "Hot air shrinkage", "tbllaboritematlab": "Itemat",
-                    "tbllaboritematplus": "Itemat Plus", "tbllaborkochschrumpf": "Hot water shrinkage",
-                    "tbllaborrapid600": "Rapid 600", "tbllaborstatimatds": "Statimat DS",
-                    "tbllaborstatimatm": "Statimat", "tbllaborwaterbath": "Water bath"}
+    # what else a trial delete takes along: db/recycle_bin.table_label()
 
     def _delete_trials(self, trial_ids: List[int]) -> None:
         """Deletes trials with everything attached into the recycle bin. The
@@ -5321,7 +5181,7 @@ class ShowExperimentScreen(QWidget):
             key = table.lower()
             if key == "tbltrial":
                 continue
-            label = self._TABLE_NAMES.get(key) or (table[8:] if key.startswith("tbllabor") else table)
+            label = recycle_bin.table_label(table)
             parts.append(f"{label}: {cnt}")
         left = [v for t, v in zip(self._trial_ids, self._trial_vnos) if int(t) not in set(trial_ids)]
         msg = QMessageBox(self)
@@ -5393,43 +5253,12 @@ class ShowExperimentScreen(QWidget):
         if name is None:
             return
 
-        trial_cols = _db_get_columns_map("tblTrial")
+        # INSERT + lab row structure: db/trial_actions.add_reference_sample (shared with the web app)
+        template_id = next(
+            (t for t in self._trial_ids if int(t) not in self._reference_names), None)
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                # Own negative number range (-1, -2, ...): a reference
-                # sample doesn't use up a trial number.
-                cur.execute(
-                    "SELECT MIN(Versuchsnummer) FROM tblTrial WHERE TrialSeriesID = ?",
-                    (self._series_pk,),
-                )
-                row = cur.fetchone()
-                new_v = next_reference_number(row[0] if row else None)
-
-                cols = ["TrialSeriesID", "Versuchsnummer", IS_REFERENCE_COL, REFERENCE_NAME_COL]
-                vals: List[Any] = [self._series_pk, new_v, 1, name or None]
-                if "globalid" in trial_cols:
-                    cols.append(trial_cols["globalid"])
-                    vals.append(new_global_id())
-                uid = self._current_user_id()
-                if "user" in trial_cols and uid not in (None, ""):
-                    cols.append(trial_cols["user"])
-                    vals.append(uid)
-                cur.execute(
-                    f"INSERT INTO tblTrial ({', '.join(f'[{c}]' for c in cols)}) "
-                    f"VALUES ({', '.join('?' for _ in cols)})",
-                    vals,
-                )
-                cur.execute("SELECT @@IDENTITY")
-                id_row = cur.fetchone()
-                new_id = int(id_row[0]) if id_row and id_row[0] else None
-                if not new_id:
-                    raise RuntimeError("Could not determine the new trial ID.")
-
-                template_id = next(
-                    (t for t in self._trial_ids if int(t) not in self._reference_names), None)
-                if template_id is not None:
-                    self._clone_lab_rows_for_trial(cur, int(template_id), new_id)
+            _trial_actions.add_reference_sample(self._series_pk, name, app_meta.current_user,
+                                                template_trial_id=template_id)
         except Exception as e:
             show_error(self, "Reference sample", "The reference sample could not be added.", e, warning=True)
             return
@@ -5464,26 +5293,9 @@ class ShowExperimentScreen(QWidget):
             if ans != QMessageBox.Yes:
                 return
             name = None
-            try:
-                if int(vno) < 1:
-                    rows = fetch_all(
-                        "SELECT MAX(Versuchsnummer) AS mx FROM tblTrial WHERE TrialSeriesID = ?",
-                        [self._series_pk])
-                    new_vno = next_trial_number(rows[0]["mx"] if rows else None)
-            except (TypeError, ValueError):
-                pass
+            new_vno = _trial_actions.unmark_number(self._series_pk, vno)
         try:
-            if new_vno is not None:
-                _db_execute(
-                    f"UPDATE tblTrial SET {IS_REFERENCE_COL} = 0, {REFERENCE_NAME_COL} = NULL, "
-                    f"Versuchsnummer = ? WHERE ID = ?",
-                    [new_vno, int(trial_id)],
-                )
-            else:
-                _db_execute(
-                    f"UPDATE tblTrial SET {IS_REFERENCE_COL} = ?, {REFERENCE_NAME_COL} = ? WHERE ID = ?",
-                    [1 if make_reference else 0, name or None, int(trial_id)],
-                )
+            _trial_actions.write_reference_flag(trial_id, make_reference, name, new_vno)
         except Exception as e:
             show_error(self, "Reference sample", "The reference sample could not be saved.", e, warning=True)
             return
@@ -5502,10 +5314,7 @@ class ShowExperimentScreen(QWidget):
         if name is None:
             return
         try:
-            _db_execute(
-                f"UPDATE tblTrial SET {REFERENCE_NAME_COL} = ? WHERE ID = ?",
-                [name or None, int(trial_id)],
-            )
+            _trial_actions.rename_reference_sample(trial_id, name)
         except Exception as e:
             show_error(self, "Reference sample", "The reference sample could not be saved.", e, warning=True)
             return
@@ -5554,37 +5363,10 @@ class ShowExperimentScreen(QWidget):
             return
         if not self._confirm_proceed_despite_unsaved():
             return
-        by_key = {f.key: f for f in fields}
-        series_id = self._series_pk
-        new_ids: List[int] = []
-        try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute(
-                    "SELECT MAX(Versuchsnummer) FROM tblTrial WHERE TrialSeriesID = ?",
-                    (series_id,),
-                )
-                row = cur.fetchone()
-                # Clamped at 0: negative numbers are reference samples.
-                max_v = next_trial_number(row[0] if row else None) - 1
-                for src_trial_id, overrides in plan:
-                    max_v += 1
-                    new_id = self._insert_trial_copy(cur, src_trial_id, series_id, max_v)
-                    new_ids.append(new_id)
-                    for fkey, value in (overrides or {}).items():
-                        f = by_key.get(fkey)
-                        if f is None:
-                            continue
-                        if f.kind == "trial":
-                            cur.execute(f"UPDATE tblTrial SET [{f.column}] = ? WHERE ID = ?",
-                                        (value, new_id))
-                        elif f.kind == "use_of":
-                            cur.execute(
-                                f"UPDATE tblTrialSettings SET [{f.column}] = ? "
-                                f"WHERE TrialID = ? AND YarnUseID = ?",
-                                (value, new_id, f.use_id))
-        except Exception as e:
-            show_error(self, "Error copying trials", "The trials could not be copied.", e, warning=True)
+        # the copies themselves: db/trial_actions.copy_trials (Qt-free, shared with the web app)
+        new_ids, err = _trial_actions.copy_trials(self._series_pk, plan, fields, app_meta.current_user)
+        if err is not None:
+            show_error(self, "Error copying trials", "The trials could not be copied.", err, warning=True)
             if not new_ids:
                 return
 
@@ -5636,38 +5418,21 @@ class ShowExperimentScreen(QWidget):
         if not series_pk:
             QMessageBox.information(self, "Print Labels", "No series loaded.")
             return
+        # range, header, cell renderer: db/trial_labels.py (Qt-free, shared with the web app)
+        from db import trial_labels
         if not table_exists("tbltrial"):
             return
-        try:
-            rows = fetch_all(
-                "SELECT MIN([Versuchsnummer]) AS mn, MAX([Versuchsnummer]) AS mx "
-                "FROM tbltrial WHERE [TrialSeriesID] = ? AND [Versuchsnummer] >= 1", [series_pk])
-        except Exception:
-            rows = []
-        if not rows or rows[0].get("mn") is None:
+        rng = trial_labels.trial_label_range(series_pk)
+        if rng is None:
             QMessageBox.information(self, "Print Labels", "No trials in this series.")
             return
-        mn, mx = int(rows[0]["mn"]), int(rows[0]["mx"])
+        mn, mx = rng
 
         # "ExperimentID.SS" (erste 2 Zeichen des Series-Namens) fuer die
-        # Kopfzeile ueber der Versuchsnummer - gilt fuer die ganze Series,
-        # also nur einmal abfragen statt pro Trial.
-        header_txt = ""
-        try:
-            hrows = fetch_all(
-                "SELECT e.[ExperimentID] AS ExpId, s.[SeriesName] AS SeriesName "
-                "FROM tbltrialseries s "
-                "LEFT JOIN tblexperimente e ON e.[ID] = s.[ExperimentID] "
-                "WHERE s.[ID] = ?", [series_pk])
-            if hrows:
-                exp_id = hrows[0].get("ExpId")
-                series_name = str(hrows[0].get("SeriesName") or "")
-                if exp_id is not None:
-                    header_txt = f"{exp_id}.{series_name[:2]}"
-        except Exception:
-            header_txt = ""
+        # Kopfzeile ueber der Versuchsnummer - gilt fuer die ganze Series.
+        header_txt = trial_labels.trial_label_header(series_pk)
 
-        template = load_label_template("TrialLabel")
+        template = load_label_template(trial_labels.TEMPLATE_NAME)
 
         range_widget = QWidget()
         range_layout = QHBoxLayout(range_widget)
@@ -5704,7 +5469,7 @@ class ShowExperimentScreen(QWidget):
         tpl = dlg.template_values()
         start_index = dlg.start_index()
         f, t = spn_from.value(), spn_to.value()
-        items = [{"TrialNr": n, "Header": header_txt} for n in range(f, t + 1)]
+        items = trial_labels.trial_label_items(header_txt, f, t)
 
         out_path, _ = QFileDialog.getSaveFileName(
             self, "Save label PDF", "trial_labels.pdf", "PDF Files (*.pdf)")
@@ -5727,167 +5492,14 @@ class ShowExperimentScreen(QWidget):
             QMessageBox.information(self, "Info", "Navigation is not configured.")
 
     def _clone_lab_rows_for_trial(self, cur, src_trial_id: int, new_trial_id: int) -> None:
-        """Klont alle Labor-Datensätze von src_trial_id auf new_trial_id.
-
-        - Struktur / Parameter (z.B. Tension) werden übernommen
-        - eigentliche Messwerte werden auf NULL gesetzt
-        """
-        lab_tables = [
-            ("tbllabortiter", "TrialID"),
-            ("tbllaborstatimatm", "TrialID"),
-            ("tbllaborstatimatds", "TrialID"),
-            ("tblLaborWaterbath", "TrialID"),
-            ("tblLaborItematLab", "TrialID"),
-            ("tblLaborItematPlus", "TrialID"),
-            ("tblLaborRapid600", "TrialID"),
-            ("tblLaborDTYoMat", "TrialID"),
-            ("tblLaborATYoMat", "TrialID"),
-            ("tblLaborEKB", "TrialID"),
-            ("tblLaborHeissLuftSchrumpf", "TrialID"),
-            ("tblLaborKochSchrumpf", "TrialID"),
-            ("tblLaborATYShrinkage", "TrialID"),
-        ]
-
-        for table_name, trial_col in lab_tables:
-            # prüfen, ob Tabelle existiert (MySQL)
-            if not _db_table_exists(table_name.lower()):
-                continue
-
-            cur.execute(
-                f"SELECT * FROM {table_name} WHERE {trial_col} = ?",
-                (src_trial_id,),
-            )
-            rows = cur.fetchall()
-            if not rows:
-                continue
-
-            col_names = [c[0] for c in cur.description]
-
-            # ID + TrialID nicht direkt übernehmen
-            skip_lower = {"id", trial_col.lower()}
-            gid_col = None
-            for c in col_names:
-                if c.lower() == "globalid":
-                    gid_col = c
-                    skip_lower.add("globalid")
-                    break
-            insert_cols = [c for c in col_names if c.lower() not in skip_lower]
-
-            def _is_zero_datetime(v: Any) -> bool:
-                """Detect common 'zero' datetime placeholders (e.g. 0 or '0')."""
-                if v is None:
-                    return False
-                if isinstance(v, (int, float)):
-                    return v == 0
-                if isinstance(v, str):
-                    return v.strip() in ("", "0", "0000-00-00", "0000-00-00 00:00:00")
-                return False
-
-            current_uid = None
-            try:
-                current_uid = self._current_user_id()
-            except Exception:
-                current_uid = None
-
-            for row in rows:
-                row_map = dict(zip(col_names, row))
-                values = []
-                for col in insert_cols:
-                    cl = col.lower()
-                    v = row_map.get(col)
-
-                    # --- keep/correct meta + FK fields so we don't violate constraints ---
-                    if cl.endswith("id"):
-                        # keep foreign keys (e.g. UserID, InstrumentID, ...) intact
-                        # but if it is a UserID placeholder (0), map to current user if available.
-                        if "user" in cl and _is_zero_datetime(v):
-                            values.append(current_uid if current_uid not in (None, "") else None)
-                        elif "user" in cl and v in (0, "0", "", None):
-                            values.append(current_uid if current_uid not in (None, "") else None)
-                        else:
-                            values.append(v)
-                        continue
-
-                    if "createdby" in cl:
-                        values.append(current_uid if current_uid not in (None, "") else v)
-                        continue
-
-                    if any(k in cl for k in ("createdat", "updatedat", "timestamp")):
-                        # give cloned rows a fresh timestamp if the source contains an invalid placeholder
-                        values.append(datetime.datetime.now() if _is_zero_datetime(v) else v)
-                        continue
-
-                    if any(k in cl for k in ("date", "time")):
-                        # never insert 0 into date/time-like columns
-                        values.append(None if _is_zero_datetime(v) else v)
-                        continue
-
-                    # --- keep parameter columns, null measurement columns ---
-                    # Keep obvious setting columns; everything else becomes NULL.
-                    if "tension" in cl:
-                        values.append(v)
-                    else:
-                        values.append(None)
-
-                cols_for_insert = [trial_col] + list(insert_cols)
-                vals_for_insert = [new_trial_id] + values
-                if gid_col:
-                    cols_for_insert.append(gid_col)
-                    vals_for_insert.append(new_global_id())
-                cols_sql = ", ".join(
-                    f"[{c}]" for c in cols_for_insert)
-                ph = ", ".join("?" for _ in cols_for_insert)
-                cur.execute(
-                    f"INSERT INTO [{table_name}] ({cols_sql}) VALUES ({ph})",
-                    vals_for_insert,
-                )
+        """Lab rows of src_trial_id cloned onto new_trial_id (parameters such
+        as Tension kept, measured values NULL): db/trial_actions."""
+        _trial_actions.clone_lab_rows_for_trial(cur, src_trial_id, new_trial_id, self._current_user_id())
 
     def _clone_trial_settings_rows(self, cur, src_trial_id: int, new_trial_id: int) -> None:
-        """Klont alle tblTrialSettings-Zeilen von src_trial_id auf new_trial_id.
-
-        Alle Felder (inkl. Ply-Parameter wie 1stHeaterT1/T2, YarnTensionT1/T2 usw.)
-        werden 1:1 übernommen. Nur ID und TrialID werden neu gesetzt; die
-        gemessenen Fadenspannungen vor/nach Jet und die Kommentare bleiben
-        leer (_col_not_copied()).
-        """
-        if not _db_table_exists("tbltrialsettings"):
-            return
-
-        cur.execute(
-            "SELECT * FROM tblTrialSettings WHERE TrialID = ?",
-            (src_trial_id,),
-        )
-        rows = cur.fetchall()
-        if not rows:
-            return
-
-        col_names = [c[0] for c in cur.description]
-
-        skip_lower = {"id", "trialid"}
-        gid_col = None
-        for c in col_names:
-            if c.lower() == "globalid":
-                gid_col = c
-                skip_lower.add("globalid")
-                break
-        insert_cols = [c for c in col_names if c.lower() not in skip_lower]
-
-        for row in rows:
-            row_map = dict(zip(col_names, row))
-            values = [None if _col_not_copied(c) else row_map.get(c) for c in insert_cols]
-
-            cols_for_insert = ["TrialID"] + list(insert_cols)
-            vals_for_insert = [new_trial_id] + values
-            if gid_col:
-                cols_for_insert.append(gid_col)
-                vals_for_insert.append(new_global_id())
-
-            cols_sql = ", ".join(f"[{c}]" for c in cols_for_insert)
-            ph = ", ".join("?" for _ in cols_for_insert)
-            cur.execute(
-                f"INSERT INTO [tblTrialSettings] ({cols_sql}) VALUES ({ph})",
-                vals_for_insert,
-            )
+        """tblTrialSettings rows of src_trial_id cloned 1:1 onto new_trial_id
+        (measured tensions + comments empty): db/trial_actions."""
+        _trial_actions.clone_trial_settings_rows(cur, src_trial_id, new_trial_id)
 
     def _get_jet_info_rows(self) -> list:
         """3 Zeilen (label, [wert_pro_trial]) für Jet / Jet Plate / Air Pressure

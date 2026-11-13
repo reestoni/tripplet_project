@@ -1563,35 +1563,25 @@ class AllExperimentsScreen(QWidget):
         except Exception:
             series_name = str(series_id)
 
+        from db import series_actions   # Qt-free, shared with the Backlog + web
+
         # Aktuelle MachineID laden
         try:
-            row_data = fetch_all(
-                "SELECT s.MachineID, m.Maschine AS MachineName "
-                "FROM tblTrialSeries s "
-                "LEFT JOIN tblMaschine m ON m.ID = s.MachineID "
-                "WHERE s.ID = ?",
-                [series_id],
-            )
-            cur_machine_id = int(row_data[0]["MachineID"]) if row_data and row_data[0]["MachineID"] else None
-            cur_machine_name = str(row_data[0]["MachineName"] or "") if row_data else ""
+            cur_machine_id, cur_machine_name = series_actions.current_machine(series_id)
         except Exception as e:
             show_error(self, "Error", "The machine data could not be loaded.", e)
             return
 
         # Alle Maschinen laden
-        try:
-            machines = fetch_all(
-                "SELECT ID, Maschine FROM tblMaschine ORDER BY Maschine", [])
-        except Exception:
-            machines = []
+        machines = series_actions.list_machines()
 
         if not machines:
             QMessageBox.information(self, "No Machines",
                                     "No machines found in database.")
             return
 
-        machine_ids = [int(r["ID"]) for r in machines]
-        machine_names = [str(r["Maschine"] or "") for r in machines]
+        machine_ids = [r["ID"] for r in machines]
+        machine_names = [r["Maschine"] for r in machines]
 
         dlg = QDialog(self)
         dlg.setWindowTitle(f"Change Machine — {series_name}")
@@ -1631,24 +1621,11 @@ class AllExperimentsScreen(QWidget):
             return
 
         try:
-            execute(
-                "UPDATE tblTrialSeries SET MachineID = ? WHERE ID = ?",
-                [new_machine_id, series_id],
-            )
+            # UPDATE + feature tracking: db/series_actions.change_machine
+            series_actions.change_machine(series_id, new_machine_id, app_meta.current_user)
         except Exception as e:
             show_error(self, "Save Error", "The machine could not be saved.", e)
             return
-
-        # Feature-Tracking
-        try:
-            user_id = (getattr(app_meta.current_user, "id", None)
-                       or getattr(app_meta.current_user, "ID", None))
-            execute(
-                "INSERT INTO tblFeatureUsage (FeatureID, UserID, ExtraInfo) VALUES (?, ?, ?)",
-                [7, user_id, str(series_id)],
-            )
-        except Exception:
-            pass
 
         new_name = machine_names[new_idx]
         QMessageBox.information(
@@ -1684,15 +1661,9 @@ class AllExperimentsScreen(QWidget):
             series_name = str(series_id)
 
         # ── Aktuelle Garnzuordnung laden (via tbltrialsettings, DISTINCT pro Ply) ──
+        from db import trial_actions   # Qt-free, shared by Backlog + All Experiments + web
         try:
-            yarn_rows = fetch_all(
-                "SELECT DISTINCT ts.Ply, ts.YarnID "
-                "FROM tbltrialsettings ts "
-                "JOIN tbltrial t ON t.ID = ts.TrialID "
-                "WHERE t.TrialSeriesID = ? AND " + exclude_references_sql("t") + " "
-                "ORDER BY ts.Ply",
-                [series_id],
-            )
+            yarn_rows = trial_actions.series_ply_yarns(series_id)
         except Exception as e:
             show_error(self, "Error", "The yarn data could not be loaded.", e)
             return
@@ -1703,14 +1674,8 @@ class AllExperimentsScreen(QWidget):
             return
 
         # ── Alle verfügbaren Garne laden ──────────────────────────────────
-        try:
-            # Halbfabrikat-"Schatten"-Garne (Multimaschinen-Ply-Verknüpfung)
-            # sollen hier nicht als Reassign-Ziel auftauchen.
-            src_col = resolve_field(['SourceTrialID'], get_columns_map('tblYarn'))
-            where = f" WHERE [{src_col}] IS NULL" if src_col else ""
-            all_yarns = fetch_all(f"SELECT ID, Name FROM tblYarn{where} ORDER BY Name", [])
-        except Exception:
-            all_yarns = []
+        # (no shadow yarns of the multi-machine ply link)
+        all_yarns = trial_actions.reassign_yarn_choices()
 
         yarn_id_to_name = {int(r["ID"]): str(r["Name"]) for r in all_yarns}
         yarn_name_list = [str(r["Name"]) for r in all_yarns]
@@ -1841,153 +1806,26 @@ class AllExperimentsScreen(QWidget):
         if dlg.exec() != QDialog.Accepted:
             return
 
-        # ── Trials laden ──────────────────────────────────────────────────
-        try:
-            trial_rows_c = fetch_all(
-                "SELECT ID FROM tblTrial WHERE TrialSeriesID = ? AND "
-                + exclude_references_sql("") + " ORDER BY Versuchsnummer",
-                [series_id])
-            trial_ids = [int(r["ID"]) for r in trial_rows_c]
-        except Exception:
-            trial_ids = []
-
-        def _get_ply1_settings(trial_id):
-            try:
-                rows = fetch_all(
-                    "SELECT * FROM tblTrialSettings WHERE TrialID = ? ORDER BY ID LIMIT 1",
-                    [trial_id])
-                return dict(rows[0]) if rows else None
-            except Exception:
-                return None
-
-        # ── Speichern ─────────────────────────────────────────────────────
-        # Neue Ply-Labels berechnen (nur nicht-gelöschte, in Reihenfolge)
-        active_states = [s for s in rows_state if not s["deleted"]]
-        for i, s in enumerate(active_states):
-            s["new_ply"] = f"Ply {i + 1}"
-
-        # ── Konsistenzprüfung vor dem Schreiben ───────────────────────────
-        # 1) Dialog-intern: zwei Zeilen mit gleichem Ply-Label aber verschiedener YarnID?
-        ply_to_yid: dict = {}
-        conflicts = []
-        for state in active_states:
-            new_ply = state["new_ply"]
+        # ── Plan (new ply labels, conflicts) + write: db/trial_actions ──
+        rows = []
+        for state in rows_state:
             idx = state["cmb"].currentIndex()
-            new_yid = yarn_id_list[idx] if idx >= 0 and yarn_id_list else None
-            if new_yid is None:
-                continue
-            if new_ply in ply_to_yid:
-                if ply_to_yid[new_ply] != new_yid:
-                    name_a = yarn_id_to_name.get(ply_to_yid[new_ply], f"ID {ply_to_yid[new_ply]}")
-                    name_b = yarn_id_to_name.get(new_yid, f"ID {new_yid}")
-                    conflicts.append(f"{new_ply}: «{name_a}» vs «{name_b}» (within dialog)")
-            else:
-                ply_to_yid[new_ply] = new_yid
+            rows.append({"orig_ply": state["orig_ply"], "orig_yid": state["orig_yid"],
+                         "deleted": state["deleted"], "is_new": state["is_new"],
+                         "new_yid": yarn_id_list[idx] if idx >= 0 and yarn_id_list else None})
+        plan = trial_actions.plan_yarn_reassign(series_id, rows, yarn_id_to_name)
 
-        # 2) Gegen DB: gibt es in der Series bereits ein anderes Garn für dieses Ply?
-        for new_ply, new_yid in ply_to_yid.items():
-            conflict_rows = fetch_all(
-                """
-                SELECT DISTINCT y.Name AS YarnName
-                FROM tblTrialSettings ts
-                         JOIN tblTrial t ON t.ID = ts.TrialID
-                         JOIN tblYarn y ON y.ID = ts.YarnID
-                WHERE t.TrialSeriesID = ?
-                  AND ts.Ply = ?
-                  AND ts.YarnID != ?
-                  AND """ + exclude_references_sql("t") + """
-                """,
-                [series_id, new_ply, new_yid],
-            )
-            if conflict_rows:
-                existing = ", ".join(r["YarnName"] for r in conflict_rows)
-                new_name = yarn_id_to_name.get(new_yid, f"ID {new_yid}")
-                conflicts.append(f"{new_ply}: «{new_name}» conflicts with existing «{existing}»")
-
-        if conflicts:
+        if plan["conflicts"]:
             from PySide6.QtWidgets import QMessageBox as _QMB
             _QMB.critical(
-                None, "Yarn Conflict",
-                "Cannot save — the following plies would create inconsistencies:\n\n"
-                + "\n".join(f"  • {c}" for c in conflicts)
-                + "\n\nAll trials in a series must use the same yarn per ply."
-            )
+                None, "Yarn Conflict", trial_actions.conflict_message(plan["conflicts"]))
             return
 
-        changes_made = 0
         try:
-            for state in rows_state:
-                orig_ply = state["orig_ply"]
-                orig_yid = state["orig_yid"]
-                deleted = state["deleted"]
-                is_new = state["is_new"]
-                idx = state["cmb"].currentIndex()
-                new_yid = yarn_id_list[idx] if idx >= 0 and yarn_id_list else None
-                new_ply = state.get("new_ply")
-
-                if deleted and is_new:
-                    # Neu hinzugefügt und gleich wieder gelöscht → nichts tun
-                    pass
-
-                elif deleted and not is_new and orig_ply and trial_ids:
-                    # Ply löschen: alle tbltrialsettings-Zeilen mit diesem Ply-Label entfernen
-                    ph = ",".join(["?"] * len(trial_ids))
-                    execute(
-                        f"DELETE FROM tblTrialSettings "
-                        f"WHERE Ply = ? AND TrialID IN ({ph})",
-                        [orig_ply] + trial_ids,
-                    )
-                    changes_made += 1
-
-                elif is_new and new_yid is not None:
-                    # Neues Ply: tbltrialsettings-Klon von Ply 1 pro Trial
-                    for tid in trial_ids:
-                        tmpl = _get_ply1_settings(tid)
-                        if tmpl:
-                            skip = {"id", "trialid", "globalid"}
-                            cols = [c for c in tmpl.keys() if c.lower() not in skip]
-                            vals = []
-                            for c in cols:
-                                if c.lower() == "yarnid":
-                                    vals.append(new_yid)
-                                elif c.lower() == "ply":
-                                    vals.append(new_ply)
-                                else:
-                                    vals.append(tmpl[c])
-                            cols_sql = ", ".join(f"`{c}`" for c in ["TrialID"] + cols)
-                            ph2 = ", ".join(["?"] * (1 + len(cols)))
-                            execute(
-                                f"INSERT INTO tblTrialSettings ({cols_sql}) VALUES ({ph2})",
-                                [tid] + vals,
-                            )
-                    changes_made += 1
-
-                elif not is_new and new_ply is not None:
-                    # Bestehendes Ply: YarnID und Ply-Label aktualisieren
-                    if trial_ids:
-                        ph = ",".join(["?"] * len(trial_ids))
-                        if new_yid != orig_yid or new_ply != orig_ply:
-                            execute(
-                                f"UPDATE tblTrialSettings SET YarnID = ?, Ply = ? "
-                                f"WHERE Ply = ? AND TrialID IN ({ph})",
-                                [new_yid, new_ply, orig_ply] + trial_ids,
-                            )
-                            changes_made += 1
-
+            changes_made = trial_actions.apply_yarn_reassign(series_id, plan, app_meta.current_user)
         except Exception as e:
             show_error(self, "Save Error", "The yarn data could not be saved.", e)
             return
-
-        # ── Feature-Tracking ──────────────────────────────────────────────
-        try:
-            user_id = (getattr(app_meta.current_user, "id", None)
-                       or getattr(app_meta.current_user, "ID", None))
-            execute(
-                "INSERT INTO tblFeatureUsage (FeatureID, UserID, ExtraInfo) VALUES (?, ?, ?)",
-                [6, user_id, str(series_id)],
-            )
-        except Exception:
-            pass
 
         if changes_made:
             QMessageBox.information(
@@ -2230,12 +2068,11 @@ class AllExperimentsScreen(QWidget):
         if dlg.exec() != QDialog.Accepted:
             return
 
-        new_text = (dlg.new_name() or "").strip()
-        if not new_text:
+        from db import series_actions   # Qt-free, shared with the Backlog + web
+        new_full = series_actions.compose_name(prefix, dlg.new_name())
+        if not new_full:
             # Empty -> keep old
             return
-
-        new_full = f"{prefix}{new_text}" if prefix else new_text
 
         # Persist to DB
         try:
@@ -2249,7 +2086,7 @@ class AllExperimentsScreen(QWidget):
             return
 
         try:
-            update_trialseries_name(series_pk, new_full)
+            series_actions.rename_series(series_pk, new_full)
         except Exception as e:
             show_error(self, "Rename Trial Series", "The new name could not be saved.", e)
             return
@@ -2262,26 +2099,10 @@ class AllExperimentsScreen(QWidget):
 
     @staticmethod
     def _split_trialseries_prefix(full_name: str) -> tuple[str, str]:
-        """Split a TrialSeries name into (prefix_to_keep, editable_part).
-
-        Rules:
-        - If it starts with something like "f(03 ) " (letter + (...) + spaces), keep that.
-        - Else if it starts with digits followed by whitespace, keep that.
-        - Otherwise prefix is empty.
-        """
-        s = full_name or ""
-
-        # Pattern like: f(03 ) <name>  or A(12)  <name>
-        m = re.match(r"^(\s*[A-Za-z]\([^\)]*\)\s+)(.*)$", s)
-        if m:
-            return m.group(1), m.group(2)
-
-        # Pattern like: 03 <name>
-        m = re.match(r"^(\s*\d+\s+)(.*)$", s)
-        if m:
-            return m.group(1), m.group(2)
-
-        return "", s
+        """Split a TrialSeries name into (prefix_to_keep, editable_part):
+        db/series_actions.split_prefix (shared with the Backlog + web)."""
+        from db.series_actions import split_prefix
+        return split_prefix(full_name)
 
 
 class RenameTrialSeriesDialog(QDialog):

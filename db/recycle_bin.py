@@ -251,6 +251,22 @@ def preview_trials(series_id: int, trial_ids: Sequence[int]) -> List[Tuple[str, 
     return [(t, len(rows)) for t, rows in groups]
 
 
+# shown names of the tables a trial delete takes along ("Also deleted: ...")
+TABLE_LABELS = {"tbltrial": "trials", "tbltrialsettings": "ply settings", "tblnote": "notes",
+                "tbltrialretestflag": "retest flags", "tbllabortiter": "Titer",
+                "tbllaboratyomat": "ATYoMat", "tbllaboratyshrinkage": "ATY shrinkage",
+                "tbllabordtyomat": "DTYoMat", "tbllaborekb": "EKB",
+                "tbllaborheissluftschrumpf": "Hot air shrinkage", "tbllaboritematlab": "Itemat",
+                "tbllaboritematplus": "Itemat Plus", "tbllaborkochschrumpf": "Hot water shrinkage",
+                "tbllaborrapid600": "Rapid 600", "tbllaborstatimatds": "Statimat DS",
+                "tbllaborstatimatm": "Statimat", "tbllaborwaterbath": "Water bath"}
+
+
+def table_label(table: str) -> str:
+    key = str(table).lower()
+    return TABLE_LABELS.get(key) or (str(table)[8:] if key.startswith("tbllabor") else str(table))
+
+
 def can_delete_trials_now(series_id: Any) -> bool:
     """Same rule as deleting the whole series (db/series_permissions.py),
     and only with the recycle bin."""
