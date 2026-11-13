@@ -67,6 +67,25 @@ def can_edit_trials(user: Any) -> bool:
     return access_level(user) >= 2
 
 
+def lab_row_user_id() -> Optional[int]:
+    """UserID for new lab rows (some lab tables have a NOT NULL FK on tbluser):
+    the logged-in user, else (scripts without login) the smallest user ID."""
+    try:
+        import app_meta
+        uid = (app_meta.current_user or {}).get("id")
+        if uid is not None:
+            return int(uid)
+    except Exception:
+        pass
+    if not table_exists("tbluser"):
+        return None
+    try:
+        urows = fetch_all("SELECT MIN([ID]) AS uid FROM tbluser")
+        return int(urows[0]["uid"]) if urows and urows[0].get("uid") is not None else None
+    except Exception:
+        return None
+
+
 def user_id_of(user: Any) -> Any:
     cu = user or {}
     return cu.get("id") if isinstance(cu, dict) else None
@@ -119,8 +138,13 @@ def plan_yarn_reassign(series_id: int, rows: List[Dict[str, Any]],
     rows = [dict(r) for r in rows]
     # Neue Ply-Labels berechnen (nur nicht-gelöschte, in Reihenfolge)
     active_states = [s for s in rows if not s["deleted"]]
-    for i, s in enumerate(active_states):
-        s["new_ply"] = f"Ply {i + 1}"
+    # new numbers in order; lines of the same original ply stay one ply
+    numbers: Dict[Any, int] = {}
+    for s in active_states:
+        k = ("new", id(s)) if s.get("is_new") or not s.get("orig_ply") else ("old", s["orig_ply"])
+        if k not in numbers:
+            numbers[k] = len(numbers) + 1
+        s["new_ply"] = f"Ply {numbers[k]}"
 
     # ── Konsistenzprüfung vor dem Schreiben ───────────────────────────
     # 1) Dialog-intern: zwei Zeilen mit gleichem Ply-Label aber verschiedener YarnID?
@@ -139,25 +163,10 @@ def plan_yarn_reassign(series_id: int, rows: List[Dict[str, Any]],
         else:
             ply_to_yid[new_ply] = new_yid
 
-    # 2) Gegen DB: gibt es in der Series bereits ein anderes Garn für dieses Ply?
-    for new_ply, new_yid in ply_to_yid.items():
-        conflict_rows = fetch_all(
-            """
-            SELECT DISTINCT y.Name AS YarnName
-            FROM tblTrialSettings ts
-            JOIN tblTrial t ON t.ID = ts.TrialID
-            JOIN tblYarn y ON y.ID = ts.YarnID
-            WHERE t.TrialSeriesID = ?
-              AND ts.Ply = ?
-              AND ts.YarnID != ?
-              AND """ + exclude_references_sql("t") + """
-            """,
-            [series_id, new_ply, new_yid],
-        )
-        if conflict_rows:
-            existing = ", ".join(r["YarnName"] for r in conflict_rows)
-            new_name = yarn_names.get(new_yid, f"ID {new_yid}")
-            conflicts.append(f"{new_ply}: «{new_name}» conflicts with existing «{existing}»")
+    # (2) A check against the yarns in the DB is not needed: the plan rewrites every
+    # line of the series (the editor shows all DISTINCT ply/yarn lines), so after
+    # saving each ply has exactly the yarns of (1). The old check compared against the
+    # yarns that are being replaced and so blocked every real change (found 2026-11-13).
 
     return {"trial_ids": trial_ids, "rows": rows, "conflicts": conflicts}
 
@@ -237,10 +246,12 @@ def apply_yarn_reassign(series_id: int, plan: Dict[str, Any], user: Any = None) 
             if trial_ids:
                 ph = ",".join(["?"] * len(trial_ids))
                 if new_yid != orig_yid or new_ply != orig_ply:
+                    # only this line (ply + its yarn) - a ply can hold several yarn lines
+                    yid_sql, yid_par = ("AND YarnID = ? ", [orig_yid]) if orig_yid is not None else ("AND YarnID IS NULL ", [])
                     execute(
                         f"UPDATE tblTrialSettings SET YarnID = ?, Ply = ? "
-                        f"WHERE Ply = ? AND TrialID IN ({ph})",
-                        [new_yid, new_ply, orig_ply] + trial_ids,
+                        f"WHERE Ply = ? {yid_sql}AND TrialID IN ({ph})",
+                        [new_yid, new_ply, orig_ply] + yid_par + trial_ids,
                     )
                     changes_made += 1
 
@@ -853,14 +864,7 @@ def save_jet_air_consumption_rows(cur, series_id: int, lab_data: Iterable[Dict[s
         col_press = resolve_field(["AirPressure"], lcols) or "AirPressure"
         col_gid = resolve_field(["GlobalID"], lcols)
         col_user = resolve_field(["UserID", "User"], lcols)
-        default_user_id = None
-        if col_user and table_exists("tbluser"):
-            try:
-                urows = fetch_all("SELECT MIN([ID]) AS uid FROM tbluser")
-                if urows and urows[0].get("uid") is not None:
-                    default_user_id = int(urows[0]["uid"])
-            except Exception:
-                default_user_id = None
+        default_user_id = lab_row_user_id() if col_user else None
 
         for pj in physical_jets:
             # Bereits vorhanden? (Duese+Druck fuer diese Series)
@@ -964,8 +968,8 @@ def add_trials(series_id: int, jets: Sequence[Dict[str, Any]], materials: Sequen
     cn = None
     try:
         with get_connection() as cn:
-            cn.autocommit = False
             cur = cn.cursor()
+            cur.execute("START TRANSACTION")   # the pool runs autocommit - a real transaction
 
             # Letzter Trial der Serie für Lab-Klon
             cur.execute(
@@ -1052,14 +1056,7 @@ def add_trials(series_id: int, jets: Sequence[Dict[str, Any]], materials: Sequen
             # regulaeren Create-Flow), NICHT vom letzten Trial klonen - der
             # letzte Trial hat nicht unbedingt in jeder Tabelle schon eine
             # Zeile. lab_data kommt aus series_lab_data() (ganze Serie).
-            default_user_id = None
-            if table_exists("tbluser"):
-                try:
-                    urows = fetch_all("SELECT MIN([ID]) AS uid FROM tbluser")
-                    if urows and urows[0].get("uid") is not None:
-                        default_user_id = int(urows[0]["uid"])
-                except Exception:
-                    default_user_id = None
+            default_user_id = lab_row_user_id()
 
             for lm in lab_data:
                 if str(lm.get("RowMode") or "").strip().lower() == "seriesfreeform":

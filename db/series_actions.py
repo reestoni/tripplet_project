@@ -20,7 +20,7 @@ Permission rules (same as the desktop context menus):
     can_rename(user)          access level >= 2
     can_change_machine(user)  access level >= 4 (superuser)
     can_change_prio(user)     everybody (the Backlog menu never restricted it)
-    can_save_notes(user)      everybody (Show Experiment never restricted it)
+    can_save_notes(user)      access level >= 2 (before 2026-11-13: nobody checked)
 
 `user` is a dict like app_meta.current_user ({"id", "username",
 "access_level", ...}); the rule functions also accept a plain access level.
@@ -60,15 +60,16 @@ def can_change_prio(user: Any) -> bool:
 
 
 def can_save_notes(user: Any) -> bool:
-    return True
+    """Series notes: write access like every other change (access level >= 2; since 2026-11-13)."""
+    return access_level(user) >= 2
+
 
 
 def legacy_feature_user_id(user: Any) -> Any:
-    """UserID the desktop writes into tblFeatureUsage for machine / yarn changes.
-
-    Kept 1:1: the screens used getattr(app_meta.current_user, "id") on a DICT,
-    which is always None - so these two features have always been tracked
-    without a user. Changing that is a separate decision."""
+    """UserID for tblFeatureUsage (machine / yarn changes). Until 2026-11-13 the screens read
+    getattr(dict, "id") = always None, so these features were never tracked (UserID is NOT NULL)."""
+    if isinstance(user, dict):
+        return user.get("id")
     return getattr(user, "id", None) or getattr(user, "ID", None)
 
 

@@ -441,6 +441,11 @@ class _SQLiteConnWrapper:
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        if exc_type is not None:
+            try:   # an open START TRANSACTION must never stay half done
+                self.rollback()
+            except Exception:
+                pass
         try:
             self.close()
         except Exception:
@@ -723,6 +728,11 @@ class _ConnWrapper:
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        if exc_type is not None:
+            try:   # an open START TRANSACTION must never stay half done
+                self.rollback()
+            except Exception:
+                pass
         try:
             self.close()
         except Exception:

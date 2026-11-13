@@ -2616,8 +2616,8 @@ class CreateExperimentScreen(QWidget):
 
         try:
             with get_connection() as cn:
-                cn.autocommit = False
                 cur = cn.cursor()
+                cur.execute("START TRANSACTION")   # the pool runs autocommit - a real transaction
                 inserted = 0
                 skipped = 0
 
@@ -4514,8 +4514,8 @@ class CreateExperimentScreen(QWidget):
 
         try:
             with get_connection() as cn:
-                cn.autocommit = False
                 cur = cn.cursor()
+                cur.execute("START TRANSACTION")   # the pool runs autocommit - a real transaction
 
                 if self.mode == "addseries":
                     if self.cmbExistingExperiment.currentIndex() < 0:
@@ -4826,14 +4826,7 @@ class CreateExperimentScreen(QWidget):
                 # Lab Machines -> in AddTrials jetzt FRISCH aus _lab_data schreiben (kein Übernehmen)
                 # Einige Labor-Tabellen (z.B. tbllabordytomat) haben einen NOT NULL FK auf tbluser(UserID).
                 # Falls im Insert kein UserID angegeben wird, landet in MySQL oft ein Default (z.B. 0) -> FK-Fehler.
-                default_user_id = None
-                if table_exists("tbluser"):
-                    try:
-                        urows = fetch_all("SELECT MIN([ID]) AS uid FROM tbluser")
-                        if urows and urows[0].get("uid") is not None:
-                            default_user_id = int(urows[0]["uid"])
-                    except Exception:
-                        default_user_id = None
+                default_user_id = _trial_actions.lab_row_user_id()   # logged-in user (before: smallest user ID)
 
                 for lm in self._lab_data:
                     if str(lm.get("RowMode") or "").strip().lower() == "seriesfreeform":

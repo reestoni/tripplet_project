@@ -4397,6 +4397,8 @@ class ShowExperimentScreen(QWidget):
             self.txt_notes.blockSignals(True)
             self.txt_notes.setPlainText(notes_val)
             self.txt_notes.blockSignals(False)
+            # read-only users / recycle-bin preview: notes cannot be changed (db/series_actions.can_save_notes)
+            self.txt_notes.setReadOnly(self._get_access_level() < 2)
         except Exception:
             pass
 
@@ -4441,7 +4443,9 @@ class ShowExperimentScreen(QWidget):
             current = self.txt_notes.toPlainText()
             if current == self._notes_last_saved:
                 return
-            from db.series_actions import save_notes   # Qt-free, shared with the web app
+            from db.series_actions import can_save_notes, save_notes   # Qt-free, shared with the web app
+            if not can_save_notes(self._get_access_level()):
+                return
             save_notes(self._series_pk, current)
             self._notes_last_saved = current
         except Exception:

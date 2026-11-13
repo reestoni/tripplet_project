@@ -55,13 +55,14 @@ def test_rules(lvl, rename, machine, trials):
     assert ta.can_reassign_yarn(user) is machine
     assert ta.can_edit_trials(user) is trials
     assert sy.can_edit(user) is trials
-    assert sa.can_change_prio(user) and sa.can_save_notes(user)
+    assert sa.can_change_prio(user)
+    assert sa.can_save_notes(user) is trials       # since 2026-11-13: write access needed
 
 
-def test_feature_tracking_user_is_kept_as_before():
-    # the screens used getattr() on the user DICT -> always None (kept 1:1)
+def test_feature_tracking_gets_the_user():
+    # until 2026-11-13 getattr() on the user DICT gave None and the INSERT failed silently
     from db.series_actions import legacy_feature_user_id
-    assert legacy_feature_user_id({"id": 5}) is None
+    assert legacy_feature_user_id({"id": 5}) == 5
 
 
 @pytest.mark.parametrize("full, prefix, rest", [
@@ -103,13 +104,26 @@ def test_yarn_plan_relabels_kept_plies(monkeypatch):
     assert plan["conflicts"] == []
 
 
-def test_yarn_plan_reports_db_conflicts_and_apply_refuses(monkeypatch):
-    from db import trial_actions as ta
+def test_yarn_plan_changing_a_yarn_is_allowed(monkeypatch):
+    # the old DB check compared against the yarn being replaced and blocked every change
     rows = [{"orig_ply": "Ply 1", "orig_yid": 1, "new_yid": 2, "deleted": False, "is_new": False}]
     plan, _ = _plan(monkeypatch, rows, db_conflicts=["A"])
-    assert plan["conflicts"] == ["Ply 1: «B» conflicts with existing «A»"]
+    assert plan["conflicts"] == [] and plan["rows"][0]["new_ply"] == "Ply 1"
+
+
+def test_yarn_plan_two_yarns_on_one_ply_stay_one_ply(monkeypatch):
+    rows = [{"orig_ply": "Ply 1", "orig_yid": 1, "new_yid": 1, "deleted": False, "is_new": False},
+            {"orig_ply": "Ply 1", "orig_yid": 2, "new_yid": 2, "deleted": False, "is_new": False},
+            {"orig_ply": "Ply 2", "orig_yid": 3, "new_yid": 3, "deleted": False, "is_new": False}]
+    plan, _ = _plan(monkeypatch, rows)
+    assert [r["new_ply"] for r in plan["rows"]] == ["Ply 1", "Ply 1", "Ply 2"]
+    assert plan["conflicts"] and "within dialog" in plan["conflicts"][0]   # series rule: one yarn per ply
+
+
+def test_yarn_apply_refuses_a_plan_with_conflicts():
+    from db import trial_actions as ta
     with pytest.raises(ValueError):
-        ta.apply_yarn_reassign(1, plan)
+        ta.apply_yarn_reassign(1, {"conflicts": ["x"], "rows": [], "trial_ids": []})
 
 
 def test_yarn_plan_needs_one_ply(monkeypatch):
