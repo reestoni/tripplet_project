@@ -89,7 +89,6 @@ from db.trial_reference import (
 )
 
 import html
-import math
 import re
 import os
 import sys
@@ -4604,9 +4603,14 @@ class ShowExperimentScreen(QWidget):
             labels=self._trial_labels)
 
     def _model_from_pivot(self, p):
-        """db/series_tables.LabPivot -> editable PivotEditModel (same cells as the old per-tab code)."""
-        model = PivotEditModel(row_titles=p.row_titles, col_titles=self._trial_labels,
+        """db/series_tables.LabPivot -> editable PivotEditModel (same cells as the old per-tab code).
+        Columns = the trials, unless the pivot brings its own col_titles (Jet Air: pressure steps)."""
+        model = PivotEditModel(row_titles=p.row_titles,
+                               col_titles=self._trial_labels if p.col_titles is None else p.col_titles,
                                row_validators=p.validators)
+        if p.extra.get("unit_scale"):
+            # Jet Air in l/min: shown converted, stored in Nm3/h (see build_jet_air)
+            model.set_unit_scale(p.extra["unit_scale"], p.extra.get("unit_field"))
         for r_idx, row in enumerate(p.cells):
             for c_idx, (value, binding) in enumerate(row):
                 model.set_cell(r_idx, c_idx, value, binding)
@@ -6743,126 +6747,30 @@ class ShowExperimentScreen(QWidget):
         (JetID + JetPlate), Spalten = Druckstufen. Drei Grids: Air
         Consumption (mit Einheiten-Umschalter Nm3/h <-> l/min - gespeichert
         wird immer in Nm3/h), Atmospheric Pressure und Air Temperature
-        (beide mit "Fuer alle uebernehmen"). Eine Series-gemeinsame
-        Druck-Liste wird mit allen physischen Duesen der Series gekreuzt
-        (siehe _save_jet_air_consumption_rows in screen_create_experiment.py)."""
-        table = "tblLaborJetAirConsumption"
-        series_id = getattr(self, "_series_pk", None)
-        if not table_exists(table) or not series_id:
+        (beide mit "Fuer alle uebernehmen"). Data: db/series_tables.build_jet_air
+        (shared with the web app)."""
+        ja = _series_tables.build_jet_air(getattr(self, "_series_pk", None), self._jet_air_unit)
+        if ja is None:
             self._remove_jet_air_tab_if_exists()
             return
-
-        rows = fetch_all(
-            f"SELECT [ID], [JetID], [JetPlate], [AirPressure], [AirConsumption], "
-            f"[AtmosphericPressure], [AirTemperature] "
-            f"FROM {table} WHERE [TrialSeriesID] = ?",
-            [series_id],
-        )
-        if not rows:
-            self._remove_jet_air_tab_if_exists()
-            return
-
-        # Jet-Namen nachladen (gleiche Quelle wie _get_jet_info_rows)
-        jet_ids = sorted({int(r["JetID"]) for r in rows if r.get("JetID") is not None})
-        jet_name_map: Dict[int, str] = {}
-        try:
-            if jet_ids and table_exists("tblDTYJets"):
-                ph = ",".join(["?"] * len(jet_ids))
-                for jr in fetch_all(
-                        f"SELECT [ID], [Jet] AS JName FROM tblDTYJets WHERE [ID] IN ({ph})", jet_ids):
-                    jet_name_map[int(jr["ID"])] = str(jr.get("JName") or "")
-        except Exception:
-            pass
-
-        def _plate_key(p):
-            return "" if p is None else str(p)
-
-        physical_jets = sorted(
-            {(int(r["JetID"]), _plate_key(r.get("JetPlate")))
-             for r in rows if r.get("JetID") is not None},
-            key=lambda t: (jet_name_map.get(t[0], ""), t[1]),
-        )
-        pressures = sorted({float(r["AirPressure"]) for r in rows if r.get("AirPressure") is not None})
-
-        if not physical_jets or not pressures:
-            self._remove_jet_air_tab_if_exists()
-            return
-
-        row_titles = []
-        for jid, plate in physical_jets:
-            jname = jet_name_map.get(jid, f"Jet {jid}")
-            row_titles.append(f"{jname} / Plate {plate}" if plate else jname)
-
-        col_titles = [f"{p:g} bar" for p in pressures]
 
         self._ensure_jet_air_tab()
 
         def _populate():
-            by_key: Dict[Tuple[int, str, float], dict] = {}
-            for r in rows:
-                if r.get("JetID") is None or r.get("AirPressure") is None:
-                    continue
-                key = (int(r["JetID"]), _plate_key(r.get("JetPlate")), round(float(r["AirPressure"]), 6))
-                by_key[key] = r
-
-            # 1 Nm3/h = 1000 l / 60 min = 16.6667 l/min
-            LMIN_PER_NM3H = 1000.0 / 60.0
-            use_lmin = (self._jet_air_unit == "lmin")
-
             # ── Air Consumption ──────────────────────────────────────────────
-            self.model_jet_air = PivotEditModel(
-                row_titles=row_titles, col_titles=col_titles,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-            if use_lmin:
-                self.model_jet_air.set_unit_scale(LMIN_PER_NM3H, "AirConsumption")
-            for r_idx, (jid, plate) in enumerate(physical_jets):
-                for c_idx, p in enumerate(pressures):
-                    rec = by_key.get((jid, plate, round(p, 6)))
-                    if rec:
-                        binding = CellBinding(table, "ID", rec["ID"], "AirConsumption")
-                        val = rec.get("AirConsumption")
-                        disp = None
-                        if val is not None:
-                            v = float(val) * LMIN_PER_NM3H if use_lmin else float(val)
-                            disp = f"{v:.2f}"
-                        self.model_jet_air.set_cell(r_idx, c_idx, disp, binding)
-                    else:
-                        self.model_jet_air.set_cell(r_idx, c_idx, None, None)
+            self.model_jet_air = self._model_from_pivot(ja.consumption)
             self.tbl_jet_air.setModel(self.model_jet_air)
             self._register_save_model("model_jet_air")
             self.tbl_jet_air.resizeColumnsToContents(fixed_data_column_width=90)
 
             # ── Atmospheric Pressure ────────────────────────────────────────
-            self.model_jet_air_atm = PivotEditModel(
-                row_titles=row_titles, col_titles=col_titles,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-            for r_idx, (jid, plate) in enumerate(physical_jets):
-                for c_idx, p in enumerate(pressures):
-                    rec = by_key.get((jid, plate, round(p, 6)))
-                    if rec:
-                        binding = CellBinding(table, "ID", rec["ID"], "AtmosphericPressure")
-                        self.model_jet_air_atm.set_cell(r_idx, c_idx, rec.get("AtmosphericPressure"), binding)
-                    else:
-                        self.model_jet_air_atm.set_cell(r_idx, c_idx, None, None)
+            self.model_jet_air_atm = self._model_from_pivot(ja.atm)
             self.tbl_jet_air_atm.setModel(self.model_jet_air_atm)
             self._register_save_model("model_jet_air_atm")
             self.tbl_jet_air_atm.resizeColumnsToContents(fixed_data_column_width=90)
 
             # ── Air Temperature ─────────────────────────────────────────────
-            self.model_jet_air_temp = PivotEditModel(
-                row_titles=row_titles, col_titles=col_titles,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-            for r_idx, (jid, plate) in enumerate(physical_jets):
-                for c_idx, p in enumerate(pressures):
-                    rec = by_key.get((jid, plate, round(p, 6)))
-                    if rec:
-                        binding = CellBinding(table, "ID", rec["ID"], "AirTemperature")
-                        self.model_jet_air_temp.set_cell(r_idx, c_idx, rec.get("AirTemperature"), binding)
-                    else:
-                        self.model_jet_air_temp.set_cell(r_idx, c_idx, None, None)
+            self.model_jet_air_temp = self._model_from_pivot(ja.temp)
             self.tbl_jet_air_temp.setModel(self.model_jet_air_temp)
             self._register_save_model("model_jet_air_temp")
             self.tbl_jet_air_temp.resizeColumnsToContents(fixed_data_column_width=90)
@@ -7640,98 +7548,16 @@ class ShowExperimentScreen(QWidget):
         )
 
     def _build_itemat_tab(self):
-        if not self._trial_ids or not table_exists("tblLaborItematLab"):
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_itemat(self._series_trials_data())
+        if p is None:
             self._remove_itemat_tab_if_exists()
             return
-
-        rows = fetch_all(
-            f"""
-            SELECT
-                IL.ID AS RecID,
-                IL.TrialID,
-                IL.[Tension (cN/dtex)]     AS Tension,
-                IL.[Intermingling Points (FP/m)]     AS IP,
-                IL.[Intermingling Points CV (%)]     AS IPCV,
-                IL.[Stability (%)]                   AS Stability
-            FROM tblLaborItematLab AS IL
-            WHERE IL.TrialID IN ({",".join(["?"] * len(self._trial_ids))})
-            ORDER BY IL.TrialID, IL.[Tension (cN/dtex)], IL.ID
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_itemat_tab_if_exists()
-            return
-
-        by_trial: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
-        tensions_set: set[float] = set()
-        for r in rows:
-            by_trial[int(r["TrialID"])].append(r)
-            try:
-                t = float(str(r["Tension"]).replace(",", "."))
-            except Exception:
-                t = 0.0
-            if t != 0.0:
-                tensions_set.add(round(t, 2))
-
-        tensions_sorted = sorted(tensions_set)
-        self._itemat_tensions = tensions_sorted.copy()
-
-        row_titles: List[str] = [
-                                    "Intermingling Points (FP/m) @0.0 cN/dtex",
-                                    "Intermingling Points CV (%) @0.0 cN/dtex",
-                                ] + [f"Stability@{t:.1f} cN/dtex" for t in tensions_sorted]
-
+        self._itemat_tensions = list(p.extra["tensions"])
         self._ensure_itemat_tab()
 
         def _populate():
-            self.model_itemat = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-            )
-
-            def find_record(trial_list: List[Dict[str, Any]], tension_value: float) -> Optional[Dict[str, Any]]:
-                for rr in trial_list:
-                    try:
-                        tt = float(str(rr["Tension"]).replace(",", "."))
-                    except Exception:
-                        tt = 0.0
-                    if abs(tt - tension_value) < 1e-6:
-                        return rr
-                return None
-
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                recs = by_trial.get(tid, [])
-                r0 = find_record(recs, 0.0)
-                if r0:
-                    self.model_itemat.set_cell(
-                        0, c_idx, r0.get("IP"),
-                        CellBinding("tblLaborItematLab", "ID",
-                                    r0["RecID"], "Intermingling Points (FP/m)"),
-                    )
-                    self.model_itemat.set_cell(
-                        1, c_idx, r0.get("IPCV"),
-                        CellBinding("tblLaborItematLab", "ID",
-                                    r0["RecID"], "Intermingling Points CV (%)"),
-                    )
-                else:
-                    self.model_itemat.set_cell(0, c_idx, None, None)
-                    self.model_itemat.set_cell(1, c_idx, None, None)
-
-                for idx, tval in enumerate(tensions_sorted, start=2):
-                    rr = find_record(recs, tval)
-                    if rr:
-                        self.model_itemat.set_cell(
-                            idx, c_idx, rr.get("Stability"),
-                            CellBinding("tblLaborItematLab", "ID",
-                                        rr["RecID"], "Stability (%)"),
-                        )
-                    else:
-                        self.model_itemat.set_cell(idx, c_idx, None, None)
-
+            self.model_itemat = self._model_from_pivot(p)
             self.tbl_itemat.setModel(self.model_itemat)
             self.model_itemat.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_itemat")
@@ -7857,8 +7683,8 @@ class ShowExperimentScreen(QWidget):
         # insert_readonly_rows_at_top(self._get_jet_info_rows()) verschiebt
         # die echten Datenzeilen um die Jet-Info-Kopfzeilen nach unten.
         n_header = len(self._get_jet_info_rows())
-        ROW_IP0 = n_header + 0
-        ROW_STAB_START = n_header + 2
+        ROW_IP0 = n_header + _series_tables.ITEMAT_ROW_IP0
+        ROW_STAB_START = n_header + _series_tables.ITEMAT_ROW_STAB_START
 
         # Kandidaten sammeln
         cand_ids: List[Any] = []
@@ -7879,7 +7705,7 @@ class ShowExperimentScreen(QWidget):
                 if not bind:
                     continue
                 rec_id = bind.id_value
-                new_val = ip0 * (stab / 100.0)
+                new_val = _series_tables.itemat_ip_at_tension(ip0, stab)
                 cand_ids.append(rec_id)
                 cand_vals[rec_id] = new_val
 
@@ -7959,125 +7785,16 @@ class ShowExperimentScreen(QWidget):
         self._itemat_plus_tensions = []
 
     def _build_itemat_plus_tab(self):
-        if not self._trial_ids or not table_exists("tblLaborItematPlus"):
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_itemat_plus(self._series_trials_data())
+        if p is None:
             self._remove_itemat_plus_tab_if_exists()
             return
-
-        rows = fetch_all(
-            f"""
-            SELECT
-                IP.ID AS RecID,
-                IP.TrialID,
-                IP.[Tension (cN/dtex)]                AS Tension,
-                IP.[Intermingling Points (FP/m)]      AS InterP,
-                IP.[Intermingling Points CV (%)]      AS InterCV,
-                IP.[Stability (%)]                    AS Stability,
-                IP.[OL X (mm)]                        AS OLX,
-                IP.[OL S (mm)]                        AS OLS,
-                IP.[KL X (mm)]                        AS KLX,
-                IP.[KL S (mm)]                        AS KLS
-            FROM tblLaborItematPlus AS IP
-            WHERE IP.TrialID IN ({",".join(["?"] * len(self._trial_ids))})
-            ORDER BY IP.TrialID, IP.[Tension (cN/dtex)], IP.ID
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_itemat_plus_tab_if_exists()
-            return
-
-        by_trial: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
-        tensions_set: set[float] = set()
-        for r in rows:
-            by_trial[int(r["TrialID"])].append(r)
-            try:
-                t = float(str(r["Tension"]).replace(",", "."))
-            except Exception:
-                t = 0.0
-            if t != 0.0:
-                tensions_set.add(round(t, 2))
-
-        tensions_sorted = sorted(tensions_set)
-        self._itemat_plus_tensions = tensions_sorted.copy()
-
-        # Zeilen: IP@0, OLX@0, OLS@0, KLX@0, KLS@0, dann Stability@t für alle t>0
-        row_titles: List[str] = [
-                                    "Intermingling Points (FP/m) @0.0 cN/dtex",
-                                    "OL X (mm) @0.0 cN/dtex",
-                                    "OL S (mm) @0.0 cN/dtex",
-                                    "KL X (mm) @0.0 cN/dtex",
-                                    "KL S (mm) @0.0 cN/dtex",
-                                ] + [f"Stability@{t:.1f} cN/dtex" for t in tensions_sorted]
-
+        self._itemat_plus_tensions = list(p.extra["tensions"])
         self._ensure_itemat_plus_tab()
 
         def _populate():
-            self.model_itemat_plus = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-            )
-
-            def find_record(trial_list: List[Dict[str, Any]], tension_value: float) -> Optional[Dict[str, Any]]:
-                for rr in trial_list:
-                    try:
-                        tt = float(str(rr["Tension"]).replace(",", "."))
-                    except Exception:
-                        tt = 0.0
-                    if abs(tt - tension_value) < 1e-6:
-                        return rr
-                return None
-
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                recs = by_trial.get(tid, [])
-
-                r0 = find_record(recs, 0.0)
-                if r0:
-                    # Row 0: IP@0
-                    self.model_itemat_plus.set_cell(
-                        0, c_idx, r0.get("InterP"),
-                        CellBinding("tblLaborItematPlus", "ID",
-                                    r0["RecID"], "Intermingling Points (FP/m)"),
-                    )
-                    # Row 1..4: OLX, OLS, KLX, KLS @0
-                    self.model_itemat_plus.set_cell(
-                        1, c_idx, r0.get("OLX"),
-                        CellBinding("tblLaborItematPlus", "ID",
-                                    r0["RecID"], "OL X (mm)"),
-                    )
-                    self.model_itemat_plus.set_cell(
-                        2, c_idx, r0.get("OLS"),
-                        CellBinding("tblLaborItematPlus", "ID",
-                                    r0["RecID"], "OL S (mm)"),
-                    )
-                    self.model_itemat_plus.set_cell(
-                        3, c_idx, r0.get("KLX"),
-                        CellBinding("tblLaborItematPlus", "ID",
-                                    r0["RecID"], "KL X (mm)"),
-                    )
-                    self.model_itemat_plus.set_cell(
-                        4, c_idx, r0.get("KLS"),
-                        CellBinding("tblLaborItematPlus", "ID",
-                                    r0["RecID"], "KL S (mm)"),
-                    )
-                else:
-                    for rr in range(5):
-                        self.model_itemat_plus.set_cell(rr, c_idx, None, None)
-
-                # Stability@t für jede Spannung > 0
-                for idx, tval in enumerate(tensions_sorted, start=5):
-                    rr = find_record(recs, tval)
-                    if rr:
-                        self.model_itemat_plus.set_cell(
-                            idx, c_idx, rr.get("Stability"),
-                            CellBinding("tblLaborItematPlus", "ID",
-                                        rr["RecID"], "Stability (%)"),
-                        )
-                    else:
-                        self.model_itemat_plus.set_cell(idx, c_idx, None, None)
-
+            self.model_itemat_plus = self._model_from_pivot(p)
             self.tbl_itemat_plus.setModel(self.model_itemat_plus)
             self.model_itemat_plus.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_itemat_plus")
@@ -8109,12 +7826,12 @@ class ShowExperimentScreen(QWidget):
         # statt OLX/OLS/KLX/KLS, "if None in (...)" greift dann immer und
         # FPmCV wird nie mehr neu berechnet.
         n_header = len(self._get_jet_info_rows())
-        ROW_IP0 = n_header + 0
-        ROW_OLX0 = n_header + 1
-        ROW_OLS0 = n_header + 2
-        ROW_KLX0 = n_header + 3
-        ROW_KLS0 = n_header + 4
-        ROW_STAB_START = n_header + 5
+        ROW_IP0 = n_header + _series_tables.ITEMAT_PLUS_ROW_IP0
+        ROW_OLX0 = n_header + _series_tables.ITEMAT_PLUS_ROW_OLX0
+        ROW_OLS0 = n_header + _series_tables.ITEMAT_PLUS_ROW_OLS0
+        ROW_KLX0 = n_header + _series_tables.ITEMAT_PLUS_ROW_KLX0
+        ROW_KLS0 = n_header + _series_tables.ITEMAT_PLUS_ROW_KLS0
+        ROW_STAB_START = n_header + _series_tables.ITEMAT_PLUS_ROW_STAB_START
         EPS = 1e-9
 
         # -------- Teil 1: IP(t) für t>0 --------
@@ -8136,7 +7853,7 @@ class ShowExperimentScreen(QWidget):
                 if not bind:
                     continue
                 rec_id = bind.id_value
-                new_val = ip0 * (stab / 100.0)
+                new_val = _series_tables.itemat_ip_at_tension(ip0, stab)
                 cand_ids_ip.append(rec_id)
                 cand_vals_ip[rec_id] = new_val
 
@@ -8169,13 +7886,10 @@ class ShowExperimentScreen(QWidget):
                 return self._to_float(self.model_itemat_plus.get_cell_value(row_idx, c_idx))
 
             olx, ols, klx, kls = _f(ROW_OLX0), _f(ROW_OLS0), _f(ROW_KLX0), _f(ROW_KLS0)
-            if None in (olx, ols, klx, kls):
+            # rule shared with the web app (db/series_tables.itemat_plus_cv0)
+            cv0 = _series_tables.itemat_plus_cv0(olx, ols, klx, kls)
+            if cv0 is None:
                 continue
-            denom = (olx or 0.0) + (klx or 0.0)
-            if denom <= 0:
-                continue
-            cv0 = math.sqrt((kls or 0.0) ** 2 +
-                            (ols or 0.0) ** 2) / denom * 100
 
             bind0 = self.model_itemat_plus.get_binding(ROW_IP0, c_idx)
             if not bind0:
@@ -8255,178 +7969,16 @@ class ShowExperimentScreen(QWidget):
         self.lbl_dtyomat_retest_banner = None
 
     def _build_dtyomat_tab(self):
-        """
-        Baut das DTYoMat-Tab aus tblLaborDTYoMat auf.
-        Erwartet pro Trial höchstens einen Datensatz. Falls mehrere vorhanden sind,
-        wird aktuell der erste Datensatz pro Trial verwendet.
-        """
-        if not self._trial_ids or not table_exists("tblLaborDTYoMat"):
+        """DTYoMat tab from tblLaborDTYoMat (first record per trial).
+        Data: db/series_tables.build_dtyomat (shared with the web app)."""
+        p = _series_tables.build_dtyomat(self._series_trials_data())
+        if p is None:
             self._remove_dtyomat_tab_if_exists()
             return
-
-        rows = fetch_all(
-            f"""
-            SELECT
-                D.ID         AS RecID,
-                D.TrialID    AS TrialID,
-                D.[FP/m]     AS FPm,
-                D.CV_FP      AS CV_FP,
-                D.AvgFP      AS AvgFP,
-                D.StdDevFP   AS StdDevFP,
-                D.CV_KL      AS CV_KL,
-                D.AvgKL      AS AvgKL,
-                D.StdDevKL   AS StdDevKL,
-                D.CV_OL      AS CV_OL,
-                D.AvgOL      AS AvgOL,
-                D.StdDevOL   AS StdDevOL,
-                D.AKnots     AS AKnots,
-                D.BKnots     AS BKnots,
-                D.CKnots     AS CKnots
-            FROM tblLaborDTYoMat AS D
-            WHERE D.TrialID IN ({",".join(["?"] * len(self._trial_ids))})
-            ORDER BY D.TrialID, D.ID
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_dtyomat_tab_if_exists()
-            return
-
-        # Pro Trial den ersten Datensatz verwenden
-        by_trial: Dict[int, Dict[str, Any]] = {}
-        for r in rows:
-            tid = int(r["TrialID"])
-            if tid not in by_trial:
-                by_trial[tid] = r
-
-        row_titles: List[str] = [
-            "Intermingling Points per Meter (FP/m)",
-            "Intermingling Points CV (%)",
-            "Average FP Length (mm)",
-            "Standard Deviation FP Length (mm)",
-            "Knot Length CV (%)",
-            "Average Knot Length (mm)",
-            "Standard Deviation Knot Length (mm)",
-            "Open Length CV (%)",
-            "Average Open Length (mm)",
-            "Standard Deviation Open Length (mm)",
-            "A-Knots (%)",
-            "B-Knots (%)",
-            "C-Knots (%)",
-        ]
-
         self._ensure_dtyomat_tab()
 
         def _populate():
-            self.model_dtyomat = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                rec = by_trial.get(tid)
-                if not rec:
-                    for r_idx in range(len(row_titles)):
-                        self.model_dtyomat.set_cell(r_idx, c_idx, None, None)
-                    continue
-
-                rec_id = rec["RecID"]
-
-                # 0: FP/m
-                self.model_dtyomat.set_cell(
-                    0,
-                    c_idx,
-                    rec.get("FPm"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "FP/m"),
-                )
-                # 1: CV_FP
-                self.model_dtyomat.set_cell(
-                    1,
-                    c_idx,
-                    rec.get("CV_FP"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "CV_FP"),
-                )
-                # 2: AvgFP
-                self.model_dtyomat.set_cell(
-                    2,
-                    c_idx,
-                    rec.get("AvgFP"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "AvgFP"),
-                )
-                # 3: StdDevFP
-                self.model_dtyomat.set_cell(
-                    3,
-                    c_idx,
-                    rec.get("StdDevFP"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "StdDevFP"),
-                )
-                # 4: CV_KL
-                self.model_dtyomat.set_cell(
-                    4,
-                    c_idx,
-                    rec.get("CV_KL"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "CV_KL"),
-                )
-                # 5: AvgKL
-                self.model_dtyomat.set_cell(
-                    5,
-                    c_idx,
-                    rec.get("AvgKL"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "AvgKL"),
-                )
-                # 6: StdDevKL
-                self.model_dtyomat.set_cell(
-                    6,
-                    c_idx,
-                    rec.get("StdDevKL"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "StdDevKL"),
-                )
-                # 7: CV_OL
-                self.model_dtyomat.set_cell(
-                    7,
-                    c_idx,
-                    rec.get("CV_OL"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "CV_OL"),
-                )
-                # 8: AvgOL
-                self.model_dtyomat.set_cell(
-                    8,
-                    c_idx,
-                    rec.get("AvgOL"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "AvgOL"),
-                )
-                # 9: StdDevOL
-                self.model_dtyomat.set_cell(
-                    9,
-                    c_idx,
-                    rec.get("StdDevOL"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "StdDevOL"),
-                )
-                # 10: AKnots
-                self.model_dtyomat.set_cell(
-                    10,
-                    c_idx,
-                    rec.get("AKnots"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "AKnots"),
-                )
-                # 11: BKnots
-                self.model_dtyomat.set_cell(
-                    11,
-                    c_idx,
-                    rec.get("BKnots"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "BKnots"),
-                )
-                # 12: CKnots
-                self.model_dtyomat.set_cell(
-                    12,
-                    c_idx,
-                    rec.get("CKnots"),
-                    CellBinding("tblLaborDTYoMat", "ID", rec_id, "CKnots"),
-                )
-
+            self.model_dtyomat = self._model_from_pivot(p)
             if self.tbl_dtyomat is not None:
                 self.tbl_dtyomat.setModel(self.model_dtyomat)
                 self.model_dtyomat.insert_readonly_rows_at_top(self._get_jet_info_rows())
@@ -8488,94 +8040,16 @@ class ShowExperimentScreen(QWidget):
         self.lbl_atyomat_retest_banner = None
 
     def _build_atyomat_tab(self):
-        """
-        Baut das ATYoMat-Tab aus tblLaborATYoMat auf.
-        Zeigt die Kern-/Schlaufen-Kennzahlen der neuen ATY-Analyse
-        (ui/yarnscope/aty_core_analysis.py, seit 2026-08-13 -- die Tabelle
-        wurde von der alten thick_spot_analysis.py-Methode komplett auf
-        diese umgestellt, siehe CLAUDE.md).
-        Pro Trial wird der neueste Datensatz verwendet (MAX(ID)).
-        """
-        if not self._trial_ids or not table_exists("tblLaborATYoMat"):
+        """ATYoMat tab from tblLaborATYoMat (core/loop figures of the ATY analysis,
+        newest record per trial). Data: db/series_tables.build_atyomat (shared with the web app)."""
+        p = _series_tables.build_atyomat(self._series_trials_data())
+        if p is None:
             self._remove_atyomat_tab_if_exists()
             return
-
-        from ui.yarnscope.aty_core_analysis import DB_COLUMN_MAP  # lazy: avoid a new module-level import in this huge file
-
-        # DB_COLUMN_MAP keys are analyze_trial()'s python field names;
-        # ParamsVersion (a string) is metadata, not a numeric row to edit here.
-        col_db = [c for k, c in DB_COLUMN_MAP.items() if k != "params_version"]
-        row_titles: List[str] = [
-            "Laenge (m)", "Global mean (um)", "Kern (um)", "Kern-CV (%)",
-            "Difference core vs. mean (%)", "Kern-CV @1m (%)", "Kern-CV @20m (%)",
-            "Number of loops", "Frequenz (1/m)", "Ø Abstand (mm)", "Abstand-CV (%)",
-            "Hoehe Median (um)", "Height mean (um)", "Hoehe P95 (um)", "Hoehe P99 (um)", "Hoehe Max (um)",
-            "Rel. Hoehe Median (%)", "Rel. height mean (%)", "Rel. Hoehe P90 (%)",
-            "Rel. Hoehe P95 (%)", "Rel. Hoehe P99 (%)", "Rel. Hoehe Max (%)",
-            "Bulk Index (%)", "Kurzhocker Anteil (%)", "Langwelle Anteil (%)",
-            "Kurzhocker Dichte (1/m)", "Langwelle Dichte (1/m)",
-            "Kurzhocker Hoehe Median (um)", "Kurzhocker Rel. Hoehe Median (%)", "Kurzhocker Bulk-Beitrag (%)",
-            "Langwelle Hoehe Median (um)", "Langwelle Rel. Hoehe Median (%)", "Langwelle Bulk-Beitrag (%)",
-            "Ellipticity Mittel (%)", "Ellipticity Schlaufen (%)", "Ellipticity Kern (%)",
-            "Ellipticity Schlaufe/Kern-Verhaeltnis",
-        ]
-        assert len(row_titles) == len(col_db), "ATYoMat row_titles/col_db out of sync with DB_COLUMN_MAP"
-
-        cols_sql = ", ".join(f"D.{c} AS {c}" for c in col_db)
-        rows = fetch_all(
-            f"""
-            SELECT
-                D.ID            AS RecID,
-                D.TrialID       AS TrialID,
-                {cols_sql}
-            FROM tblLaborATYoMat AS D
-            INNER JOIN (
-                SELECT TrialID, MAX(ID) AS MaxID
-                FROM tblLaborATYoMat
-                WHERE TrialID IN ({",".join(["?"] * len(self._trial_ids))})
-                GROUP BY TrialID
-            ) AS Latest ON D.ID = Latest.MaxID
-            ORDER BY D.TrialID
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_atyomat_tab_if_exists()
-            return
-
-        by_trial: Dict[int, Dict[str, Any]] = {}
-        for r in rows:
-            tid = int(r["TrialID"])
-            if tid not in by_trial:
-                by_trial[tid] = r
-
         self._ensure_atyomat_tab()
 
         def _populate():
-            self.model_atyomat = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                rec = by_trial.get(tid)
-                if not rec:
-                    for r_idx in range(len(row_titles)):
-                        self.model_atyomat.set_cell(r_idx, c_idx, None, None)
-                    continue
-
-                rec_id = rec["RecID"]
-                for r_idx, col_name in enumerate(col_db):
-                    self.model_atyomat.set_cell(
-                        r_idx,
-                        c_idx,
-                        rec.get(col_name),
-                        CellBinding("tblLaborATYoMat", "ID", rec_id, col_name),
-                    )
-
+            self.model_atyomat = self._model_from_pivot(p)
             if self.tbl_atyomat is not None:
                 self.tbl_atyomat.setModel(self.model_atyomat)
                 self.model_atyomat.insert_readonly_rows_at_top(self._get_jet_info_rows())
