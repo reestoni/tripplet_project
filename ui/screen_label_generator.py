@@ -92,206 +92,11 @@ def _scene_to_mm(pos: QPointF) -> Tuple[float, float]:
     return ((pos.x() - PREVIEW_MARGIN) / PX_PER_MM, (pos.y() - PREVIEW_MARGIN) / PX_PER_MM)
 
 
-def _normalize_element(el: Dict) -> Dict:
-    """Wandelt ein Element im alten Einzel-Quelle-Format (source/static_text/
-    field_key auf oberster Ebene) in das neue parts-Format um. Logo-Elemente
-    und bereits parts-basierte Elemente bleiben unveraendert - macht
-    fruehere Designs in tblLabelDesign weiterhin ladbar."""
-    el = dict(el)
-    if el.get("type") == "text" and "parts" not in el:
-        if el.get("source") == "field":
-            el["parts"] = [{"source": "field", "field_key": el.get("field_key")}]
-        else:
-            el["parts"] = [{"source": "static", "text": el.get("static_text", "")}]
-        el.pop("source", None)
-        el.pop("static_text", None)
-        el.pop("field_key", None)
-    return el
-
-
-# ---------------------------------------------------------------------------
-# DB-Helfer fuer tblLabelDesign (auto-erstellt, analog zu anderen Tools -
-# siehe z.B. ui/screen_air_supply.py::_ensure_tables)
-# ---------------------------------------------------------------------------
-
-def _ensure_design_table() -> None:
-    try:
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(f"""
-                CREATE TABLE IF NOT EXISTS {DESIGN_TABLE} (
-                    ID           INT AUTO_INCREMENT PRIMARY KEY,
-                    Name         VARCHAR(120) NOT NULL UNIQUE,
-                    TemplateName VARCHAR(120) NOT NULL,
-                    ElementsJson LONGTEXT NOT NULL,
-                    UpdatedAt    DATETIME DEFAULT CURRENT_TIMESTAMP
-                                 ON UPDATE CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """)
-    except Exception as e:
-        print(f"[LabelGenerator] Could not ensure {DESIGN_TABLE}: {e}")
-
-
-def _db_list_designs() -> List[str]:
-    if not table_exists(DESIGN_TABLE):
-        return []
-    try:
-        rows = fetch_all(f"SELECT [Name] FROM {DESIGN_TABLE} ORDER BY [Name]")
-        return [r["Name"] for r in rows]
-    except Exception:
-        return []
-
-
-def _db_load_design(name: str) -> Optional[List[Dict]]:
-    if not table_exists(DESIGN_TABLE):
-        return None
-    try:
-        rows = fetch_all(
-            f"SELECT [ElementsJson] FROM {DESIGN_TABLE} WHERE [Name] = ? LIMIT 1", [name])
-        if not rows:
-            return None
-        return json.loads(rows[0]["ElementsJson"])
-    except Exception:
-        return None
-
-
-def _db_save_design(name: str, elements: List[Dict]) -> None:
-    _ensure_design_table()
-    ejson = json.dumps(elements)
-    existing = fetch_all(f"SELECT [ID] FROM {DESIGN_TABLE} WHERE [Name] = ? LIMIT 1", [name])
-    if existing:
-        execute(
-            f"UPDATE {DESIGN_TABLE} SET [TemplateName] = ?, [ElementsJson] = ? WHERE [ID] = ?",
-            [TEMPLATE_NAME, ejson, existing[0]["ID"]])
-    else:
-        execute(
-            f"INSERT INTO {DESIGN_TABLE} ([Name], [TemplateName], [ElementsJson]) "
-            f"VALUES (?, ?, ?)", [name, TEMPLATE_NAME, ejson])
-
-
-# ---------------------------------------------------------------------------
-# Rendering: Element-Liste -> draw_cell-Funktion (fuer PrintLabelsDialog /
-# generate_label_sheet_pdf UND fuer die Live-Vorschau - derselbe Code, damit
-# Vorschau und PDF nie auseinanderlaufen koennen).
-# ---------------------------------------------------------------------------
-
-def _resolve_text(parts: List[Dict], item: Optional[Dict]) -> str:
-    out = []
-    for p in parts:
-        source = p.get("source")
-        if source == "field":
-            out.append(str((item or {}).get(p.get("field_key") or "", "") or ""))
-        elif source == "counter":
-            index = int((item or {}).get("__label_index__") or 0)
-            start = int(p.get("start") if p.get("start") is not None else 1)
-            step = int(p.get("step") if p.get("step") is not None else 1)
-            digits = int(p.get("digits") or 0)
-            value = start + index * step
-            out.append(str(value).zfill(digits) if digits > 0 else str(value))
-        else:
-            out.append(str(p.get("text") or ""))
-    return "".join(out)
-
-
-def _draw_text_in_box(page, text: str, x_mm: float, y_mm: float, w_mm: float, h_mm: float,
-                       fontsize: float, fontname: str, align: str) -> None:
-    """Schreibt `text` vertikal zentriert / horizontal ausgerichtet in die Box
-    (x_mm,y_mm,w_mm,h_mm) - gemeinsame Text-Platzierung fuer normale
-    Text-Elemente UND Tabellenzellen (siehe make_draw_cell)."""
-    if not text:
-        return
-    text = fit_text(text, fontsize, w_mm, fontname=fontname)
-    tw_mm = fitz.get_text_length(text, fontname=fontname, fontsize=fontsize) / MM
-    if align == "center":
-        tx = x_mm + max(0.0, (w_mm - tw_mm) / 2)
-    elif align == "right":
-        tx = x_mm + max(0.0, w_mm - tw_mm)
-    else:
-        tx = x_mm
-    ty = y_mm + h_mm / 2 + fontsize * 0.35 / MM
-    try:
-        page.insert_text(
-            fitz.Point(tx * MM, ty * MM), text,
-            fontsize=fontsize, fontname=fontname, color=(0, 0, 0))
-    except Exception:
-        pass
-
-
-def _draw_table(page, el: Dict, ex: float, ey: float, ew: float, eh: float, item: Dict) -> None:
-    """Gleichmaessiges Raster (rows x cols, jede Zelle ew/cols x eh/rows breit/hoch)
-    - keine individuellen Spalten-/Zeilenbreiten. Gitterlinien optional
-    (el['show_borders']), Zellinhalt wie ein normales Text-Element ueber
-    'parts' (static/field/counter), ausgewertet mit _resolve_text()."""
-    rows = max(1, int(el.get("rows") or 1))
-    cols = max(1, int(el.get("cols") or 1))
-    row_h = eh / rows
-    col_w = ew / cols
-    fontsize = float(el.get("font_size") or 9.0)
-    fontname = "hebo" if el.get("bold") else "helv"
-    align = el.get("align") or "left"
-
-    if el.get("show_borders", True):
-        try:
-            shape = page.new_shape()
-            for r in range(rows + 1):
-                y = (ey + r * row_h) * MM
-                shape.draw_line(fitz.Point(ex * MM, y), fitz.Point((ex + ew) * MM, y))
-            for c in range(cols + 1):
-                x = (ex + c * col_w) * MM
-                shape.draw_line(fitz.Point(x, ey * MM), fitz.Point(x, (ey + eh) * MM))
-            shape.finish(color=(0, 0, 0), width=0.5)
-            shape.commit()
-        except Exception:
-            pass
-
-    cells = el.get("cells") or []
-    for r in range(rows):
-        row_cells = cells[r] if r < len(cells) else []
-        for c in range(cols):
-            cell = row_cells[c] if c < len(row_cells) else {}
-            text = _resolve_text(cell.get("parts") or [], item)
-            _draw_text_in_box(
-                page, text, ex + c * col_w, ey + r * row_h, col_w, row_h,
-                fontsize, fontname, align)
-
-
-def make_draw_cell(elements: List[Dict]) -> Callable:
-    logo_path = resource_path(LOGO_ASSET)
-    logo_available = os.path.isfile(logo_path)
-
-    def draw_cell(page, x0_mm: float, y0_mm: float, w_mm: float, h_mm: float, item: Dict) -> None:
-        for el in elements:
-            ex = x0_mm + float(el.get("x_mm") or 0.0)
-            ey = y0_mm + float(el.get("y_mm") or 0.0)
-            ew = float(el.get("w_mm") or 10.0)
-            eh = float(el.get("h_mm") or 6.0)
-            el_type = el.get("type")
-
-            if el_type == "logo":
-                if not logo_available:
-                    continue
-                rect = fitz.Rect(ex * MM, ey * MM, (ex + ew) * MM, (ey + eh) * MM)
-                try:
-                    page.insert_image(rect, filename=logo_path, keep_proportion=True)
-                except Exception:
-                    pass
-                continue
-
-            if el_type == "table":
-                _draw_table(page, el, ex, ey, ew, eh, item)
-                continue
-
-            parts = el.get("parts")
-            if parts is None:
-                el = _normalize_element(el)
-                parts = el.get("parts") or []
-            text = _resolve_text(parts, item)
-            fontsize = float(el.get("font_size") or 9.0)
-            fontname = "hebo" if el.get("bold") else "helv"
-            align = el.get("align") or "left"
-            _draw_text_in_box(page, text, ex, ey, ew, eh, fontsize, fontname, align)
-
-    return draw_cell
+from ui import label_designer as _ld  # noqa: E402
+from ui.label_designer import (  # noqa: E402,F401 - Qt-free since 2026-11-13 (web version)
+    _db_list_designs, _db_load_design, _db_save_design, _draw_table, _draw_text_in_box, _ensure_design_table,
+    _normalize_element, _resolve_text, make_draw_cell,
+)
 
 
 def _card(title: str):
@@ -414,23 +219,7 @@ class LabelElementItem(QGraphicsRectItem):
             self.handle.setVisible(False)
 
     def _caption_text(self) -> str:
-        el_type = self.element.get("type")
-        if el_type == "logo":
-            return "Logo"
-        if el_type == "table":
-            return f"Table {int(self.element.get('rows') or 1)}×{int(self.element.get('cols') or 1)}"
-        parts = self.element.get("parts") or []
-        bits = []
-        for p in parts:
-            source = p.get("source")
-            if source == "field":
-                bits.append(f"{{{p.get('field_key')}}}")
-            elif source == "counter":
-                bits.append(f"{{#{p.get('start', 1)}}}")
-            else:
-                bits.append(p.get("text") or "")
-        preview = "".join(bits)
-        return preview[:24] or "Text"
+        return _ld.caption_text(self.element)
 
     def refresh_caption(self) -> None:
         self.caption.setText(self._caption_text())
@@ -794,23 +583,8 @@ class LabelGeneratorScreen(QWidget):
                 for _ in range(rows)]
 
     def _add_element(self, data: Optional[Dict] = None) -> LabelElementItem:
-        data = _normalize_element(dict(data or {}))
         n = sum(1 for it in self.scene.items() if isinstance(it, LabelElementItem))
-        el_type = data.get("type")
-        is_logo = el_type == "logo"
-        is_table = el_type == "table"
-        data.setdefault("x_mm", 2.0 + (n % 5) * 3.0)
-        data.setdefault("y_mm", 2.0 + (n % 5) * 3.0)
-        if is_table:
-            data.setdefault("w_mm", 40.0)
-            data.setdefault("h_mm", 20.0)
-            data.setdefault("rows", 2)
-            data.setdefault("cols", 2)
-            data.setdefault("show_borders", True)
-            data.setdefault("cells", self._blank_table_cells(int(data["rows"]), int(data["cols"])))
-        else:
-            data.setdefault("w_mm", 15.0 if is_logo else 30.0)
-            data.setdefault("h_mm", 10.0 if is_logo else 8.0)
+        data = _ld.new_element((data or {}).get("type") or "text", n, data)    # ui/label_designer.py
         item = LabelElementItem(
             data, on_change=self._on_element_changed, on_move=self._on_element_moved)
         self.scene.addItem(item)
@@ -959,21 +733,7 @@ class LabelGeneratorScreen(QWidget):
         """Passt die cells-Matrix an item.element['rows']/['cols'] an -
         bestehender Zellinhalt bleibt erhalten, neue Zellen sind leer,
         ueberzaehlige werden verworfen."""
-        el = item.element
-        rows = max(1, int(el.get("rows") or 1))
-        cols = max(1, int(el.get("cols") or 1))
-        old_cells = el.get("cells") or []
-        new_cells = []
-        for r in range(rows):
-            old_row = old_cells[r] if r < len(old_cells) else []
-            new_row = []
-            for c in range(cols):
-                cell = old_row[c] if c < len(old_row) else None
-                if not cell or not cell.get("parts"):
-                    cell = {"parts": [{"source": "static", "text": ""}]}
-                new_row.append(cell)
-            new_cells.append(new_row)
-        el["rows"], el["cols"], el["cells"] = rows, cols, new_cells
+        _ld.resize_table_cells(item.element)
 
     def _on_table_dim_changed(self, item: LabelElementItem, key: str, value: int) -> None:
         item.element[key] = int(value)
@@ -1285,19 +1045,15 @@ class LabelGeneratorScreen(QWidget):
     def _on_search_series(self) -> None:
         series_id = self.spn_series_id.value()
         try:
-            header = series_header(series_id)
-            trial_numbers = list_trials_for_series(series_id) if header else []
-            self._trial_ids_by_nr = trial_ids_by_number(series_id) if header else {}
-            self._machine_id = machine_id_for_series(series_id) if header else None
+            ctx = _ld.series_context(series_id)          # ui/label_designer.py
         except Exception as e:
             show_error(self, "Search", f"Trial series {series_id} could not be searched.", e)
             return
-
-        # Feld-Dropdown (Static/Field/Counter-Auswahl je Text-Teil) an die
-        # Maschine dieser Series anpassen - zeigt danach genau die Felder,
-        # die auch der "Machine Data"-Tab fuer diese Maschine hat.
-        self._dynamic_field_registry = dict(FIELD_REGISTRY)
-        self._dynamic_field_registry.update(machine_field_registry(self._machine_id))
+        self._ctx = ctx
+        header, trial_numbers = ctx["header"], ctx["trials"]
+        self._trial_ids_by_nr = ctx["trial_ids"]
+        self._machine_id = ctx["machine_id"]
+        self._dynamic_field_registry = ctx["fields"]
         self._rebuild_properties_panel()
 
         self._series_context = header
@@ -1327,12 +1083,7 @@ class LabelGeneratorScreen(QWidget):
     def _on_trial_picked(self, index: int) -> None:
         if not self._series_context or index < 0 or index >= len(self._trial_numbers):
             return
-        trial_nr = self._trial_numbers[index]
-        values = build_fields(
-            self._series_context["experiment_id"], self._series_context["series_name"], trial_nr)
-        trial_id = self._trial_ids_by_nr.get(trial_nr)
-        if trial_id is not None:
-            values.update(build_machine_fields(trial_id, self._machine_id))
+        values = _ld.trial_values(self._ctx, self._trial_numbers[index])
         self._loaded_values = values
         self.lbl_loaded_summary.setText(
             "Loaded: " + ", ".join(
@@ -1396,12 +1147,7 @@ class LabelGeneratorScreen(QWidget):
         self._schedule_preview_refresh()
 
     def _preview_item(self) -> Dict[str, str]:
-        if self._loaded_values:
-            item = dict(self._loaded_values)
-        else:
-            item = {k: f"<{v}>" for k, v in self._dynamic_field_registry.items()}
-        item.setdefault("__label_index__", 0)
-        return item
+        return _ld.preview_item(self._loaded_values, self._dynamic_field_registry)
 
     def _schedule_preview_refresh(self) -> None:
         self._preview_timer.start()
@@ -1411,14 +1157,7 @@ class LabelGeneratorScreen(QWidget):
         w_mm = float(self._sheet_template.get("LabelWidthMm") or 60.0)
         h_mm = float(self._sheet_template.get("LabelHeightMm") or 30.0)
         try:
-            doc = fitz.open()
-            page = doc.new_page(width=w_mm * MM, height=h_mm * MM)
-            draw_cell = make_draw_cell(elements)
-            draw_cell(page, 0.0, 0.0, w_mm, h_mm, self._preview_item())
-            zoom = (PX_PER_MM * 25.4) / 72.0
-            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), colorspace=fitz.csRGB, alpha=False)
-            img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888).copy()
-            doc.close()
+            img = QImage.fromData(_ld.preview_png(elements, w_mm, h_mm, self._preview_item(), PX_PER_MM), "PNG")
         except Exception as e:
             print(f"[LabelGenerator] Preview render error: {e}")
             return
@@ -1483,49 +1222,19 @@ class LabelGeneratorScreen(QWidget):
 
     def _on_generate(self) -> None:
         elements = self._collect_elements()
-        if not elements:
-            QMessageBox.information(self, "Generate PDF", "Add at least one element first.")
-            return
-
         is_range = self.cb_gen_mode.currentIndex() == 1
-        if is_range:
-            if not self._series_context or not self._trial_numbers:
-                QMessageBox.information(
-                    self, "Generate PDF", "Search a Trial Series first (see 'Load data' above).")
-                return
-            f, t = self.spn_from.value(), self.spn_to.value()
-            if t < f:
-                f, t = t, f
-            selected_nrs = [n for n in self._trial_numbers if f <= n <= t]
-            if not selected_nrs:
-                QMessageBox.information(self, "Generate PDF", "No trials in that range.")
-                return
-            items = []
-            for i, nr in enumerate(selected_nrs):
-                it = build_fields(self._series_context["experiment_id"],
-                                   self._series_context["series_name"], nr)
-                trial_id = self._trial_ids_by_nr.get(nr)
-                if trial_id is not None:
-                    it.update(build_machine_fields(trial_id, self._machine_id))
-                it["__label_index__"] = i
-                items.append(it)
-        else:
-            uses_fields = any(
-                p.get("source") == "field"
-                for el in elements if el.get("type") == "text"
-                for p in (el.get("parts") or []))
-            if uses_fields and not self._loaded_values:
-                QMessageBox.information(
-                    self, "Generate PDF",
-                    "This design uses a trial data field - pick a trial first "
-                    "(see 'Load data' above), or remove that field if you only "
-                    "need static text / a running number.")
-                return
-            items = []
-            for i in range(self.spn_quantity.value()):
-                it = dict(self._loaded_values or {})
-                it["__label_index__"] = i
-                items.append(it)
+        items, err = _ld.build_items(elements, "range" if is_range else "copies", self.spn_quantity.value(),
+                                     getattr(self, "_ctx", None), self._loaded_values,
+                                     self.spn_from.value(), self.spn_to.value())       # ui/label_designer.py
+        if err:
+            QMessageBox.information(self, "Generate PDF", {
+                "no_elements": "Add at least one element first.",
+                "no_series": "Search a Trial Series first (see 'Load data' above).",
+                "empty_range": "No trials in that range.",
+                "need_trial": "This design uses a trial data field - pick a trial first "
+                              "(see 'Load data' above), or remove that field if you only "
+                              "need static text / a running number."}[err])
+            return
 
         dlg = PrintLabelsDialog(TEMPLATE_NAME, self._sheet_template, len(items), parent=self)
         if dlg.exec() != QDialog.Accepted:
