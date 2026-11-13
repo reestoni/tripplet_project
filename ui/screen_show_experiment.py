@@ -53,6 +53,7 @@ import ui.advisor_tab as _advisor_mod
 import ui.machine_tab as _machine_tab_mod
 import ui.widgets.yarn_locations as _yarn_locations
 import ui.cell_notes_ui as _cell_notes_ui
+import db.series_tables as _series_tables
 from ui.advisor_worker import AdvisorWorker, load_api_key
 from ui.screen_create_experiment_request import (
     EXCLUDE_FIELDS as ER_EXCLUDE_FIELDS,
@@ -1160,27 +1161,8 @@ def _col_not_copied(col: str) -> bool:
     return cl in _TENSION_COLS_NOT_COPIED or bool(_COMMENT_COL_RE.match(cl))
 
 
-@dataclass
-class CellBinding:
-    """Verbindet eine Pivot-Tabellen-Zelle mit einem konkreten DB-Datensatz.
-
-    Enthält: Tabelle, Spalte, Primärschlüssel – genug um einen einzelnen UPDATE auszuführen.
-    """
-    table: str
-    id_field: str
-    id_value: Any
-    field: str
-
-
-@dataclass
-class GroupCellBinding:
-    """Wie CellBinding, aber für YarnUse-Gruppen: schreibt denselben Wert
-    in mehrere tblTrialSettings-Zeilen gleichzeitig.
-    """
-    table: str
-    id_field: str
-    id_values: List[int]  # alle Settings-IDs der Gruppe
-    field: str
+# CellBinding / GroupCellBinding: db/series_tables.py (shared with the web app), re-exported here
+from db.series_tables import CellBinding, GroupCellBinding  # noqa: E402,F401
 
 
 _ALERT_ICONS: Dict[Tuple[str, bool], Any] = {}
@@ -1709,23 +1691,8 @@ class PivotEditModel(QAbstractTableModel):
             # Tenacity CV highlight: Wert >= 10 -> rot + fett + heller Rohhintergrund (analog Elongation CV)
             _is_ten_cv_alert = False
             if c > 0 and 0 <= dr < len(self._row_titles):
-                _title = self._row_titles[dr]
-                if "Elongation CV" in _title:
-                    _raw = self._matrix[dr][c - 1]
-                    try:
-                        _fval = float(str(_raw).replace(",", ".")) if _raw not in (None, "") else None
-                        if _fval is not None and _fval >= 10.0:
-                            _is_elong_cv_alert = True
-                    except Exception:
-                        pass
-                if "Tenacity CV" in _title:
-                    _raw = self._matrix[dr][c - 1]
-                    try:
-                        _fval = float(str(_raw).replace(",", ".")) if _raw not in (None, "") else None
-                        if _fval is not None and _fval >= 10.0:
-                            _is_ten_cv_alert = True
-                    except Exception:
-                        pass
+                # rule shared with the web app (db/series_tables.cv_limit_alert)
+                _is_elong_cv_alert = _series_tables.cv_limit_alert(self._row_titles[dr], self._matrix[dr][c - 1])
 
             # cell-level alert (Titer out-of-tolerance, Tenacity orange, etc.)
             _cell_alert = self._cell_alerts.get((dr, c - 1)) if c > 0 else None
@@ -4756,47 +4723,37 @@ class ShowExperimentScreen(QWidget):
     # ---------- Daten laden ----------
 
     def _load_trials(self):
-        # Reference samples (customer originals, see db/trial_reference.py)
-        # come first, so the benchmark is always the leftmost column(s).
-        if has_reference_columns():
-            rows = fetch_all(
-                f"""
-                SELECT ID, Versuchsnummer, {IS_REFERENCE_COL}, {REFERENCE_NAME_COL}
-                FROM tblTrial
-                WHERE TrialSeriesID = ?
-                ORDER BY COALESCE({IS_REFERENCE_COL}, 0) DESC,
-                         CASE WHEN COALESCE({IS_REFERENCE_COL}, 0) = 1 THEN ABS(Versuchsnummer)
-                              ELSE Versuchsnummer END
-                """,
-                [self._series_pk],
-            )
-        else:
-            rows = fetch_all(
-                """
-                SELECT ID, Versuchsnummer
-                FROM tblTrial
-                WHERE TrialSeriesID = ?
-                ORDER BY Versuchsnummer
-                """,
-                [self._series_pk],
-            )
-        self._trials = rows
-        self._trial_ids = [r["ID"] for r in rows]
-        self._trial_vnos = [r["Versuchsnummer"] for r in rows]
-        self._reference_names = {
-            int(r["ID"]): str(r.get(REFERENCE_NAME_COL) or "")
-            for r in rows if is_reference_value(r.get(IS_REFERENCE_COL))
-        }
-        self._trial_labels = [
-            reference_label(r["Versuchsnummer"]) if int(r["ID"]) in self._reference_names
-            else f"V{r['Versuchsnummer']}"
-            for r in rows
-        ]
+        # data: db/series_tables.load_trials (shared with the web app) - reference
+        # samples first, so the benchmark is always the leftmost column(s).
+        st = _series_tables.load_trials(self._series_pk)
+        self._series_trials = st
+        self._trials = st.trials
+        self._trial_ids = st.trial_ids
+        self._trial_vnos = st.trial_vnos
+        self._reference_names = st.reference_names
+        self._trial_labels = st.labels
         if getattr(self, "btn_ref_compare", None) is not None:
             self.btn_ref_compare.setVisible(bool(self._trial_ids))
         # Invalidate the per-load cache in _get_jet_info_rows() - new trial
         # list means its cached result (if any) is stale.
         self._jet_info_rows_cache = None
+
+    def _series_trials_data(self):
+        """The current trial columns as db/series_tables.SeriesTrials (the lists
+        may have been changed in place, e.g. after copying a trial)."""
+        return _series_tables.SeriesTrials(
+            series_id=self._series_pk, trials=self._trials, trial_ids=self._trial_ids,
+            trial_vnos=getattr(self, "_trial_vnos", []), reference_names=getattr(self, "_reference_names", {}),
+            labels=self._trial_labels)
+
+    def _model_from_pivot(self, p):
+        """db/series_tables.LabPivot -> editable PivotEditModel (same cells as the old per-tab code)."""
+        model = PivotEditModel(row_titles=p.row_titles, col_titles=self._trial_labels,
+                               row_validators=p.validators)
+        for r_idx, row in enumerate(p.cells):
+            for c_idx, (value, binding) in enumerate(row):
+                model.set_cell(r_idx, c_idx, value, binding)
+        return model
 
     def _init_machine_cache(self):
         """Lädt alle statischen DB-Daten für _build_machine_tab einmalig in den Cache."""
@@ -6787,46 +6744,14 @@ class ShowExperimentScreen(QWidget):
             )
 
     def _get_jet_info_rows(self) -> list:
-        """3 Zeilen (label, [wert_pro_trial]) für Jet / Jet Plate / Air Pressure.
-        Lädt direkt aus DB – unabhängig vom Machine Tab.
-
-        Cached per load_record() call (invalidated in _load_trials()) - up to
-        13 different lab tab builders (Titer, Statimat, EKB, shrinkage tabs,
-        Waterbath, ITEMAT, DTYoMat, ATYoMat, Rapid600, ...) each call this for
-        the exact same trial list during a single experiment open, previously
-        re-querying the DB every single time (profiled: ~0.23s / ~21% of a
-        255-trial open's total time was this alone, before caching).
-        """
+        """3 Zeilen (label, [wert_pro_trial]) für Jet / Jet Plate / Air Pressure
+        (db/series_tables.jet_info_rows). Cached per load_record() call
+        (invalidated in _load_trials()) - up to 13 lab tab builders call this
+        for the same trial list (profiled: ~21% of a 255-trial open before caching)."""
         cached = getattr(self, "_jet_info_rows_cache", None)
         if cached is not None:
             return cached
-        trial_ids = getattr(self, "_trial_ids", []) or []
-        if not trial_ids:
-            result = [("Jet", []), ("Jet Plate", []), ("Air Pressure", [])]
-            self._jet_info_rows_cache = result
-            return result
-        try:
-            placeholders = ",".join(["?"] * len(trial_ids))
-            # Jet name via JOIN auf tblDTYJets
-            jet_rows = fetch_all(
-                f"SELECT T.ID, T.Versuchsnummer, J.Jet AS JetName, "
-                f"T.JetPlate, T.AirPressure "
-                f"FROM tblTrial AS T "
-                f"LEFT JOIN tblDTYJets AS J ON J.ID = T.JetID "
-                f"WHERE T.ID IN ({placeholders}) "
-                f"ORDER BY T.Versuchsnummer",
-                trial_ids,
-            )
-            by_id = {int(r["ID"]): r for r in jet_rows}
-            # Preserve order of self._trial_ids
-            ordered = [by_id.get(int(tid), {}) for tid in trial_ids]
-            jets = [str(r.get("JetName") or "") for r in ordered]
-            plates = [str(r.get("JetPlate") or "") for r in ordered]
-            airs = [str(r.get("AirPressure") or "") for r in ordered]
-            result = [("Jet", jets), ("Jet Plate", plates), ("Air Pressure", airs)]
-        except Exception:
-            n = len(trial_ids)
-            result = [("Jet", [""] * n), ("Jet Plate", [""] * n), ("Air Pressure", [""] * n)]
+        result = _series_tables.jet_info_rows(getattr(self, "_trial_ids", []) or [])
         self._jet_info_rows_cache = result
         return result
 
@@ -6873,58 +6798,15 @@ class ShowExperimentScreen(QWidget):
         self.lbl_titer_retest_banner = None
 
     def _build_titer_tab(self):
-        # Tabelle kann je nach Schema unterschiedlich heissen
-        titer_table = None
-        for _cand in ("tbltiter", "tblLaborTiter"):
-            if table_exists(_cand):
-                titer_table = _cand
-                break
-
-        if not titer_table or not self._trial_ids:
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_titer(self._series_trials_data())
+        if p is None:
             self._remove_titer_tab_if_exists()
             return
-
-        titer_cols = get_columns_map(titer_table)
-        col_titer = resolve_field(["Titer", "Titer (dtex)", "Titer(dtex)"], titer_cols)
-        if not col_titer:
-            self._remove_titer_tab_if_exists()
-            return
-
-        rows = fetch_all(
-            f"""
-            SELECT LT.ID, LT.TrialID, LT.[{col_titer}] AS Titer
-            FROM {titer_table} AS LT
-            WHERE LT.TrialID IN ({",".join(["?"] * len(self._trial_ids))})
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_titer_tab_if_exists()
-            return
-
         self._ensure_titer_tab()
 
         def _populate():
-            self.model_titer = PivotEditModel(
-                row_titles=["Titer (dtex)"],
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"],  # nur Zahlen (mit Komma/Punkt)
-            )
-            by_trial = defaultdict(dict)
-            for r in rows:
-                by_trial[int(r["TrialID"])] = r
-
-            for c_idx, trial in enumerate(self._trials):
-                rec = by_trial.get(trial["ID"])
-                if rec:
-                    binding = CellBinding(
-                        titer_table, "ID", rec["ID"], col_titer)
-                    self.model_titer.set_cell(
-                        0, c_idx, rec.get("Titer"), binding)
-                else:
-                    self.model_titer.set_cell(0, c_idx, None, None)
-
+            self.model_titer = self._model_from_pivot(p)
             self.tbl_titer.setModel(self.model_titer)
             self.model_titer.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_titer")
@@ -6932,63 +6814,12 @@ class ShowExperimentScreen(QWidget):
             self._apply_lab_retest_flags(
                 self.model_titer, self.tab_titer, "Titer", self.lbl_titer_retest_banner)
 
-            # ── Soll-Titer aus Trial 1 berechnen (einmalig für die ganze Series) ──
-            self._titer_out_of_tolerance: set = set()  # c_idx der auffälligen Trials
-            try:
-                # First real trial - a reference sample (listed first) is
-                # the customer's yarn and says nothing about our target titer.
-                first_trial_id = next(
-                    (t["ID"] for t in self._trials if int(t["ID"]) not in self._reference_names),
-                    None,
-                )
-                if first_trial_id is not None:
-                    yarn_rows = fetch_all(
-                        "SELECT YarnID FROM tbltrialsettings WHERE TrialID = ?",
-                        [first_trial_id],
-                    )
-                    yarn_ids = [r["YarnID"] for r in yarn_rows if r.get("YarnID") is not None]
-                    soll_titer = None
-                    if yarn_ids:
-                        # Lookup: eindeutige YarnIDs -> Endtiter
-                        unique_ids = list(set(yarn_ids))
-                        placeholders = ",".join(["?"] * len(unique_ids))
-                        titer_rows = fetch_all(
-                            f"SELECT ID, Endtiter FROM tblyarn WHERE ID IN ({placeholders})",
-                            unique_ids,
-                        )
-                        endtiter_by_id = {}
-                        for tr in titer_rows:
-                            try:
-                                endtiter_by_id[int(tr["ID"])] = float(tr["Endtiter"] or 0)
-                            except Exception:
-                                pass
-                        # Summiere pro Vorkommen in yarn_ids (Duplikate = mehrere Plies desselben Garns)
-                        total = 0.0
-                        for yid in yarn_ids:
-                            total += endtiter_by_id.get(int(yid), 0.0)
-                        soll_titer = total if total > 0 else None
-
-                    if soll_titer:
-                        lo = soll_titer * 0.95
-                        hi = soll_titer * 1.05
-                        for c_idx, trial in enumerate(self._trials):
-                            rec = by_trial.get(trial["ID"])
-                            if not rec:
-                                continue
-                            raw = rec.get("Titer")
-                            if raw in (None, ""):
-                                continue
-                            try:
-                                val = float(str(raw).replace(",", "."))
-                            except Exception:
-                                continue
-                            if val < lo or val > hi:
-                                self._titer_out_of_tolerance.add(c_idx)
-                                self.model_titer.set_cell_alert(len(self._get_jet_info_rows()), c_idx, "red")
-                        # Statimat DS Tenacity orange markieren (falls Modell schon existiert)
-                        self._apply_titer_alert_to_stat_ds()
-            except Exception:
-                pass
+            # ── Soll-Titer: Abweichung > 5 % rot, Tenacity in Statimat DS orange ──
+            self._titer_out_of_tolerance = set(p.extra.get("out_of_tolerance", set()))
+            for (r, c), style in p.alerts.items():
+                self.model_titer.set_cell_alert(len(self._get_jet_info_rows()) + r, c, style)
+            if p.extra.get("has_target"):
+                self._apply_titer_alert_to_stat_ds()
 
         self._defer_or_populate("titer", self.tab_titer, _populate)
 
@@ -7525,81 +7356,15 @@ class ShowExperimentScreen(QWidget):
         self.lbl_stat_retest_banner = None
 
     def _build_statimat_tab(self):
-        # Tabelle kann je nach Schema unterschiedlich heissen
-        stat_table = None
-        for _cand in ("tbllaborstatimatm", "tblLaborStatimat", "tbllaborstatimat"):
-            if table_exists(_cand):
-                stat_table = _cand
-                break
-
-        if not stat_table or not self._trial_ids:
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_stat(self._series_trials_data())
+        if p is None:
             self._remove_stat_tab_if_exists()
             return
-
-        stat_cols = get_columns_map(stat_table)
-        col_elong = resolve_field(
-            ["Elongation (%)", "Elongation%", "Elongation"], stat_cols)
-        col_elong_cv = resolve_field(
-            ["Elongation CV (%)", "ElongationCV%", "ElongationCV"], stat_cols)
-        col_ten = resolve_field(
-            ["Tenacity (cN/dtex)", "Tenacity", "Tenacity(cN/dtex)"], stat_cols)
-        col_ten_cv = resolve_field(
-            ["Tenacity CV (%)", "TenacityCV%", "TenacityCV"], stat_cols)
-
-        if not all([col_elong, col_elong_cv, col_ten, col_ten_cv]):
-            self._remove_stat_tab_if_exists()
-            return
-
-        rows = fetch_all(
-            f"""
-            SELECT ID, TrialID,
-                   [{col_elong}] AS Elong,
-                   [{col_elong_cv}] AS ElongCV,
-                   [{col_ten}] AS Ten,
-                   [{col_ten_cv}] AS TenCV
-            FROM {stat_table}
-            WHERE TrialID IN ({",".join(["?"] * len(self._trial_ids))})
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_stat_tab_if_exists()
-            return
-
         self._ensure_stat_tab()
 
         def _populate():
-            row_titles = [
-                "Elongation (%)",
-                "Elongation CV (%)",
-                "Tenacity (cN/dtex)",
-                "Tenacity CV (%)",
-            ]
-            self.model_stat = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-            )
-
-            by_trial = {r["TrialID"]: r for r in rows}
-            for c_idx, trial in enumerate(self._trials):
-                rec = by_trial.get(trial["ID"])
-                if rec:
-                    self.model_stat.set_cell(0, c_idx, rec.get("Elong"),
-                                             CellBinding(stat_table, "ID", rec["ID"], col_elong))
-                    self.model_stat.set_cell(1, c_idx, rec.get("ElongCV"),
-                                             CellBinding(stat_table, "ID", rec["ID"], col_elong_cv))
-                    self.model_stat.set_cell(2, c_idx, rec.get("Ten"),
-                                             CellBinding(stat_table, "ID", rec["ID"], col_ten))
-                    self.model_stat.set_cell(3, c_idx, rec.get("TenCV"),
-                                             CellBinding(stat_table, "ID", rec["ID"], col_ten_cv))
-                else:
-                    self.model_stat.set_cell(0, c_idx, None, None)
-                    self.model_stat.set_cell(1, c_idx, None, None)
-                    self.model_stat.set_cell(2, c_idx, None, None)
-                    self.model_stat.set_cell(3, c_idx, None, None)
-
+            self.model_stat = self._model_from_pivot(p)
             self.tbl_stat.setModel(self.model_stat)
             self.model_stat.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_stat")
@@ -7656,81 +7421,15 @@ class ShowExperimentScreen(QWidget):
         self.lbl_stat_ds_retest_banner = None
 
     def _build_statimat_ds_tab(self):
-        # Tabelle kann je nach Schema unterschiedlich heissen
-        stat_ds_table = None
-        for _cand in ("tbllaborstatimatds", "tblLaborStatimatDS"):
-            if table_exists(_cand):
-                stat_ds_table = _cand
-                break
-
-        if not stat_ds_table or not self._trial_ids:
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_stat_ds(self._series_trials_data())
+        if p is None:
             self._remove_stat_ds_tab_if_exists()
             return
-
-        stat_cols = get_columns_map(stat_ds_table)
-        col_elong = resolve_field(
-            ["Elongation (%)", "Elongation%", "Elongation"], stat_cols)
-        col_elong_cv = resolve_field(
-            ["Elongation CV (%)", "ElongationCV%", "ElongationCV"], stat_cols)
-        col_ten = resolve_field(
-            ["Tenacity (cN/dtex)", "Tenacity", "Tenacity(cN/dtex)"], stat_cols)
-        col_ten_cv = resolve_field(
-            ["Tenacity CV (%)", "TenacityCV%", "TenacityCV"], stat_cols)
-
-        if not all([col_elong, col_elong_cv, col_ten, col_ten_cv]):
-            self._remove_stat_ds_tab_if_exists()
-            return
-
-        rows = fetch_all(
-            f"""
-            SELECT ID, TrialID,
-                   [{col_elong}] AS Elong,
-                   [{col_elong_cv}] AS ElongCV,
-                   [{col_ten}] AS Ten,
-                   [{col_ten_cv}] AS TenCV
-            FROM {stat_ds_table}
-            WHERE TrialID IN ({",".join(["?"] * len(self._trial_ids))})
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_stat_ds_tab_if_exists()
-            return
-
         self._ensure_stat_ds_tab()
 
         def _populate():
-            row_titles = [
-                "Elongation (%)",
-                "Elongation CV (%)",
-                "Tenacity (cN/dtex)",
-                "Tenacity CV (%)",
-            ]
-            self.model_stat_ds = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-            )
-
-            by_trial = {r["TrialID"]: r for r in rows}
-            for c_idx, trial in enumerate(self._trials):
-                rec = by_trial.get(trial["ID"])
-                if rec:
-                    self.model_stat_ds.set_cell(0, c_idx, rec.get("Elong"),
-                                                CellBinding(stat_ds_table, "ID", rec["ID"], col_elong))
-                    self.model_stat_ds.set_cell(1, c_idx, rec.get("ElongCV"),
-                                                CellBinding(stat_ds_table, "ID", rec["ID"], col_elong_cv))
-                    self.model_stat_ds.set_cell(2, c_idx, rec.get("Ten"),
-                                                CellBinding(stat_ds_table, "ID", rec["ID"], col_ten))
-                    self.model_stat_ds.set_cell(3, c_idx, rec.get("TenCV"),
-                                                CellBinding(stat_ds_table, "ID", rec["ID"], col_ten_cv))
-                else:
-                    self.model_stat_ds.set_cell(0, c_idx, None, None)
-                    self.model_stat_ds.set_cell(1, c_idx, None, None)
-                    self.model_stat_ds.set_cell(2, c_idx, None, None)
-                    self.model_stat_ds.set_cell(3, c_idx, None, None)
-
+            self.model_stat_ds = self._model_from_pivot(p)
             self.tbl_stat_ds.setModel(self.model_stat_ds)
             self.model_stat_ds.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_stat_ds")
@@ -7790,104 +7489,15 @@ class ShowExperimentScreen(QWidget):
         self.lbl_ekb_retest_banner = None
 
     def _build_ekb_tab(self):
-        if not self._trial_ids or not table_exists("tblLaborEKB"):
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_ekb(self._series_trials_data())
+        if p is None:
             self._remove_ekb_tab_if_exists()
             return
-
-        cols_map = get_columns_map("tblLaborEKB")
-
-        col_e_x = resolve_field(
-            ["EinkräuselungX", "Einkräuselung X"], cols_map)
-        col_e_cv = resolve_field(
-            ["EinkräuselungCV", "Einkräuselung CV"], cols_map)
-        col_k_x = resolve_field(
-            ["KennkräuselungX", "Kennkräuselung X"], cols_map)
-        col_k_cv = resolve_field(
-            ["KennkräuselungCV", "Kennkräuselung CV"], cols_map)
-        col_b_x = resolve_field(
-            ["KräuselbeständigkeitX", "Kräuselbeständigkeit X"], cols_map)
-        col_b_cv = resolve_field(
-            ["KräuselbeständigkeitCV", "Kräuselbeständigkeit CV"], cols_map)
-
-        if not all([col_e_x, col_e_cv, col_k_x, col_k_cv, col_b_x, col_b_cv]):
-            self._remove_ekb_tab_if_exists()
-            return
-
-        placeholders = ",".join(["?"] * len(self._trial_ids))
-        rows = fetch_all(
-            f"""
-            SELECT
-                [ID]       AS RecID,
-                [TrialID],
-                [{col_e_x}] AS E_X,
-                [{col_e_cv}] AS E_CV,
-                [{col_k_x}] AS K_X,
-                [{col_k_cv}] AS K_CV,
-                [{col_b_x}] AS B_X,
-                [{col_b_cv}] AS B_CV
-            FROM tblLaborEKB
-            WHERE [TrialID] IN ({placeholders})
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_ekb_tab_if_exists()
-            return
-
-        by_trial = {int(r["TrialID"]): r for r in rows}
-
-        row_titles = [
-            "Einkräuselung X",
-            "Einkräuselung CV",
-            "Kennkräuselung X",
-            "Kennkräuselung CV",
-            "Kräuselbeständigkeit X",
-            "Kräuselbeständigkeit CV",
-        ]
-
         self._ensure_ekb_tab()
 
         def _populate():
-            self.model_ekb = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                rec = by_trial.get(tid)
-                if rec:
-                    rec_id = rec["RecID"]
-                    self.model_ekb.set_cell(
-                        0, c_idx, rec.get("E_X"),
-                        CellBinding("tblLaborEKB", "ID", rec_id, col_e_x),
-                    )
-                    self.model_ekb.set_cell(
-                        1, c_idx, rec.get("E_CV"),
-                        CellBinding("tblLaborEKB", "ID", rec_id, col_e_cv),
-                    )
-                    self.model_ekb.set_cell(
-                        2, c_idx, rec.get("K_X"),
-                        CellBinding("tblLaborEKB", "ID", rec_id, col_k_x),
-                    )
-                    self.model_ekb.set_cell(
-                        3, c_idx, rec.get("K_CV"),
-                        CellBinding("tblLaborEKB", "ID", rec_id, col_k_cv),
-                    )
-                    self.model_ekb.set_cell(
-                        4, c_idx, rec.get("B_X"),
-                        CellBinding("tblLaborEKB", "ID", rec_id, col_b_x),
-                    )
-                    self.model_ekb.set_cell(
-                        5, c_idx, rec.get("B_CV"),
-                        CellBinding("tblLaborEKB", "ID", rec_id, col_b_cv),
-                    )
-                else:
-                    for r_idx in range(len(row_titles)):
-                        self.model_ekb.set_cell(r_idx, c_idx, None, None)
-
+            self.model_ekb = self._model_from_pivot(p)
             if self.tbl_ekb is not None:
                 self.tbl_ekb.setModel(self.model_ekb)
                 self.model_ekb.insert_readonly_rows_at_top(self._get_jet_info_rows())
@@ -7946,76 +7556,22 @@ class ShowExperimentScreen(QWidget):
         self.lbl_hot_air_shrinkage_retest_banner = None
 
     def _build_hot_air_shrinkage_tab(self):
-        table_name = "tblLaborHeissLuftSchrumpf"
-        if not self._trial_ids or not table_exists(table_name):
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_hot_air_shrinkage(self._series_trials_data())
+        if p is None:
             self._remove_hot_air_shrinkage_tab_if_exists()
             return
-
-        cols_map = get_columns_map(table_name)
-        col_x = resolve_field(["ShrinkageX", "Shrinkage X"], cols_map)
-        col_cv = resolve_field(["ShrinkageCV", "Shrinkage CV"], cols_map)
-
-        if not all([col_x, col_cv]):
-            self._remove_hot_air_shrinkage_tab_if_exists()
-            return
-
-        placeholders = ",".join(["?"] * len(self._trial_ids))
-        rows = fetch_all(
-            f"""
-            SELECT
-                [ID]       AS RecID,
-                [TrialID],
-                [{col_x}] AS X,
-                [{col_cv}] AS CV
-            FROM {table_name}
-            WHERE [TrialID] IN ({placeholders})
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_hot_air_shrinkage_tab_if_exists()
-            return
-
-        by_trial = {int(r["TrialID"]): r for r in rows}
-
-        row_titles = ["Shrinkage X", "Shrinkage CV"]
-
         self._ensure_hot_air_shrinkage_tab()
 
         def _populate():
-            self.model_hot_air_shrinkage = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                rec = by_trial.get(tid)
-                if rec:
-                    rec_id = rec["RecID"]
-                    self.model_hot_air_shrinkage.set_cell(
-                        0, c_idx, rec.get("X"),
-                        CellBinding(table_name, "ID", rec_id, col_x),
-                    )
-                    self.model_hot_air_shrinkage.set_cell(
-                        1, c_idx, rec.get("CV"),
-                        CellBinding(table_name, "ID", rec_id, col_cv),
-                    )
-                else:
-                    for r_idx in range(len(row_titles)):
-                        self.model_hot_air_shrinkage.set_cell(
-                            r_idx, c_idx, None, None)
-
+            self.model_hot_air_shrinkage = self._model_from_pivot(p)
             if self.tbl_hot_air_shrinkage is not None:
                 self.tbl_hot_air_shrinkage.setModel(self.model_hot_air_shrinkage)
                 self.model_hot_air_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
                 self._register_save_model("model_hot_air_shrinkage")
                 self.tbl_hot_air_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
                 self._apply_lab_retest_flags(
-                    self.model_hot_air_shrinkage, self.tab_hot_air_shrinkage, "HotAirShrinkage",
-                    self.lbl_hot_air_shrinkage_retest_banner)
+                    self.model_hot_air_shrinkage, self.tab_hot_air_shrinkage, "HotAirShrinkage", self.lbl_hot_air_shrinkage_retest_banner)
 
         self._defer_or_populate("hot_air_shrinkage", self.tab_hot_air_shrinkage, _populate)
 
@@ -8071,77 +7627,22 @@ class ShowExperimentScreen(QWidget):
         self.lbl_hot_water_shrinkage_retest_banner = None
 
     def _build_hot_water_shrinkage_tab(self):
-        table_name = "tblLaborKochSchrumpf"
-        if not self._trial_ids or not table_exists(table_name):
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_hot_water_shrinkage(self._series_trials_data())
+        if p is None:
             self._remove_hot_water_shrinkage_tab_if_exists()
             return
-
-        cols_map = get_columns_map(table_name)
-        col_x = resolve_field(["ShrinkageX", "Shrinkage X"], cols_map)
-        col_cv = resolve_field(["ShrinkageCV", "Shrinkage CV"], cols_map)
-
-        if not all([col_x, col_cv]):
-            self._remove_hot_water_shrinkage_tab_if_exists()
-            return
-
-        placeholders = ",".join(["?"] * len(self._trial_ids))
-        rows = fetch_all(
-            f"""
-            SELECT
-                [ID]       AS RecID,
-                [TrialID],
-                [{col_x}] AS X,
-                [{col_cv}] AS CV
-            FROM {table_name}
-            WHERE [TrialID] IN ({placeholders})
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_hot_water_shrinkage_tab_if_exists()
-            return
-
-        by_trial = {int(r["TrialID"]): r for r in rows}
-
-        row_titles = ["Shrinkage X", "Shrinkage CV"]
-
         self._ensure_hot_water_shrinkage_tab()
 
         def _populate():
-            self.model_hot_water_shrinkage = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                rec = by_trial.get(tid)
-                if rec:
-                    rec_id = rec["RecID"]
-                    self.model_hot_water_shrinkage.set_cell(
-                        0, c_idx, rec.get("X"),
-                        CellBinding(table_name, "ID", rec_id, col_x),
-                    )
-                    self.model_hot_water_shrinkage.set_cell(
-                        1, c_idx, rec.get("CV"),
-                        CellBinding(table_name, "ID", rec_id, col_cv),
-                    )
-                else:
-                    for r_idx in range(len(row_titles)):
-                        self.model_hot_water_shrinkage.set_cell(
-                            r_idx, c_idx, None, None)
-
+            self.model_hot_water_shrinkage = self._model_from_pivot(p)
             if self.tbl_hot_water_shrinkage is not None:
-                self.tbl_hot_water_shrinkage.setModel(
-                    self.model_hot_water_shrinkage)
+                self.tbl_hot_water_shrinkage.setModel(self.model_hot_water_shrinkage)
                 self.model_hot_water_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
                 self._register_save_model("model_hot_water_shrinkage")
                 self.tbl_hot_water_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
                 self._apply_lab_retest_flags(
-                    self.model_hot_water_shrinkage, self.tab_hot_water_shrinkage, "HotWaterShrinkage",
-                    self.lbl_hot_water_shrinkage_retest_banner)
+                    self.model_hot_water_shrinkage, self.tab_hot_water_shrinkage, "HotWaterShrinkage", self.lbl_hot_water_shrinkage_retest_banner)
 
         self._defer_or_populate("hot_water_shrinkage", self.tab_hot_water_shrinkage, _populate)
 
@@ -8193,75 +7694,22 @@ class ShowExperimentScreen(QWidget):
         self.lbl_aty_shrinkage_retest_banner = None
 
     def _build_aty_shrinkage_tab(self):
-        table_name = "tblLaborATYShrinkage"
-        if not self._trial_ids or not table_exists(table_name):
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_aty_shrinkage(self._series_trials_data())
+        if p is None:
             self._remove_aty_shrinkage_tab_if_exists()
             return
-
-        cols_map = get_columns_map(table_name)
-        col_x = resolve_field(["ShrinkageX", "Shrinkage X"], cols_map)
-        col_cv = resolve_field(["ShrinkageCV", "Shrinkage CV"], cols_map)
-
-        if not all([col_x, col_cv]):
-            self._remove_aty_shrinkage_tab_if_exists()
-            return
-
-        placeholders = ",".join(["?"] * len(self._trial_ids))
-        rows = fetch_all(
-            f"""
-            SELECT
-                [ID]       AS RecID,
-                [TrialID],
-                [{col_x}] AS X,
-                [{col_cv}] AS CV
-            FROM {table_name}
-            WHERE [TrialID] IN ({placeholders})
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_aty_shrinkage_tab_if_exists()
-            return
-
-        by_trial = {int(r["TrialID"]): r for r in rows}
-
-        row_titles = ["Shrinkage X", "Shrinkage CV"]
-
         self._ensure_aty_shrinkage_tab()
 
         def _populate():
-            self.model_aty_shrinkage = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                rec = by_trial.get(tid)
-                if rec:
-                    rec_id = rec["RecID"]
-                    self.model_aty_shrinkage.set_cell(
-                        0, c_idx, rec.get("X"),
-                        CellBinding(table_name, "ID", rec_id, col_x),
-                    )
-                    self.model_aty_shrinkage.set_cell(
-                        1, c_idx, rec.get("CV"),
-                        CellBinding(table_name, "ID", rec_id, col_cv),
-                    )
-                else:
-                    for r_idx in range(len(row_titles)):
-                        self.model_aty_shrinkage.set_cell(r_idx, c_idx, None, None)
-
+            self.model_aty_shrinkage = self._model_from_pivot(p)
             if self.tbl_aty_shrinkage is not None:
                 self.tbl_aty_shrinkage.setModel(self.model_aty_shrinkage)
                 self.model_aty_shrinkage.insert_readonly_rows_at_top(self._get_jet_info_rows())
                 self._register_save_model("model_aty_shrinkage")
                 self.tbl_aty_shrinkage.resizeColumnsToContents(fixed_data_column_width=110)
                 self._apply_lab_retest_flags(
-                    self.model_aty_shrinkage, self.tab_aty_shrinkage, "ATYShrinkage",
-                    self.lbl_aty_shrinkage_retest_banner)
+                    self.model_aty_shrinkage, self.tab_aty_shrinkage, "ATYShrinkage", self.lbl_aty_shrinkage_retest_banner)
 
         self._defer_or_populate("aty_shrinkage", self.tab_aty_shrinkage, _populate)
 
@@ -8312,54 +7760,15 @@ class ShowExperimentScreen(QWidget):
         self.lbl_water_retest_banner = None
 
     def _build_waterbath_tab(self):
-        if not self._trial_ids:
-            self._remove_waterbath_tab_if_exists()
-            return
-        table_name = "tblLaborWaterbath"
-        id_col = "ID"
-        trial_col = "TrialID"
-        inter_col = "Intermingling Points (FP/m)"
-        placeholders = ",".join(["?"] * len(self._trial_ids))
-        rows = fetch_all(
-            f"""
-            SELECT [{id_col}] AS RecID,
-                   [{trial_col}] AS WBTrialID,
-                   [{inter_col}] AS WBValue
-            FROM {table_name}
-            WHERE [{trial_col}] IN ({placeholders})
-            ORDER BY [{trial_col}], [{id_col}]
-            """,
-            self._trial_ids,
-        )
-        if not rows:
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_water(self._series_trials_data())
+        if p is None:
             self._remove_waterbath_tab_if_exists()
             return
         self._ensure_waterbath_tab()
 
         def _populate():
-            row_titles = ["Intermingling 1", "Intermingling 2", "Intermingling 3"]
-            self.model_water = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),  # nur Zahlen
-            )
-            per_trial: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
-            for r in rows:
-                per_trial[int(r["WBTrialID"])].append(r)
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                vals = per_trial.get(tid, [])
-                for i in range(3):
-                    if i < len(vals):
-                        rec = vals[i]
-                        self.model_water.set_cell(
-                            i, c_idx,
-                            rec.get("WBValue"),
-                            CellBinding(table_name, id_col,
-                                        rec["RecID"], inter_col),
-                        )
-                    else:
-                        self.model_water.set_cell(i, c_idx, None, None)
+            self.model_water = self._model_from_pivot(p)
             self.tbl_water.setModel(self.model_water)
             self.model_water.insert_readonly_rows_at_top(self._get_jet_info_rows())
             self._register_save_model("model_water")
@@ -9509,88 +8918,15 @@ class ShowExperimentScreen(QWidget):
         self.lbl_rapid600_retest_banner = None
 
     def _build_rapid600_tab(self):
-        """
-        Baut das Rapid 600-Tab aus tblLaborRapid600 auf.
-        Erwartet pro Trial höchstens einen Datensatz. Falls mehrere vorhanden sind,
-        wird aktuell der erste Datensatz pro Trial verwendet.
-        """
-        if not self._trial_ids or not table_exists("tblLaborRapid600"):
+        # data: db/series_tables.py (shared with the web app)
+        p = _series_tables.build_rapid600(self._series_trials_data())
+        if p is None:
             self._remove_rapid600_tab_if_exists()
             return
-
-        rows = fetch_all(
-            f"""
-            SELECT
-                R.ID         AS RecID,
-                R.TrialID    AS TrialID,
-                R.SPD        AS SPD,
-                R.[SPD Avg]  AS SPD_Avg,
-                R.[SPD Dev]  AS SPD_Dev
-            FROM tblLaborRapid600 AS R
-            WHERE R.TrialID IN ({",".join(["?"] * len(self._trial_ids))})
-            ORDER BY R.TrialID, R.ID
-            """,
-            self._trial_ids,
-        )
-
-        if not rows:
-            self._remove_rapid600_tab_if_exists()
-            return
-
-        # Pro Trial den ersten Datensatz verwenden
-        by_trial: Dict[int, Dict[str, Any]] = {}
-        for r in rows:
-            tid = int(r["TrialID"])
-            if tid not in by_trial:
-                by_trial[tid] = r
-
-        row_titles: List[str] = [
-            "SPD",
-            "SPD Avg",
-            "SPD Dev",
-        ]
-
         self._ensure_rapid600_tab()
 
         def _populate():
-            self.model_rapid600 = PivotEditModel(
-                row_titles=row_titles,
-                col_titles=self._trial_labels,
-                row_validators=["onlyDoubles"] * len(row_titles),
-            )
-
-            for c_idx, trial in enumerate(self._trials):
-                tid = trial["ID"]
-                rec = by_trial.get(tid)
-                if not rec:
-                    for r_idx in range(len(row_titles)):
-                        self.model_rapid600.set_cell(r_idx, c_idx, None, None)
-                    continue
-
-                rec_id = rec["RecID"]
-
-                # 0: SPD
-                self.model_rapid600.set_cell(
-                    0,
-                    c_idx,
-                    rec.get("SPD"),
-                    CellBinding("tblLaborRapid600", "ID", rec_id, "SPD"),
-                )
-                # 1: SPD Avg
-                self.model_rapid600.set_cell(
-                    1,
-                    c_idx,
-                    rec.get("SPD_Avg"),
-                    CellBinding("tblLaborRapid600", "ID", rec_id, "SPD Avg"),
-                )
-                # 2: SPD Dev
-                self.model_rapid600.set_cell(
-                    2,
-                    c_idx,
-                    rec.get("SPD_Dev"),
-                    CellBinding("tblLaborRapid600", "ID", rec_id, "SPD Dev"),
-                )
-
+            self.model_rapid600 = self._model_from_pivot(p)
             if self.tbl_rapid600 is not None:
                 self.tbl_rapid600.setModel(self.model_rapid600)
                 self.model_rapid600.insert_readonly_rows_at_top(self._get_jet_info_rows())
