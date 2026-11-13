@@ -50,9 +50,11 @@ FEATURE_ITEMAT_IMPORT = 5
 
 
 def can_import(user: Any) -> bool:
-    """Show Experiment offers the import buttons to everybody who sees the
-    series (no extra rule in the desktop)."""
-    return True
+    """Write access (access level >= 2): Show Experiment disables the import
+    buttons for read-only users (_sync_save_button_access, "Write access
+    required"). Uploading attachments stays open to everybody."""
+    from db.series_actions import access_level
+    return access_level(user) >= 2
 
 
 def _user_id(user: Any) -> Any:
