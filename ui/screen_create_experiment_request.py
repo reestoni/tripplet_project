@@ -24,7 +24,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import os
-import uuid
 import re
 
 from PySide6.QtCore import Qt, QDate, QDateTime, QSize, QPoint, QEvent, QTimer
@@ -55,7 +54,7 @@ from PySide6.QtWidgets import (
 )
 
 import app_meta
-from db.connection import get_connection, new_global_id, current_db_name, is_dev_mode, is_offline_mode
+from db.connection import get_connection
 from db import experiment_request_changes as request_changes
 from ui.pathutil import resource_path
 from ui.widgets.footer import FooterBar
@@ -67,57 +66,19 @@ import shutil
 from ui.widgets.friendly_error import show_error
 
 
-# Felder, die im Formular nicht angezeigt werden sollen
-# (werden teils automatisch beim Speichern gesetzt)
-# ChangeOfRequestID/PriorVersionOfID sind reine Kopie-/Versions-Metadaten
-# (siehe db/experiment_request_changes.py), nie vom Nutzer editierbare Felder.
-# DenialReason wird ausschliesslich ueber den Status-Wechsel "Denied" in
-# screen_my_requests.py gesetzt (dort per eigenem Dialog abgefragt) - hier
-# nur lesend als Banner angezeigt, siehe load_request()/_lbl_denial_banner.
-EXCLUDE_FIELDS = {
-    "ID", "Timestamp", "CreatedBy", "RequestStatus", "ChangeOfRequestID",
-    "PriorVersionOfID", "DenialReason",
-}
-
-# Basisordner fuer Experiment-Request-Bilder
-# - PROD: Netzlaufwerk (gemeinsame Ablage)
-# - DEV:  lokaler Testordner
-REQUEST_IMAGES_BASE_DIR = (
-    r"C:\ttt\images\ExperimentRequestImages" if is_dev_mode() else r"H:\Technik\TrippleT\ExperimentRequestImages"
+# Form constants, schema/FK helpers, load/save and the image storage rules live
+# Qt-free in db/experiment_requests.py and db/experiment_request_images.py
+# (shared with the web app); re-exported here under their old names.
+from db import experiment_requests as er
+from db import experiment_request_images as er_images
+from db.experiment_requests import (  # noqa: F401  (re-exported)
+    EXCLUDE_FIELDS,
+    MULTILINE_FIELDS,
+    DATE_FIELDS,
+    REQUIRED_FIELDS,
+    ColumnInfo,
 )
-
-# Mehrzeilige Felder (3 Zeilen)
-MULTILINE_FIELDS = {
-    "Versuchsgrund",
-    "Aufgabe",
-    "Versuchsumfang",
-    "Beurteilungsparameter",
-    "Versuchsbedingungen",
-    "Versuchsort",
-    "Bemerkungen",
-}
-
-DATE_FIELDS = {"Wunschtermin"}
-
-# Pflichtfelder (Save nur aktiv, wenn diese gefüllt sind)
-# (Im DB-Schema kann der Feldname entweder "Versuchsgrund" oder "FVersuchsgrund" sein.)
-REQUIRED_FIELDS = [
-    "Titel",
-    "FVersuchsgrund",
-    "Versuchsgrund",
-    "Aufgabe",
-    "Beurteilungsparameter",
-    "Versuchsbedingungen",
-]
-
-
-@dataclass
-class ColumnInfo:
-    """Metadaten einer DB-Spalte (Name, Typ, Nullable, FK-Info) für das dynamische Formular."""
-    name: str
-    data_type: Optional[int] = None
-    type_name: Optional[str] = None
-
+from db.experiment_request_images import REQUEST_IMAGES_BASE_DIR  # noqa: F401  (re-exported)
 
 
 class ExperimentRequestImagesDialog(QDialog):
@@ -436,12 +397,9 @@ class ExperimentRequestImagesDialog(QDialog):
             return None
 
     def _can_delete(self, img: Dict[str, Any]) -> bool:
-        """Only the owner (CreatedBy) or a superuser (AccessLevel >= 4) may delete."""
-        if self._current_access_level() >= 4:
-            return True
-        owner_id = img.get("CreatedBy")
-        uid = self._current_user_id()
-        return owner_id not in (None, "") and uid not in (None, "") and str(owner_id) == str(uid)
+        """Only the owner (CreatedBy) or a superuser (AccessLevel >= 4) may delete
+        (rule in db/experiment_request_images.can_delete)."""
+        return er_images.can_delete(app_meta.current_user or {}, img)
 
     def _update_delete_button(self) -> None:
         """Enable/disable delete button based on selection and delete permission."""
@@ -611,7 +569,6 @@ class ExperimentRequestImagesDialog(QDialog):
         if not self._confirm_delete(len(items)):
             return
 
-        deleted_dirs: set[str] = set()
         errors: List[str] = []
         if denied:
             errors.append(
@@ -619,93 +576,22 @@ class ExperimentRequestImagesDialog(QDialog):
                 "(or need superuser rights)."
             )
 
-        # Delete in reverse row order so indices remain valid
-        for item in sorted(items, key=lambda it: self.lst.row(it), reverse=True):
-            img = item.data(Qt.UserRole) or {}
+        # Delete in reverse row order. DB row first, file second, folder
+        # cleanup when nothing remains - see
+        # db/experiment_request_images.delete_image_records().
+        ordered = sorted(items, key=lambda it: self.lst.row(it), reverse=True)
+        ordered_imgs = [it.data(Qt.UserRole) or {} for it in ordered]
+        deleted = er_images.delete_image_records(
+            self._table_name, self._fk_field, self._fk_value, ordered_imgs, errors)
+        deleted_ids = {id(d) for d in deleted}
+
+        # Remove from in-memory list + UI (nur nach bestätigtem DB-Delete)
+        for item, img in zip(ordered, ordered_imgs):
+            if id(img) not in deleted_ids:
+                continue  # Eintrag bleibt in der Liste sichtbar
             rel_path = str(img.get("RelativePath") or "")
             stored = str(img.get("StoredFilename") or img.get("StoredFile") or "")
             full_path = str(img.get("FullPath") or (os.path.join(rel_path, stored) if rel_path else stored))
-            img_id = img.get("ID")
-
-            # 1) Delete the DB row FIRST, the file SECOND (deliberately reversed
-            # from the previous file-then-DB order). Root cause found by tracing
-            # a real incident (8 images physically removed from disk, but their
-            # tblTrialSeriesImage rows still present): tblTrialSeriesImageAnalysis
-            # (Garnspiegel auto-analysis, runs on every wrap-test upload) has an
-            # FK on TrialSeriesImageID - deleting the file FIRST and the DB row
-            # SECOND meant that whenever that DELETE then failed (here: 1451
-            # foreign key constraint fails, since the analysis row was never
-            # cleaned up first), the file was already gone but the DB row
-            # survived the failed DELETE. Fixed on two levels: (a) this reordered
-            # DB-first sequence means ANY DB-delete failure (this one or any
-            # other) now leaves the file untouched instead of orphaning the row -
-            # `cur.rowcount` confirms real success (0 affected rows is NOT a
-            # MySQL error/exception, so it needed an explicit check); (b) the
-            # analysis row is now deleted first (see below), so the delete
-            # actually succeeds instead of merely failing safely. Matcht
-            # bevorzugt über die Primary-Key-ID (jetzt von
-            # _fetch_series_images() mitgeliefert), fällt auf
-            # RelativePath+StoredFilename zurück für Aufrufer, die (wie die
-            # Experiment-Request-Bilder) keine ID mitliefern.
-            db_deleted = False
-            try:
-                with get_connection() as cn:
-                    cur = cn.cursor()
-                    # Child row first (FK-Kind von tblTrialSeriesImage) - nur
-                    # relevant/vorhanden für genau diese Tabelle, best-effort
-                    # falls die Analyse-Tabelle in einer Umgebung fehlt oder
-                    # gar keine Analyse für dieses Bild existiert.
-                    if img_id not in (None, "") and self._table_name.lower() == "tbltrialseriesimage":
-                        try:
-                            cur.execute(
-                                "DELETE FROM tblTrialSeriesImageAnalysis WHERE TrialSeriesImageID=?",
-                                [img_id],
-                            )
-                        except Exception:
-                            pass
-                    if img_id not in (None, ""):
-                        cur.execute(
-                            f"DELETE FROM [{self._table_name}] WHERE [ID]=?", [img_id])
-                    else:
-                        cur.execute(
-                            f"DELETE FROM [{self._table_name}] WHERE [{self._fk_field}]=? "
-                            f"AND [RelativePath]=? AND [StoredFilename]=?",
-                            [self._fk_value, rel_path, stored],
-                        )
-                    db_deleted = (cur.rowcount or 0) > 0
-                    try:
-                        cn.commit()
-                    except Exception:
-                        pass
-            except Exception as e:
-                errors.append(f"Could not delete database entry for:\n{stored}\n\n{e}")
-
-            if not db_deleted:
-                if not errors or "database entry for" not in errors[-1]:
-                    errors.append(
-                        f"Database entry not found (already deleted?), file left untouched:\n{stored}")
-                continue  # Datei bewusst NICHT anfassen, Eintrag bleibt in der Liste sichtbar
-
-            # 2) DB-Zeile ist nachweislich weg - jetzt erst die Datei löschen.
-            # deleted_dirs erst HIER (nicht schon am Loop-Anfang für jedes
-            # Item unconditional) befüllen: der "Ordner komplett löschen,
-            # wenn keine Bilder mehr übrig sind"-Schritt unten träfe sonst
-            # auch Ordner, in denen bewusst übersprungene Dateien (db_deleted
-            # False, siehe oben) noch unangetastet liegen - beim Testen real
-            # reproduziert: eine übersprungene Datei wurde trotzdem von
-            # shutil.rmtree() mitgerissen, weil ihr rel_path unconditional in
-            # deleted_dirs landete, obwohl NUR die anderen beiden Dateien
-            # dieses Batches tatsächlich gelöscht wurden.
-            if rel_path:
-                deleted_dirs.add(os.path.normpath(rel_path))
-            try:
-                if full_path and os.path.exists(full_path):
-                    os.remove(full_path)
-            except Exception as e:
-                errors.append(
-                    f"Database entry deleted, but the file could not be removed:\n{full_path}\n\n{e}")
-
-            # 3) Remove from in-memory list + UI (nur nach bestätigtem DB-Delete)
             try:
                 self._images = [
                     d for d in self._images
@@ -733,39 +619,6 @@ class ExperimentRequestImagesDialog(QDialog):
         except Exception:
             pass
 
-        # If no images remain for this FK, delete the folder too - but only if
-        # this batch had zero errors/skips. "0 rows remain in the DB" alone
-        # isn't proof the folder is actually empty: a skipped item (db_deleted
-        # False further up, e.g. its row was already gone independently)
-        # leaves its file physically untouched on purpose, yet the FK-wide
-        # COUNT(*) can still come back 0 (that row was never counted to begin
-        # with) - reproduced while testing: a deliberately preserved file got
-        # wiped out anyway by shutil.rmtree() here, undoing the whole point of
-        # skipping it above.
-        try:
-            if not errors:
-                remaining = 1
-                with get_connection() as cn:
-                    cur = cn.cursor()
-                    cur.execute(
-                        f"SELECT COUNT(*) FROM [{self._table_name}] WHERE [{self._fk_field}]=?",
-                        [self._fk_value],
-                    )
-                    row = cur.fetchone()
-                    remaining = int(row[0]) if row and row[0] is not None else 0
-
-                if remaining == 0:
-                    for d in list(deleted_dirs):
-                        try:
-                            if d and os.path.isdir(d):
-                                shutil.rmtree(d)
-                        except Exception:
-                            # Best-effort cleanup; no UI errors for folder deletion.
-                            pass
-        except Exception:
-            # Folder cleanup is best-effort
-            pass
-
         self._update_delete_button()
 
         if errors:
@@ -781,10 +634,7 @@ class ExperimentRequestImagesDialog(QDialog):
         current = str(img.get("OriginalFilename") or "")
 
         # Determine the frozen extension.
-        ref_name = current or stored
-        _base, ext = os.path.splitext(ref_name)
-        if not ext:
-            ext = ""  # Nothing to preserve
+        ext = er_images.fixed_extension(img)
 
         # Suggest base name without extension
         current_base = os.path.splitext(current)[0] if current else os.path.splitext(stored)[0]
@@ -799,74 +649,25 @@ class ExperimentRequestImagesDialog(QDialog):
         if not ok:
             return
 
-        new_base = (new_base or "").strip()
-        if not new_base:
+        # Typed extension dropped, fixed one appended, slashes sanitized
+        # (db/experiment_request_images.new_original_filename).
+        new_name = er_images.new_original_filename(img, new_base)
+        if new_name is None:
             return
-
-        # If user typed a full filename, strip any extension they tried to set.
-        # Then enforce the original ext.
-        candidate_base, candidate_ext = os.path.splitext(new_base)
-        if candidate_ext:
-            new_base = candidate_base
-
-        # Sanitize (avoid paths)
-        new_base = new_base.replace("/", "_").replace("\\", "_")
-        new_name = f"{new_base}{ext}"
 
         # Snapshot selection so we can rebuild/re-sort the list and keep focus.
         selected_full_path = str(img.get("FullPath") or "")
 
-        # Helper: Access via ODBC is notorious for returning rowcount = -1
-        # (unknown) even when an UPDATE succeeded. So we verify by selecting.
-        def _verify_persisted(cur) -> bool:
-            img_id = img.get("ID")
-            if img_id not in (None, ""):
-                cur.execute(
-                    f"SELECT [OriginalFilename] FROM [{self._table_name}] WHERE [ID]=?",
-                    [img_id],
-                )
-                row = cur.fetchone()
-                return bool(row and str(row[0] or "").strip().lower() == str(new_name).strip().lower())
-
-            cur.execute(
-                f"SELECT [OriginalFilename] FROM [{self._table_name}] "
-                f"WHERE [{self._fk_field}]=? AND [StoredFilename]=? AND [RelativePath]=?",
-                [self._fk_value, stored, rel_path],
-            )
-            row = cur.fetchone()
-            return bool(row and str(row[0] or "").strip().lower() == str(new_name).strip().lower())
-
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-
-                # Prefer the row's own primary key if available (most robust)
-                img_id = img.get("ID")
-                if img_id not in (None, ""):
-                    cur.execute(
-                        f"UPDATE [{self._table_name}] SET [OriginalFilename]=? WHERE [ID]=?",
-                        [new_name, img_id],
-                    )
-                else:
-                    # Fallback: match by FK + StoredFilename + RelativePath
-                    cur.execute(
-                        f"UPDATE [{self._table_name}] "
-                        f"SET [OriginalFilename]=? "
-                        f"WHERE [{self._fk_field}]=? AND [StoredFilename]=? AND [RelativePath]=?",
-                        [new_name, self._fk_value, stored, rel_path],
-                    )
-
-                cn.commit()
-
-                # Only show the warning if we can verify that the DB did NOT update.
-                # (rowcount may be 0 or -1 even when the update worked.)
-                if not _verify_persisted(cur):
-                    QMessageBox.warning(
-                        self,
-                        "Rename",
-                        "No database row was updated. The image could not be matched."
-                    )
-                    return
+            # UPDATE + read back (rowcount may be 0 or -1 even when it worked).
+            if not er_images.persist_original_filename(
+                    self._table_name, self._fk_field, self._fk_value, img, new_name):
+                QMessageBox.warning(
+                    self,
+                    "Rename",
+                    "No database row was updated. The image could not be matched."
+                )
+                return
         except Exception as e:
             QMessageBox.critical(self, "Rename failed", str(e))
             return
@@ -1050,130 +851,13 @@ class ExperimentRequestImagesDialog(QDialog):
             pass
         return super().eventFilter(obj, event)
 
-def _try_tables_for_fk(field_name: str) -> List[str]:
-    """Ermittelt mögliche FK-Lookup-Tabellen für einen Feldnamen (heuristisch)."""
-    """Heuristik: <X>ID → tblX, tblXs, tblXes"""
-    base = field_name[:-2] if field_name.lower().endswith("id") else field_name
-    base = base.strip().strip("_")
-    if not base:
-        return []
-    cands = [f"tbl{base}", f"tbl{base}s", f"tbl{base}es"]
-    # häufige Sonderfälle
-    if base.lower() == "user":
-        cands = ["tblUser", "tblUsers"]
-    return cands
-
-
-def _pick_display_column(table: str) -> Optional[str]:
-    """Wählt die beste Anzeigespalte einer FK-Lookup-Tabelle (Name, Bezeichnung o.ä.)."""
-    """Wählt eine sinnvolle Anzeigespalte für Dropdowns."""
-    preferred = ["Name", "Username", "Title", "Bezeichnung", "Beschreibung", "DisplayName"]
-    # MySQL: information_schema
-    with get_connection() as cn:
-        cur = cn.cursor()
-        cur.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = %s AND table_name = %s
-            ORDER BY ordinal_position
-            """,
-            (current_db_name(), table.lower()),
-        )
-        rows = cur.fetchall()
-        cols = [r[0] for r in rows] if rows else []
-    for p in preferred:
-        if p in cols:
-            return p
-    # sonst: erste Textspalte (type_name enthält oft VARCHAR/TEXT)
-    with get_connection() as cn:
-        cur = cn.cursor()
-        cur.execute(
-            """
-            SELECT column_name, data_type
-            FROM information_schema.columns
-            WHERE table_schema = %s AND table_name = %s
-            ORDER BY ordinal_position
-            """,
-            (current_db_name(), table.lower()),
-        )
-        for name, data_type in cur.fetchall() or []:
-            tn = str(data_type or "").lower()
-            if any(x in tn for x in ["char", "text", "varchar"]):
-                return str(name)
-    return None
-
-
-def _get_table_columns(table: str) -> List[ColumnInfo]:
-    """Lädt alle Spalten einer Tabelle als ColumnInfo-Liste aus der DB.
-
-    tblExperimentRequests ist nicht Teil der Offline-SQLite-Kopie (kein
-    ROOT_TABLES-Eintrag, siehe db/offline_schema.py) - dieser Screen ist im
-    Offline-Modus ohnehin per Navigation-Guard gesperrt. Der SQLite-Zweig hier
-    sorgt nur dafür, dass ein versehentlicher Aufruf (z.B. durch die eager
-    Konstruktion in main.py) sauber "keine Spalten gefunden" statt eines
-    information_schema-Fehlers (SQLite kennt information_schema nicht)
-    zurückgibt, statt die ganze App am Start zu blockieren.
-    """
-    if is_offline_mode():
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(f'PRAGMA table_info("{table}")')
-            cols: List[ColumnInfo] = []
-            for _cid, name, col_type, *_rest in cur.fetchall() or []:
-                cols.append(ColumnInfo(name=str(name), data_type=None, type_name=str(col_type or "")))
-            return cols
-
-    with get_connection() as cn:
-        cur = cn.cursor()
-        cur.execute(
-            """
-            SELECT column_name, data_type, column_type
-            FROM information_schema.columns
-            WHERE table_schema = %s AND table_name = %s
-            ORDER BY ordinal_position
-            """,
-            (current_db_name(), table.lower()),
-        )
-        cols: List[ColumnInfo] = []
-        for name, data_type, column_type in cur.fetchall() or []:
-            cols.append(ColumnInfo(name=str(name), data_type=None, type_name=str(column_type)))
-        return cols
-
-
-def _table_exists(table: str) -> bool:
-    """Gibt True zurück wenn die Tabelle in der DB existiert."""
-    if is_offline_mode():
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND lower(name) = ? LIMIT 1",
-                (table.lower(),),
-            )
-            return cur.fetchone() is not None
-
-    with get_connection() as cn:
-        cur = cn.cursor()
-        cur.execute(
-            """
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = %s AND table_name = %s
-            LIMIT 1
-            """,
-            (current_db_name(), table.lower()),
-        )
-        return cur.fetchone() is not None
-
-
-def _is_guid_col(col: ColumnInfo) -> bool:
-    """Gibt True zurück wenn eine Spalte als GUID-Feld erkannt wird (ID/GlobalID-Typ)."""
-    # MySQL: GUIDs werden bei uns als VARCHAR gespeichert
-    tn = str(col.type_name or "").lower()
-    return "char(36" in tn or "varchar(36" in tn
-
-
-
+# Moved to db/experiment_requests.py (old names kept for importers, e.g. the
+# read-only request popup in ui/screen_show_experiment.py).
+_try_tables_for_fk = er.try_tables_for_fk
+_pick_display_column = er.pick_display_column
+_get_table_columns = er.get_table_columns
+_table_exists = er.table_exists_info
+_is_guid_col = er.is_guid_col
 
 
 class ExperimentRequestPdfsDialog(QDialog):
@@ -2235,76 +1919,24 @@ class BatchRenameDialog(QDialog):
 
     def _save_and_next(self) -> None:
         img = self._current_img()
-        rel_path = str(img.get("RelativePath") or "")
-        stored = str(img.get("StoredFilename") or img.get("StoredFile") or "")
-        current = str(img.get("OriginalFilename") or "")
-        ref_name = current or stored
-        _b, ext = os.path.splitext(ref_name)
-        if not ext:
-            ext = self._ext or ""
-
-        new_base = (self.txt_new.text() or "").strip()
-        if not new_base:
+        prefix = (getattr(self, "txt_prefix", None).text() if getattr(self, "txt_prefix", None) else "")
+        # Fixed extension, optional prefix, sanitizing:
+        # db/experiment_request_images.new_original_filename().
+        new_name = er_images.new_original_filename(
+            img, self.txt_new.text(), prefix=prefix, fallback_ext=self._ext)
+        if new_name is None:
             QMessageBox.warning(self, "Rename", "Name cannot be empty.")
             return
 
-        cand_base, cand_ext = os.path.splitext(new_base)
-        if cand_ext:
-            new_base = cand_base
-
-        prefix = (getattr(self, "txt_prefix", None).text() if getattr(self, "txt_prefix", None) else "")
-        prefix = (prefix or "").strip()
-        if prefix:
-            # If user already typed the prefix, don't add it again.
-            if not new_base.lower().startswith(prefix.lower()):
-                new_base = f"{prefix}{new_base}"
-        new_base = new_base.replace("/", "_").replace("\\", "_")
-        new_name = f"{new_base}{ext}"
-
-        def _verify_persisted(cur) -> bool:
-            img_id = img.get("ID")
-            if img_id not in (None, ""):
-                cur.execute(
-                    f"SELECT [OriginalFilename] FROM [{self._table_name}] WHERE [ID]=?",
-                    [img_id],
-                )
-                row = cur.fetchone()
-                return bool(row and str(row[0] or "").strip().lower() == str(new_name).strip().lower())
-
-            cur.execute(
-                f"SELECT [OriginalFilename] FROM [{self._table_name}] "
-                f"WHERE [{self._fk_field}]=? AND [StoredFilename]=? AND [RelativePath]=?",
-                [self._fk_value, stored, rel_path],
-            )
-            row = cur.fetchone()
-            return bool(row and str(row[0] or "").strip().lower() == str(new_name).strip().lower())
-
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-
-                img_id = img.get("ID")
-                if img_id not in (None, ""):
-                    cur.execute(
-                        f"UPDATE [{self._table_name}] SET [OriginalFilename]=? WHERE [ID]=?",
-                        [new_name, img_id],
-                    )
-                else:
-                    cur.execute(
-                        f"UPDATE [{self._table_name}] SET [OriginalFilename]=? "
-                        f"WHERE [{self._fk_field}]=? AND [StoredFilename]=? AND [RelativePath]=?",
-                        [new_name, self._fk_value, stored, rel_path],
-                    )
-
-                cn.commit()
-
-                if not _verify_persisted(cur):
-                    QMessageBox.warning(
-                        self,
-                        "Rename",
-                        "No database row was updated. The image could not be matched."
-                    )
-                    return
+            if not er_images.persist_original_filename(
+                    self._table_name, self._fk_field, self._fk_value, img, new_name):
+                QMessageBox.warning(
+                    self,
+                    "Rename",
+                    "No database row was updated. The image could not be matched."
+                )
+                return
 
         except Exception as e:
             QMessageBox.critical(self, "Rename failed", str(e))
@@ -2549,50 +2181,11 @@ class CreateExperimentRequestScreen(QWidget):
     
     def _request_has_images(self, request_id: Any) -> bool:
         """True if at least one image row exists for this request."""
-        if request_id in (None, ""):
-            return False
-        try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                # Works with the Access-to-MySQL translation layer in db.connection
-                cur.execute(
-                    "SELECT 1 FROM [tblExperimentRequestImage] WHERE [ExperimentRequestID]=? LIMIT 1",
-                    [request_id],
-                )
-                return cur.fetchone() is not None
-        except Exception:
-            return False
+        return er_images.has_images(request_id)
 
     def _fetch_request_images(self, request_id: Any) -> List[Dict[str, str]]:
         """Returns dicts with FullPath + display name fields."""
-        if request_id in (None, ""):
-            return []
-        rows: List[Dict[str, str]] = []
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(
-                "SELECT [ID], [RelativePath], [StoredFilename], [OriginalFilename], [CreatedBy] "
-                "FROM [tblExperimentRequestImage] "
-                "WHERE [ExperimentRequestID]=? "
-                "ORDER BY [ID] DESC",
-                [request_id],
-            )
-            for img_id, rel_path, stored, orig_name, created_by in cur.fetchall() or []:
-                rel_path = str(rel_path or "")
-                stored = str(stored or "")
-                orig_name = str(orig_name or "")
-                full = os.path.join(rel_path, stored) if rel_path else stored
-                rows.append(
-                    {
-                        "ID": img_id,
-                        "RelativePath": rel_path,
-                        "StoredFilename": stored,
-                        "OriginalFilename": orig_name,
-                        "FullPath": full,
-                        "CreatedBy": created_by,
-                    }
-                )
-        return rows
+        return er_images.list_images(request_id)
 
     def _update_images_icon(self) -> None:
         """Show / hide the images icon depending on whether images exist."""
@@ -2633,115 +2226,25 @@ class CreateExperimentRequestScreen(QWidget):
 
     def _request_images_dir(self, request_id: Any) -> str:
         """Gibt den Zielordner fuer Bilder eines Requests zurueck."""
-        return os.path.join(REQUEST_IMAGES_BASE_DIR, str(request_id))
+        return er_images.images_dir(request_id)
 
     def _request_images_relative_path_for_db(self, request_id: Any) -> str:
         """Gibt den Pfad so zurueck, wie er in RelativePath gespeichert werden soll."""
-        # In der DB wollen wir den UNC-Pfad mit Backslashes und trailing Slash.
-        return REQUEST_IMAGES_BASE_DIR + "\\" + str(request_id) + "\\"
+        return er_images.relative_path_for_db(request_id)
 
     def _ensure_request_id_for_upload(self) -> Any:
         """Stellt sicher, dass es eine ExperimentRequestID gibt.
 
         Falls der Request noch nicht gespeichert ist, wird ein Datensatz erzeugt,
-        aber explizit als "Draft" markiert (RequestStatus = NULL).
-
-        Wichtig: Wir erzwingen hier *keine* Pflichtfeld-Validierung.
+        aber explizit als "Draft" markiert (RequestStatus = NULL) - ohne
+        Pflichtfeld-Validierung (db/experiment_request_images.ensure_request_for_upload).
         """
         if self._edit_request_id not in (None, ""):
             return self._edit_request_id
-
-        created_by = self._current_user_id()
-        if created_by in (None, ""):
-            raise RuntimeError(
-                "CreatedBy/UserID could not be determined. Please log in again."
-            )
-
-        # Wir sammeln aktuelle Formwerte (falls schon etwas ausgefuellt ist),
-        # setzen aber RequestStatus bewusst auf NULL.
-        values = self._collect_values(for_insert=True, request_status=None)
-
-        # ID: falls GUID/Text → setzen, ansonsten weglassen (Autonumber)
-        id_col = next((c for c in self._cols if c.name == "ID"), None)
-        if id_col and _is_guid_col(id_col):
-            values["ID"] = new_global_id()
-
-        cols = [k for k, v in values.items() if v is not None]
-        if not cols:
-            # mindestens diese Felder setzen
-            values["Timestamp"] = datetime.datetime.now()
-            values["CreatedBy"] = created_by
-            cols = ["Timestamp", "CreatedBy"]
-
-        placeholders = ",".join(["?"] * len(cols))
-        col_sql = ",".join([f"[{c}]" for c in cols])
-        sql = f"INSERT INTO [{self._table}] ({col_sql}) VALUES ({placeholders})"
-        params = [values[c] for c in cols]
-
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(sql, params)
-            # autocommit=True, aber wir lassen commit trotzdem laufen
-            try:
-                cn.commit()
-            except Exception:
-                pass
-
-            # mysql-connector liefert lastrowid; unser CursorWrapper proxied das.
-            new_id = getattr(cur, "lastrowid", None)
-
-            # Fallback: über LAST_INSERT_ID() (pro Connection)
-            if new_id in (None, 0, ""):
-                try:
-                    cur.execute("SELECT LAST_INSERT_ID()")
-                    row = cur.fetchone()
-                    if row and row[0] not in (None, 0, ""):
-                        new_id = row[0]
-                except Exception:
-                    pass
-            # Falls GUID als PK verwendet wird, haben wir die ID bereits gesetzt
-            if new_id in (None, 0, "") and values.get("ID") is not None:
-                new_id = values.get("ID")
-
-        if new_id in (None, 0, ""):
-            raise RuntimeError("ExperimentRequestID could not be determined after the insert.")
-
+        new_id = er_images.ensure_request_for_upload(
+            app_meta.current_user or {}, None, self._collect_values(for_insert=False), self._cols)
         self._edit_request_id = new_id
         return new_id
-
-    def _insert_experiment_request_image_row(
-        self,
-        *,
-        request_id: Any,
-        relative_path: str,
-        stored_filename: str,
-        original_filename: str,
-    ) -> None:
-        """Erzeugt einen Datensatz in tblExperimentRequestImage."""
-        created_by = self._current_user_id()
-        if created_by in (None, ""):
-            raise RuntimeError("CreatedBy/UserID could not be determined.")
-
-        sql = (
-            "INSERT INTO [tblExperimentRequestImage] "
-            "([ExperimentRequestID],[RelativePath],[StoredFilename],[OriginalFilename],[CreatedAt],[CreatedBy]) "
-            "VALUES (?,?,?,?,?,?)"
-        )
-        params = [
-            request_id,
-            relative_path,
-            stored_filename,
-            original_filename,
-            datetime.datetime.now(),
-            created_by,
-        ]
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(sql, params)
-            try:
-                cn.commit()
-            except Exception:
-                pass
 
     def _upload_images(self) -> None:
         """Button-Handler: Bilder waehlen, speichern, DB-Records anlegen."""
@@ -2756,50 +2259,19 @@ class CreateExperimentRequestScreen(QWidget):
                 return
 
             request_id = self._ensure_request_id_for_upload()
-            target_dir = self._request_images_dir(request_id)
-            db_rel_path = self._request_images_relative_path_for_db(request_id)
-
-            # Ordner erstellen
-            try:
-                os.makedirs(target_dir, exist_ok=True)
-            except PermissionError as e:
-                raise RuntimeError(
-                    "[WinError 5] Access denied while creating the target folder. "
-                    "This is a permission problem on the share/NTFS.\n\n"
-                    f"Path: {target_dir}\n\n"
-                    "Please ensure that the Windows user (or the account running TrippleT) "
-                    f"has write permission on {REQUEST_IMAGES_BASE_DIR}.\n\n"
-                    f"Original error: {e}"
-                )
-            except Exception as e:
-                raise RuntimeError(f"Target folder could not be created: {target_dir}\n{e}")
+            # Ordner erstellen (RuntimeError mit Erklaerung, falls nicht moeglich)
+            target_dir = er_images.prepare_folder(request_id)
 
             stored_any = 0
             errors: List[str] = []
 
             for src in files:
                 try:
-                    orig_name = os.path.basename(src)
-                    _, ext = os.path.splitext(orig_name)
-                    ext = ext or ""
-
-                    stored_name = f"{uuid.uuid4().hex}{ext}"
-                    dst = os.path.join(target_dir, stored_name)
-
-                    # Kopieren (binary)
                     with open(src, "rb") as fsrc:
                         data = fsrc.read()
-                    with open(dst, "wb") as fdst:
-                        fdst.write(data)
-
-                    # DB-Eintrag
-                    self._insert_experiment_request_image_row(
-                        request_id=request_id,
-                        relative_path=db_rel_path,
-                        stored_filename=stored_name,
-                        original_filename=orig_name,
-                    )
-
+                    # Datei unter zufaelligem Namen + DB-Eintrag
+                    er_images.store_image(app_meta.current_user or {}, request_id, data,
+                                          os.path.basename(src), target_dir)
                     stored_any += 1
                 except Exception as e:
                     errors.append(f"{os.path.basename(src)}: {e}")
@@ -2819,17 +2291,14 @@ class CreateExperimentRequestScreen(QWidget):
 
     def _load_schema_and_build_form(self):
         try:
-            if not _table_exists(self._table):
-                raise RuntimeError(f"Table not found: {self._table}")
-            self._cols = _get_table_columns(self._table)
+            self._cols = er.load_columns(self._table)
         except Exception as e:
             QMessageBox.critical(self, "DB Error", str(e))
             return
 
-        for col in self._cols:
-            if col.name in EXCLUDE_FIELDS:
-                continue
-            self._add_field_row(col)
+        # Field types + dropdown choices: db/experiment_requests.form_fields()
+        for fld in er.form_fields(self._cols):
+            self._add_field_row(fld)
 
         if not self._widgets:
             self._form_layout.addRow(QLabel("(No fields found)"), QLabel(""))
@@ -2843,19 +2312,14 @@ class CreateExperimentRequestScreen(QWidget):
         """
         self._edit_request_id = request_id
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute(f"SELECT * FROM [{self._table}] WHERE [ID]=?", [request_id])
-                row = cur.fetchone()
-                if not row:
-                    QMessageBox.warning(self, "Not found", "The selected request was not found.")
-                    return
-                col_names = [d[0] for d in (cur.description or [])]
+            values = er.fetch_request(request_id)
+            if values is None:
+                QMessageBox.warning(self, "Not found", "The selected request was not found.")
+                return
         except Exception as e:
             QMessageBox.critical(self, "DB Error", str(e))
             return
 
-        values = {str(col_names[i]): row[i] for i in range(len(col_names))}
         self._change_of_id = values.get("ChangeOfRequestID")
         self._populate_fields(values)
         # Snapshot NACH _populate_fields, damit die Widgets schon befuellt sind -
@@ -2871,9 +2335,9 @@ class CreateExperimentRequestScreen(QWidget):
         except Exception:
             self.btn_history.setVisible(False)
 
-        denial_reason = values.get("DenialReason")
-        if values.get("RequestStatus") == 2 and denial_reason:
-            self._lbl_denial_banner.setText(f"⚠ This request was denied.\nReason: {denial_reason}")
+        banner = er.denial_banner_text(values)
+        if banner:
+            self._lbl_denial_banner.setText(banner)
             self._lbl_denial_banner.setVisible(True)
         else:
             self._lbl_denial_banner.setVisible(False)
@@ -3082,37 +2546,10 @@ class CreateExperimentRequestScreen(QWidget):
                 w.dateChanged.connect(self._on_required_changed)
 
     def _required_ok(self) -> bool:
-        """True, wenn mind. Versuchsgrund/FVersuchsgrund, Aufgabe,
-        Beurteilungsparameter und Versuchsbedingungen gefüllt sind."""
-        # Versuchsgrund kann im Schema entweder Versuchsgrund oder FVersuchsgrund heissen
-        vg_widget = self._find_widget("FVersuchsgrund") or self._find_widget("Versuchsgrund")
-
-        def has_text(w: QWidget | None) -> bool:
-            if w is None:
-                return False
-            if isinstance(w, QLineEdit):
-                return bool(w.text().strip())
-            if isinstance(w, QTextEdit):
-                return bool(w.toPlainText().strip())
-            if isinstance(w, QComboBox):
-                # MySQL-Umstellung: Combos koennen Text anzeigen, ohne itemData/currentData zu setzen.
-                data = w.currentData()
-                if data is not None and str(data).strip() != "":
-                    return True
-                return bool(w.currentText().strip())
-            if isinstance(w, QDateEdit):
-                return w.date().isValid()
-            return False
-
-        return all(
-            [
-                has_text(self._find_widget("Titel")),
-                has_text(vg_widget),
-                has_text(self._find_widget("Aufgabe")),
-                has_text(self._find_widget("Beurteilungsparameter")),
-                has_text(self._find_widget("Versuchsbedingungen")),
-            ]
-        )
+        """True, wenn mind. Titel, Versuchsgrund/FVersuchsgrund, Aufgabe,
+        Beurteilungsparameter und Versuchsbedingungen gefüllt sind
+        (db/experiment_requests.validate)."""
+        return not er.validate(self._collect_values(for_insert=False))
 
     def _check_required_fields(self) -> None:
         """Aktualisiert das Pflichtfeld-Feedback.
@@ -3140,50 +2577,43 @@ class CreateExperimentRequestScreen(QWidget):
         except Exception:
             pass
 
-    def _add_field_row(self, col: ColumnInfo):
-        label = QLabel(col.name)
+    def _add_field_row(self, fld: Dict[str, Any]):
+        """Widget for one field of er.form_fields() (type fk/date/multiline/text)."""
+        name = fld["name"]
+        label = QLabel(fld["label"])
         label.setMinimumWidth(190)
 
-        # Spezialfall: Projekt (Dropdown aus tblProject; gespeichert wird tblProject.ID)
-        if col.name == 'Projekt':
+        if fld["type"] == "fk":
+            # Dropdown (Projekt: tblProject, gespeichert wird tblProject.ID;
+            # sonst ...ID-Spalten ueber die tblX-Lookup-Heuristik)
             combo = QComboBox()
             combo.setMinimumHeight(28)
             combo.setStyleSheet(
-                'QComboBox { background: #ffffff; border: 1px solid #8fbf8f; padding: 2px 6px; }'
-                'QComboBox QAbstractItemView { background: #ffffff; }'
+                "QComboBox { background: #ffffff; border: 1px solid #8fbf8f; padding: 2px 6px; }"
+                "QComboBox QAbstractItemView { background: #ffffff; }"
             )
-
-            choices = self._load_project_choices()
-            if choices:
-                combo.addItem('', None)  # allow empty
-                for _id, txt in choices:
-                    combo.addItem(str(txt), _id)
-                self._choices[col.name] = choices
-                self._widgets[col.name] = combo
-                self._form_layout.addRow(label, combo)
-                return
-
-            # Fallback: wenn tblProject/Spalten fehlen → einfache Textbox
-            le = QLineEdit()
-            le.setMinimumHeight(28)
-            le.setStyleSheet('border: 1px solid #8fbf8f; background: #ffffff;')
-            self._widgets[col.name] = le
-            self._form_layout.addRow(label, le)
+            choices = fld["choices"]
+            combo.addItem("", None)  # allow empty
+            for _id, txt in choices:
+                combo.addItem(str(txt), _id)
+            self._choices[name] = choices
+            self._widgets[name] = combo
+            self._form_layout.addRow(label, combo)
             return
 
         # Date field
-        if col.name in DATE_FIELDS:
+        if fld["type"] == "date":
             w = QDateEdit()
             w.setCalendarPopup(True)
             w.setDisplayFormat("dd.MM.yyyy")
             w.setDate(QDate.currentDate())
             w.setMinimumHeight(28)
-            self._widgets[col.name] = w
+            self._widgets[name] = w
             self._form_layout.addRow(label, w)
             return
 
         # Multiline
-        if col.name in MULTILINE_FIELDS:
+        if fld["type"] == "multiline":
             w = QTextEdit()
             w.setAcceptRichText(False)
             w.setTabChangesFocus(True)
@@ -3191,120 +2621,24 @@ class CreateExperimentRequestScreen(QWidget):
             fm = QFontMetrics(w.font())
             # 3 Zeilen + etwas Padding
             w.setFixedHeight(int(fm.lineSpacing() * 3.2) + 14)
-            self._widgets[col.name] = w
+            self._widgets[name] = w
             self._form_layout.addRow(label, w)
             return
 
-        # Foreign key heuristic: ...ID (aber nicht die Primär-ID, die wir ausblenden)
-        if col.name.lower().endswith("id") and col.name != "ID":
-            combo = QComboBox()
-            combo.setMinimumHeight(28)
-            combo.setStyleSheet(
-                "QComboBox { background: #ffffff; border: 1px solid #8fbf8f; padding: 2px 6px; }"
-                "QComboBox QAbstractItemView { background: #ffffff; }"
-            )
-
-            choices = self._load_fk_choices(col.name)
-            if choices:
-                combo.addItem("", None)  # allow empty
-                for _id, txt in choices:
-                    combo.addItem(str(txt), _id)
-            else:
-                # Fallback: keine Lookups gefunden → einfache Textbox
-                le = QLineEdit()
-                le.setMinimumHeight(28)
-                le.setStyleSheet("border: 1px solid #8fbf8f; background: #ffffff;")
-                self._widgets[col.name] = le
-                self._form_layout.addRow(label, le)
-                return
-
-            self._choices[col.name] = choices
-            self._widgets[col.name] = combo
-            self._form_layout.addRow(label, combo)
-            return
-
-        # Default: single-line textbox
+        # Default (auch FK/Projekt ohne Lookup-Tabelle): single-line textbox
         le = QLineEdit()
         le.setMinimumHeight(28)
         le.setStyleSheet("border: 1px solid #8fbf8f; background: #ffffff;")
-        self._widgets[col.name] = le
+        self._widgets[name] = le
         self._form_layout.addRow(label, le)
 
     def _load_fk_choices(self, field_name: str) -> List[Tuple[Any, str]]:
         """Versucht für <X>ID eine Lookup-Tabelle zu finden und (id,label) zu laden."""
-        table_cands = _try_tables_for_fk(field_name)
-        target_table = next((t for t in table_cands if _table_exists(t)), None)
-        if not target_table:
-            return []
-
-        display_col = _pick_display_column(target_table)
-        if not display_col:
-            return []
-
-        # id spalte bestimmen
-        cols = [c.name for c in _get_table_columns(target_table)]
-        id_col = None
-        for cand in ["ID", f"{field_name}"]:
-            if cand in cols:
-                id_col = cand
-                break
-        if not id_col:
-            # first column ending with ID
-            for c in cols:
-                if c.lower().endswith("id"):
-                    id_col = c
-                    break
-        if not id_col:
-            return []
-
-        sql = f"SELECT [{id_col}] AS _id, [{display_col}] AS _txt FROM [{target_table}] ORDER BY [{display_col}]"
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(sql)
-            rows = cur.fetchall()
-        out: List[Tuple[Any, str]] = []
-        for r in rows:
-            out.append((r[0], r[1]))
-        return out
-
+        return er.load_fk_choices(field_name)
 
     def _load_project_choices(self) -> List[Tuple[Any, str]]:
-        """Lädt Projekte aus tblProject.
-
-        Anzeige im Dropdown: "Project Number" + "Project Name".
-        Gespeicherter Wert: tblProject.ID
-        """
-        table = "tblProject"
-        if not _table_exists(table):
-            return []
-
-        cols_map = {c.name.lower(): c.name for c in _get_table_columns(table)}
-        id_col = cols_map.get("id")
-        num_col = cols_map.get("projectnumber") or cols_map.get("project number")
-        name_col = cols_map.get("projectname") or cols_map.get("project name")
-        if not (id_col and num_col and name_col):
-            return []
-
-        sql = (
-            f"SELECT [{id_col}] AS _id, [{num_col}] AS _num, [{name_col}] AS _name "
-            "FROM tblProject "
-            f"ORDER BY [{num_col}], [{name_col}]"
-        )
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(sql)
-            rows = cur.fetchall()
-
-        out: List[Tuple[Any, str]] = []
-        for _id, num, name in rows:
-            num_s = "" if num is None else str(num).strip()
-            name_s = "" if name is None else str(name).strip()
-            if num_s and name_s:
-                label = f"{num_s} – {name_s}"
-            else:
-                label = num_s or name_s or str(_id)
-            out.append((_id, label))
-        return out
+        """Lädt Projekte aus tblProject ("Nummer – Name", Wert tblProject.ID)."""
+        return er.load_project_choices()
 
     def _collect_values(self, *, for_insert: bool, request_status: Any = 1) -> Dict[str, Any]:
         values: Dict[str, Any] = {}
@@ -3337,14 +2671,8 @@ class CreateExperimentRequestScreen(QWidget):
                 values[col.name] = None
 
         if for_insert:
-            # Auto-Felder nur beim Insert
-            values["Timestamp"] = datetime.datetime.now()
-            cu = getattr(app_meta, "current_user", {}) or {}
-            values["CreatedBy"] = cu.get("id")
-
-            # RequestStatus soll beim Erstellen automatisch gesetzt werden (nicht im Formular sichtbar)
-            if any(c.name == "RequestStatus" for c in self._cols):
-                values["RequestStatus"] = request_status
+            # Auto-Felder nur beim Insert (Timestamp, CreatedBy, RequestStatus)
+            values = er.with_auto_fields(app_meta.current_user or {}, self._cols, values, request_status)
 
         return values
 
@@ -3352,174 +2680,33 @@ class CreateExperimentRequestScreen(QWidget):
         """True, wenn sich mindestens ein Feld gegenueber dem beim Laden
         vorgefundenen Stand (self._loaded_values, siehe load_request())
         geaendert hat. Ohne Snapshot (z.B. brandneuer Request) immer True."""
-        if not self._loaded_values:
-            return True
-
-        def _norm(v: Any) -> Any:
-            if v is None:
-                return ""
-            if isinstance(v, str):
-                return v.strip()
-            return v
-
-        for key in self._widgets:
-            if _norm(values.get(key)) != _norm(self._loaded_values.get(key)):
-                return True
-        return False
+        return er.has_changes(values, self._loaded_values, list(self._widgets))
 
     def _save(self):
-        # Generisches INSERT in tblExperimentRequests.
+        # Decision tree (insert / unchanged / direct update / change proposal):
+        # db/experiment_requests.save_request().
         try:
-            # Pflichtfeld-Check (redundant zum disabled Button, aber sicher ist sicher)
-            if not self._required_ok():
-                missing: List[str] = []
-                vg_widget = self._find_widget("FVersuchsgrund") or self._find_widget("Versuchsgrund")
-
-                def has_text(w: QWidget | None) -> bool:
-                    if w is None:
-                        return False
-                    if isinstance(w, QLineEdit):
-                        return bool(w.text().strip())
-                    if isinstance(w, QTextEdit):
-                        return bool(w.toPlainText().strip())
-                    if isinstance(w, QComboBox):
-                        data = w.currentData()
-                        if data is not None and str(data).strip() != "":
-                            return True
-                        return bool(w.currentText().strip())
-                    if isinstance(w, QDateEdit):
-                        return w.date().isValid()
-                    return False
-
-                checks = [
-                    ("Titel", self._find_widget("Titel")),
-                    ("Versuchsgrund", vg_widget),
-                    ("Aufgabe", self._find_widget("Aufgabe")),
-                    ("Beurteilungsparameter", self._find_widget("Beurteilungsparameter")),
-                    ("Versuchsbedingungen", self._find_widget("Versuchsbedingungen")),
-                ]
-                for label, w in checks:
-                    if not has_text(w):
-                        missing.append(label)
-
-                msg = "Please fill in at least title, reason for experiment, task, evaluation parameters and test conditions."
-                if missing:
-                    msg += "\n\nStill missing: " + ", ".join(missing)
-
-                QMessageBox.warning(self, "Missing information", msg)
+            res = er.save_request(
+                app_meta.current_user or {},
+                self._edit_request_id,
+                self._collect_values(for_insert=False),
+                cols=self._cols,
+                field_names=list(self._widgets),
+                loaded_values=self._loaded_values,
+                change_of_id=self._change_of_id,
+            )
+            if res.kind == "invalid":
+                QMessageBox.warning(self, res.title, res.message)
                 return
-
-            is_insert = self._edit_request_id in (None, "")
-            values = self._collect_values(for_insert=is_insert, request_status=1)
-
-            # CreatedBy muss beim Insert vorhanden sein
-            if is_insert and values.get("CreatedBy") in (None, ""):
-                QMessageBox.critical(
-                    self,
-                    "Login fehlt",
-                    "CreatedBy could not be set because no user ID was found. Please log in again.",
-                )
+            if res.kind == "no_user":
+                QMessageBox.critical(self, res.title, res.message)
                 return
-
-            if is_insert:
-                # ID: falls GUID/Text → setzen, ansonsten weglassen (Autonumber)
-                id_col = next((c for c in self._cols if c.name == "ID"), None)
-                if id_col and _is_guid_col(id_col):
-                    values["ID"] = new_global_id()
-
-                cols = [k for k, v in values.items() if v is not None]
-                if not cols:
-                    QMessageBox.warning(self, "Note", "Nothing to save.")
-                    return
-
-                placeholders = ",".join(["?"] * len(cols))
-                col_sql = ",".join([f"[{c}]" for c in cols])
-                sql = f"INSERT INTO [{self._table}] ({col_sql}) VALUES ({placeholders})"
-                params = [values[c] for c in cols]
-
-                with get_connection() as cn:
-                    cur = cn.cursor()
-                    cur.execute(sql, params)
-                    try:
-                        cn.commit()
-                    except Exception:
-                        pass
-
-                QMessageBox.information(self, "Gespeichert", "Experiment request saved.")
-                self._go_experiment_request()
-            else:
-                # Nichts geaendert? Dann gar nichts schreiben - kein Status-
-                # Wechsel, keine Kopie (haeufigster Fall: Request nur zum
-                # Ansehen geoeffnet und wieder gespeichert).
-                if not self._has_unsaved_changes(values):
-                    self._go_experiment_request()
-                    return
-
-                is_superuser = bool(getattr(app_meta, "is_superuser_level", lambda: False)())
-                change_tracking_on = request_changes.supports_change_tracking()
-                cols = [k for k in values.keys() if k in self._widgets]
-
-                if self._change_of_id is not None or is_superuser or not change_tracking_on:
-                    # Diese Zeile ist entweder selbst schon eine offene
-                    # Aenderungs-Kopie (noch nicht freigegeben, direktes
-                    # Ueberschreiben also unbedenklich), ein Superuser
-                    # bearbeitet direkt, oder diese Umgebung hat die
-                    # ChangeOfRequestID-Spalte noch nicht (Feature bisher nur
-                    # auf dev_local ausgerollt) - in allen drei Faellen kein
-                    # Kopie-Umweg, und RequestStatus bleibt unangetastet
-                    # (nicht mehr zwangsweise auf 1 zuruecksetzen, siehe
-                    # Bugreport).
-                    if not cols:
-                        QMessageBox.warning(self, "Note", "Nothing to save.")
-                        return
-
-                    # A superuser directly editing a LIVE row (no copy
-                    # detour, see above) still overwrites it immediately -
-                    # archive its prior state first (user request 2026-09-01:
-                    # version history should be traceable for the user too).
-                    # If this row is itself already an open pending change
-                    # (self._change_of_id set), it's not "live" - no archive
-                    # needed. Best-effort: a failure here must not block the
-                    # actual save.
-                    if self._change_of_id is None:
-                        try:
-                            request_changes.archive_current_version(self._edit_request_id)
-                        except Exception:
-                            pass
-
-                    set_clause = ",".join([f"[{c}]=?" for c in cols])
-                    sql = f"UPDATE [{self._table}] SET {set_clause} WHERE [ID]=?"
-                    params = [values.get(c) for c in cols] + [self._edit_request_id]
-
-                    with get_connection() as cn:
-                        cur = cn.cursor()
-                        cur.execute(sql, params)
-                        try:
-                            cn.commit()
-                        except Exception:
-                            pass
-
-                    QMessageBox.information(self, "Gespeichert", "Experiment request updated.")
-                    self._go_experiment_request()
-                else:
-                    # Normaler Nutzer bearbeitet ein bereits gespeichertes
-                    # Original: das Original bleibt unangetastet (inkl. Status
-                    # und einer evtl. schon verknuepften Experiment-Zeile) -
-                    # die Aenderung geht als Kopie zur Pruefung an die
-                    # Superuser (siehe db/experiment_request_changes.py).
-                    cu = getattr(app_meta, "current_user", {}) or {}
-                    request_changes.create_or_update_pending_change(
-                        original_id=self._edit_request_id,
-                        values=values,
-                        created_by=cu.get("id"),
-                    )
-                    QMessageBox.information(
-                        self,
-                        "Zur Pruefung eingereicht",
-                        "Your changes were saved as a proposal and are waiting for approval by a superuser. Until "
-                        "then the existing request stays unchanged.",
-                    )
-                    self._go_experiment_request()
+            if res.kind == "nothing":
+                QMessageBox.warning(self, res.title, res.message)
+                return
+            if res.kind != "unchanged":
+                QMessageBox.information(self, res.title, res.message)
+            self._go_experiment_request()
 
         except Exception as e:
             QMessageBox.critical(self, "Save Error", str(e))

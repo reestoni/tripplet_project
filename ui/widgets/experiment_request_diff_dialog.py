@@ -16,9 +16,7 @@ double-click action on a row that has one) - it replaces the previous
 blind "accept"/"reject" actions that showed no comparison at all.
 """
 
-import datetime
-import re
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -26,83 +24,18 @@ from PySide6.QtWidgets import (
     QWidget, QFrame, QPushButton, QDialogButtonBox, QMessageBox,
 )
 
-from db.connection import get_connection, fetch_all, table_exists, get_columns_map
-from db import experiment_request_changes as request_changes
-from ui.text_normalize import resolve_field
+import app_meta
+from db import experiment_requests as er
 from ui.widgets.friendly_error import show_error
 
-# Pure row metadata - never a real content difference worth showing (mirrors
-# ui/screen_create_experiment_request.py::EXCLUDE_FIELDS).
-_META_FIELDS = {
-    "ID", "Timestamp", "CreatedBy", "RequestStatus", "ChangeOfRequestID",
-    "PriorVersionOfID", "DenialReason",
-}
-_DATE_FIELDS = {"Wunschtermin"}
+# Field-by-field comparison (meta fields skipped, Wunschtermin/Projekt as text):
+# db/experiment_requests.compare_requests().
 
 _HIGHLIGHT_STYLE = (
     "background: #fff3b0; border: 1px solid #e0b400; "
     "border-radius: 4px; padding: 4px 6px;"
 )
 _UNCHANGED_STYLE = "color: #888; padding: 4px 6px;"
-
-
-def _fetch_row(request_id: Any) -> Optional[Dict[str, Any]]:
-    if request_id in (None, ""):
-        return None
-    with get_connection() as cn:
-        cur = cn.cursor()
-        cur.execute("SELECT * FROM [tblExperimentRequests] WHERE [ID]=?", [request_id])
-        row = cur.fetchone()
-        if not row:
-            return None
-        names = [d[0] for d in (cur.description or [])]
-    return {names[i]: row[i] for i in range(len(names))}
-
-
-def _lookup_project_label(project_id: Any) -> str:
-    """Same lookup as _ExperimentRequestReadOnlyDialog._lookup_project_label()
-    in ui/screen_show_experiment.py - small enough to duplicate here rather
-    than depend on that dialog's instance state."""
-    if project_id in (None, ""):
-        return ""
-    for t in ("tblProject", "tblProjects"):
-        if not table_exists(t):
-            continue
-        try:
-            cols = get_columns_map(t)
-            f_num = resolve_field(
-                ["Project Number", "ProjectNumber", "Projekt Nummer", "ProjektNummer", "Number", "Nr"], cols)
-            f_name = resolve_field(
-                ["Project Name", "ProjectName", "Projekt Name", "ProjektName", "Name", "Titel", "Title"], cols)
-            if not (f_num and f_name):
-                continue
-            rows = fetch_all(f"SELECT [{f_num}] AS PN, [{f_name}] AS PName FROM [{t}] WHERE [ID]=?", [project_id])
-            if rows:
-                pn = str(rows[0].get("PN") or "")
-                pnm = str(rows[0].get("PName") or "")
-                return (pn + " - " + pnm).strip(" -")
-        except Exception:
-            continue
-    return str(project_id)
-
-
-def _format_value(field_name: str, val: Any) -> str:
-    if val is None:
-        return ""
-    if field_name in _DATE_FIELDS:
-        if isinstance(val, (datetime.datetime, datetime.date)):
-            return val.strftime("%d.%m.%Y")
-        s = re.sub(r"(Z|[+-]\d{2}:\d{2})$", "", str(val).strip().replace("T", " ")).strip()
-        s_date = s.split(" ")[0]
-        if re.match(r"^\d{4}-\d{2}-\d{2}$", s_date):
-            try:
-                return datetime.datetime.strptime(s_date, "%Y-%m-%d").strftime("%d.%m.%Y")
-            except Exception:
-                return s
-        return s
-    if field_name.lower() == "projekt":
-        return _lookup_project_label(val)
-    return str(val).strip()
 
 
 class ExperimentRequestDiffDialog(QDialog):
@@ -138,9 +71,8 @@ class ExperimentRequestDiffDialog(QDialog):
         self.setMinimumSize(860, 580)
         self.resize(900, 640)
 
-        original = _fetch_row(original_id) or {}
-        proposed = _fetch_row(copy_id) or {}
-        title = str(proposed.get("Titel") or original.get("Titel") or "").strip() or f"Request #{original_id}"
+        cmp = er.compare_requests(original_id, copy_id)
+        title = cmp["title"]
 
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 14)
@@ -171,17 +103,10 @@ class ExperimentRequestDiffDialog(QDialog):
             lbl.setStyleSheet("font-weight: 700; color: #303030;")
             grid.addWidget(lbl, 0, col)
 
-        field_names = [n for n in original.keys() if n not in _META_FIELDS]
-        for n in proposed.keys():
-            if n not in _META_FIELDS and n not in field_names:
-                field_names.append(n)
-
         any_changes = False
         row_i = 1
-        for fn in field_names:
-            old_val = _format_value(fn, original.get(fn))
-            new_val = _format_value(fn, proposed.get(fn))
-            changed = old_val != new_val
+        for r in cmp["rows"]:
+            fn, old_val, new_val, changed = r["field"], r["left"], r["right"], r["changed"]
 
             lbl = QLabel(fn)
             old_lbl = QLabel(old_val or "—")
@@ -235,23 +160,14 @@ class ExperimentRequestDiffDialog(QDialog):
         root.addWidget(buttons)
 
     def _on_accept(self) -> None:
+        # Accept + best-effort heads-up to owners of experiments already made
+        # from this request (db/experiment_requests.accept_pending_change); the
+        # requester is notified by the caller (My Requests).
         try:
-            original_id, archived_version_id = request_changes.accept_pending_change(self._copy_id)
+            er.accept_pending_change(app_meta.current_user or {}, self._copy_id, notify_requester=False)
         except Exception as e:
             show_error(self, "Error", "The change could not be accepted.", e)
             return
-        # Best-effort heads-up (2026-09-02, user request) to whoever already
-        # created an Experiment from this request before it changed - they're
-        # otherwise not part of this review loop at all and would only find
-        # out by explicitly checking back. Never blocks/fails the actual
-        # accept if it errors.
-        try:
-            import app_meta
-            from ui.notifications import notify_experiment_owners_of_request_change
-            actor_id = (app_meta.current_user or {}).get("id")
-            notify_experiment_owners_of_request_change(original_id, archived_version_id, actor_id)
-        except Exception:
-            pass
         self.outcome = "accepted"
         self.accept()
 
@@ -265,7 +181,7 @@ class ExperimentRequestDiffDialog(QDialog):
         if reply != QMessageBox.Yes:
             return
         try:
-            request_changes.reject_pending_change(self._copy_id)
+            er.reject_pending_change(app_meta.current_user or {}, self._copy_id, notify_requester=False)
         except Exception as e:
             show_error(self, "Error", "The change could not be rejected.", e)
             return

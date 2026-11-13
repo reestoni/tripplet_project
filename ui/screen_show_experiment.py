@@ -711,54 +711,15 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
         self._update_images_icon()
 
     def _request_has_images(self, request_id: Any) -> bool:
-        """Gibt True zurück wenn dem Request Bilder zugeordnet sind."""
         """True if at least one image row exists for this request."""
-        if request_id in (None, ""):
-            return False
-        try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute(
-                    "SELECT 1 FROM [tblExperimentRequestImage] WHERE [ExperimentRequestID]=? LIMIT 1",
-                    [request_id],
-                )
-                return cur.fetchone() is not None
-        except Exception:
-            return False
+        from db import experiment_request_images as er_images
+        return er_images.has_images(request_id)
 
     def _fetch_request_images(self, request_id: Any) -> List[Dict[str, str]]:
-        """Lädt alle Bild-Metadaten eines Requests aus der DB."""
-        """Returns dicts with FullPath + display name fields."""
-        if request_id in (None, ""):
-            return []
-        rows: List[Dict[str, str]] = []
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(
-                "SELECT [ID], [RelativePath], [StoredFilename], [OriginalFilename], [CreatedBy] "
-                "FROM [tblExperimentRequestImage] "
-                "WHERE [ExperimentRequestID]=? "
-                "ORDER BY [ID] DESC",
-                [request_id],
-            )
-            for img_id, rel_path, stored, orig_name, created_by in cur.fetchall() or []:
-                rel_path_s = str(rel_path or "")
-                stored_s = str(stored or "")
-                orig_s = str(orig_name or "")
-                full = os.path.join(rel_path_s, stored_s) if rel_path_s else stored_s
-                # Provide both keys to be compatible with any viewer implementation
-                rows.append(
-                    {
-                        "ID": img_id,
-                        "RelativePath": rel_path_s,
-                        "StoredFilename": stored_s,
-                        "StoredFile": stored_s,
-                        "OriginalFilename": orig_s,
-                        "FullPath": full,
-                        "CreatedBy": created_by,
-                    }
-                )
-        return rows
+        """Returns dicts with FullPath + display name fields (db/experiment_request_images)."""
+        from db import experiment_request_images as er_images
+        # Provide both keys (StoredFilename + StoredFile) to be compatible with any viewer implementation
+        return er_images.list_images(request_id, with_stored_file_key=True)
 
     def _update_images_icon(self) -> None:
         """Aktualisiert das Bild-Icon (sichtbar wenn Bilder vorhanden)."""
@@ -828,53 +789,32 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
 
         cols = er_get_table_columns(self._table)
 
+        from db import experiment_requests as er
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute(f"SELECT * FROM [{self._table}] WHERE [ID]=?", [self._request_id])
-                row = cur.fetchone()
-                if not row:
-                    QMessageBox.warning(self, "Not found", "The linked request was not found.")
-                    return
-                names = [d[0] for d in (cur.description or [])]
-                data = {names[i]: row[i] for i in range(len(names))}
+            data = er.fetch_request(self._request_id)
+            if data is None:
+                QMessageBox.warning(self, "Not found", "The linked request was not found.")
+                return
         except Exception as e:
             QMessageBox.critical(self, "DB Error", str(e))
             return
 
         # Use tblExperimentRequests.Titel as the popup title (window title + header).
-        req_title = "" if data.get("Titel") is None else str(data.get("Titel")).strip()
-        prefix = self._title_prefix
-        if req_title:
-            safe = req_title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            self.setWindowTitle(f"{prefix}{req_title}")
-            self._title_label.setText(f"{prefix}<b>{safe}</b>")
-        else:
-            # Fallback: keep prior behaviour if Titel is missing/empty.
-            self.setWindowTitle(f"{prefix}Experiment Request #{self._request_id}")
-            self._title_label.setText(f"{prefix}Experiment Request <b>#{self._request_id}</b>")
+        win_title, header = er.popup_title(data, self._request_id, self._title_prefix)
+        self.setWindowTitle(win_title)
+        self._title_label.setText(header)
 
         # Update images indicator after we know the request is valid.
         self._update_images_icon()
         self._sync_version_history_button(data.get("PriorVersionOfID"))
 
-        for c in cols:
-            fn = c.name
-
-            # Titel is shown in the popup header; do not repeat it inside the form.
-            if fn.lower() in ("titel", "title"):
-                continue
-
-            # In the create-screen we exclude CreatedBy, but in the read-only popup we DO want it.
-            if fn in ER_EXCLUDE_FIELDS and fn.lower() != "createdby":
-                continue
-
-            label_txt = "Created By" if fn.lower() == "createdby" else fn
-            lbl = QLabel(label_txt)
+        # Fields/labels/texts: db/experiment_requests.display_fields() (Titel is
+        # the header; CreatedBy is shown here as "Created By", unlike the form).
+        for f in er.display_fields(cols, data):
+            lbl = QLabel(f["label"])
             lbl.setStyleSheet("padding: 8px 6px; color:#303030; font-weight:600;")
 
-            v = data.get(fn)
-            w = self._make_widget_for_field(fn, v)
+            w = self._make_display_widget(f["name"], f["text"])
             self._form.addRow(lbl, w)
 
             sep = QFrame()
@@ -884,138 +824,21 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
 
     def _lookup_project_label(self, project_id: Any) -> str:
         """Gibt den lesbaren Projektnamen für eine Projekt-ID zurück."""
-        if project_id in (None, ""):
-            return ""
-        for t in ("tblProject", "tblProjects"):
-            if not table_exists(t):
-                continue
-            try:
-                cols = get_columns_map(t)
-                f_num = resolve_field(
-                    ["Project Number", "ProjectNumber", "Projekt Nummer", "ProjektNummer", "Number", "Nr"], cols)
-                f_name = resolve_field(
-                    ["Project Name", "ProjectName", "Projekt Name", "ProjektName", "Name", "Titel", "Title"], cols)
-                if not (f_num and f_name):
-                    continue
-                rows = fetch_all(f"SELECT [{f_num}] AS PN, [{f_name}] AS PName FROM [{t}] WHERE [ID]=?", [project_id])
-                if rows:
-                    pn = rows[0].get("PN")
-                    pnm = rows[0].get("PName")
-                    pn = "" if pn is None else str(pn)
-                    pnm = "" if pnm is None else str(pnm)
-                    out = (pn + " - " + pnm).strip(" -")
-                    return out
-            except Exception:
-                continue
-        return str(project_id)
+        from db import experiment_requests as er
+        return er.project_label(project_id)
 
     def _lookup_fk_label(self, field_name: str, fk_id: Any) -> str:
         """Gibt den lesbaren FK-Namen für eine FK-ID zurück (heuristisches Lookup)."""
-        if fk_id in (None, ""):
-            return ""
-
-        # Special case: tblExperimentRequests.CreatedBy -> tblUser.ID
-        # In popups we want a friendly label, not the raw ID.
-        if field_name.lower() in {"createdby", "createdbyid"}:
-            for t in ("tblUser", "tblUsers"):
-                if not table_exists(t):
-                    continue
-                try:
-                    cols = get_columns_map(t)
-                    f_user = resolve_field(["Username", "UserName", "Login", "Name"], cols)
-                    if not f_user:
-                        continue
-                    f_first = resolve_field(["FirstName", "First Name", "Vorname", "GivenName"], cols)
-                    f_last = resolve_field(["LastName", "Last Name", "Nachname", "Surname", "FamilyName"], cols)
-
-                    sel = [f"[{f_user}] AS U"]
-                    sel.append(f"[{f_first}] AS FN" if f_first else "NULL AS FN")
-                    sel.append(f"[{f_last}] AS LN" if f_last else "NULL AS LN")
-                    sql = f"SELECT {', '.join(sel)} FROM [{t}] WHERE [ID]=?"
-                    rows = fetch_all(sql, [fk_id])
-                    if rows:
-                        u = rows[0].get("U")
-                        if u is None:
-                            return str(fk_id)
-                        u_s = str(u).strip()
-                        fn = rows[0].get("FN")
-                        ln = rows[0].get("LN")
-                        fn_s = "" if fn is None else str(fn).strip()
-                        ln_s = "" if ln is None else str(ln).strip()
-
-                        full = (fn_s + " " + ln_s).strip()
-                        # Desired format: Username (FirstName LastName)
-                        return f"{u_s} ({full})" if full else u_s
-                except Exception:
-                    continue
-            return str(fk_id)
-
-        if field_name.lower() in {"projekt", "project", "projectid", "projektid"}:
-            return self._lookup_project_label(fk_id)
-
-        for t in er_try_tables_for_fk(field_name):
-            if not table_exists(t):
-                continue
-            disp = er_pick_display_column(t)
-            if not disp:
-                continue
-            try:
-                rows = fetch_all(f"SELECT [ID] AS ID, [{disp}] AS D FROM [{t}] WHERE [ID]=?", [fk_id])
-                if rows:
-                    d = rows[0].get("D")
-                    return "" if d is None else str(d)
-            except Exception:
-                continue
-        return str(fk_id)
+        from db import experiment_requests as er
+        return er.fk_label(field_name, fk_id)
 
     def _make_widget_for_field(self, field_name: str, val: Any) -> QWidget:
         """Erstellt einen passenden Display-Widget für ein Request-Feld."""
-        # If looks like FK, render label
-        try:
-            looks_fk = (
-                    field_name.lower().endswith('id')
-                    or field_name.lower() in {'projekt', 'project', 'createdby', 'createdbyid'}
-            )
-        except Exception:
-            looks_fk = False
+        from db import experiment_requests as er
+        return self._make_display_widget(field_name, er.display_text(field_name, val))
 
-        if looks_fk and val not in (None, ""):
-            txt = self._lookup_fk_label(field_name, val)
-        else:
-            txt = "" if val is None else str(val)
-
-        if field_name in ER_DATE_FIELDS and txt:
-            # keep raw string; Access via ODBC can be datetime/date
-            # Normalize to dd.MM.yyyy (no time)
-            try:
-                from datetime import datetime, date
-                if isinstance(val, (datetime, date)):
-                    txt = val.strftime("%d.%m.%Y")
-                else:
-                    s = str(txt).strip()
-                    # common Access/ODBC representations
-                    s = s.replace("T", " ")
-                    # strip timezone if present
-                    s = re.sub(r"(Z|[+-]\d{2}:\d{2})$", "", s).strip()
-                    # keep only date part if time is present
-                    s_date = s.split(" ")[0]
-                    if re.match(r"^\d{4}-\d{2}-\d{2}$", s_date):
-                        dt = datetime.strptime(s_date, "%Y-%m-%d")
-                        txt = dt.strftime("%d.%m.%Y")
-                    elif re.match(r"^\d{2}\.\d{2}\.\d{4}$", s_date):
-                        txt = s_date  # already desired
-                    else:
-                        # try a couple more common formats
-                        for fmt in ("%Y/%m/%d", "%d/%m/%Y", "%m/%d/%Y"):
-                            try:
-                                dt = datetime.strptime(s_date, fmt)
-                                txt = dt.strftime("%d.%m.%Y")
-                                break
-                            except Exception:
-                                continue
-            except Exception:
-                pass
-
+    def _make_display_widget(self, field_name: str, txt: str) -> QWidget:
+        """Read-only widget for an already formatted field text."""
         if field_name in ER_MULTILINE_FIELDS:
             te = QTextEdit()
             te.setReadOnly(True)

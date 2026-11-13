@@ -44,13 +44,11 @@ from PySide6.QtWidgets import (
 )
 
 import app_meta
-import datetime
-from db.connection import get_connection
 from db import experiment_request_changes as request_changes
+from db import experiment_requests as er
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.widgets.experiment_request_help_dialog import show_experiment_request_help
-from ui.screen_create_experiment import table_exists, get_columns_map, resolve_field
 from ui.widgets.friendly_error import show_error
 
 
@@ -81,10 +79,7 @@ class MyRequestsScreen(QWidget):
     # zeigt initial nur die "Kernspalten" (Titel/Status/Projekt/Owner/
     # Wunschtermin/Experiment ID), Volltext bleibt weiterhin per Doppelklick
     # (Edit-Screen) einsehbar.
-    _DETAIL_COLUMN_NAMES = {
-        "Versuchsgrund", "Aufgabe", "Versuchsumfang", "Beurteilungsparameter",
-        "Versuchsbedingungen", "Versuchsort", "Bemerkungen",
-    }
+    _DETAIL_COLUMN_NAMES = er.LIST_DETAIL_COLUMNS
 
     def __init__(self, on_back_home=None,
                  on_open_request: Optional[Callable[[Any], None]] = None, on_open_experiment=None,
@@ -130,108 +125,40 @@ class MyRequestsScreen(QWidget):
     # ---------------- Lookups ----------------
 
     def _load_status_choices(self) -> List[Tuple[Any, str]]:
-        """Lädt alle möglichen Status-Werte aus tblExperimentRequestStatus.
-
-        Returns:
-            Liste von (StatusID, StatusName)-Tupeln.
-        """
         """Lädt Status-Choices aus tblRequestStatus, sortiert nach RequestOrder."""
-        try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                sql = (
-                    "SELECT [ID], [RequestStatus] "
-                    "FROM [tblRequestStatus] "
-                    "ORDER BY [RequestOrder] ASC"
-                )
-                cur.execute(sql)
-                rows = cur.fetchall()
-            out: List[Tuple[Any, str]] = []
-            for r in rows:
-                out.append((r[0], r[1]))
-            return out
-        except Exception:
-            return []
+        return er.load_status_choices()
 
     def _update_request_status(
         self, request_id: Any, new_status_id: Any, denial_reason: Optional[str] = None
     ) -> bool:
-        """Aktualisiert den Status eines Requests in der DB.
-
-        `denial_reason` wird nur geschrieben, wenn die Umgebung die Spalte
-        `DenialReason` bereits hat (additiv, siehe CLAUDE.md-Migrationshistorie
-        - bisher dev_local + prod). Ein Statuswechsel WEG von "Denied" löscht
-        einen evtl. vorhandenen alten Grund gleich mit (sonst würde ein später
-        erneut abgelehnter Request einen veralteten Grund stehen lassen, falls
-        der neue Deny-Dialog aus irgendeinem Grund uebersprungen wuerde).
+        """Aktualisiert den Status eines Requests in der DB
+        (db/experiment_requests.update_request_status - ein Wechsel weg von
+        "Denied" löscht einen alten Grund mit).
 
         Returns:
             True bei Erfolg, False bei Fehler.
         """
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                has_denial_col = "denialreason" in get_columns_map("tblExperimentRequests")
-                if has_denial_col:
-                    cur.execute(
-                        "UPDATE [tblExperimentRequests] SET [RequestStatus]=?, [DenialReason]=? WHERE [ID]=?",
-                        [new_status_id, denial_reason, request_id],
-                    )
-                else:
-                    cur.execute(
-                        "UPDATE [tblExperimentRequests] SET [RequestStatus]=? WHERE [ID]=?",
-                        [new_status_id, request_id],
-                    )
-                try:
-                    cn.commit()
-                except Exception:
-                    pass
+            er.update_request_status(request_id, new_status_id, denial_reason=denial_reason)
             return True
         except Exception as e:
             QMessageBox.critical(self, "DB Error", str(e))
             return False
 
     def _notify_owner(self, owner_id: Optional[Any], request_id: Any, message: str) -> None:
-        """Benachrichtigt den Request-Besitzer (best-effort, siehe
-        ui/notifications.py). Keine Selbst-Benachrichtigung, falls der
-        Superuser sein eigenes Request bearbeitet."""
-        if owner_id in (None, ""):
-            return
-        try:
-            cu = getattr(app_meta, "current_user", {}) or {}
-            if str(owner_id) == str(cu.get("id")):
-                return
-            from ui.notifications import create_experiment_request_notification
-            create_experiment_request_notification(owner_id, request_id, message)
-        except Exception:
-            pass
+        """Benachrichtigt den Request-Besitzer (best-effort, keine Selbst-
+        Benachrichtigung), siehe db/experiment_requests.notify_owner."""
+        er.notify_owner(getattr(app_meta, "current_user", {}) or {}, owner_id, request_id, message)
 
     def _notify_owner_status_changed(
         self, owner_id: Optional[Any], request_id: Any, titel: str, new_status_label: str
     ) -> None:
-        label = titel.strip() or f"#{request_id}"
-        self._notify_owner(owner_id, request_id, f"Request '{label}' status changed to {new_status_label}")
+        er.notify_owner_status_changed(getattr(app_meta, "current_user", {}) or {},
+                                       owner_id, request_id, titel, new_status_label)
 
     def _notify_owner_of_request(self, request_id: Any, message: str) -> None:
-        """Wie _notify_owner(), aber holt CreatedBy/Titel selbst per ID nach
-        (fuer Aufrufer, die nur die request_id kennen, z.B.
-        _assign_experiment_to_request()/_review_pending_change()).
-        `message` ist bereits fertig formuliert."""
-        try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute(
-                    "SELECT [CreatedBy], [Titel] FROM [tblExperimentRequests] WHERE [ID]=?",
-                    [request_id],
-                )
-                row = cur.fetchone()
-            if not row:
-                return
-            owner_id, titel = row[0], row[1]
-            label = str(titel or "").strip() or f"#{request_id}"
-            self._notify_owner(owner_id, request_id, f"Request '{label}': {message}")
-        except Exception:
-            pass
+        """Wie _notify_owner(), aber holt CreatedBy/Titel selbst per ID nach."""
+        er.notify_owner_of_request(getattr(app_meta, "current_user", {}) or {}, request_id, message)
 
     def set_user(self, user_id: Optional[Any]):
         """Setzt die Benutzer-ID für die Filterung und lädt die Daten neu.
@@ -241,74 +168,12 @@ class MyRequestsScreen(QWidget):
         self._user_id = user_id
 
     def _resolve_experiment_request_field(self) -> Optional[str]:
-        """Ermittelt den FK-Feldnamen in tblExperimente, der auf ExperimentRequests zeigt.
-
-        Verschiedene DB-Versionen nutzen unterschiedliche Feldnamen.
-        Gibt None zurück wenn kein passendes Feld gefunden wurde.
-        """
         """Findet das Feld in tblExperimente, das auf einen Experiment Request (ID) verweist."""
-        try:
-            if not table_exists("tblExperimente"):
-                return None
-            cols = get_columns_map("tblExperimente")
-            return resolve_field(
-                ["ExperimentRequest", "Experiment Request", "ExperimentRequestID", "ExperimentRequestId"],
-                cols,
-            )
-        except Exception:
-            return None
+        return er.resolve_experiment_request_field()
 
     def _prefetch_experiment_ids_for_requests(self, request_ids: List[Any]) -> dict:
-        """Lädt die zugehörigen Experiment-IDs für eine Liste von Request-IDs.
-
-        Wird verwendet um in der Tabelle die lesbare Experiment-ID (z.B. "2024-PG-001")
-        statt der internen DB-ID anzuzeigen.
-
-        Returns:
-            Dict {RequestID: ExperimentID-String}.
-        """
-        """Liefert {RequestID: ExperimentID} für gegebene RequestIDs.
-
-        Robust gegen unterschiedliche Feldnamen (Migration Access/MySQL).
-        """
-        out: dict = {}
-        if not request_ids:
-            return out
-
-        er_field = self._resolve_experiment_request_field()
-        if not er_field:
-            return out
-
-        try:
-            cols = get_columns_map("tblExperimente")
-            expid_field = resolve_field(["ExperimentID", "Experiment ID", "ExperimentId"], cols) or "ExperimentID"
-        except Exception:
-            expid_field = "ExperimentID"
-
-        chunk_size = 200
-        try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                for i in range(0, len(request_ids), chunk_size):
-                    chunk = request_ids[i:i + chunk_size]
-                    placeholders = ",".join(["?"] * len(chunk))
-                    sql = (
-                        f"SELECT [{expid_field}] AS ExpID, [{er_field}] AS ReqID "
-                        f"FROM [tblExperimente] "
-                        f"WHERE [{er_field}] IN ({placeholders})"
-                    )
-                    cur.execute(sql, list(chunk))
-                    rows = cur.fetchall()
-                    for r in rows or []:
-                        exp_id = r[0]
-                        req_id = r[1]
-                        if req_id in (None, ""):
-                            continue
-                        out[req_id] = "" if exp_id is None else str(exp_id)
-        except Exception:
-            return out
-
-        return out
+        """Liefert {RequestID: ExperimentID} für gegebene RequestIDs."""
+        return er.experiment_ids_for_requests(request_ids)
 
     # ---------------- Data ----------------
 
@@ -340,43 +205,9 @@ class MyRequestsScreen(QWidget):
         self._status_choices = self._load_status_choices()
 
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                sql = (
-                    "SELECT er.*, "
-                    "CONCAT_WS(' - ', p.ProjectNumber, p.ProjectName) AS ProjektText, "
-                    "u.[Username] AS CreatedByUser "
-                    "FROM ((tblExperimentRequests AS er "
-                    "LEFT JOIN tblProject AS p ON er.[Projekt]=p.[ID]) "
-                    "LEFT JOIN tblUser AS u ON er.[CreatedBy]=u.[ID]) "
-                )
-
-                # Aenderungs-Kopien (ChangeOfRequestID gesetzt) sind kein
-                # eigenstaendiger Request - sie erscheinen nie als eigene
-                # Zeile, sondern nur als Markierung auf ihrem Original.
-                # Archived prior versions (PriorVersionOfID set, see
-                # db/experiment_request_changes.py) are likewise not a
-                # standalone row - pure read-only snapshots, visible only
-                # through the version history dialog. Both columns don't
-                # exist on every environment yet (dev is still pending as of
-                # 2026-09-02) - drop the respective filter entirely on
-                # environments without it, instead of "Unknown column".
-                params: List[Any] = []
-                where_clauses: List[str] = []
-                if request_changes.supports_change_tracking():
-                    where_clauses.append("er.[ChangeOfRequestID] IS NULL")
-                if request_changes.supports_versioning():
-                    where_clauses.append("er.[PriorVersionOfID] IS NULL")
-                if not self._is_superuser:
-                    where_clauses.append("er.[CreatedBy]=?")
-                    params.append(uid)
-                if where_clauses:
-                    sql += "WHERE " + " AND ".join(where_clauses) + " "
-
-                sql += "ORDER BY er.[Timestamp] DESC"
-                cur.execute(sql, params)
-                rows = cur.fetchall()
-                col_names = [d[0] for d in (cur.description or [])]
+            # Query (copies/archived versions excluded, normal users only their
+            # own rows): db/experiment_requests.fetch_request_rows()
+            rows, col_names = er.fetch_request_rows(uid, self._is_superuser)
         except Exception as e:
             QMessageBox.critical(self, "DB Error", str(e))
             self._lbl_info.setText("Error while loading.")
@@ -387,31 +218,15 @@ class MyRequestsScreen(QWidget):
         self._rebuild_filter_options(rows, col_names)
 
         # DenialReason wird nicht als eigene Spalte gezeigt (siehe Tooltip auf
-        # der Status-Combo weiter unten) - reine Moderations-Info, keine vom
-        # Nutzer bearbeitbare Tabellenspalte.
-        hidden_cols = {"CreatedBy", "Projekt", "ID", "Timestamp", "DenialReason"}
-        if not self._is_superuser:
-            hidden_cols.add("CreatedByUser")
-
-        visible_cols: List[Tuple[int, str]] = []
-        for i, name in enumerate(col_names):
-            if name in hidden_cols:
-                continue
-            visible_cols.append((i, name))
+        # der Status-Combo weiter unten) - er.list_columns().
+        visible_cols: List[Tuple[int, str]] = er.list_columns(col_names, self._is_superuser)
 
         self._tbl.setSortingEnabled(False)
         self._tbl.clear()
         # +1 für die zusätzliche UI-Spalte
         self._tbl.setColumnCount(len(visible_cols) + 1)
 
-        header_labels: List[str] = []
-        for _, name in visible_cols:
-            if name == "ProjektText":
-                header_labels.append("Project")
-            elif name == "CreatedByUser":
-                header_labels.append("Owner")
-            else:
-                header_labels.append(name)
+        header_labels: List[str] = [er.list_header_label(name) for _, name in visible_cols]
         header_labels.append("Experiment ID")
         self._tbl.setHorizontalHeaderLabels(header_labels)
 
@@ -422,23 +237,12 @@ class MyRequestsScreen(QWidget):
         self._tbl.setRowCount(len(rows))
 
         # Indizes ermitteln
-        id_idx: Optional[int] = None
-        rs_idx: Optional[int] = None
-        cb_idx: Optional[int] = None
-        titel_idx: Optional[int] = None
-        dr_idx: Optional[int] = None
-        for i, n in enumerate(col_names):
-            ln = str(n).strip().lower()
-            if ln == "id":
-                id_idx = i
-            elif ln == "requeststatus":
-                rs_idx = i
-            elif ln == "createdby":
-                cb_idx = i
-            elif ln == "titel":
-                titel_idx = i
-            elif ln == "denialreason":
-                dr_idx = i
+        _ix = er.list_column_indices(col_names)
+        id_idx: Optional[int] = _ix["id"]
+        rs_idx: Optional[int] = _ix["requeststatus"]
+        cb_idx: Optional[int] = _ix["createdby"]
+        titel_idx: Optional[int] = _ix["titel"]
+        dr_idx: Optional[int] = _ix["denialreason"]
 
         # ExperimentIDs für Status=4 vorladen
         exp_map: dict = {}
@@ -477,7 +281,7 @@ class MyRequestsScreen(QWidget):
             req_id = row[id_idx] if id_idx is not None else None
             current_status_id = row[rs_idx] if rs_idx is not None else None
             has_pending_change = req_id in self._pending_copy_map
-            is_new_unreviewed = current_status_id == 1 and not has_pending_change
+            is_new_unreviewed = er.is_new_unreviewed(current_status_id, has_pending_change)
             owner_id = row[cb_idx] if cb_idx is not None else None
             titel_val = str(row[titel_idx] or "") if titel_idx is not None else ""
             denial_reason_val = row[dr_idx] if dr_idx is not None else None
@@ -506,56 +310,21 @@ class MyRequestsScreen(QWidget):
                         f"QComboBox {{ background: #ffffff; border: 1px solid {combo_border}; padding: 2px 6px; }}"
                         "QComboBox QAbstractItemView { background: #ffffff; }"
                     )
-                    tooltip_parts: List[str] = []
-                    if has_pending_change:
-                        tooltip_parts.append(
-                            "There is a change proposal for this request that is not approved yet (waiting for a superuser)."
-                        )
-                    elif is_new_unreviewed:
-                        tooltip_parts.append("New request, not reviewed yet.")
-                    if current_status_id == 2 and denial_reason_val:
-                        tooltip_parts.append(f"Denial reason: {denial_reason_val}")
-                    if tooltip_parts:
-                        combo.setToolTip("\n".join(tooltip_parts))
-                    # Superuser soll Status ändern dürfen, aber nicht auf "leer" und nicht auf "Experiment".
-
+                    _tooltip = er.status_tooltip(current_status_id, has_pending_change,
+                                                 is_new_unreviewed, denial_reason_val)
+                    if _tooltip:
+                        combo.setToolTip(_tooltip)
+                    # Superuser soll Status ändern dürfen, aber nicht auf "leer" und nicht auf
+                    # "Experiment" (nur angezeigt, wenn aktuell) - er.status_options().
                     # Nicht-Superuser: Combo bleibt deaktiviert, darf aber den aktuellen Text anzeigen.
-
-                    if not self._is_superuser:
-                        combo.addItem("", None)
-
-                    for _id, label in self._status_choices:
-
-                        lbl = "" if label is None else str(label)
-
-                        # Für Superuser: "Experiment" und leere Werte NICHT als Option anbieten.
-
-                        if self._is_superuser:
-
-                            if lbl.strip() == "":
-                                continue
-
-                            if lbl.strip().lower() == "experiment":
-
-                                # Falls der aktuelle Status aus historischen Gründen "Experiment" ist,
-
-                                # darf er angezeigt werden, aber nicht auswählbar sein.
-
-                                if _id == current_status_id:
-
-                                    combo.addItem(lbl, _id)
-
-                                    try:
-
-                                        combo.model().item(combo.count() - 1).setEnabled(False)
-
-                                    except Exception:
-
-                                        pass
-
-                                continue
-
+                    for lbl, _id, _selectable in er.status_options(
+                            self._status_choices, current_status_id, self._is_superuser):
                         combo.addItem(lbl, _id)
+                        if not _selectable:
+                            try:
+                                combo.model().item(combo.count() - 1).setEnabled(False)
+                            except Exception:
+                                pass
 
                     combo.blockSignals(True)
                     if current_status_id is None:
@@ -571,10 +340,7 @@ class MyRequestsScreen(QWidget):
                         _state = {"old_id": current_status_id}
 
                         def _label_for_status_id(_sid: Any) -> str:
-                            for _id, _label in self._status_choices:
-                                if _id == _sid:
-                                    return "" if _label is None else str(_label)
-                            return ""
+                            return er.status_label(self._status_choices, _sid)
 
                         def _set_combo_to_status_id(_sid: Any, *, _cb: QComboBox) -> None:
                             _cb.blockSignals(True)
@@ -590,31 +356,21 @@ class MyRequestsScreen(QWidget):
                             _owner_id=owner_id, _titel=titel_val,
                         ):
                             new_id = _cb.currentData()
-
-                            # Nicht erlaubt: leer / None
-                            if new_id in (None, ""):
-                                _set_combo_to_status_id(_state["old_id"], _cb=_cb)
-                                return
-
-                            new_label = _label_for_status_id(new_id).strip()
-
-                            # Nicht erlaubt: Status "Experiment"
-                            if new_label.lower() == "experiment":
-                                _set_combo_to_status_id(_state["old_id"], _cb=_cb)
-                                return
-
                             old_id = _state["old_id"]
-                            if new_id == old_id:
+
+                            # Regel: db/experiment_requests.check_status_change() -
+                            # nicht erlaubt: leer / None / "Experiment"; "Fehlklick"-
+                            # Schutz (2026-08-27): Wechsel auf "Denied" braucht einen
+                            # Grund, Approved/Experiment -> "Request" eine Bestaetigung.
+                            verdict, new_label = er.check_status_change(self._status_choices, old_id, new_id)
+                            if verdict == "invalid":
+                                _set_combo_to_status_id(old_id, _cb=_cb)
+                                return
+                            if verdict == "same":
                                 return
 
-                            # "Fehlklick"-Schutz (2026-08-27, Nutzerwunsch: kein
-                            # ungefragtes Zuruecksetzen mehr): jeder Wechsel WEG
-                            # von "Denied" braucht einen Grund, jeder Wechsel
-                            # zurueck auf "Request" von einem bereits
-                            # geprueften Status (Approved/Experiment) eine
-                            # explizite Bestaetigung.
                             denial_reason = None
-                            if new_label.lower() == "denied":
+                            if verdict == "needs_reason":
                                 text, ok = QInputDialog.getMultiLineText(
                                     self,
                                     "Deny request",
@@ -625,13 +381,12 @@ class MyRequestsScreen(QWidget):
                                     _set_combo_to_status_id(old_id, _cb=_cb)
                                     return
                                 denial_reason = text.strip()
-                            elif old_id in (3, 4) and new_label.lower() == "request":
+                            elif verdict == "needs_confirmation":
                                 old_label = _label_for_status_id(old_id).strip()
                                 reply = QMessageBox.question(
                                     self,
                                     "Confirm status change",
-                                    f"Request #{_req_id} is currently '{old_label}'. "
-                                    "Really move it back to 'Request' (open)?",
+                                    er.confirm_back_to_request_text(_req_id, old_label),
                                     QMessageBox.Yes | QMessageBox.No,
                                     QMessageBox.No,
                                 )
@@ -650,31 +405,10 @@ class MyRequestsScreen(QWidget):
                     self._tbl.setCellWidget(r, c_vis, combo)
                     continue
 
-                val = row[c_src]
-                # Format dates
-                if _col_name == "Wunschtermin" and val not in (None, ""):
-                    try:
-                        # QDate / QDateTime
-                        if hasattr(val, "toString"):
-                            val = val.toString("dd.MM.yyyy")
-                        elif isinstance(val, (datetime.date, datetime.datetime)):
-                            val = val.strftime("%d.%m.%Y")
-                        else:
-                            s = str(val).strip()
-                            for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%d.%m.%Y"):
-                                try:
-                                    val = datetime.datetime.strptime(s, fmt).strftime("%d.%m.%Y")
-                                    break
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
+                val = er.format_list_value(_col_name, row[c_src])
                 display_val = "" if val is None else str(val)
                 if str(_col_name).strip().lower() == "titel":
-                    if has_pending_change:
-                        display_val = "⏳ " + display_val
-                    elif is_new_unreviewed:
-                        display_val = "🆕 " + display_val
+                    display_val = er.title_marker(has_pending_change, is_new_unreviewed) + display_val
                 item = QTableWidgetItem(display_val)
 
                 # Titel-Spalte gruen + fett darstellen
@@ -687,12 +421,10 @@ class MyRequestsScreen(QWidget):
 
                 if has_pending_change:
                     item.setData(Qt.BackgroundRole, pending_bg)
-                    item.setToolTip(
-                        "There is a change proposal for this request that is not approved yet (waiting for a superuser)."
-                    )
+                    item.setToolTip(er.PENDING_TOOLTIP)
                 elif is_new_unreviewed:
                     item.setData(Qt.BackgroundRole, new_bg)
-                    item.setToolTip("New request, not reviewed yet.")
+                    item.setToolTip(er.NEW_TOOLTIP)
 
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 if c_vis == 0:
@@ -1243,25 +975,13 @@ class MyRequestsScreen(QWidget):
             return
 
         try:
-            cols = get_columns_map("tblExperimente")
-            exp_id_field = resolve_field(
-                ["ExperimentID", "Experiment ID", "ExperimentId"], cols
-            ) or "ExperimentID"
-            pk_field = resolve_field(["ID"], cols) or "ID"
+            exp_id_field, pk_field = er.experiment_id_fields()
         except Exception as e:
             show_error(self, "Assign experiment", "The experiment requests could not be read.", e)
             return
 
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                cur.execute(
-                    f"SELECT [{pk_field}] AS PK, [{exp_id_field}] AS ExpID "
-                    f"FROM [tblExperimente] "
-                    f"WHERE [{er_field}] IS NULL "
-                    f"ORDER BY [{exp_id_field}] DESC",
-                )
-                exp_rows = cur.fetchall()
+            exp_rows = er.unlinked_experiments(er_field, exp_id_field, pk_field)
         except Exception as e:
             show_error(self, "Assign experiment", "The experiments could not be loaded.", e)
             return
@@ -1303,7 +1023,7 @@ class MyRequestsScreen(QWidget):
         )
         cmb.addItem("– Please select –", None)
         for pk, exp_id_val in exp_rows:
-            cmb.addItem(str(exp_id_val) if exp_id_val is not None else f"ID {pk}", pk)
+            cmb.addItem(er.experiment_choice_label(pk, exp_id_val), pk)
 
         form.addRow("Experiment:", cmb)
         layout.addLayout(form)
@@ -1344,25 +1064,10 @@ class MyRequestsScreen(QWidget):
         if reply != QMessageBox.Yes:
             return
 
-        # --- DB schreiben ---
+        # --- DB schreiben (Verknuepfung + Status 4) ---
         try:
-            with get_connection() as cn:
-                cn.autocommit = False
-                cur = cn.cursor()
-                cur.execute(
-                    f"UPDATE [tblExperimente] SET [{er_field}]=? WHERE [{pk_field}]=?",
-                    [req_id, selected_pk],
-                )
-                cur.execute(
-                    "UPDATE [tblExperimentRequests] SET [RequestStatus]=4 WHERE [ID]=?",
-                    [req_id],
-                )
-                cn.commit()
+            er.link_experiment(req_id, selected_pk, er_field, pk_field)
         except Exception as e:
-            try:
-                cn.rollback()
-            except Exception:
-                pass
             show_error(self, "Error", "The experiment could not be assigned.", e)
             return
 
