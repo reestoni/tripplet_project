@@ -1714,3 +1714,135 @@ def compare_requests(left_id: Any, right_id: Any) -> Dict[str, Any]:
         new_val = compare_text(fn, proposed.get(fn))
         rows.append({"field": fn, "left": old_val, "right": new_val, "changed": old_val != new_val})
     return {"title": title, "rows": rows, "any_changes": any(r["changed"] for r in rows)}
+
+
+# ======================================================================
+# Read-only popup from series lists / Show Experiment / Report + version
+# history + Experiment ID -> series (moved from the Qt screens, 2026-11-13,
+# shared with the web app)
+# ======================================================================
+
+def request_id_for_experiment(experiment_pk: Any) -> Any:
+    """Experiment Request linked to an experiment (tblExperimente.ID), None if
+    none (from ShowExperimentScreen._refresh_experiment_request_link)."""
+    if experiment_pk in (None, ""):
+        return None
+    f_req = resolve_experiment_request_field()
+    if not f_req:
+        return None
+    try:
+        rows = fetch_all(f"SELECT [{f_req}] AS ER FROM [tblExperimente] WHERE [ID]=?", [experiment_pk])
+    except Exception:
+        return None
+    rid = rows[0].get("ER") if rows else None
+    return None if rid in (None, "", 0, "0") else rid
+
+
+def request_id_for_series(series_pk: Any) -> Any:
+    """Experiment Request linked to the experiment of a trial series, only if
+    the request row exists (Report ER icon, from ReportScreen._refresh_experiment_request_link)."""
+    if series_pk in (None, ""):
+        return None
+    try:
+        rows = fetch_all(
+            """
+            SELECT er.ID AS req_id
+            FROM tblTrialSeries ts
+            JOIN tblExperimente e ON e.ID = ts.ExperimentID
+            JOIN tblExperimentRequests er ON er.ID = e.ExperimentRequestID
+            WHERE ts.ID = ?
+            LIMIT 1
+            """,
+            [series_pk],
+        )
+    except Exception:
+        return None
+    return rows[0].get("req_id") if rows else None
+
+
+def is_linked_request(request_id: Any) -> bool:
+    """True if an experiment links to this request."""
+    f_req = resolve_experiment_request_field()
+    if not f_req or request_id in (None, ""):
+        return False
+    try:
+        return bool(fetch_all(f"SELECT 1 AS X FROM [tblExperimente] WHERE [{f_req}]=? LIMIT 1", [request_id]))
+    except Exception:
+        return False
+
+
+def can_view(user: Optional[dict], row: Optional[Dict[str, Any]]) -> bool:
+    """Who may see a request read-only: whoever may open it (can_open), plus
+    everybody for a request linked to an experiment (and its archived versions) -
+    the desktop shows those from All Experiments/Backlog/Show Experiment/Report
+    to every user who sees the series."""
+    if not row:
+        return False
+    if can_open(user, row):
+        return True
+    return is_linked_request(row.get("PriorVersionOfID") or row.get("ID"))
+
+
+def popup_data(request_id: Any, prefix: str = "") -> Optional[Dict[str, Any]]:
+    """Content of the read-only popup (_ExperimentRequestReadOnlyDialog): title,
+    fields, images and whether a version history exists. None if not found."""
+    from db import experiment_request_images as images
+
+    data = fetch_request(request_id)
+    if data is None:
+        return None
+    history_target = data.get("PriorVersionOfID") or request_id
+    try:
+        has_versions = request_changes.has_versions(history_target)
+    except Exception:
+        has_versions = False
+    return {
+        "id": data.get("ID", request_id),
+        "title": popup_title(data, request_id, prefix)[0],
+        "display": display_fields(get_table_columns(TABLE), data),
+        "images": images.list_images(request_id),
+        "history_target_id": history_target,
+        "has_versions": has_versions,
+    }
+
+
+def version_history(request_id: Any) -> List[Dict[str, Any]]:
+    """Entries of the version history dialog, newest first: the live row
+    ("Current", version total+1) and every archived prior version (version
+    total..1). Each {"id", "version", "current", "timestamp", "user"}."""
+    versions = request_changes.list_versions(request_id)
+    total = len(versions)
+    out: List[Dict[str, Any]] = [{"id": request_id, "version": total + 1, "current": True,
+                                  "timestamp": None, "user": ""}]
+    for i, v in enumerate(versions):
+        ts = v.get("Timestamp")
+        out.append({"id": v.get("ID"), "version": total - i, "current": False,
+                    "timestamp": ts.strftime("%Y-%m-%d %H:%M") if isinstance(ts, datetime.datetime) else str(ts or ""),
+                    "user": str(v.get("CreatedByUser") or "").strip() or "?"})
+    return out
+
+
+def series_for_experiment_id(exp_id_txt: Any) -> Tuple[Optional[int], List[Dict[str, Any]]]:
+    """(experiment PK, [{"id", "name", "trials"}]) for an ExperimentID text
+    (My Requests: click on Experiment ID -> series picker -> Show Experiment).
+    (None, []) if the experiment does not exist."""
+    cols = _db_get_columns_map("tblexperimente")
+    f_id = None
+    for cand in ("experimentid", "experiment id", "experimentid_txt"):
+        if cand in cols:
+            f_id = cols[cand]
+            break
+    if not f_id or exp_id_txt in (None, ""):
+        return None, []
+    exp_rows = fetch_all(f"SELECT ID FROM tblExperimente WHERE `{f_id}` = %s", [str(exp_id_txt)])
+    if not exp_rows:
+        return None, []
+    exp_pk = int(exp_rows[0]["ID"])
+    series_rows = fetch_all(
+        "SELECT ID, SeriesName, "
+        "(SELECT COUNT(*) FROM tblTrial WHERE TrialSeriesID = tblTrialSeries.ID) AS TrialCount "
+        "FROM tblTrialSeries WHERE ExperimentID = %s ORDER BY ID",
+        [exp_pk],
+    )
+    return exp_pk, [{"id": int(r["ID"]), "name": str(r.get("SeriesName") or f"Series {r['ID']}"),
+                     "trials": int(r.get("TrialCount") or 0)} for r in series_rows]

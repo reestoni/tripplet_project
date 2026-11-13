@@ -27,7 +27,9 @@ from ui.pathutil import resource_path
 # Natives SVG-Seitenverhaeltnis (viewBox="-230 0 1170 500" in
 # assets/images/experiment_request_flow.svg) - Breite/Hoehe der Anzeige
 # unten leiten sich davon ab, damit nichts gestaucht/verzerrt wird.
-_SVG_W, _SVG_H = 1080, 461
+from ui.widgets.experiment_request_help_texts import (  # texts = data, shared with the web app
+    INTRO, NOTE, SVG, SVG_H as _SVG_H, SVG_W as _SVG_W, WINDOW_TITLE,
+)
 
 
 class ExperimentRequestHelpDialog(QDialog):
@@ -35,7 +37,7 @@ class ExperimentRequestHelpDialog(QDialog):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("Wie funktionieren Experiment Requests?")
+        self.setWindowTitle(WINDOW_TITLE)
         # Muss das SVG (siehe _SVG_W/_SVG_H) plus Rand vollstaendig ohne
         # Scrollen fassen - Bugreport 2026-08-31: "das Fenster das aufgeht
         # ist zu schmal" (vorherige Version: SVG-Mindestbreite 1000px in
@@ -47,24 +49,16 @@ class ExperimentRequestHelpDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 16)
         layout.setSpacing(14)
 
-        intro = QLabel(
-            "From request to experiment: green arrows are steps you take yourself, purple ones a superuser "
-            "takes when reviewing."
-        )
+        intro = QLabel(INTRO)
         intro.setWordWrap(True)
         intro.setStyleSheet("font-size: 13px; color: #565656;")
         layout.addWidget(intro)
 
-        self._svg = QSvgWidget(resource_path("assets/images/experiment_request_flow.svg"))
+        self._svg = QSvgWidget(resource_path(SVG))
         self._svg.setFixedSize(_SVG_W, _SVG_H)
         layout.addWidget(self._svg, 0, Qt.AlignHCenter)
 
-        note = QLabel(
-            "<b>Important when editing:</b> if you change a request that is already approved or linked "
-            'to an experiment, a separate <b>copy</b> in status "Open" is created (dashed in the diagram) '
-            "– only when a superuser accepts it does the content go into the original, without changing "
-            "its status or experiment link."
-        )
+        note = QLabel(NOTE)
         note.setWordWrap(True)
         note.setStyleSheet(
             "font-size: 13px; color: #2b2b2b; background: #fff3cd; "

@@ -351,28 +351,10 @@ class ReportScreen(QWidget):
 
 
     def _refresh_experiment_request_link(self) -> None:
-        """Laedt die verknuepfte ExperimentRequest-ID ueber series_pk -> ExperimentID."""
-        self._experiment_request_id = None
-        if not self._series_pk:
-            return
-        try:
-            from db.connection import fetch_all
-            # series_pk -> tblTrialSeries.ExperimentID -> tblExperimente.ExperimentRequest
-            rows = fetch_all(
-                """
-                SELECT er.ID AS req_id
-                FROM tblTrialSeries ts
-                JOIN tblExperimente e ON e.ID = ts.ExperimentID
-                JOIN tblExperimentRequests er ON er.ID = e.ExperimentRequestID
-                WHERE ts.ID = ?
-                LIMIT 1
-                """,
-                [self._series_pk],
-            )
-            if rows:
-                self._experiment_request_id = rows[0].get("req_id")
-        except Exception:
-            self._experiment_request_id = None
+        """Laedt die verknuepfte ExperimentRequest-ID ueber series_pk -> ExperimentID
+        (db/experiment_requests.request_id_for_series, shared with the web)."""
+        from db import experiment_requests as er
+        self._experiment_request_id = er.request_id_for_series(self._series_pk) if self._series_pk else None
 
     def _sync_experiment_request_icon(self) -> None:
         """Zeigt/versteckt den ER-Button je nach verlinktem Request."""

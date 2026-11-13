@@ -263,33 +263,11 @@ class LoginScreen(QWidget):
             except Exception as e:
                 print(f"Draft ExperimentRequests cleanup failed: {e}", flush=True)
 
-            # --- Athena Token-Reset on Login (monatlich) ---
-            try:
-                from db.connection import execute as db_execute, fetch_all as db_fetch
-                import datetime
-                reset_rows = db_fetch(
-                    "SELECT tokens_reset FROM tblUser WHERE Username = %s",
-                    [user],
-                )
-                do_reset = True
-                if reset_rows and reset_rows[0].get("tokens_reset"):
-                    last = reset_rows[0]["tokens_reset"]
-                    if isinstance(last, str):
-                        last = datetime.date.fromisoformat(last)
-                    if last > datetime.date.today():
-                        do_reset = False
-                if do_reset:
-                    db_execute(
-                        "UPDATE tblUser SET tokens_used = 0, "
-                        "tokens_reset = CURDATE() + INTERVAL 1 MONTH "
-                        "WHERE Username = %s",
-                        [user],
-                    )
-                    print(f"Athena token reset on login for: {user}", flush=True)
-                else:
-                    print(f"Athena token reset skipped (valid until {reset_rows[0]['tokens_reset']}) for: {user}", flush=True)
-            except Exception as e:
-                print(f"Athena token reset failed: {e}", flush=True)
+            # --- Athena Token-Reset on Login (monatlich, db/ai_key.py - auch Web-Login) ---
+            from db.ai_key import reset_tokens_if_due
+            done = reset_tokens_if_due(user)
+            if done is not None:
+                print(f"Athena token reset {'on login' if done else 'skipped (still valid)'} for: {user}", flush=True)
 
             # Navigation zur App (kein Popup, direkt weiter)
             self.on_success(

@@ -31,75 +31,8 @@ import app_meta
 # Master Key + API Key laden
 # ---------------------------------------------------------------------------
 
-def _load_master_key() -> Optional[bytes]:
-    """Lädt den Fernet MASTER_KEY aus secrets.enc (eingebettet via PyInstaller oder lokal)."""
-    candidates = [Path("secrets.enc")]
-    if getattr(sys, "frozen", False):
-        candidates.insert(0, Path(sys._MEIPASS) / "secrets.enc")
-    else:
-        candidates.append(Path(__file__).parent.parent / "secrets.enc")
-
-    for p in candidates:
-        if p.exists():
-            try:
-                key = p.read_bytes().strip()
-                if len(key) == 44:
-                    return key
-            except Exception:
-                pass
-    return None
-
-
-def load_api_key() -> Optional[str]:
-    """Lädt und entschlüsselt den Anthropic API Key für den aktuell eingeloggten User."""
-    try:
-        from cryptography.fernet import Fernet
-
-        master_key = _load_master_key()
-        if master_key:
-            username = app_meta.current_user.get("username", "")
-            if username:
-                rows = fetch_all(
-                    "SELECT api_key_enc, token_limit, tokens_used "
-                    "FROM tbluser WHERE Username = %s",
-                    [username]
-                )
-                if rows and rows[0].get("api_key_enc"):
-                    enc   = rows[0]["api_key_enc"]
-                    limit = rows[0].get("token_limit") or 0
-                    used  = rows[0].get("tokens_used") or 0
-                    if limit > 0 and used >= limit:
-                        return None  # Limit erreicht
-                    f = Fernet(master_key)
-                    return f.decrypt(enc.encode("utf-8")).decode("utf-8")
-    except Exception:
-        pass
-
-    # Fallback: ai_secrets.json (Dev-Modus)
-    for p in [Path("ai_secrets.json"), Path(r"C:\ProgramData\TrippleT\ai_secrets.json")]:
-        if p.exists():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8"))
-                key  = data.get("anthropic_api_key", "").strip()
-                if key:
-                    return key
-            except Exception:
-                pass
-    return None
-
-
-def update_token_usage(input_tokens: int, output_tokens: int) -> None:
-    """Schreibt den Token-Verbrauch nach einem API-Call in tbluser zurück."""
-    try:
-        from db.connection import execute
-        username = app_meta.current_user.get("username", "")
-        if username:
-            execute(
-                "UPDATE tblUser SET tokens_used = tokens_used + %s WHERE Username = %s",
-                [input_tokens + output_tokens, username]
-            )
-    except Exception:
-        pass
+# moved to the Qt-free db/ai_key.py (shared with the web app); re-exported here
+from db.ai_key import _load_master_key, load_api_key, update_token_usage  # noqa: E402,F401
 
 
 # ---------------------------------------------------------------------------

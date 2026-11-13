@@ -25,31 +25,20 @@ import app_meta
 from ui import display_prefs
 from ui.widgets.friendly_error import show_error
 
-WELCOME_MAX_LEN = 45
+from db.user_account import WELCOME_MAX_LEN  # noqa: E402  (rules shared with the web app)
 # chosen size clearly visible (the app stylesheet barely marks :checked)
 _CHOICE_QSS = ("QPushButton:checked{background:#1F4E8C;color:#FFFFFF;font-weight:bold;"
                "border:2px solid #1F4E8C;}")
 
 
 def _load_welcome_message() -> str:
-    uid = (app_meta.current_user or {}).get("id")
-    if not uid:
-        return ""
-    try:
-        from db.connection import fetch_all
-        rows = fetch_all("SELECT WelcomeMessage FROM tblUser WHERE ID = ?", [uid])
-        return str((rows[0].get("WelcomeMessage") if rows else None) or "")
-    except Exception:
-        return ""
+    from db.user_account import load_welcome_message
+    return load_welcome_message((app_meta.current_user or {}).get("id"))
 
 
 def _save_welcome_message(text: str) -> None:
-    uid = (app_meta.current_user or {}).get("id")
-    if not uid:
-        return
-    from db.connection import execute
-    value = (text or "").strip()[:WELCOME_MAX_LEN] or None
-    execute("UPDATE tblUser SET WelcomeMessage = ? WHERE ID = ?", [value, uid])
+    from db.user_account import save_welcome_message
+    save_welcome_message((app_meta.current_user or {}).get("id"), text)
 
 
 def _refresh_welcome_labels() -> None:
@@ -69,10 +58,8 @@ def apply_accent(hex_val: str) -> None:
 
 
 def save_accent(hex_val: str) -> None:
-    username = (app_meta.current_user or {}).get("username")
-    if username:
-        from db.connection import execute
-        execute("UPDATE tblUser SET AccentColour = ? WHERE Username = ?", [hex_val, username])
+    from db.user_account import save_accent as _save
+    _save((app_meta.current_user or {}).get("username"), hex_val)
     app_meta.current_user["accent_colour"] = hex_val
 
 

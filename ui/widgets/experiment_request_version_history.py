@@ -54,25 +54,19 @@ class _VersionHistoryDialog(QDialog):
         self._list = QListWidget()
         lay.addWidget(self._list, 1)
 
-        versions = request_changes.list_versions(request_id)
-        total = len(versions)
-
-        # "Current" is always the highest version number (total + 1) - the
-        # archived prior versions below it are chronologically 1..total,
-        # oldest (the very first original) = version 1.
-        current_item = QListWidgetItem(f"●  Current (live)  —  Version {total + 1}")
-        current_item.setData(Qt.UserRole, (request_id, "Current"))
-        bold_font = current_item.font()
-        bold_font.setBold(True)
-        current_item.setFont(bold_font)
-        self._list.addItem(current_item)
-
-        for i, v in enumerate(versions):
-            version_no = total - i
-            who = str(v.get("CreatedByUser") or "").strip() or "?"
-            ts = _fmt_timestamp(v.get("Timestamp"))
-            item = QListWidgetItem(f"Version {version_no}  —  {ts}  —  {who}")
-            item.setData(Qt.UserRole, (v.get("ID"), f"Version {version_no}"))
+        # entries (Current + archived versions, newest first):
+        # db/experiment_requests.version_history (shared with the web)
+        from db import experiment_requests as er
+        for v in er.version_history(request_id):
+            if v["current"]:
+                item = QListWidgetItem(f"●  Current (live)  —  Version {v['version']}")
+                item.setData(Qt.UserRole, (v["id"], "Current"))
+                bold_font = item.font()
+                bold_font.setBold(True)
+                item.setFont(bold_font)
+            else:
+                item = QListWidgetItem(f"Version {v['version']}  —  {v['timestamp']}  —  {v['user']}")
+                item.setData(Qt.UserRole, (v["id"], f"Version {v['version']}"))
             self._list.addItem(item)
 
         if self._list.count():

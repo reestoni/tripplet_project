@@ -71,6 +71,22 @@ def series_report_map() -> Dict[int, int]:
         return {}
 
 
+def reports_for_series(series_pk) -> List[Dict[str, Any]]:
+    """Saved (non-template) Smart-Chart reports of a trial series, newest first:
+    [{"ID", "Title", "Author"}] - RE icon in All Experiments/Backlog (moved from
+    ui/widgets/report_picker.py). [] if the table is missing / on DB errors."""
+    if not series_pk:
+        return []
+    try:
+        return fetch_all(
+            "SELECT ID, Title, Author FROM tblSmartChartReport "
+            "WHERE SeriesPK=? AND IsTemplate=0 ORDER BY UpdatedAt DESC",
+            [series_pk],
+        )
+    except Exception:
+        return []
+
+
 # --------------------------------------------------------------------------- All Experiments
 def _chunks(lst, n=200):
     for i in range(0, len(lst), n):

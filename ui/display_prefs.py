@@ -43,24 +43,11 @@ ADD_COLUMN_SQL = "ALTER TABLE tbluser ADD COLUMN DisplaySettings TEXT NULL DEFAU
 # the settings silently stayed on this PC only); widen_column() makes it TEXT
 WIDEN_COLUMN_SQL = "ALTER TABLE tbluser MODIFY COLUMN DisplaySettings TEXT NULL DEFAULT NULL"
 
-DEFAULTS: Dict[str, Any] = {"scale": 100, "contrast": False, "crosshair": False, "readbar": False,
-                            "alert_marks": False, "cb_colours": False, "app_scale": 100,
-                            "whats_new_seen": "", "recent_series": [], "start": "backlog"}
-RECENT_MAX = 8  # Sidebar -> "Recent" (ui/recent_series.py)
-
-
-def _clean_recent(v: Any) -> list:
-    out = []
-    for e in (v if isinstance(v, list) else [])[:RECENT_MAX]:
-        try:
-            out.append({"exp": int(e["exp"]), "series": int(e["series"]),
-                        "eid": str(e.get("eid") or "")[:40], "name": str(e.get("name") or "")[:80]})
-        except (KeyError, TypeError, ValueError):
-            continue
-    return out
-_BOOL_KEYS = ("contrast", "crosshair", "readbar", "alert_marks", "cb_colours")
-SCALE_MIN, SCALE_MAX, SCALE_STEP = 80, 300, 10
-APP_SCALE_CHOICES = [100, 125, 150, 200]
+# Keys, defaults, cleaning and fitting are Qt-free in db/display_settings.py (shared with the web app)
+from db.display_settings import (  # noqa: F401
+    DEFAULTS, RECENT_MAX, _clean_recent, _BOOL_KEYS, SCALE_MIN, SCALE_MAX, SCALE_STEP, APP_SCALE_CHOICES,
+    _clean, _col_len, _column_max_len, _fit,
+)
 _LOCAL_APP_SCALE_KEY = "app_scale_local"
 
 _prefs: Dict[str, Any] = dict(DEFAULTS)
@@ -75,54 +62,6 @@ def current() -> Dict[str, Any]:
 
 def scale() -> int:
     return int(_prefs.get("scale") or 100)
-
-
-def _clean(d: Dict[str, Any]) -> Dict[str, Any]:
-    out = dict(DEFAULTS)
-    try:
-        out["scale"] = max(SCALE_MIN, min(SCALE_MAX, int(d.get("scale", 100))))
-    except (TypeError, ValueError):
-        pass
-    for k in _BOOL_KEYS:
-        out[k] = bool(d.get(k, False))
-    try:
-        a = int(d.get("app_scale", 100))
-        out["app_scale"] = a if a in APP_SCALE_CHOICES else 100
-    except (TypeError, ValueError):
-        pass
-    out["whats_new_seen"] = str(d.get("whats_new_seen") or "")[:40]
-    out["recent_series"] = _clean_recent(d.get("recent_series"))
-    out["start"] = str(d.get("start") or "backlog")[:30]
-    return out
-
-
-_col_len: Dict[str, Any] = {}
-
-
-def _column_max_len() -> int:
-    """Length of tblUser.DisplaySettings (0 = unlimited / unknown)."""
-    if "n" not in _col_len:
-        try:
-            from db.connection import fetch_all
-            rows = fetch_all("SELECT CHARACTER_MAXIMUM_LENGTH AS n, DATA_TYPE AS t FROM information_schema.COLUMNS "
-                             "WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'tbluser' "
-                             "AND COLUMN_NAME = 'DisplaySettings'")
-            n = rows[0].get("n") if rows else None
-            _col_len["n"] = int(n) if n and str(rows[0].get("t") or "").lower() == "varchar" else 0
-        except Exception:
-            _col_len["n"] = 0
-    return _col_len["n"]
-
-
-def _fit(prefs: Dict[str, Any], max_len: int) -> str:
-    """JSON of the settings - only what differs from DEFAULTS (_clean() fills in the rest);
-    in a short column the oldest Recent entries are left out so the rest still gets saved."""
-    data = {k: v for k, v in prefs.items() if v != DEFAULTS.get(k)}
-    raw = json.dumps(data, separators=(",", ":"))
-    while max_len and len(raw) > max_len and data.get("recent_series"):
-        data["recent_series"] = data["recent_series"][:-1]
-        raw = json.dumps(data, separators=(",", ":"))
-    return raw
 
 
 def widen_column() -> None:

@@ -24,8 +24,8 @@ def remember(exp_pk: Any, series_pk: Any, experiment_id: str, series_name: str =
         from ui import display_prefs
         e = {"exp": int(exp_pk), "series": int(series_pk), "eid": str(experiment_id or ""),
              "name": str(series_name or "")}
-        rest = [x for x in entries() if x.get("series") != e["series"]]
-        display_prefs.update(quiet=True, recent_series=[e] + rest[:display_prefs.RECENT_MAX - 1])
+        from db.display_settings import push_recent  # same rule as the web app
+        display_prefs.update(quiet=True, recent_series=push_recent(entries(), e))
     except Exception:
         pass  # never let the list get in the way of opening a series
 

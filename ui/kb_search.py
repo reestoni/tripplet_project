@@ -43,7 +43,7 @@ def _strings(obj: Any, out: List[str]) -> None:
 def _body(obj: Any) -> str:
     """All texts of a scene/station as distinct words (the search only needs
     each word once - keeps building the index fast)."""
-    from ui.widgets.help_search import normalize
+    from ui.help_index import normalize
     parts: List[str] = []
     _strings(obj, parts)
     seen = dict.fromkeys(normalize(" ".join(parts)).split())
@@ -63,7 +63,7 @@ def parse_key(key: str) -> Optional[Tuple[str, Optional[int], Optional[int]]]:
 
 
 def build_index():
-    from ui.widgets.help_search import HelpEntry
+    from ui.help_index import HelpEntry
     entries = []
     for m in cat.MODULES:
         try:

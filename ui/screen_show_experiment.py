@@ -4078,21 +4078,10 @@ class ShowExperimentScreen(QWidget):
             self.lbl_material_value.setText(txt)
 
     def _refresh_experiment_request_link(self) -> None:
-        """Loads linked ExperimentRequest ID from tblExperimente (if any)."""
-        self._experiment_request_id = None
-        if self._exp_pk in (None, ""):
-            return
-        try:
-            cols = get_columns_map('tblExperimente')
-            f_req = resolve_field(
-                ['ExperimentRequest', 'Experiment Request', 'ExperimentRequestID', 'ExperimentRequestId'], cols)
-            if not f_req:
-                return
-            rows = fetch_all(f'SELECT [{f_req}] AS ER FROM [tblExperimente] WHERE [ID]=?', [self._exp_pk])
-            if rows:
-                self._experiment_request_id = rows[0].get('ER')
-        except Exception:
-            self._experiment_request_id = None
+        """Loads linked ExperimentRequest ID from tblExperimente (if any) -
+        db/experiment_requests.request_id_for_experiment (shared with the web)."""
+        from db import experiment_requests as er
+        self._experiment_request_id = er.request_id_for_experiment(self._exp_pk)
 
     def _sync_experiment_request_icon(self) -> None:
         """Shows/hides the Experiment Request icon depending on whether a request is linked."""
@@ -5593,155 +5582,36 @@ class ShowExperimentScreen(QWidget):
         self._defer_or_populate("jet_air", self.tab_jet_air, _populate)
 
     def _get_current_physical_jets_for_series(self, series_id: int) -> List[Tuple[int, Optional[str]]]:
-        """Ermittelt die aktuell in den Trials der Series hinterlegten
-        physischen Duesen (JetID + JetPlate) - siehe
-        screen_create_experiment.py:_get_physical_jets_for_series fuer das
-        Original dieser Logik (dort zur Erstbefuellung beim Series-Anlegen,
-        hier zum nachtraeglichen Abgleich)."""
-        if not table_exists("tbltrialsettings") or not table_exists("tbltrial"):
-            return []
-        ts_cols = get_columns_map("tbltrialsettings")
-        t_cols = get_columns_map("tbltrial")
-        col_jet_ts = resolve_field(["JetID"], ts_cols)
-        col_jet_t = resolve_field(["JetID"], t_cols)
-        col_plate = resolve_field(
-            ["Jet Plate Number", "JetPlate", "Jet Plate", "JetPlateNumber"], t_cols) or "Jet Plate Number"
-        if not col_jet_ts and not col_jet_t:
-            return []
-        if col_jet_ts and col_jet_t:
-            jet_expr = f"COALESCE(ts.[{col_jet_ts}], t.[{col_jet_t}])"
-        elif col_jet_ts:
-            jet_expr = f"ts.[{col_jet_ts}]"
-        else:
-            jet_expr = f"t.[{col_jet_t}]"
-        try:
-            rows = fetch_all(
-                f"SELECT DISTINCT {jet_expr} AS JetID, t.[{col_plate}] AS JetPlate "
-                f"FROM tbltrialsettings ts "
-                f"JOIN tbltrial t ON t.ID = ts.TrialID "
-                f"WHERE t.TrialSeriesID = ? AND {jet_expr} IS NOT NULL",
-                [series_id],
-            )
-        except Exception:
-            return []
-        return [(int(r["JetID"]), r.get("JetPlate")) for r in rows]
+        """Jets/plates currently set in the trials: db/jet_air_sync.current_physical_jets (shared with the web app)."""
+        from db import jet_air_sync
+        return jet_air_sync.current_physical_jets(series_id)
 
     def _sync_jet_air_physical_jets(self):
-        """Gleicht tblLaborJetAirConsumption mit den aktuell in den Trials
-        hinterlegten physischen Duesen ab. Faelle wie 'Jet wurde nachtraeglich
-        auf einem oder mehreren Trials geaendert' fuehren sonst dazu, dass das
-        Grid Duesen zeigt, die keinem Trial mehr entsprechen, waehrend die
-        neuen Duesen fehlen - dieses Grid wird naemlich nur additiv beim
-        Series-Anlegen/Trials-Hinzufuegen befuellt (siehe
-        screen_create_experiment.py:_save_jet_air_consumption_rows).
-
-        Fehlende Duese x Druck-Kombis werden ergaenzt (leer, Werte danach
-        nachtragen). Kombis, die keinem aktuellen Trial mehr entsprechen,
-        werden nur zur Loeschung angeboten, wenn sie komplett unbefuellt sind
-        (AirConsumption/AtmosphericPressure/AirTemperature alle NULL) - sonst
-        nur angezeigt, damit echte Messwerte nie automatisch verloren gehen."""
-        table = "tblLaborJetAirConsumption"
+        """"Sync physical jets": plan + write in db/jet_air_sync.py (Qt-free, shared with the
+        web app); here only the questions and messages."""
+        from db import jet_air_sync
         series_id = getattr(self, "_series_pk", None)
-        if not table_exists(table) or not series_id:
+        plan = jet_air_sync.plan_sync(series_id)
+        if plan["status"] == "unavailable":
             return
-
-        current_jets = self._get_current_physical_jets_for_series(series_id)
-        rows = fetch_all(
-            f"SELECT [ID],[JetID],[JetPlate],[AirPressure],[AirConsumption],"
-            f"[AtmosphericPressure],[AirTemperature] FROM {table} WHERE [TrialSeriesID] = ?",
-            [series_id],
-        )
-        pressures = sorted({float(r["AirPressure"]) for r in rows if r.get("AirPressure") is not None})
-        if not current_jets or not pressures:
+        if plan["status"] == "nothing_found":
             QMessageBox.information(
                 self, "Sync physical jets",
                 "No jets/pressure levels found - sync not possible.")
             return
-
-        def _plate_key(p):
-            return "" if p is None else str(p)
-
-        existing_keys = {
-            (int(r["JetID"]), _plate_key(r.get("JetPlate")), round(float(r["AirPressure"]), 6))
-            for r in rows if r.get("JetID") is not None and r.get("AirPressure") is not None
-        }
-        current_key_set = {(jid, _plate_key(plate)) for jid, plate in current_jets}
-
-        to_insert: List[Tuple[int, Optional[str], float]] = []
-        for jid, plate in current_jets:
-            for p in pressures:
-                key = (jid, _plate_key(plate), round(p, 6))
-                if key not in existing_keys:
-                    to_insert.append((jid, plate, p))
-
-        orphan_combo_rows: Dict[Tuple[int, str], List[dict]] = {}
-        for r in rows:
-            if r.get("JetID") is None:
-                continue
-            combo = (int(r["JetID"]), _plate_key(r.get("JetPlate")))
-            if combo not in current_key_set:
-                orphan_combo_rows.setdefault(combo, []).append(r)
-
-        if not to_insert and not orphan_combo_rows:
+        if plan["status"] == "in_sync":
             QMessageBox.information(
                 self, "Sync physical jets",
                 "Already in sync - no changes needed.")
             return
-
-        jet_ids = sorted({jid for jid, _ in current_jets} | {c[0] for c in orphan_combo_rows})
-        jet_name_map: Dict[int, str] = {}
-        try:
-            if jet_ids and table_exists("tblDTYJets"):
-                ph = ",".join(["?"] * len(jet_ids))
-                for jr in fetch_all(
-                        f"SELECT [ID], [Jet] AS JName FROM tblDTYJets WHERE [ID] IN ({ph})", jet_ids):
-                    jet_name_map[int(jr["ID"])] = str(jr.get("JName") or "")
-        except Exception:
-            pass
-
-        msg_lines = []
-        if to_insert:
-            msg_lines.append(f"{len(to_insert)} missing row(s) will be added (empty, enter the values afterwards).")
-
-        delete_ids: List[int] = []
-        if orphan_combo_rows:
-            msg_lines.append(
-                "\nFolgende Duese(n)/Plate(s) im Grid entsprechen keinem aktuellen Trial mehr:")
-            for (jid, plate), rr in sorted(orphan_combo_rows.items()):
-                jname = jet_name_map.get(jid, f"Jet {jid}")
-                has_data = any(
-                    r.get("AirConsumption") is not None
-                    or r.get("AtmosphericPressure") is not None
-                    or r.get("AirTemperature") is not None
-                    for r in rr
-                )
-                if has_data:
-                    msg_lines.append(f"  - {jname} / Plate {plate or '-'} (has measured values - will NOT be deleted)")
-                else:
-                    msg_lines.append(f"  - {jname} / Plate {plate or '-'} (empty - will be deleted)")
-                    delete_ids.extend(r["ID"] for r in rr)
-
         resp = QMessageBox.question(
             self, "Sync physical jets",
-            "\n".join(msg_lines) + "\n\nContinue?",
+            "\n".join(plan["lines"]) + "\n\nContinue?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if resp != QMessageBox.Yes:
             return
-
         try:
-            with get_connection() as cn:
-                cur = cn.cursor()
-                user_id = self._current_user_id()
-                for jid, plate, p in to_insert:
-                    cur.execute(
-                        f"INSERT INTO {table} (TrialSeriesID, JetID, JetPlate, AirPressure, UserID, GlobalID) "
-                        f"VALUES (?,?,?,?,?,?)",
-                        [series_id, jid, plate, p, user_id, new_global_id()],
-                    )
-                if delete_ids:
-                    ph = ",".join(["?"] * len(delete_ids))
-                    cur.execute(f"DELETE FROM {table} WHERE [ID] IN ({ph})", delete_ids)
-                cn.commit()
+            jet_air_sync.apply_sync(series_id, plan, self._current_user_id())
         except Exception as e:
             QMessageBox.critical(self, "DB Error", str(e))
             return

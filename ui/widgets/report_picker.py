@@ -17,23 +17,13 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QListWidget, QListWidgetItem, QDialogButtonBox, QLabel,
 )
 
-from db.connection import fetch_all
 
 
 def get_reports_for_series(series_pk) -> list:
     """Alle gespeicherten (Nicht-Template-)Reports für eine TrialSeries,
-    neueste zuerst. Leere Liste bei fehlender Tabelle/DB-Fehler (z.B.
-    Offline-Modus, wo tblSmartChartReport nicht Teil der Kopie ist)."""
-    if not series_pk:
-        return []
-    try:
-        return fetch_all(
-            "SELECT ID, Title, Author FROM tblSmartChartReport "
-            "WHERE SeriesPK=? AND IsTemplate=0 ORDER BY UpdatedAt DESC",
-            [series_pk],
-        )
-    except Exception:
-        return []
+    neueste zuerst - db/series_overview.reports_for_series (shared with the web)."""
+    from db.series_overview import reports_for_series
+    return reports_for_series(series_pk)
 
 
 class _ReportPickerDialog(QDialog):

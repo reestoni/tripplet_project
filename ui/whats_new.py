@@ -28,7 +28,6 @@ app_meta.APP_VERSION; compiled versions carry their fixed number and date
 """
 from __future__ import annotations
 
-import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QTimer
@@ -65,56 +64,28 @@ def _fit(pm, max_w: int, max_h: int, dpr: float):
     return pm
 
 
-# ── versions ─────────────────────────────────────────────────────────────
-def release_version(release: Dict[str, Any]) -> str:
-    v = str(release.get("version") or "")
-    if v == "current":
-        import app_meta
-        return str(app_meta.APP_VERSION)
-    return v
+# versions, unseen, sections and search are Qt-free in ui/whats_new_data.py (shared with the web app)
+from ui import whats_new_data as _data  # noqa: E402
+from ui.whats_new_data import (  # noqa: E402,F401
+    release_version, _date_text, _current_when, release_when, release_sections,
+)
 
 
+# thin wrappers: they use RELEASES of THIS module (tests replace it here)
 def current_release_id() -> Optional[str]:
-    return release_version(RELEASES[0]) if RELEASES else None
+    return _data.current_release_id(RELEASES)
 
 
-def _date_text(iso: str, lang: str) -> str:
-    try:
-        d = datetime.date.fromisoformat(iso)
-    except (TypeError, ValueError):
-        return iso or ""
-    return d.strftime("%d %b %Y") if lang == "en" else d.strftime("%d.%m.%Y" if lang == "de" else "%d/%m/%Y")
+def unseen_versions(seen: Optional[str] = None) -> List[str]:
+    return _data.unseen_versions(seen, RELEASES)
 
 
-def _current_when(lang: str) -> str:
-    """Date of the version being worked on: in the compiled exe the day the
-    exe was built (the entry only gets its fixed date after the compile),
-    from source "in progress"."""
-    import os
-    import sys
-    if getattr(sys, "frozen", False):
-        try:
-            built = datetime.date.fromtimestamp(os.path.getmtime(sys.executable))
-            return _date_text(built.isoformat(), lang)
-        except OSError:
-            return ""
-    return CURRENT_LABEL[lang]
+def has_unseen(seen: Optional[str] = None) -> bool:
+    return _data.has_unseen(seen, RELEASES)
 
 
-def release_when(release: Dict[str, Any], lang: str) -> str:
-    return _date_text(release["date"], lang) if release.get("date") else _current_when(lang)
-
-
-def unseen_versions() -> List[str]:
-    """Versions newer than the one the user has seen (all if none seen)."""
-    from ui import display_prefs
-    seen = display_prefs.current().get("whats_new_seen") or ""
-    versions = [release_version(r) for r in RELEASES]
-    return versions[:versions.index(seen)] if seen in versions else versions
-
-
-def has_unseen() -> bool:
-    return bool(RELEASES) and bool(unseen_versions())
+def search_features(query: str) -> List[Tuple[int, int]]:
+    return _data.search_features(query, RELEASES)
 
 
 def mark_seen() -> None:
@@ -123,62 +94,6 @@ def mark_seen() -> None:
     if cur and display_prefs.current().get("whats_new_seen") != cur:
         display_prefs.update(whats_new_seen=cur)
         display_prefs.save_now()
-
-
-def release_sections(release: Dict[str, Any], lang: str) -> List[Tuple[str, List[tuple]]]:
-    """[(heading, blocks)] - one entry per ("h", …) heading; blocks before
-    the first heading go into the first section (or an untitled one)."""
-    sections: List[Tuple[str, List[tuple]]] = []
-    lead: List[tuple] = []
-    for block in release["texts"][lang]:
-        if block[0] == "h":
-            sections.append((str(block[1]), list(lead) if not sections else []))
-            lead = []
-        elif sections:
-            sections[-1][1].append(block)
-        else:
-            lead.append(block)
-    if lead:  # no heading at all
-        sections.append(("", lead))
-    return sections
-
-
-# ── search ───────────────────────────────────────────────────────────────
-def _search_index() -> List[Tuple[int, int, set, set]]:
-    """(release idx, block idx, words, synonym concepts) per feature card;
-    words of title, text and "where" in all languages together."""
-    from ui.widgets.help_search import _phrase_concepts, concepts_of, normalize
-    idx = []
-    for ri, r in enumerate(RELEASES):
-        for bi, block in enumerate(r["texts"]["en"]):
-            if block[0] != "feature":
-                continue
-            norm = normalize(" ".join(" ".join(str(x) for x in blocks[bi][1:4])
-                                      for blocks in r["texts"].values()))
-            words = set(norm.split())
-            concepts = set(_phrase_concepts(norm))
-            for w in words:
-                concepts |= concepts_of(w)
-            idx.append((ri, bi, words, concepts))
-    return idx
-
-
-def search_features(query: str) -> List[Tuple[int, int]]:
-    """Feature cards matching every search word, as (release idx, block idx),
-    newest version first. A word matches literally (also as the start of a
-    word, from 3 letters: "ref" -> "reference"), in any language, or via the
-    synonyms of the help search."""
-    from ui.widgets.help_search import _word_match, concepts_of, tokens
-    toks = tokens(query)
-    if not toks:
-        return []
-    terms = [(t, concepts_of(t)) for t in toks]
-    hits = []
-    for ri, bi, words, concepts in _search_index():
-        if all(bool(cons & concepts) or any(_word_match(t, w) or (len(t) >= 3 and w.startswith(t)) for w in words)
-               for t, cons in terms):
-            hits.append((ri, bi))
-    return hits
 
 
 # ── window ───────────────────────────────────────────────────────────────

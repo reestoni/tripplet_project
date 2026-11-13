@@ -417,3 +417,23 @@ def reject_pending_change(copy_id: Any) -> None:
             cn.commit()
         except Exception:
             pass
+
+
+def versioned_ids(request_ids: List[Any]) -> set:
+    """IDs of `request_ids` that have at least one archived prior version
+    (has_versions() for a whole list in one query - My Requests context menu)."""
+    ids = [i for i in (request_ids or []) if i not in (None, "")]
+    if not ids or not supports_versioning():
+        return set()
+    out: set = set()
+    with get_connection() as cn:
+        cur = cn.cursor()
+        for k in range(0, len(ids), 200):
+            chunk = ids[k:k + 200]
+            cur.execute(
+                "SELECT DISTINCT [PriorVersionOfID] FROM [tblExperimentRequests] "
+                f"WHERE [PriorVersionOfID] IN ({','.join(['?'] * len(chunk))})",
+                list(chunk),
+            )
+            out.update(r[0] for r in cur.fetchall())
+    return out

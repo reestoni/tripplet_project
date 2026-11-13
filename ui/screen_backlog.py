@@ -2108,11 +2108,8 @@ class BacklogScreen(QWidget):
     # für das Original, hier auf Backlog-Groesse verkleinert) ----------
 
     def _format_welcome_text(self, welcome_message, first_name: str) -> str:
-        msg = (welcome_message or "").strip()
-        fn = (first_name or "").strip()
-        if msg:
-            return f"{msg}, {fn}".strip().strip(",")
-        return f"Welcome, {fn}".strip()
+        from db.user_account import format_welcome  # shared with the web app
+        return format_welcome(welcome_message, first_name)
 
     def _fetch_welcome_message_from_db(self):
         try:

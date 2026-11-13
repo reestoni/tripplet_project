@@ -1120,30 +1120,11 @@ class MyRequestsScreen(QWidget):
         """Lädt Series des Experiments und navigiert direkt oder via Popup."""
         from PySide6.QtWidgets import QDialog, QVBoxLayout, QListWidget, QListWidgetItem, QLabel, QDialogButtonBox
         try:
-            # Experiment PK laden
-            from db.connection import fetch_all as _fa, get_columns_map as _gcm
-            cols = _gcm("tblexperimente")
-            f_id = None
-            for cand in ("experimentid", "experiment id", "experimentid_txt"):
-                if cand in cols:
-                    f_id = cols[cand]
-                    break
-            if not f_id:
+            # Experiment PK + Series (db/experiment_requests.series_for_experiment_id, shared with the web)
+            exp_pk, series_list = er.series_for_experiment_id(exp_id_txt)
+            if exp_pk is None or not series_list:
                 return
-            exp_rows = _fa(f"SELECT ID FROM tblExperimente WHERE `{f_id}` = %s", [exp_id_txt])
-            if not exp_rows:
-                return
-            exp_pk = int(exp_rows[0]["ID"])
-
-            # Series laden
-            series_rows = _fa(
-                "SELECT ID, SeriesName, "
-                "(SELECT COUNT(*) FROM tblTrial WHERE TrialSeriesID = tblTrialSeries.ID) AS TrialCount "
-                "FROM tblTrialSeries WHERE ExperimentID = %s ORDER BY ID",
-                [exp_pk]
-            )
-            if not series_rows:
-                return
+            series_rows = [{"ID": x["id"], "SeriesName": x["name"], "TrialCount": x["trials"]} for x in series_list]
 
             def _navigate(series_pk, series_name):
                 if callable(getattr(self, "on_open_experiment", None)):

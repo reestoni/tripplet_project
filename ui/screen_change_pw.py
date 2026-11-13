@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from db.connection import verify_user_password, update_user_password, user_exists
 from ui.widgets.footer import FooterBar
 from ui.widgets.header import HeaderBar
 
@@ -165,61 +164,39 @@ class ChangePasswordScreen(QWidget):
         new = self.txt_new.text()
         rep = self.txt_rep.text()
 
-        # Existenz prüfen (Safety; normal schon vor dem Öffnen geprüft)
-        if not u or not user_exists(u):
+        # rules shared with the web app: db/user_account.py (same order as before)
+        from db import user_account as ua
+        err = ua.change_password(u, old, new, rep)
+        if err is None:
+            QMessageBox.information(self, "Password changed",
+                                    "Your password has been changed. Log in with the new password.")
+            self._on_dismiss()  # zurück zum Login
+            return
+        if err == ua.PW_NO_USER:
             QMessageBox.warning(self, "No valid user",
                                 "No valid user is set. Returning to login.")
             self._on_dismiss()
-            return
-
-        # Alle Felder befüllt?
-        if not (old and new and rep):
+        elif err == ua.PW_INCOMPLETE:
             QMessageBox.warning(self, "Incomplete input",
                                 "Please fill out all three fields.")
-            return
-
-        # Altes Passwort korrekt?
-        if not verify_user_password(u, old):
+        elif err == ua.PW_WRONG_OLD:
             QMessageBox.warning(self, "Wrong password",
                                 "The old password is not correct.")
             self.txt_old.clear()
             self.txt_new.clear()
             self.txt_rep.clear()
             self.txt_old.setFocus()
-            return
-
-        # Neue Passwörter identisch? (case-sensitive)
-        if new != rep:
-            QMessageBox.warning(self, "Passwords do not match",
-                                "\u201cNew Password\u201d and \u201cRepeat New Password\u201d must be identical.")
+        elif err in (ua.PW_MISMATCH, ua.PW_SAME_AS_OLD, ua.PW_SAME_AS_USER):
+            title, text = {
+                ua.PW_MISMATCH: ("Passwords do not match",
+                                 "“New Password” and “Repeat New Password” must be identical."),
+                ua.PW_SAME_AS_OLD: ("Invalid password", "The new password must be different from the old one."),
+                ua.PW_SAME_AS_USER: ("Insecure password", "The new password must not be the same as the username."),
+            }[err]
+            QMessageBox.warning(self, title, text)
             self.txt_new.clear()
             self.txt_rep.clear()
             self.txt_new.setFocus()
-            return
-
-        # Neues Passwort muss sich vom alten unterscheiden
-        if new == old:
-            QMessageBox.warning(self, "Invalid password",
-                                "The new password must be different from the old one.")
-            self.txt_new.clear()
-            self.txt_rep.clear()
-            self.txt_new.setFocus()
-            return
-
-        # Neues Passwort darf nicht gleich dem Benutzernamen sein (case-insensitive)
-        if new.lower() == u.lower():
-            QMessageBox.warning(self, "Insecure password",
-                                "The new password must not be the same as the username.")
-            self.txt_new.clear()
-            self.txt_rep.clear()
-            self.txt_new.setFocus()
-            return
-
-        # Passwort in DB aktualisieren (Argon2-Hash)
-        if update_user_password(u, new):
-            QMessageBox.information(self, "Password changed",
-                                    "Your password has been changed. Log in with the new password.")
-            self._on_dismiss()  # zurück zum Login
         else:
             QMessageBox.critical(self, "Update failed",
                                  "Password could not be updated. Please try again.")
