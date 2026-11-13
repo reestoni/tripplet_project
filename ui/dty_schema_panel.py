@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from db import dty_process as dp
+from db.machine_data import SINGLE_PLY_TIP as _SINGLE_PLY_TIP
 from ui import dty_stations as ds
 
 _SETTINGS = ("TrippleT", "ShowExperiment")
@@ -87,8 +88,7 @@ def _mod(profile: Optional[str]):
     return ds
 
 
-def _filled(v: Any) -> bool:
-    return v is not None and str(v).strip() not in ("", "—", "None")
+from db.machine_data import filled as _filled  # noqa: E402  (shared rule, db/machine_data.py)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -619,11 +619,9 @@ def _yarn_types(screen, specs) -> Dict[int, Any]:
 # wiring into ShowExperimentScreen
 # ══════════════════════════════════════════════════════════════════════
 def _is_active(screen) -> bool:
-    cache = getattr(screen, "_machine_cache", None) or {}
-    if "is_dty" not in cache:
-        from db import dty_process
-        cache["is_dty"] = dty_process.available() and dty_process.is_dty_machine(cache.get("machine_id"))
-    return bool(cache.get("is_dty")) and "dtyprocessid" in (getattr(screen, "_machine_row_keys", None) or [])
+    from db import machine_data as _md
+    return _md.is_dty_active(getattr(screen, "_machine_cache", None) or {},
+                             getattr(screen, "_machine_row_keys", None) or [])
 
 
 def _profile(screen) -> Optional[str]:
@@ -723,51 +721,24 @@ def _on_toggle(screen, on: bool) -> None:
 
 def update_process_rows(screen) -> None:
     """screen._process_hidden_rows = pre-jet / jet 3 rows no trial needs
-    (applied by machine_row_visibility.apply)."""
+    (applied by machine_row_visibility.apply); merge cells of single-ply
+    trials lose their binding. Rules: db/machine_data.process_rules."""
+    from db import machine_data as _md
     model = getattr(screen, "model_machine", None)
     keys = list(getattr(screen, "_machine_row_keys", None) or [])
-    if model is None or "dtyprocessid" not in keys or not _is_active(screen):
+    if model is None:
         screen._process_hidden_rows = set()
         return
-    from db import dty_process
-    cache = screen._machine_cache
-    if "dty_flags" not in cache:
-        cache["dty_flags"] = dty_process.flags_by_id()
-    plies = _plies_per_trial(screen)
-    _lock_single_ply_merge_cells(screen, model, keys, plies)
-    screen._process_hidden_rows = ds.process_hidden_rows(
-        keys, len(model._col_titles), model.get_cell_value, keys.index("dtyprocessid"),
-        cache["dty_flags"], multi_ply=any(n >= 2 for n in plies.values()))
+    hidden, locked = _md.process_rules(
+        getattr(screen, "_machine_cache", None) or {}, keys,
+        getattr(screen, "_machine_col_specs", None) or [], len(model._col_titles), model.get_cell_value)
+    for r, c in locked:
+        model._binding[r][c] = None
+        model._cell_tooltips[(r, c)] = SINGLE_PLY_TIP
+    screen._process_hidden_rows = hidden
 
 
-SINGLE_PLY_TIP = "Single ply - nothing to merge"
-
-
-def _plies_per_trial(screen) -> Dict[Any, int]:
-    """{trial id: number of plies} from the Machine Data column specs
-    (Groups mode: one column can hold several plies)."""
-    out: Dict[Any, int] = {}
-    for cs in getattr(screen, "_machine_col_specs", None) or []:
-        n = len(cs.get("sr_all") or []) if cs.get("is_group") else (1 if cs.get("sr") else 0)
-        out[cs["trial_id"]] = out.get(cs["trial_id"], 0) + n
-    return out
-
-
-def _lock_single_ply_merge_cells(screen, model, keys, plies) -> None:
-    """Route / Merge into ply / Merge point make no sense for a trial with
-    one ply: no binding (= not editable, skipped by paste and Fill row) and
-    a tooltip. Values already stored stay visible."""
-    rows = [r for r, k in enumerate(keys) if k in ds.MERGE_KEYS]
-    if not rows:
-        return
-    for c, cs in enumerate(getattr(screen, "_machine_col_specs", None) or []):
-        if plies.get(cs["trial_id"], 0) >= 2:
-            continue
-        for r in rows:
-            if _filled(model.get_cell_value(r, c)):
-                continue
-            model._binding[r][c] = None
-            model._cell_tooltips[(r, c)] = SINGLE_PLY_TIP
+SINGLE_PLY_TIP = _SINGLE_PLY_TIP
 
 
 def refresh(screen) -> None:

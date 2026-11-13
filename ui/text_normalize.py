@@ -65,3 +65,22 @@ def canon_with_id_strip(s: str) -> str:
     if x.endswith("id"):
         x = x[:-2]
     return x
+
+
+def canon_rule(ff: Optional[str]) -> Optional[str]:
+    """Normalisiert einen Feldnamen für Spalten-Matching-Regeln."""
+    """DB-Rule -> onlySZ | onlyInteger | onlyDoubles | dropdown:tblXxx | hidden | None."""
+    if not ff:
+        return None
+    s = norm(ff)
+    if s in {"onlysz", "sz"}:
+        return "onlySZ"
+    if s in {"onlyinteger", "integer", "int", "ganzzahl"}:
+        return "onlyInteger"
+    if s in {"onlydouble", "onlydoubles", "double", "doubles", "float", "zahlmitkomma", "decimal"}:
+        return "onlyDoubles"
+    if s == "hidden":
+        return "hidden"
+    if ff.lower().startswith("dropdown:"):
+        return ff.strip()
+    return None

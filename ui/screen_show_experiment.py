@@ -37,7 +37,7 @@ Datenbankbezug:
 from ui.theme import accent_tint, accent_gridline, get_accent
 from PySide6.QtGui import QPixmap, QColor, QIcon
 from ui.pathutil import resource_path
-from ui.text_normalize import norm, resolve_field
+from ui.text_normalize import norm, resolve_field, canon_rule  # canon_rule moved there (2026-11-13)
 from ui.widgets.statimat_pdf_parser import parse_statimat_pdf
 from ui.widgets.itemat_pdf_parser import parse_itemat_pdf, DB_TENSIONS as ITEMAT_DB_TENSIONS
 from ui.widgets import sidebar_nav
@@ -54,6 +54,8 @@ import ui.machine_tab as _machine_tab_mod
 import ui.widgets.yarn_locations as _yarn_locations
 import ui.cell_notes_ui as _cell_notes_ui
 import db.series_tables as _series_tables
+import db.machine_data as _machine_data
+from db.machine_data import get_columns_info  # noqa: F401  (moved there, still imported from here)
 from ui.advisor_worker import AdvisorWorker, load_api_key
 from ui.screen_create_experiment_request import (
     EXCLUDE_FIELDS as ER_EXCLUDE_FIELDS,
@@ -1088,35 +1090,6 @@ def get_columns_map(table: str) -> Dict[str, str]:
     return _db_get_columns_map(table.lower())
 
 
-def get_columns_info(table: str) -> List[Dict[str, Any]]:
-    """Gibt Spalten-Metadaten (Name, Typ, Nullable) zurück."""
-    """Spalteninfos (MySQL)."""
-    cmap = _db_get_columns_map(table.lower())
-    out: List[Dict[str, Any]] = []
-    for lc, real in cmap.items():
-        out.append({"lower": lc, "real": real, "data_type": None, "type_name": None})
-    return out
-
-
-def canon_rule(ff: Optional[str]) -> Optional[str]:
-    """Normalisiert einen Feldnamen für Spalten-Matching-Regeln."""
-    """DB-Rule -> onlySZ | onlyInteger | onlyDoubles | dropdown:tblXxx | hidden | None."""
-    if not ff:
-        return None
-    s = norm(ff)
-    if s in {"onlysz", "sz"}:
-        return "onlySZ"
-    if s in {"onlyinteger", "integer", "int", "ganzzahl"}:
-        return "onlyInteger"
-    if s in {"onlydouble", "onlydoubles", "double", "doubles", "float", "zahlmitkomma", "decimal"}:
-        return "onlyDoubles"
-    if s == "hidden":
-        return "hidden"
-    if ff.lower().startswith("dropdown:"):
-        return ff.strip()
-    return None
-
-
 # ------------------------ Pivot Table Model ------------------------
 
 _RETEST_FLAG_DOT_ICON: Optional[QIcon] = None
@@ -2050,25 +2023,8 @@ class MachinePivotModel(PivotEditModel):
         )
 
     def _id_display(self, lookup_map: Dict[Any, str], internal) -> str:
-        """Return display name for an ID stored internally."""
-        if internal is None or str(internal).strip() == "":
-            return ""
-        # Direkt suchen
-        v = lookup_map.get(internal)
-        if v is not None:
-            return v
-        # Als String suchen
-        v = lookup_map.get(str(internal))
-        if v is not None:
-            return v
-        # Als int suchen
-        try:
-            v = lookup_map.get(int(internal))
-            if v is not None:
-                return v
-        except Exception:
-            pass
-        return str(internal)
+        """Return display name for an ID stored internally (db/machine_data.id_display)."""
+        return _machine_data.id_display(lookup_map, internal)
 
     def data(self, index: QModelIndex, role=Qt.DisplayRole):
         if index.isValid() and index.row() < self._n_hdr:
@@ -3165,119 +3121,20 @@ class ShowExperimentScreen(QWidget):
 
     def _load_jets_lookup(self):
         """Lädt alle Jets aus tblDTYJets (ID + Jet-Name, A–Z sortiert)
-        sowie Geometrie-Daten für den Hover-Tooltip."""
-        self._jets_list = []
-        self._jets_map = {}
-        self._jets_name_to_id = {}
-        self._jets_tooltip_map: Dict[Any, str] = {}
-        try:
-            rows = fetch_all(
-                """
-                SELECT [ID], [Jet], [Luftbohrung], [WinkelLuftbohrung], [GarnkanalBreite], [Luftverbrauch], [Entwicklungsname]
-                FROM [tblDTYJets]
-                ORDER BY [Jet] ASC
-                """
-            )
-        except Exception:
-            # Fallback ohne Geometrie-Spalten
-            try:
-                rows = fetch_all(
-                    """
-                    SELECT [ID], [Jet]
-                    FROM [tblDTYJets]
-                    ORDER BY [Jet] ASC
-                    """
-                )
-            except Exception:
-                rows = []
-        for r in rows:
-            jid = r.get("ID")
-            name = r.get("Jet")
-            if jid is None:
-                continue
-            nm = name or ""
-            self._jets_list.append((jid, nm))
-            # sowohl mit int- als auch mit str-Key zugreifbar
-            try:
-                self._jets_map[int(jid)] = nm
-            except Exception:
-                pass
-            self._jets_map[str(jid)] = nm
-            # Reverse lookup for paste (Jet-Name -> JetID)
-            key = str(nm).strip()
-            if key:
-                self._jets_name_to_id[key] = jid
-                self._jets_name_to_id[key.lower()] = jid
-
-            # Geometrie-Tooltip aufbauen
-            def _fmt(val, unit, superscript=""):
-                if val is None or str(val).strip() == "":
-                    return "—"
-                return f"{val}{superscript} {unit}".strip()
-
-            lines = []
-            lb = r.get("Luftbohrung")
-            wlb = r.get("WinkelLuftbohrung")
-            gb = r.get("GarnkanalBreite")
-            lv = r.get("Luftverbrauch")
-            if lb is not None: lines.append(f"Luftbohrung:          {_fmt(lb, 'mm')}")
-            if wlb is not None: lines.append(f"Winkel Luftbohrung:   {_fmt(wlb, '°')}")
-            if gb is not None: lines.append(f"Yarn channel width:   {_fmt(gb, 'mm')}")
-            if lv is not None: lines.append(f"Luftverbrauch:        {_fmt(lv, 'Nm³/h')}")
-            en = r.get("Entwicklungsname")
-            if en is not None and str(en).strip(): lines.append(f"Entwicklungsname:     {en}")
-            if lines:
-                tip = "\n".join(lines)
-                try:
-                    self._jets_tooltip_map[int(jid)] = tip
-                except Exception:
-                    pass
-                self._jets_tooltip_map[str(jid)] = tip
+        sowie Geometrie-Daten für den Hover-Tooltip (db/machine_data.load_jets_lookup)."""
+        jl = _machine_data.load_jets_lookup()
+        self._jets_list = jl.list
+        self._jets_map = jl.map
+        self._jets_name_to_id = jl.name_to_id
+        self._jets_tooltip_map: Dict[Any, str] = jl.tooltip_map
 
     def _load_housing_lookup(self):
-        """Lädt alle Housings aus tblHousing (ID + HousingName + Link, A-Z sortiert)."""
-        self._housing_list = []
-        self._housing_map = {}
-        self._housing_image_map: Dict[Any, str] = {}
-        try:
-            if not table_exists("tblHousing"):
-                return
-            cmap = get_columns_map("tblHousing")
-            col_id = resolve_field(["ID"], cmap) or "ID"
-            col_name = resolve_field(["HousingName", "Name", "Bezeichnung"], cmap)
-            if not col_name:
-                return
-            col_link = resolve_field(["Link", "link", "Image", "ImagePath", "Bild"], cmap)
-            if col_link:
-                rows = fetch_all(
-                    f"SELECT [{col_id}] AS HID, [{col_name}] AS HName, [{col_link}] AS HLink "
-                    f"FROM tblHousing ORDER BY [{col_name}] ASC"
-                )
-            else:
-                rows = fetch_all(
-                    f"SELECT [{col_id}] AS HID, [{col_name}] AS HName "
-                    f"FROM tblHousing ORDER BY [{col_name}] ASC"
-                )
-        except Exception:
-            rows = []
-        for r in rows:
-            hid = r.get("HID")
-            name = r.get("HName") or ""
-            if hid is None:
-                continue
-            self._housing_list.append((hid, str(name)))
-            try:
-                self._housing_map[int(hid)] = str(name)
-            except Exception:
-                pass
-            self._housing_map[str(hid)] = str(name)
-            link = r.get("HLink") or ""
-            if str(link).strip():
-                try:
-                    self._housing_image_map[int(hid)] = str(link).strip()
-                except Exception:
-                    pass
-                self._housing_image_map[str(hid)] = str(link).strip()
+        """Lädt alle Housings aus tblHousing (ID + HousingName + Link, A-Z sortiert)
+        (db/machine_data.load_housing_lookup)."""
+        hl = _machine_data.load_housing_lookup()
+        self._housing_list = hl.list
+        self._housing_map = hl.map
+        self._housing_image_map: Dict[Any, str] = hl.image_map
 
     # ---------- Lazy tab population ----------
 
@@ -4756,130 +4613,9 @@ class ShowExperimentScreen(QWidget):
         return model
 
     def _init_machine_cache(self):
-        """Lädt alle statischen DB-Daten für _build_machine_tab einmalig in den Cache."""
-        cache = {}
-
-        # MachineID der Series + OriginalJoker (gesetzt wenn Series von Joker-Maschine kam)
-        r = fetch_all(
-            "SELECT TS.MachineID, TS.OriginalJoker FROM tblTrialSeries AS TS WHERE TS.ID = ?",
-            [self._series_pk],
-        )
-        cache["machine_id"] = r[0]["MachineID"] if r else None
-        cache["original_joker_id"] = r[0].get("OriginalJoker") if r else None
-
-        # tblMachineFields (aktuelle Maschine)
-        _mf_query = """SELECT FieldNumber, \
-                              FieldName, \
-                              FieldFunction, \
-                              OriginalName,
-                              COALESCE(StorageTable, 'tbltrial') AS StorageTable,
-                              COALESCE(RDSetting, 0)             AS RDSetting
-                       FROM tblMachineFields \
-                       WHERE MachineID = ?
-                       ORDER BY FieldNumber, FieldName"""
-        try:
-            cache["machine_fields"] = fetch_all(
-                _mf_query, [cache["machine_id"]],
-            ) if cache["machine_id"] else []
-        except Exception:
-            cache["machine_fields"] = []
-
-        # Falls OriginalJoker gesetzt (Series kam von Joker-Maschine): fehlende Felder ergänzen.
-        # Die Joker-Maschine hat ein grosses Feldset; die neue Maschine kennt möglicherweise
-        # einzelne Felder (z.B. Winder) nicht. Die Werte liegen aber bereits in tblTrial.
-        joker_id = cache.get("original_joker_id")
-        if joker_id and joker_id != cache["machine_id"]:
-            try:
-                joker_fields = fetch_all(_mf_query, [joker_id])
-                existing_norms = {norm(f.get("FieldName") or "") for f in cache["machine_fields"]}
-                for jf in joker_fields:
-                    jf_norm = norm(jf.get("FieldName") or "")
-                    if jf_norm and jf_norm not in existing_norms:
-                        cache["machine_fields"].append(jf)
-                        existing_norms.add(jf_norm)
-            except Exception:
-                pass
-
-        # Spalten-Maps
-        cache["trial_cols_map"] = get_columns_map("tblTrial")
-        cache["settings_cols_map"] = get_columns_map("tblTrialSettings") if table_exists("tblTrialSettings") else {}
-
-        # tblYarn Map
-        cache["yarn_map"] = {}
-        if table_exists("tblYarn"):
-            for yr in fetch_all("SELECT ID, Name FROM tblYarn"):
-                try:
-                    cache["yarn_map"][int(yr["ID"])] = str(yr["Name"] or "")
-                except Exception:
-                    pass
-        from ui.widgets.yarn_colour import load_yarn_colours
-        cache["yarn_colour_map"] = load_yarn_colours()[0]
-
-        # tblYarnUse Map
-        cache["yarn_use_map"] = {}
-        try:
-            for r in fetch_all("SELECT ID, Name FROM tblYarnUse ORDER BY ID"):
-                cache["yarn_use_map"][int(r["ID"])] = str(r.get("Name") or "")
-        except Exception:
-            pass
-
-        # Lookup-Maps pro LookupTable (für dropdown_rows)
-        cache["lookup_maps"] = {}
-        for fdef in cache["machine_fields"]:
-            # LookupTable aus FieldFunction extrahieren (dropdown:tblXxx)
-            ff = str(fdef.get("FieldFunction") or "").strip()
-            lt = None
-            if ff.lower().startswith("dropdown:"):
-                lt = ff[len("dropdown:"):].strip() or None
-            if not lt or lt in cache["lookup_maps"]:
-                continue
-            lk_map: Dict[Any, str] = {}
-            try:
-                if table_exists(lt):
-                    lk_cmap = get_columns_map(lt)
-                    lk_id = resolve_field(["ID"], lk_cmap) or "ID"
-                    lk_name = resolve_field(
-                        ["DiscName", "Name", "Bezeichnung", "Caption",
-                         "HousingName", "Jet", "JetName", "MaterialName",
-                         "YarnName", "Description", "Label"],
-                        lk_cmap)
-                    # DTY process (db/dty_process.py): own order, not alphabetical
-                    lk_order = (resolve_field(["SortOrder"], lk_cmap) or lk_name) \
-                        if lt.lower() == "tbldtyprocess" else lk_name
-                    if lk_name:
-                        for lk in fetch_all(
-                                f"SELECT `{lk_id}` AS LID, `{lk_name}` AS LName "
-                                f"FROM `{lt}` ORDER BY `{lk_order}` ASC"
-                        ):
-                            lid = lk.get("LID")
-                            lname = str(lk.get("LName") or "")
-                            if lid is not None:
-                                lk_map[lid] = lname
-                                lk_map[str(lid)] = lname
-                                try:
-                                    lk_map[int(lid)] = lname
-                                except Exception:
-                                    pass
-            except Exception:
-                pass
-            cache["lookup_maps"][lt] = lk_map
-
-        # has_groups: YarnUseIDs vorhanden?
-        try:
-            if self._trial_ids:
-                ph = ",".join(["%s"] * len(self._trial_ids))
-                use_rows = fetch_all(
-                    f"SELECT COUNT(*) AS cnt FROM tblTrialSettings "
-                    f"WHERE TrialID IN ({ph}) AND YarnUseID IS NOT NULL",
-                    self._trial_ids,
-                )
-                cache["has_groups"] = (use_rows[0]["cnt"] > 0) if use_rows else False
-            else:
-                cache["has_groups"] = False
-        except Exception:
-            cache["has_groups"] = False
-
-        self._machine_cache = cache
+        """Lädt alle statischen DB-Daten für _build_machine_tab einmalig in den Cache
+        (db/machine_data.load_machine_cache, shared with the web app)."""
+        self._machine_cache = _machine_data.load_machine_cache(self._series_pk, self._trial_ids)
 
     def _refresh_materials_box(self):
         """Lädt die Materialliste für die aktuelle TrialSeries und zeigt sie an."""
@@ -5731,30 +5467,11 @@ class ShowExperimentScreen(QWidget):
         if checks:
             checked_labels = {cb.text() for cb in checks if cb.isChecked()}
 
-        trial_first_seen: set = set()
         right_view = self.tbl_machine.right
-
-        for c_idx, cs in enumerate(col_specs):
-            model_col = c_idx + 1
-            tid = cs.get("trial_id")
-            if groups:
-                lbl = str(cs.get("yarn_use_name") or cs.get("ply") or "")
-            else:
-                lbl = str(cs.get("ply") or "")
-
-            if compact:
-                if tid not in trial_first_seen:
-                    trial_first_seen.add(tid)
-                    hidden = False
-                else:
-                    hidden = True
-            else:
-                if checked_labels is not None and lbl:
-                    hidden = lbl not in checked_labels
-                else:
-                    hidden = False
-
-            right_view.setColumnHidden(model_col, hidden)
+        # rule: db/machine_data.hidden_columns (shared with the web app)
+        hidden_cols = _machine_data.hidden_columns(col_specs, compact, groups, checked_labels)
+        for c_idx, hidden in enumerate(hidden_cols):
+            right_view.setColumnHidden(c_idx + 1, hidden)
 
         self.tbl_machine.resizeColumnsToContents(fixed_data_column_width=90)
 

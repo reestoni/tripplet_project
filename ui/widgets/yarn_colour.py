@@ -16,16 +16,8 @@ from typing import Dict, Optional, Tuple
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 
-# fixed table - all colours of tblColour (2026-10-22) plus obvious spellings
-COLOUR_HEX: Dict[str, str] = {
-    "white": "#FFFFFF",
-    "natural": "#F3EAD3",
-    "raw white": "#F3EAD3",
-    "beige": "#D9C4A0",
-    "black": "#1A1A1A",
-    "grey": "#9A9A9A",
-    "gray": "#9A9A9A",
-}
+# fixed name -> colour table and the loader live Qt-free in db/yarn_colours.py (web app)
+from db.yarn_colours import COLOUR_HEX, load_yarn_colours  # noqa: F401,E402
 
 _BORDER = QColor("#7A7A7A")
 _UNKNOWN_FILL = QColor("#E6E6E6")
@@ -75,26 +67,3 @@ def colour_icon(name: Optional[str], size: int = 12) -> QIcon:
 
 def colour_tooltip(name: Optional[str]) -> str:
     return f"Colour: {name.strip()}" if (name or "").strip() else "Colour: not set"
-
-
-def load_yarn_colours() -> Tuple[Dict[int, str], Dict[str, str]]:
-    """({yarn_id: colour name}, {yarn name: colour name}). Best effort: empty
-    dicts if tblColour/ColourID do not exist (e.g. older offline snapshot)."""
-    by_id: Dict[int, str] = {}
-    by_name: Dict[str, str] = {}
-    try:
-        from db.connection import fetch_all
-        rows = fetch_all(
-            "SELECT y.ID AS YarnID, y.Name AS YarnName, c.Colour AS Colour "
-            "FROM tblYarn y JOIN tblColour c ON c.ID = y.ColourID", [])
-    except Exception:
-        return by_id, by_name
-    for r in rows:
-        colour = str(r.get("Colour") or "").strip()
-        if not colour:
-            continue
-        if r.get("YarnID") is not None:
-            by_id[int(r["YarnID"])] = colour
-        if r.get("YarnName"):
-            by_name[str(r["YarnName"])] = colour
-    return by_id, by_name
