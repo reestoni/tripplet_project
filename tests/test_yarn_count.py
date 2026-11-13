@@ -87,3 +87,15 @@ def test_formulas_and_designation():
     assert yc.notation(167, 48, 1) == "dtex 167 f48 · 150.3 den / 48 f"
     assert yc.notation(167, 48, 2).startswith("2 × dtex 167 f48")
     assert yc.notation(167, None, 1) == "dtex 167 · 150.3 den"
+
+
+def test_filament_values():
+    from ui import yarn_count as yc
+    v = yc.filament_values(16.7, 48, 2, 1.38)
+    assert round(v["total_dtex"], 6) == 334.0 and round(v["total_den"], 6) == 300.6
+    assert v["total_fil"] == 96 and round(v["dpf_dtex"], 4) == round(167 / 48, 4)
+    assert v["designation"].startswith("2 × dtex 167 f48")
+    none = yc.filament_values(None, 48, 1, 1.38)
+    assert none["total_dtex"] is None and none["designation"] is None
+    nofil = yc.filament_values(16.7, None, 1, 1.38)
+    assert nofil["dpf_dtex"] is None and nofil["diameter"] is None and nofil["total_fil"] is None

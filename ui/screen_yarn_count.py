@@ -379,27 +379,11 @@ class YarnCountScreen(QWidget):
     def _filament(self) -> None:
         fil = self._int(self.ed_fil.text())
         plies = self._int(self.ed_ply.text()) or 1
-        t = self._tex
-        if not t:
-            for v in self.fil.values():
-                v.setText("–")
-            self.lbl_designation.setText("–")
-            return
-        dtex = t * 10
-        total = t * plies
-        self.fil["total_dtex"].setText(yc.fmt(total * 10))
-        self.fil["total_den"].setText(yc.fmt(total * 9))
-        self.fil["total_Nm"].setText(yc.fmt(yc.from_tex(total, "Nm")))
-        self.fil["total_Ne"].setText(yc.fmt(yc.from_tex(total, "Ne")))
-        self.fil["total_fil"].setText(str(fil * plies) if fil else "–")
-        if fil:
-            self.fil["dpf_dtex"].setText(yc.fmt(dtex / fil))
-            self.fil["dpf_den"].setText(yc.fmt(dtex * 0.9 / fil))
-            self.fil["diameter"].setText(yc.fmt(yc.filament_diameter_um(dtex / fil, self.cb_material.currentData())))
-        else:
-            for key in ("dpf_dtex", "dpf_den", "diameter"):
-                self.fil[key].setText("–")
-        self.lbl_designation.setText(yc.notation(dtex, fil, plies))
+        vals = yc.filament_values(self._tex, fil, plies, self.cb_material.currentData())   # ui/yarn_count.py
+        for key, w in self.fil.items():
+            v = vals.get(key)
+            w.setText("–" if v is None else str(int(v)) if key == "total_fil" else yc.fmt(v))
+        self.lbl_designation.setText(vals.get("designation") or "–")
 
     def _preview_notation(self) -> None:
         txt = self.ed_notation.text()

@@ -161,3 +161,22 @@ def notation(total_dtex_single: float, filaments: Optional[int], plies: int) -> 
     if filaments:
         return f"{pre}dtex {fmt(total_dtex_single)} f{filaments} · {pre}{fmt(den)} den / {filaments} f"
     return f"{pre}dtex {fmt(total_dtex_single)} · {pre}{fmt(den)} den"
+
+
+def filament_values(tex: Optional[float], filaments: Optional[int], plies: int, density: float) -> Dict[str, Optional[float]]:
+    """"Filaments & plies" of the converter: per filament, totals (n x single count, no twist take-up),
+    filament diameter and the designation. None values = not computable (no count / no filaments)."""
+    keys = ("dpf_dtex", "dpf_den", "diameter", "total_dtex", "total_den", "total_Nm", "total_Ne", "total_fil")
+    if not tex:
+        return {**{k: None for k in keys}, "designation": None}
+    plies = plies if plies and plies > 0 else 1
+    dtex = tex * 10
+    total = tex * plies
+    out: Dict[str, Optional[float]] = {
+        "total_dtex": total * 10, "total_den": total * 9, "total_Nm": from_tex(total, "Nm"),
+        "total_Ne": from_tex(total, "Ne"), "total_fil": float(filaments * plies) if filaments else None,
+        "dpf_dtex": dtex / filaments if filaments else None, "dpf_den": dtex * 0.9 / filaments if filaments else None,
+        "diameter": filament_diameter_um(dtex / filaments, density) if filaments else None}
+    out["designation"] = notation(dtex, filaments, plies)     # type: ignore[assignment]
+    return out
+
