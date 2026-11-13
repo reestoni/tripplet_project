@@ -44,6 +44,7 @@ class _Bridge(QObject):
     filterSignal = Signal(str, str, int)
     removeSignal = Signal(str, str, int)
     scopeSignal = Signal(str)
+    refsSignal = Signal(bool)
     calcSignal = Signal(str)
     selectSignal = Signal(str, str)
     excelSignal = Signal(str)
@@ -123,6 +124,11 @@ class _Bridge(QObject):
     def setPlyScope(self, scope: str):
         self.scopeSignal.emit(scope)
 
+    @Slot(bool)
+    def setIncludeRefs(self, on: bool):
+        """Filters pane: include reference samples (Nutzerwunsch 2026-11-13)."""
+        self.refsSignal.emit(bool(on))
+
     @Slot(str)
     def editCalc(self, key: str):
         """"" = new calculated field."""
@@ -173,6 +179,7 @@ class SmartDashboard(QWidget):
         b.filterSignal.connect(self._on_filter)
         b.removeSignal.connect(self._on_remove_filter)
         b.scopeSignal.connect(self._on_ply_scope)
+        b.refsSignal.connect(self._on_refs)
         b.calcSignal.connect(self._on_calc)
         b.selectSignal.connect(lambda vid, ids: (s.select(vid, ids), self.refresh()))
         b.excelSignal.connect(self._on_export_visual)
@@ -272,6 +279,10 @@ class SmartDashboard(QWidget):
         if not self.read_only:
             self.screen.set_ply_scope(scope)
 
+    def _on_refs(self, on: bool) -> None:
+        if not self.read_only and callable(getattr(self.screen, "set_include_refs", None)):
+            self.screen.set_include_refs(on)
+
     def _on_filter(self, scope: str, vid: str, index: int) -> None:
         ds = self.screen.ds
         if self.read_only or ds is None:
@@ -297,7 +308,16 @@ class SmartDashboard(QWidget):
         if not key:
             key = self.session.next_calc_key()
         from ui.smart_calc_dialog import CalcFieldDialog
-        dlg = CalcFieldDialog(self.screen.ds, existing, key, self)
+        from ui.smart_dashboard_core import calc_library
+        try:
+            from db import smart_chart_views as views
+            library = calc_library(self.screen.ds, views.list_views() if views.available() else [],
+                                   self.spec.get("calc") or [])
+        except Exception as e:
+            logger.warning("calc library: %s", e)
+            library = []
+        dlg = CalcFieldDialog(self.screen.ds, existing, key, self, filters=self.screen.filters,
+                              ply_scope=self.screen.ply_scope, library=library)
         if dlg.exec() != QDialog.Accepted:
             return
         if dlg.deleted:

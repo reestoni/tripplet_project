@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS tblSmartChartView (
     Name VARCHAR(200) NOT NULL,
     UserID INT NULL,
     IsShared TINYINT(1) NOT NULL DEFAULT 0,
-    ConfigJSON TEXT NOT NULL,
+    ConfigJSON MEDIUMTEXT NOT NULL,
     CreatedAt DATETIME NOT NULL,
     UpdatedAt DATETIME NULL,
     INDEX ix_scview_user (UserID)
@@ -228,6 +228,29 @@ def config_of(view: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
 
+_limit: Dict[str, int] = {}
+
+
+def config_limit() -> int:
+    """Bytes a view may have: ConfigJSON TEXT = 64 KB, MEDIUMTEXT (tools/smart_chart_views_migration.py) = 16 MB."""
+    if "n" not in _limit:
+        n = 65000
+        try:
+            from db.connection import fetch_all, is_offline_mode
+            if is_offline_mode():
+                n = 16_000_000
+            else:
+                # table name as literal: db.connection rewrites table names inside SQL text, not in parameters
+                rows = fetch_all("SELECT DATA_TYPE AS t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                                 "AND LOWER(TABLE_NAME) = 'tblsmartchartview' AND COLUMN_NAME = 'ConfigJSON'")
+                t = str(rows[0]["t"]).lower() if rows else "text"
+                n = {"mediumtext": 16_000_000, "longtext": 16_000_000}.get(t, 65000)
+        except Exception:
+            pass
+        _limit["n"] = n
+    return _limit["n"]
+
+
 def save_view(name: str, config: Dict[str, Any], shared: Optional[bool] = False,
               view_id: Optional[int] = None) -> int:
     name = (name or "").strip()
@@ -236,7 +259,7 @@ def save_view(name: str, config: Dict[str, Any], shared: Optional[bool] = False,
     from db.connection import execute, execute_insert
     now = datetime.datetime.now().replace(microsecond=0)
     payload = json.dumps(config, ensure_ascii=False, separators=(",", ":"))
-    if len(payload.encode("utf-8")) > 65000:      # ConfigJSON is a TEXT column (64 KB)
+    if len(payload.encode("utf-8")) > config_limit():     # TEXT = 64 KB, MEDIUMTEXT = 16 MB
         raise ValueError("This view is too big to be saved (too many pages or visuals). "
                          "Remove a few visuals or split it into two views.")
     if view_id:

@@ -329,7 +329,7 @@ body.modelmode #dtbar{display:none!important}
 <script>
 var MULTIW=['columns','drill','values'], PSIZES={}, PIESHAPES={}, FORMATS={}, SORTS={}, LEGENDPOS={}, PALS={}, MSCALES={}, FONTS={}, CARDSIZES={}, RULEOPS={}, RULECOLS={}, MONTHOF={}, YOPEN={}, RO=false, STACKS={}, bridge=null, CATALOG=[], FIELDS={}, GROUPS=[], TREE=[], TYPES={}, WELLS={}, AGGS={}, SLSTYLES={}, DDOPEN={}, SLQ={};
 var SPEC={pages:[{id:'p1',title:'Page 1',visuals:[],filters:[]}],active:'p1'}, SEL=null, RESULTS={}, PFILTERS=[];
-var MSEL=[], GRID={cols:12,row:20}, GAP=10, FDATA={all:[],page:[],cross:[],slicers:[],ply:'any',through:null}, ANA={kinds:{},colours:{},defaults:{},types:[]};
+var MSEL=[], GRID={cols:12,row:20}, GAP=10, FDATA={all:[],page:[],cross:[],slicers:[],ply:'any',refs:false,through:null}, ANA={kinds:{},colours:{},defaults:{},types:[]};
 function PG(){for(var i=0;i<SPEC.pages.length;i++)if(SPEC.pages[i].id===SPEC.active)return SPEC.pages[i];return SPEC.pages[0];}
 var ICON={
  points:'<circle cx="7.5" cy="19" r="2.3" fill="#1F7A3A"/><circle cx="12.5" cy="12.5" r="2.3" fill="#8CC63F"/><circle cx="17" cy="16.5" r="2.3" fill="#1F7A3A"/><circle cx="22.5" cy="8" r="2.3" fill="#8CC63F"/><circle cx="23" cy="17" r="2.3" fill="#232E3A"/>',
@@ -1221,7 +1221,9 @@ function renderFilterPane(){
     +'<button class="fadd" data-s="all" style="margin-top:5px">+ Add filter</button>'
     +'<div class="hint" style="margin-top:6px">Yarn filters apply to</div><select id="plyscope">'
     +[['any','Any ply'],['core','Core only'],['effect','Effect only']].map(function(o){return '<option value="'+o[0]+'"'+(FDATA.ply===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')
-    +'</select></div>';
+    +'</select>'
+    +'<label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px;cursor:pointer" title="Reference samples are left out unless ticked. With them, the field Reference sample tells them apart.">'
+    +'<input type="checkbox" id="increfs"'+(FDATA.refs?' checked':'')+'> Include reference samples</label></div>';
   h+='<div class="fsec"><div class="lab">On this page</div><div class="chips">'+chipList('page','',FDATA.page)+'</div>'
     +'<button class="fadd" data-s="page" style="margin-top:5px">+ Add filter</button></div>';
   h+=dtConfigHtml();
@@ -1246,6 +1248,7 @@ function renderFilterPane(){
     if(b.dataset.x)bridge.clearCross(b.dataset.x);
     else{var sv=vis(b.dataset.sl);if(sv){sv.sel={};changed();}}});});
   var ps=document.getElementById('plyscope');ps.disabled=RO;ps.addEventListener('change',function(){bridge.setPlyScope(ps.value);});
+  var ir=document.getElementById('increfs');ir.disabled=RO;ir.addEventListener('change',function(){if(bridge.setIncludeRefs)bridge.setIncludeRefs(ir.checked);});
   bindDtConfig(el);
 }
 function toggleTarget(id){
@@ -1534,7 +1537,7 @@ function renderResults(data){
   if(data.page&&data.page!==PG().id)return;          // late answer for a page we already left
   Object.keys(data.results).forEach(function(id){data.results[id]._rid=++_rid;});
   RESULTS=data.results;
-  FDATA={all:data.allFilters||[],page:data.pageFilters||[],cross:data.cross||[],slicers:data.slicers||[],ply:data.plyScope||'any',through:data.through||null};
+  FDATA={all:data.allFilters||[],page:data.pageFilters||[],cross:data.cross||[],slicers:data.slicers||[],ply:data.plyScope||'any',refs:!!data.refs,through:data.through||null};
   renderFilterPane();renderDtBar();
   var x=document.getElementById('cross');
   x.innerHTML=data.cross.map(function(c){return '<span class="xchip" data-s="'+esc(c.source)+'" title="Clicked in '+esc(c.from)+' - click to remove">'+esc(c.text)+'  ×</span>';}).join('');

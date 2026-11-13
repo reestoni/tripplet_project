@@ -19,13 +19,14 @@ Data and filtering: db/trial_explorer.py.
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
+    QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
@@ -65,6 +66,7 @@ class SmartChartScreen(QWidget):
         self.catalog: List[te.Field] = []
         self.filters: List[Dict[str, Any]] = []      # filters on all pages = "Find trials"
         self.ply_scope = "any"
+        self.include_refs = False                    # reference samples count too (Filters pane)
         self.view: Optional[Dict[str, Any]] = None   # loaded saved view
 
         root = QVBoxLayout(self)
@@ -148,7 +150,7 @@ class SmartChartScreen(QWidget):
         QGuiApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             self.catalog = te.build_catalog()
-            self.ds = te.TrialDataset(self.catalog)
+            self.ds = te.TrialDataset(self.catalog, include_refs=self.include_refs)
         except Exception as e:
             QGuiApplication.restoreOverrideCursor()
             self.lbl_count.setText("The trials could not be loaded.")
@@ -169,9 +171,26 @@ class SmartChartScreen(QWidget):
             self.ply_scope = scope
             self.refresh()
 
-    def settings(self) -> Dict[str, Any]:
+    def set_include_refs(self, on: bool, refresh: bool = True) -> None:
+        """Filters pane "Include reference samples": the trials are loaded again with / without them."""
+        on = bool(on)
+        if on == self.include_refs and self.ds is not None:
+            return
+        self.include_refs = on
+        if self.ds is None:
+            return
+        QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            self.ds = te.TrialDataset(self.catalog, include_refs=on)
+        finally:
+            QGuiApplication.restoreOverrideCursor()
+        _log("smart_dashboard_refs", "on" if on else "off")
+        if refresh:
+            self.refresh()
+
+    def settings(self, folder: str = "") -> Dict[str, Any]:
         from ui.smart_dashboard_core import view_settings
-        return view_settings(self.filters, self.ply_scope, self.dashboard.spec)
+        return view_settings(self.filters, self.ply_scope, self.dashboard.spec, self.include_refs, folder)
 
     def refresh(self) -> None:
         if self.ds is None:
@@ -183,7 +202,8 @@ class SmartChartScreen(QWidget):
             f"<span style='font-size:20px;font-weight:700'>{_fmt_n(summ['trials'])}</span>"
             f"&nbsp; <b>trials match</b> &nbsp;in {_fmt_n(summ['series'])} series · {summ['machines']} machines · "
             f"{summ['jets']} jets &nbsp;&nbsp;<span style='color:#2F4A37;font-size:12px'>"
-            f"filters on all pages apply to every visual · reference samples excluded</span>")
+            f"filters on all pages apply to every visual · reference samples "
+            f"{'included' if self.include_refs else 'excluded'}</span>")
         self.dashboard.refresh()
 
     # ── views ───────────────────────────────────────────────────────────
@@ -250,7 +270,8 @@ class SmartChartScreen(QWidget):
 
     def apply_settings(self, cfg: Dict[str, Any]) -> List[str]:
         """Apply a saved configuration; returns the names of unknown fields."""
-        from ui.smart_dashboard_core import read_view_settings
+        from ui.smart_dashboard_core import read_view_settings, view_refs
+        self.set_include_refs(view_refs(cfg), refresh=False)
         self.filters, self.ply_scope, spec, missing = read_view_settings(cfg, set(self.ds.fields) if self.ds else set())
         self.dashboard.set_spec(spec)
         self.refresh()
@@ -276,21 +297,22 @@ class SmartChartScreen(QWidget):
         dlg = _SaveViewDialog(self, self.view)
         if dlg.exec() != QDialog.Accepted:
             return
-        name, shared, overwrite = dlg.values()
+        name, shared, overwrite, folder = dlg.values()
         owner = overwrite and self.view and views.is_owner(self.view)
         if overwrite and self.view and not owner:
             shared = None              # edit share: the creator's sharing stays
         try:
-            vid = views.save_view(name, self.settings(), shared,
+            vid = views.save_view(name, self.settings(folder), shared,
                                   view_id=int(self.view["ID"]) if (overwrite and self.view) else None)
         except Exception as e:
             show_error(self, "Save view", "The view could not be saved.", e)
             return
         if overwrite and self.view:
-            self.view = {**self.view, "Name": name, **({} if shared is None else {"IsShared": int(shared)})}
+            self.view = {**self.view, "Name": name, "ConfigJSON": json.dumps(self.settings(folder)),
+                         **({} if shared is None else {"IsShared": int(shared)})}
         else:
             self.view = {"ID": vid, "Name": name, "IsShared": int(bool(shared)), "UserID": _uid(),
-                         "MyRight": views.RIGHT_OWNER}
+                         "MyRight": views.RIGHT_OWNER, "ConfigJSON": json.dumps(self.settings(folder))}
         self.lbl_title.setText(name)
         self._update_share_button()
         _log("smart_chart_view_save", "shared" if shared else "private" if shared is not None else "edit share")
@@ -435,6 +457,7 @@ class _OpenViewDialog(QDialog):
         self.setWindowTitle("Open view")
         self.resize(640, 480)
         self.chosen: Optional[Dict[str, Any]] = None
+        self._favs: set = set()
         v = QVBoxLayout(self)
         self.txt_q = QLineEdit()
         self.txt_q.setPlaceholderText("Search by name or owner…")
@@ -447,6 +470,10 @@ class _OpenViewDialog(QDialog):
         self.btn_del = QPushButton("Delete")
         self.btn_del.clicked.connect(self._delete)
         row.addWidget(self.btn_del)
+        self.btn_fav = QPushButton("☆ Favourite")
+        self.btn_fav.setToolTip("Favourites are listed first - here and on the Dashboards page")
+        self.btn_fav.clicked.connect(self._toggle_fav)
+        row.addWidget(self.btn_fav)
         row.addStretch(1)
         bb = QDialogButtonBox(QDialogButtonBox.Open | QDialogButtonBox.Cancel)
         bb.accepted.connect(self._ok)
@@ -467,7 +494,23 @@ class _OpenViewDialog(QDialog):
             it = QListWidgetItem("No saved views yet.")
             it.setFlags(Qt.NoItemFlags)
             self.lst.addItem(it)
-        for r in rows:
+        from ui.smart_dashboard_core import group_views
+        self._favs = set(_favourites())
+        ordered = []
+        for g in group_views(rows, list(self._favs)):
+            ordered.append(g["title"] or ("Other views" if len(ordered) else ""))
+            ordered.extend(g["views"])
+        for r in ordered:
+            if isinstance(r, str):
+                if r:
+                    head = QListWidgetItem(r)
+                    head.setFlags(Qt.NoItemFlags)
+                    f = head.font()
+                    f.setBold(True)
+                    head.setFont(f)
+                    head.setForeground(QColor("#165C2B"))
+                    self.lst.addItem(head)
+                continue
             when = r.get("UpdatedAt") or r.get("CreatedAt")
             when_s = when.strftime("%d.%m.%Y") if hasattr(when, "strftime") else ""
             right = r.get("MyRight")
@@ -490,6 +533,15 @@ class _OpenViewDialog(QDialog):
         it = self.lst.currentItem()
         v = it.data(Qt.UserRole) if it is not None else None
         self.btn_del.setEnabled(bool(v) and views.can_delete(v))
+        self.btn_fav.setEnabled(bool(v))
+        self.btn_fav.setText("★ Unfavourite" if v and int(v["ID"]) in self._favs else "☆ Favourite")
+
+    def _toggle_fav(self) -> None:
+        it = self.lst.currentItem()
+        v = it.data(Qt.UserRole) if it is not None else None
+        if v:
+            _toggle_favourite(int(v["ID"]))
+            self._fill()
 
     def _ok(self) -> None:
         it = self.lst.currentItem()
@@ -530,6 +582,17 @@ class _SaveViewDialog(QDialog):
             # saving a view shared with me: its sharing belongs to the creator (a new copy starts private)
             self.chk_shared.setChecked(False)
             self.chk_shared.setToolTip("Only the creator can share this view - a new copy is yours to share")
+        v.addWidget(QLabel("Folder (optional)"))
+        self.cmb_folder = QComboBox()
+        self.cmb_folder.setEditable(True)
+        try:
+            from ui.smart_dashboard_core import folders_of, view_folder
+            self.cmb_folder.addItems([""] + folders_of(views.list_views()))
+            self.cmb_folder.setCurrentText(view_folder(views.config_of(current or {})))
+        except Exception:
+            pass
+        self.cmb_folder.lineEdit().setPlaceholderText("e.g. Cotton-like · Customer A")
+        v.addWidget(self.cmb_folder)
         self.chk_new = QCheckBox("Save as a new view")
         can_overwrite = bool(current) and views.can_change(current)
         self.chk_new.setChecked(not can_overwrite)
@@ -545,7 +608,8 @@ class _SaveViewDialog(QDialog):
         v.addWidget(bb)
 
     def values(self):
-        return self.txt.text().strip(), self.chk_shared.isChecked(), not self.chk_new.isChecked()
+        return (self.txt.text().strip(), self.chk_shared.isChecked(), not self.chk_new.isChecked(),
+                self.cmb_folder.currentText().strip())
 
 
 def _view_kind(cfg: Dict[str, Any]) -> str:
@@ -553,6 +617,22 @@ def _view_kind(cfg: Dict[str, Any]) -> str:
     from ui.smart_dashboard_core import view_kind
     k = view_kind(cfg)
     return f"Dashboard · {k['pages']} page{'s' if k['pages'] != 1 else ''} · {k['visuals']} visuals"
+
+
+def _favourites() -> List[int]:
+    try:
+        from db.display_settings import smart_favourites
+        return smart_favourites(_uid())
+    except Exception:
+        return []
+
+
+def _toggle_favourite(view_id: int) -> None:
+    try:
+        from db.display_settings import toggle_smart_favourite
+        toggle_smart_favourite(_uid(), view_id)
+    except Exception as e:
+        logger.warning("favourite not saved: %s", e)
 
 
 def _uid():

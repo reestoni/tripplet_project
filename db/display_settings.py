@@ -14,7 +14,8 @@ COLUMN = "DisplaySettings"
 
 DEFAULTS: Dict[str, Any] = {"scale": 100, "contrast": False, "crosshair": False, "readbar": False,
                             "alert_marks": False, "cb_colours": False, "app_scale": 100,
-                            "whats_new_seen": "", "recent_series": [], "start": "backlog"}
+                            "whats_new_seen": "", "recent_series": [], "start": "backlog", "smart_favs": []}
+SMART_FAVS_MAX = 40  # Smart Chart / Dashboards: favourite saved views (view IDs)
 RECENT_MAX = 8  # Sidebar -> "Recent" (ui/recent_series.py)
 
 
@@ -48,6 +49,14 @@ def _clean(d: Dict[str, Any]) -> Dict[str, Any]:
     out["whats_new_seen"] = str(d.get("whats_new_seen") or "")[:40]
     out["recent_series"] = _clean_recent(d.get("recent_series"))
     out["start"] = str(d.get("start") or "backlog")[:30]
+    favs = []
+    for v in d.get("smart_favs") or []:
+        try:
+            if int(v) not in favs:
+                favs.append(int(v))
+        except (TypeError, ValueError):
+            continue
+    out["smart_favs"] = favs[:SMART_FAVS_MAX]
     return out
 
 
@@ -122,6 +131,23 @@ def update(user_id: Any, **changes) -> Optional[Dict[str, Any]]:
     new = _clean(cur)
     save(user_id, new)
     return new
+
+
+def smart_favourites(user_id: Any) -> list:
+    """Favourite Smart Chart views / dashboards of a user (view IDs)."""
+    return list((load(user_id) or {}).get("smart_favs") or [])
+
+
+def toggle_smart_favourite(user_id: Any, view_id: int) -> Optional[bool]:
+    """Star / unstar a view; True = now a favourite, None = could not be saved."""
+    cur = load(user_id)
+    if cur is None:
+        return None
+    favs = [int(v) for v in cur.get("smart_favs") or []]
+    on = int(view_id) not in favs
+    favs = ([int(view_id)] + favs) if on else [v for v in favs if v != int(view_id)]
+    update(user_id, smart_favs=favs)
+    return on
 
 
 def push_recent(entries: list, entry: Dict[str, Any]) -> list:

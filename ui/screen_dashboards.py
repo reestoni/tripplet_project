@@ -52,6 +52,7 @@ class DashboardsScreen(QWidget):
         self.catalog: List[te.Field] = []
         self.filters: List[Dict[str, Any]] = []
         self.ply_scope = "any"
+        self.include_refs = False
         self.grp_scope = None
         self.view: Optional[Dict[str, Any]] = None
         self._views: List[Dict[str, Any]] = []
@@ -117,6 +118,8 @@ class DashboardsScreen(QWidget):
                                 "QTreeWidget::item{padding:5px 2px;}"
                                 "QTreeWidget::item:selected{background:#E3F1E6;color:#1C2321;}")
         self.tree.itemSelectionChanged.connect(self._on_pick)
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._tree_menu)
         lv.addWidget(self.tree, 1)
         split.addWidget(left)
 
@@ -159,7 +162,7 @@ class DashboardsScreen(QWidget):
         QGuiApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             self.catalog = te.build_catalog()
-            self.ds = te.TrialDataset(self.catalog)
+            self.ds = te.TrialDataset(self.catalog, include_refs=self.include_refs)
         except Exception as e:
             self._set_empty("The trials could not be loaded.")
             show_error(self, "Dashboards", "The trials could not be loaded.", e)
@@ -189,7 +192,18 @@ class DashboardsScreen(QWidget):
         keep = int(self.view["ID"]) if self.view else _last_view()
         self.tree.blockSignals(True)
         self.tree.clear()
+        from ui.screen_smart_chart import _favourites
+        from ui.smart_dashboard_core import FAVOURITES, view_folder
+        favs = set(_favourites())
         groups = {}
+        fav_head = None
+        if any(int(v["ID"]) in favs for v in self._views):
+            fav_head = QTreeWidgetItem([FAVOURITES])
+            fav_head.setFlags(Qt.ItemIsEnabled)
+            fh = fav_head.font(0)
+            fh.setBold(True)
+            fav_head.setFont(0, fh)
+            self.tree.addTopLevelItem(fav_head)
         for title in (MINE, SHARED):
             it = QTreeWidgetItem([title])
             it.setFlags(Qt.ItemIsEnabled)
@@ -199,16 +213,33 @@ class DashboardsScreen(QWidget):
             self.tree.addTopLevelItem(it)
             groups[title] = it
         chosen = None
-        for v in self._views:
+        folders: Dict[Any, QTreeWidgetItem] = {}
+        for v in sorted(self._views, key=lambda x: (view_folder(views.config_of(x)) == "",
+                                                    view_folder(views.config_of(x)).lower(), str(x.get("Name") or "").lower())):
             mine = v.get("MyRight") == views.RIGHT_OWNER
             it = QTreeWidgetItem([str(v.get("Name") or "Dashboard")])
             it.setData(0, Qt.UserRole, v)
             it.setToolTip(0, _describe(v))
             if not mine:
                 it.setText(0, f"{v.get('Name')}  ·  {v.get('OwnerName') or ''}")
-            groups[MINE if mine else SHARED].addChild(it)
+            if fav_head is not None and int(v["ID"]) in favs:
+                fav_head.addChild(it)
+            else:
+                parent = groups[MINE if mine else SHARED]
+                folder = view_folder(views.config_of(v))
+                if folder:
+                    key = (id(parent), folder.lower())
+                    if key not in folders:
+                        folders[key] = QTreeWidgetItem([f"📁 {folder}"])
+                        folders[key].setFlags(Qt.ItemIsEnabled)
+                        parent.addChild(folders[key])
+                        folders[key].setExpanded(True)
+                    parent = folders[key]
+                parent.addChild(it)
             if keep is not None and int(v["ID"]) == int(keep):
                 chosen = it
+        if fav_head is not None:
+            fav_head.setExpanded(True)
         for title, it in groups.items():
             it.setExpanded(True)
             if not it.childCount():
@@ -217,8 +248,17 @@ class DashboardsScreen(QWidget):
                 it.addChild(ph)
         self.tree.blockSignals(False)
         if chosen is None:
-            chosen = next((groups[t].child(0) for t in (MINE, SHARED)
-                           if groups[t].childCount() and groups[t].child(0).data(0, Qt.UserRole)), None)
+            def first(node):
+                for j in range(node.childCount()):
+                    c = node.child(j)
+                    if c.data(0, Qt.UserRole):
+                        return c
+                    f = first(c)
+                    if f is not None:
+                        return f
+                return None
+            chosen = next((x for x in (first(n) for n in ([fav_head] if fav_head else []) + [groups[MINE], groups[SHARED]])
+                           if x is not None), None)
         if chosen is not None:
             self.tree.setCurrentItem(chosen)        # -> _on_pick
         else:
@@ -227,15 +267,32 @@ class DashboardsScreen(QWidget):
                             "“Save view” - or ask a colleague to share one with you.")
         self._filter_list(self.txt_q.text())
 
+    def _tree_menu(self, pos) -> None:
+        it = self.tree.itemAt(pos)
+        v = it.data(0, Qt.UserRole) if it is not None else None
+        if not v:
+            return
+        from PySide6.QtWidgets import QMenu
+        from ui.screen_smart_chart import _favourites, _toggle_favourite
+        on = int(v["ID"]) in set(_favourites())
+        menu = QMenu(self)
+        menu.addAction("★ Remove from favourites" if on else "☆ Add to favourites",
+                       lambda: (_toggle_favourite(int(v["ID"])), self.load_list()))
+        menu.exec(self.tree.viewport().mapToGlobal(pos))
+
     def _filter_list(self, q: str) -> None:
         q = q.strip().lower()
-        for i in range(self.tree.topLevelItemCount()):
-            top = self.tree.topLevelItem(i)
-            for j in range(top.childCount()):
-                it = top.child(j)
+        def walk(node):
+            for j in range(node.childCount()):
+                it = node.child(j)
                 v = it.data(0, Qt.UserRole)
-                text = (it.text(0) + " " + (_describe(v) if v else "")).lower()
-                it.setHidden(bool(q) and bool(v) and q not in text)
+                if v:
+                    text = (it.text(0) + " " + _describe(v)).lower()
+                    it.setHidden(bool(q) and q not in text)
+                else:
+                    walk(it)
+        for i in range(self.tree.topLevelItemCount()):
+            walk(self.tree.topLevelItem(i))
 
     def _on_pick(self) -> None:
         it = self.tree.currentItem()
@@ -251,6 +308,10 @@ class DashboardsScreen(QWidget):
 
     def _show(self, v: Dict[str, Any]) -> None:
         cfg = views.config_of(v)
+        from ui.smart_dashboard_core import view_refs
+        if view_refs(cfg) != self.include_refs and self.ds is not None:
+            self.include_refs = view_refs(cfg)
+            self.ds = te.TrialDataset(self.catalog, include_refs=self.include_refs)
         known = set(self.ds.fields) if self.ds else set()
         self.filters = [f for f in cfg.get("filters") or [] if f.get("key") in known]
         self.ply_scope = cfg.get("ply_scope") if cfg.get("ply_scope") in te.PLY_SCOPES else "any"

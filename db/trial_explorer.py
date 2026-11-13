@@ -103,6 +103,8 @@ GENERAL_FIELDS = [
     Field("experiment", "Experiment", "", "General", "cat"),
     Field("owner", "Owner", "", "General", "cat"),
     Field("tested_on", "Tested on (lab machine)", "", "General", "cat", source={"computed": "tested_on"}),
+    # Yes/No - only "Yes" when the dashboard includes reference samples (Nutzerwunsch 2026-11-13)
+    Field("reference", "Reference sample", "", "General", "cat"),
     Field("year", "Year", "", "Time", "cat"),
     Field("month", "Month", "", "Time", "cat"),
     Field("trial_year", "Trial year", "", "Time", "cat"),
@@ -118,7 +120,7 @@ GENERAL_FIELDS = [
 # Fields stored on the Trial itself (attributes) or in Trial.extra - known
 # for every trial AND for the empty series/experiment rows.
 ATTR_KEYS = ("machine", "jet", "series", "experiment", "year")
-EXTRA_KEYS = ("owner", "month", "trial_year", "trial_month", "exp_productgroup", "exp_ordertype",
+EXTRA_KEYS = ("reference", "owner", "month", "trial_year", "trial_month", "exp_productgroup", "exp_ordertype",
               "exp_project", "exp_owner", "exp_machine", "exp_year", "exp_month")
 # Time fields: labels sort chronologically ("2026-03"), gaps are filled in charts
 TIME_KEYS = {"year": "year", "month": "month", "trial_year": "year", "trial_month": "month",
@@ -419,9 +421,11 @@ class TrialDataset:
     `loader(field) -> {trial_id: value}` can be replaced in tests."""
 
     def __init__(self, catalog: Sequence[Field], trials: Optional[List[Trial]] = None,
-                 loader: Optional[Callable[[Field], Dict[int, Any]]] = None):
+                 loader: Optional[Callable[[Field], Dict[int, Any]]] = None, include_refs: bool = False):
         self.fields = catalog_by_key(catalog)
-        loaded = trials if trials is not None else _load_trials()
+        # include_refs: reference samples count as trials too (field "Reference sample" = Yes)
+        self.include_refs = bool(include_refs)
+        loaded = trials if trials is not None else _load_trials(include_refs=self.include_refs)
         self.trials: List[Trial] = [t for t in loaded if not t.empty]
         self.empties: List[Trial] = [t for t in loaded if t.empty]
         self.by_id: Dict[int, Trial] = {t.id: t for t in loaded}
@@ -923,11 +927,11 @@ def _tested_on() -> Dict[int, Tuple[str, ...]]:
     return {tid: tuple(names) for tid, names in found.items()}
 
 
-def _load_trials() -> List[Trial]:
-    """Real trials (reference samples excluded) plus EMPTY rows for series
+def _load_trials(include_refs: bool = False) -> List[Trial]:
+    """Real trials (reference samples excluded, unless include_refs) plus EMPTY rows for series
     without trials and experiments without series (see module doc)."""
     from db.connection import fetch_all
-    from db.trial_reference import exclude_references_sql
+    from db.trial_reference import IS_REFERENCE_COL, exclude_references_sql, has_reference_columns
     exps = _load_experiments()
     users = _lookup("tblUser", "ID", "TRIM(CONCAT(COALESCE(FirstName,''), ' ', COALESCE(LastName,'')))")
     machines = _lookup("tblMaschine", "ID", "Maschine")
@@ -973,12 +977,14 @@ def _load_trials() -> List[Trial]:
         out.update({k: exp.get(k) or None for k in exp_keys})
         return out
 
+    refs = include_refs and has_reference_columns()
     rows = fetch_all(
         "SELECT T.ID AS id, T.Versuchsnummer AS nr, T.TrialSeriesID AS sid, T.AirPressure AS ap, T.JetID AS jet_id, "
-        "T.Timestamp AS ts, J.Jet AS jet, J.Luftverbrauch AS jf "
-        "FROM tblTrial T "
+        "T.Timestamp AS ts, J.Jet AS jet, J.Luftverbrauch AS jf"
+        + (f", COALESCE(T.{IS_REFERENCE_COL}, 0) AS isref " if refs else " ")
+        + "FROM tblTrial T "
         "LEFT JOIN tbljets J ON J.ID = T.JetID "
-        f"WHERE T.TrialSeriesID IS NOT NULL AND {exclude_references_sql('T')}")
+        "WHERE T.TrialSeriesID IS NOT NULL" + ("" if include_refs else f" AND {exclude_references_sql('T')}"))
     trials: Dict[int, Trial] = {}
     for r in rows:
         s = series.get(int(r["sid"])) or {"exp_pk": None, "experiment": "", "series": "", "machine": "",
@@ -991,7 +997,8 @@ def _load_trials() -> List[Trial]:
         t_year, t_month = _ym(r.get("ts") or s["created"])
         t.extra = {"air_pressure": _f(r.get("ap")), "jet_factor": _f(r.get("jf")),
                    "jet_id": int(r["jet_id"]) if r.get("jet_id") is not None else None,
-                   **extras(s), "trial_year": t_year or s["year"] or None, "trial_month": t_month or None}
+                   **extras(s), "trial_year": t_year or s["year"] or None, "trial_month": t_month or None,
+                   "reference": "Yes" if refs and int(r.get("isref") or 0) else "No"}
         trials[t.id] = t
     # empty rows: series without (real) trials, experiments without series
     with_trials = {t.series_id for t in trials.values()}

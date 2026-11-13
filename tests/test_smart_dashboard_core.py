@@ -151,3 +151,84 @@ def test_excel_pdf_and_views(host):
     assert scope == "core" and spec == SPEC and missing == ["gone"] and len(flt) == 1
     assert core.view_kind(cfg) == {"pages": 2, "visuals": 3}
     assert s.trial_target(4) == {"exp_pk": 7, "series_id": 1, "experiment": "2026-01-001"}
+
+
+# ── 2026-11-13: cache, reference samples, calc preview / library, folders + favourites ──
+def test_results_are_cached_per_visual(host, monkeypatch):
+    s = core.DashboardSession(host)
+    s.set_spec(SPEC)
+    calls = []
+    real = core.en.compute_visual
+    monkeypatch.setattr(core.en, "compute_visual", lambda *a, **k: calls.append(a[1]["id"]) or real(*a, **k))
+    s.refresh_cmds()
+    assert sorted(calls) == ["v1", "v2"]
+    calls.clear()
+    import copy
+    spec = copy.deepcopy(s.spec)
+    spec["pages"][0]["visuals"][0].update(x=6, w=4)            # moved + resized: nothing to compute
+    s.update_spec(spec)
+    first = s.refresh_cmds()[0][1]["results"]
+    assert calls == []
+    first["v1"]["kind"] = "changed"                             # the page gets copies, the cache stays intact
+    assert s.refresh_cmds()[0][1]["results"]["v1"]["kind"] != "changed"
+    spec["pages"][0]["visuals"][0]["agg"] = "max"              # what v1 shows changed: only v1 again
+    s.update_spec(spec)
+    s.refresh_cmds()
+    assert calls == ["v1"]
+    calls.clear()
+    s.click("v1", {"x": "AFK"})              # a click filters v2 (and greys out the other bars of v1)
+    s.refresh_cmds()
+    assert "v2" in calls
+    calls.clear()
+    s.refresh_cmds()                         # same state again: all from the cache
+    assert calls == []
+    s.clear_results()
+    s.refresh_cmds()
+    assert "v1" in calls and "v2" in calls
+
+
+def test_refs_payload_and_view_settings(host):
+    s = core.DashboardSession(host)
+    s.set_spec(SPEC)
+    assert s.refresh_payload()["refs"] is False
+    host.ds.include_refs = True
+    assert s.refresh_payload()["refs"] is True
+    cfg = core.view_settings([], "any", SPEC, include_refs=True, folder="  Cotton  ")
+    assert core.view_refs(cfg) and core.view_folder(cfg) == "Cotton"
+    assert "refs" not in core.view_settings([], "any", SPEC) and "folder" not in core.view_settings([], "any", SPEC)
+
+
+def test_reference_field_in_catalog():
+    assert any(f.key == "reference" for f in te.GENERAL_FIELDS) and "reference" in te.EXTRA_KEYS
+
+
+def test_calc_preview_filtered_and_library(host):
+    p = core.calc_preview(host.ds, "[FP/m] * 2", "calc_1", [{"key": "machine", "values": ["AFK"]}], "any")
+    assert p["n"] == 5 and p["filtered"] == {"base": 3, "n": 3, "min": 200.0, "avg": 220.0, "max": 240.0}
+    import json
+    rows = [{"Name": "Other", "ConfigJSON": json.dumps({"dashboard": {"calc": [
+        {"key": "calc_1", "name": "Double", "unit": "x", "formula": "{fpm} * 2"},
+        {"key": "calc_2", "name": "Broken", "unit": "", "formula": "{gone} * 2"},
+        {"key": "calc_3", "name": "Mine", "unit": "", "formula": "{fpm} + 1"}]}})},
+        {"Name": "Bad", "ConfigJSON": "not json"}]
+    lib = core.calc_library(host.ds, rows, [{"key": "calc_1", "formula": "{fpm} + 1"}])
+    assert [(c["name"], c["view"]) for c in lib] == [("Double", "Other")] and lib[0]["formula"].startswith("[FP/m")
+
+
+def test_group_views_favourites_and_folders():
+    import json
+    rows = [{"ID": 1, "Name": "b", "ConfigJSON": json.dumps({"folder": "Zeta"})},
+            {"ID": 2, "Name": "a", "ConfigJSON": json.dumps({"folder": "alpha"})},
+            {"ID": 3, "Name": "c", "ConfigJSON": "{}"},
+            {"ID": 4, "Name": "d", "ConfigJSON": json.dumps({"folder": "alpha"})}]
+    g = core.group_views(rows, [4])
+    assert [x["title"] for x in g] == [core.FAVOURITES, "alpha", "Zeta", ""]
+    assert [r["ID"] for r in g[0]["views"]] == [4] and [r["ID"] for r in g[1]["views"]] == [2]
+    assert core.folders_of(rows) == ["alpha", "Zeta"]
+
+
+def test_favourites_are_kept_by_display_settings():
+    from db import display_settings as ds
+    out = ds._clean({"smart_favs": [3, "4", 3, "x", None]})
+    assert out["smart_favs"] == [3, 4]
+    assert ds._clean({})["smart_favs"] == []

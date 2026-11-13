@@ -22,6 +22,7 @@ from ui import smart_dashboard_engine as en
 
 logger = logging.getLogger(__name__)
 PANES = ("filters", "viz", "fields")
+RESULT_CACHE = 200          # computed visuals kept per open dashboard
 FILTER_SCOPES = ("all", "page", "visual")
 Cmd = Tuple[str, Any]
 
@@ -36,6 +37,10 @@ class DashboardSession:
         self.through: Dict[str, Dict[str, Any]] = {}
         self._calc_fields: List[te.Field] = []
         self._sent_catalog = None
+        # results per visual (2026-11-13): a visual is only computed again when what it shows changes -
+        # moving / resizing a visual, renaming a page or a change on another visual costs nothing
+        self._results: Dict[str, Dict[str, Any]] = {}
+        self._results_ds = None
 
     # ── catalog / spec ─────────────────────────────────────────────────
     @property
@@ -153,14 +158,34 @@ class DashboardSession:
         return en.visual_filters(self.ds, page, v, self.base(page), cross)
 
     def result(self, page: Dict[str, Any], v: Dict[str, Any]) -> Dict[str, Any]:
-        """Visual v computed as the dashboard shows it (highlighted or filtered by clicks)."""
+        """Visual v computed as the dashboard shows it (highlighted or filtered by clicks).
+        Cached: same visual settings + filters + clicks + data = same result (a fresh copy is returned)."""
         ds = self.ds
         cross = self.cross if page is en.active_page(self.spec) else {}
         clicks = en.page_cross(page, cross)
         flt = self.filters_for(page, v)
-        if en.highlights(self.spec, v, clicks):     # grey out instead of filtering (Nutzerwunsch 2026-11-03)
-            return en.highlight_visual(ds, en.themed(self.spec, v), flt, flt + clicks, self.host.ply_scope)
-        return en.compute_visual(ds, en.themed(self.spec, v), flt, self.host.ply_scope)
+        hl = en.highlights(self.spec, v, clicks)     # grey out instead of filtering (Nutzerwunsch 2026-11-03)
+        tv = en.themed(self.spec, v)
+        if self._results_ds is not ds:
+            self._results, self._results_ds = {}, ds
+        key = self._result_key(tv, flt, clicks if hl else None)
+        hit = self._results.get(key)
+        if hit is None:
+            hit = en.highlight_visual(ds, tv, flt, flt + clicks, self.host.ply_scope) if hl else \
+                en.compute_visual(ds, tv, flt, self.host.ply_scope)
+            if len(self._results) >= RESULT_CACHE:
+                self._results.pop(next(iter(self._results)))
+            self._results[key] = hit
+        return copy.deepcopy(hit)
+
+    def _result_key(self, tv: Dict[str, Any], flt, clicks) -> str:
+        shown = {k: val for k, val in tv.items() if k not in ("x", "y", "w", "h")}   # the place does not matter
+        return json.dumps([shown, flt, clicks, self.host.ply_scope, self.spec.get("calc") or []],
+                          sort_keys=True, default=str)
+
+    def clear_results(self) -> None:
+        """Forget the computed visuals (Reload: new data, new notes)."""
+        self._results = {}
 
     def needs_init(self) -> bool:
         return self._sent_catalog != self._catalog_sig()
@@ -200,7 +225,8 @@ class DashboardSession:
         return {"results": results, "cross": cross, "slicers": slicers, "page": page["id"],
                 "pageFilters": en.describe_filters(ds, page.get("filters") or []),
                 "allFilters": en.describe_filters(ds, list(self.host.filters)),
-                "plyScope": self.host.ply_scope, "through": self.through_info(page)}
+                "plyScope": self.host.ply_scope, "refs": bool(getattr(ds, "include_refs", False)),
+                "through": self.through_info(page)}
 
     def refresh_cmds(self, panes=None, pane_widths=None) -> List[Cmd]:
         if self.ds is None:
@@ -586,15 +612,17 @@ def calc_fields_for(ds: te.TrialDataset, key: str) -> List[Dict[str, str]]:
             for f in ds.fields.values() if f.kind == "num" and f.key != key]
 
 
-def calc_preview(ds: te.TrialDataset, text: str, key: str) -> Dict[str, Any]:
-    """{"error"} or {"stored", "n", "min", "avg", "max"} of a formula in display form."""
+def calc_preview(ds: te.TrialDataset, text: str, key: str, filters: Optional[List[Dict[str, Any]]] = None,
+                 ply_scope: str = "any") -> Dict[str, Any]:
+    """{"error"} or {"stored", "n", "min", "avg", "max"} of a formula in display form - over all trials and,
+    with filters (the filters on all pages), also "filtered": {"n", "base", "min", "avg", "max"}."""
     from db import formula as fm
     try:
         stored = fm.from_display(text, ds.fields.values())
         compiled, keys = fm.compile_formula(stored, ds.fields, exclude=key)
     except fm.FormulaError as e:
         return {"error": str(e)}
-    vals = []
+    vals, by_id = [], {}
     for t in ds.trials:
         vals_t = {}
         for k in keys:
@@ -606,9 +634,18 @@ def calc_preview(ds: te.TrialDataset, text: str, key: str) -> Dict[str, Any]:
         r = fm.evaluate(compiled, vals_t)
         if r is not None:
             vals.append(r)
+            by_id[t.id] = r
+    out: Dict[str, Any] = {"stored": stored, **_stats(vals)}
+    if filters:
+        ids = ds.apply(filters, ply_scope).ids
+        out["filtered"] = {"base": len(ids), **_stats([by_id[i] for i in ids if i in by_id])}
+    return out
+
+
+def _stats(vals: List[float]) -> Dict[str, Any]:
     if not vals:
-        return {"stored": stored, "n": 0}
-    return {"stored": stored, "n": len(vals), "min": min(vals), "avg": sum(vals) / len(vals), "max": max(vals)}
+        return {"n": 0}
+    return {"n": len(vals), "min": min(vals), "avg": sum(vals) / len(vals), "max": max(vals)}
 
 
 def calc_definition(ds: te.TrialDataset, key: str, name: str, unit: str, text: str) -> Dict[str, Any]:
@@ -620,6 +657,72 @@ def calc_definition(ds: te.TrialDataset, key: str, name: str, unit: str, text: s
     stored = fm.from_display(text, ds.fields.values())
     fm.compile_formula(stored, ds.fields, exclude=key)
     return {"key": key, "name": name, "unit": (unit or "").strip(), "formula": stored}
+
+
+def calc_library(ds: te.TrialDataset, view_rows: List[Dict[str, Any]], own: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Calculated fields of the other dashboards this user may open (db/smart_chart_views.list_views rows) to
+    copy into this one: [{"name", "unit", "formula" (display form), "view"}]. Left out: formulas with fields that
+    do not exist (any more) and ones this dashboard has already (same formula)."""
+    from db import formula as fm
+    have = {str(c.get("formula") or "") for c in own or []}
+    seen, out = set(), []
+    for row in view_rows:
+        try:
+            cfg = json.loads(row.get("ConfigJSON") or "{}")
+        except (TypeError, ValueError):
+            continue
+        for c in ((cfg.get("dashboard") or {}).get("calc") or []) if isinstance(cfg, dict) else []:
+            stored = str(c.get("formula") or "")
+            sig = (str(c.get("name") or ""), stored)
+            if not stored or stored in have or sig in seen:
+                continue
+            if any(k not in ds.fields or str(k).startswith("calc_") for k in fm.keys_in(stored)):
+                continue
+            seen.add(sig)
+            out.append({"name": str(c.get("name") or ""), "unit": str(c.get("unit") or ""),
+                        "formula": fm.to_display(stored, ds.fields), "view": str(row.get("Name") or "")})
+    return sorted(out, key=lambda x: (x["name"].lower(), x["view"].lower()))
+
+
+# ── saved views: folders and favourites (Nutzerwunsch 2026-11-13) ───────
+def group_views(rows: List[Dict[str, Any]], favourites: List[int]) -> List[Dict[str, Any]]:
+    """The views as the lists show them: favourites first, then per folder (no folder last), each sorted by name.
+    rows = list_views rows; returns [{"title": "★ Favourites" | folder | "", "views": [rows]}]."""
+    fav = {int(i) for i in favourites or []}
+    favs = [r for r in rows if int(r["ID"]) in fav]
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rows:
+        if int(r["ID"]) in fav:
+            continue
+        try:
+            cfg = json.loads(r.get("ConfigJSON") or "{}")
+        except (TypeError, ValueError):
+            cfg = {}
+        groups.setdefault(view_folder(cfg if isinstance(cfg, dict) else {}), []).append(r)
+    name = lambda r: str(r.get("Name") or "").lower()
+    out = [{"title": FAVOURITES, "views": sorted(favs, key=name)}] if favs else []
+    for folder in sorted((f for f in groups if f), key=str.lower):
+        out.append({"title": folder, "views": sorted(groups[folder], key=name)})
+    if "" in groups:
+        out.append({"title": "", "views": groups[""]})
+    return out
+
+
+FAVOURITES = "★ Favourites"
+
+
+def folders_of(rows: List[Dict[str, Any]]) -> List[str]:
+    """Folder names in use (for the suggestions when saving)."""
+    out = set()
+    for r in rows:
+        try:
+            cfg = json.loads(r.get("ConfigJSON") or "{}")
+        except (TypeError, ValueError):
+            continue
+        f = view_folder(cfg) if isinstance(cfg, dict) else ""
+        if f:
+            out.add(f)
+    return sorted(out, key=str.lower)
 
 
 def fairness_json(a) -> Optional[Dict[str, Any]]:
@@ -641,9 +744,24 @@ def view_kind(cfg: Dict[str, Any]) -> Dict[str, int]:
     return {"pages": len(pages), "visuals": sum(len(p.get("visuals") or []) for p in pages)}
 
 
-def view_settings(filters: List[Dict[str, Any]], ply_scope: str, spec: Dict[str, Any]) -> Dict[str, Any]:
-    """What a saved view stores (db/smart_chart_views.save_view)."""
-    return {"filters": [dict(f) for f in filters], "ply_scope": ply_scope, "mode": "dashboard", "dashboard": spec}
+def view_settings(filters: List[Dict[str, Any]], ply_scope: str, spec: Dict[str, Any], include_refs: bool = False,
+                  folder: str = "") -> Dict[str, Any]:
+    """What a saved view stores (db/smart_chart_views.save_view). "refs" / "folder" only when set."""
+    cfg = {"filters": [dict(f) for f in filters], "ply_scope": ply_scope, "mode": "dashboard", "dashboard": spec}
+    if include_refs:
+        cfg["refs"] = True
+    if (folder or "").strip():
+        cfg["folder"] = folder.strip()[:60]
+    return cfg
+
+
+def view_refs(cfg: Dict[str, Any]) -> bool:
+    """Does a saved view include reference samples?"""
+    return bool(cfg.get("refs"))
+
+
+def view_folder(cfg: Dict[str, Any]) -> str:
+    return str(cfg.get("folder") or "").strip()
 
 
 def read_view_settings(cfg: Dict[str, Any], known: set) -> Tuple[List[Dict[str, Any]], str, Any, List[str]]:
