@@ -143,19 +143,8 @@ from PySide6.QtWidgets import (
 )
 from ui.widgets.friendly_error import show_error
 
-# Basisordner fuer TrialSeries-Bilder
-# - PROD: Netzlaufwerk (gemeinsame Ablage)
-# - DEV:  lokaler Testordner
-TRIALSERIES_IMAGES_BASE_DIR = (
-    r"C:\ttt\images\TrialSeriesImages" if is_dev_mode() else r"H:\\Technik\\TrippleT\\TrialSeriesImages"
-)
-
-# Basisordner fuer TrialSeries-PDFs
-# - DEV + DEV_LOCAL: lokaler Testordner
-# - PROD: Netzlaufwerk (gemeinsame Ablage)
-TRIALSERIES_PDFS_BASE_DIR = (
-    r"C:\ttt\pdfs" if is_dev_mode() else r"H:\\Technik\\TrippleT\\TrialSeriesPDF"
-)
+# Basisordner fuer TrialSeries-Bilder/-PDFs: db/series_attachments.py (shared with the web app)
+from db.series_attachments import TRIALSERIES_IMAGES_BASE_DIR, TRIALSERIES_PDFS_BASE_DIR  # noqa: E402,F401
 
 
 def _draw_trial_label_cell(page, x0: float, y0: float, lw: float, lh: float, item: Dict) -> None:
@@ -4682,40 +4671,9 @@ class ShowExperimentScreen(QWidget):
             return False
 
     def _fetch_series_images(self, series_id: Any) -> List[Dict[str, str]]:
-        """Returns dicts with FullPath + display name fields.
-
-        Liefert jetzt auch die primary-key `ID` mit (vorher nicht abgefragt) -
-        ExperimentRequestImagesDialog._delete_selected() matcht den DELETE
-        darüber, statt nur über RelativePath+StoredFilename (siehe dortiger
-        Kommentar: robuster, und Grundlage für den DB-first-Löschfix)."""
-        if series_id in (None, ""):
-            return []
-        rows: List[Dict[str, str]] = []
-        with get_connection() as cn:
-            cur = cn.cursor()
-            cur.execute(
-                "SELECT [ID], [RelativePath], [StoredFilename], [OriginalFilename], [CreatedBy] "
-                "FROM [tblTrialSeriesImage] "
-                "WHERE [TrialSeriesID]=? "
-                "ORDER BY [ID] DESC",
-                [series_id],
-            )
-            for img_id, rel_path, stored, orig_name, created_by in cur.fetchall() or []:
-                rel_path = str(rel_path or "")
-                stored = str(stored or "")
-                orig_name = str(orig_name or "")
-                full = os.path.join(rel_path, stored) if rel_path else stored
-                rows.append(
-                    {
-                        "ID": img_id,
-                        "RelativePath": rel_path,
-                        "StoredFilename": stored,
-                        "OriginalFilename": orig_name,
-                        "FullPath": full,
-                        "CreatedBy": created_by,
-                    }
-                )
-        return rows
+        """Attachments of the series (db/series_attachments.list_images, shared with the web app)."""
+        from db.series_attachments import list_images
+        return list_images(series_id)
 
     def _sync_trialseries_images_icon(self) -> None:
         """Show / hide the images icon depending on whether images exist."""
@@ -4958,62 +4916,9 @@ class ShowExperimentScreen(QWidget):
             return False
 
     def _fetch_series_pdfs(self, series_id: Any) -> List[Dict[str, str]]:
-        if series_id in (None, ""):
-            return []
-        rows: List[Dict[str, str]] = []
-        with get_connection() as cn:
-            cur = cn.cursor()
-            # Include ID for robust rename/delete, if present.
-            try:
-                cur.execute(
-                    "SELECT [ID],[RelativePath],[StoredFilename],[OriginalFilename],[CreatedBy] "
-                    "FROM [tblTrialSeriesPDF] "
-                    "WHERE [TrialSeriesID]=? "
-                    "ORDER BY [ID] DESC",
-                    [series_id],
-                )
-                fetched = cur.fetchall() or []
-                for doc_id, rel_path, stored, orig_name, created_by in fetched:
-                    rel_path = str(rel_path or "")
-                    stored = str(stored or "")
-                    orig_name = str(orig_name or "")
-                    full = os.path.join(rel_path, stored) if rel_path else stored
-                    rows.append(
-                        {
-                            "ID": doc_id,
-                            "RelativePath": rel_path,
-                            "StoredFilename": stored,
-                            "OriginalFilename": orig_name,
-                            "FullPath": full,
-                            "CreatedBy": created_by,
-                        }
-                    )
-            except Exception:
-                # Fallback if table lacks ID column in the select
-                cur.execute(
-                    "SELECT [RelativePath],[StoredFilename],[OriginalFilename],[CreatedBy] "
-                    "FROM [tblTrialSeriesPDF] "
-                    "WHERE [TrialSeriesID]=? "
-                    "ORDER BY [OriginalFilename] DESC",
-                    [series_id],
-                )
-                for rel_path, stored, orig_name, created_by in cur.fetchall() or []:
-                    rel_path = str(rel_path or "")
-                    stored = str(stored or "")
-                    orig_name = str(orig_name or "")
-                    full = os.path.join(rel_path, stored) if rel_path else stored
-                    rows.append(
-                        {
-                            "RelativePath": rel_path,
-                            "StoredFilename": stored,
-                            "OriginalFilename": orig_name,
-                            "FullPath": full,
-                            "CreatedBy": created_by,
-                        }
-                    )
-        return rows
-
-    # ---------- Notes ----------
+        """Attachments of the series (db/series_attachments.list_pdfs, shared with the web app)."""
+        from db.series_attachments import list_pdfs
+        return list_pdfs(series_id)
 
     def _load_notes(self, ts_row: dict) -> None:
         """Load Notes from tblTrialSeries row into txt_notes widget."""
