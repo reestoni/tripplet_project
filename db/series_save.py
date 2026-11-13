@@ -448,6 +448,12 @@ def stamp_trial_timestamp(trial_id: Any, user: Any = None) -> int:
 _EPS = 1e-9
 
 
+def round_db(value: float, decimals: int = 2) -> float:
+    """Round like a MySQL DECIMAL column stores it (ROUND_HALF_UP, not Python's banker's rounding)."""
+    from decimal import Decimal, ROUND_HALF_UP
+    return float(Decimal(repr(float(value))).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP))
+
+
 def _write_if_changed(table: str, field: str, cand_vals: Dict[Any, float], cand_ids: List[Any]) -> int:
     updates = 0
     placeholders = ",".join(["?"] * len(cand_ids))
@@ -457,6 +463,11 @@ def _write_if_changed(table: str, field: str, cand_vals: Dict[Any, float], cand_
     )
     cur_vals: Dict[Any, Optional[float]] = {r["ID"]: to_float(r.get("V")) for r in rows}
     for rec_id, new_v in cand_vals.items():
+        # The columns hold 2 decimals: round like MySQL does (half away from zero) BEFORE
+        # comparing - otherwise 106.6316 never equals the stored 106.63 and every save of
+        # Itemat Lab/Plus rewrote all IP(t) values (fixed 2026-11-13). Stored values unchanged.
+        if new_v is not None:
+            new_v = round_db(new_v, 2)
         old_v = cur_vals.get(rec_id)
         if (old_v is None and new_v is None):
             continue

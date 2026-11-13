@@ -267,3 +267,14 @@ def test_multi_ply_differs():
     assert ss.multi_ply_differs(specs, 1, lambda r, c: ts, lambda r, c: ["1", "2", "3"][c]) is True
     assert ss.multi_ply_differs(specs, 1, lambda r, c: CellBinding("tblTrial", "ID", 1, "X"),
                                 lambda r, c: ["1", "2", "3"][c]) is False
+
+
+def test_itemat_recompute_skips_values_equal_after_db_rounding(monkeypatch):
+    """2026-11-13: computed 106.6316 vs stored 106.63 rewrote every IP(t) on every save."""
+    from db import series_save as ss
+    monkeypatch.setattr(ss, "fetch_all", lambda sql, p=None: [{"ID": 1, "V": 106.63}, {"ID": 2, "V": 50.0}])
+    writes = []
+    monkeypatch.setattr(ss, "execute_non_query", lambda sql, p: writes.append(p) or 1)
+    n = ss._write_if_changed("tblLaborItematLab", "Intermingling Points (FP/m)", {1: 106.6316, 2: 50.125}, [1, 2])
+    assert n == 1 and writes == [[50.13, 2]]          # 1 unchanged after rounding; 2 rounded half up
+    assert ss.round_db(2.675) == 2.68 and ss.round_db(-1.005) == -1.01
