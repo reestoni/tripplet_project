@@ -38,7 +38,6 @@ import os
 import re
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime as _dt
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -55,18 +54,20 @@ from PySide6.QtWidgets import (
     QCheckBox, QListWidget, QListWidgetItem, QApplication,
 )
 
-from db.connection import fetch_all, execute, get_connection
+from db.connection import fetch_all, get_connection
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 from ui.yarnscope.dty_analysis import analyze_series, full_extract_vals, run_stab_models
 from ui.yarnscope.dty_tdms_reader import read_dty_signal, read_step_mm_from_tdms
+from ui.yarnscope import dty_service as _dty_service
 
 import app_meta
 
 # ---------------------------------------------------------------------------
 # Konstanten
 # ---------------------------------------------------------------------------
-TDMS_BASE_DIR = r"H:\Technik\TrippleT\YarnScopeTDMS"
+# Ordner der DTY-TDMS-Dateien (Env TRIPPLET_YARNSCOPE_DTY_DIR, siehe dty_service)
+TDMS_BASE_DIR = str(_dty_service.tdms_base())
 
 # Minimale Segmentpunkte für analyze_series (analog YarnScope-Default)
 DEFAULT_MIN_SEG_PTS = 3
@@ -279,30 +280,7 @@ class TDMSFolderScanner:
         Format: ...<SeriesID>_<VersuchNr>_...
         Gleiche Logik wie DTYKnotsView._parse_ids_from_tdms_name.
         """
-        try:
-            first_us = stem.index("_")
-        except ValueError:
-            return None
-        i = first_us - 1
-        while i >= 0 and stem[i].isdigit():
-            i -= 1
-        num1 = stem[i + 1:first_us]
-        if not num1:
-            return None
-        try:
-            second_us = stem.index("_", first_us + 1)
-        except ValueError:
-            return None
-        j = second_us - 1
-        while j > first_us and stem[j].isdigit():
-            j -= 1
-        num2 = stem[j + 1:second_us]
-        if not num2:
-            return None
-        try:
-            return int(num1), int(num2)
-        except ValueError:
-            return None
+        return _dty_service.parse_tdms_ids(stem)
 
     @staticmethod
     def _build_tdms_map() -> Dict[Tuple[int, int], Path]:
@@ -690,115 +668,13 @@ class _AnalysisWorker(QRunnable):
 # DB-Speicher-Helfer (analog _save_values in DTYKnotsView, aber standalone)
 # ---------------------------------------------------------------------------
 def _save_analysis_to_db(trial_id: int, vals: Dict[str, Any]) -> bool:
-    """Speichert Analyse-Ergebnisse (Knoten/m, Stabilität, CV%) in tblTrialSettings.
+    """Schreibt alle Analyse-Werte in tbllabordtyomat (UPDATE, sonst INSERT).
 
-    Args:
-        trial_id: ID des Trials in tblTrial.
-        vals:     Dict mit Analyse-Werten (KnotenProMeter, Stabilitaet, CV usw.).
-
-    Returns:
-        True bei Erfolg, False bei Fehler.
+    Die DB-Logik liegt Qt-frei in ui/yarnscope/dty_service.save_analysis()
+    (auch von der Web-Version benutzt); hier nur der angemeldete Benutzer.
+    vals: extrahiertes Dict aus full_extract_vals(). True bei Erfolg.
     """
-    """
-    Schreibt alle Analyse-Werte in tbllabordtyomat (vollständig inkl.
-    Fallhöhen, Winkelsegmente, Flächen-Bins, Stab-Predictions).
-    vals: extrahiertes Dict aus full_extract_vals().
-    """
-    # vals ist bereits vollständig extrahiert (durch Worker) – kein Fallback nötig
-
-    def _v(key):
-        v = vals.get(key)
-        try:
-            return float(v) if v is not None else None
-        except Exception:
-            return None
-
-    def _s(key):
-        v = vals.get(key)
-        return str(v) if v is not None else None
-
-    ts = _dt.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    params = [
-        _v("FPm"), _v("CV_FP"), _v("AvgFP"), _v("StdDevFP"),
-        _v("CV_KL"), _v("AvgKL"), _v("StdDevKL"),
-        _v("CV_OL"), _v("AvgOL"), _v("StdDevOL"),
-        _v("maxOL"), _v("maxKL"),
-        *[_v(f"kl_bin_{i+1}") for i in range(10)],
-        *[_v(f"ol_bin_{i+1}") for i in range(10)],
-        _v("AKnots"), _v("BKnots"), _v("CKnots"),
-        *[_v(f"{c}_knots") for c in "abcdefghijklmnopqrst"],
-        *[_v(f"Fallhöhe{i+1}") for i in range(10)],
-        *[_v(f"Winkelsegment{i+1}") for i in range(10)],
-        _v("Stab_03"), _v("Stab_06"), _v("Stab_10"), _v("Stab_13"),
-        _s("Stab_03_model"), _s("Stab_06_model"),
-        _s("Stab_10_model"), _s("Stab_13_model"),
-        _v("SkewKL"), _v("SkewOL"), _v("RapportCV"), _v("RapportCVLocal"),
-        *[_v(f"ka_bin_{i+1}") for i in range(20)],
-        *[_v(f"oa_bin_{i+1}") for i in range(20)],
-        _v("KL_AC1"), _v("KL_AC2"), _v("KL_AC3"),
-        _v("KL_TailRatio"), _v("OL_TailRatio"), _v("KA_OA_Ratio"),
-        _v("KL_AsymMean"), _v("KL_AsymCV"),
-        _v("KurtKL"), _v("KurtOL"), _v("ThicknessDrift"),
-        _v("SpectralEnergyLow"), _v("SpectralEnergyMid"), _v("SpectralEnergyHigh"),
-        _v("CKnot_ClusterMean"), _v("CKnot_ClusterMax"),
-        int(app_meta.current_user.get("id") or 0),
-        ts,
-    ]
-
-    _COLS = (
-        "FPm, CV_FP, AvgFP, StdDevFP, "
-        "CV_KL, AvgKL, StdDevKL, "
-        "CV_OL, AvgOL, StdDevOL, maxOL, maxKL, "
-        "kl_bin_1,kl_bin_2,kl_bin_3,kl_bin_4,kl_bin_5,"
-        "kl_bin_6,kl_bin_7,kl_bin_8,kl_bin_9,kl_bin_10,"
-        "ol_bin_1,ol_bin_2,ol_bin_3,ol_bin_4,ol_bin_5,"
-        "ol_bin_6,ol_bin_7,ol_bin_8,ol_bin_9,ol_bin_10,"
-        "AKnots, BKnots, CKnots,"
-        "a_knots,b_knots,c_knots,d_knots,e_knots,f_knots,g_knots,h_knots,i_knots,j_knots,"
-        "k_knots,l_knots,m_knots,n_knots,o_knots,p_knots,q_knots,r_knots,s_knots,t_knots,"
-        "[Fallhöhe1],[Fallhöhe2],[Fallhöhe3],[Fallhöhe4],[Fallhöhe5],"
-        "[Fallhöhe6],[Fallhöhe7],[Fallhöhe8],[Fallhöhe9],[Fallhöhe10],"
-        "[Winkelsegment1],[Winkelsegment2],[Winkelsegment3],[Winkelsegment4],[Winkelsegment5],"
-        "[Winkelsegment6],[Winkelsegment7],[Winkelsegment8],[Winkelsegment9],[Winkelsegment10],"
-        "Stab_03, Stab_06, Stab_10, Stab_13,"
-        "Stab_03_model, Stab_06_model, Stab_10_model, Stab_13_model,"
-        "SkewKL, SkewOL, RapportCV, RapportCVLocal,"
-        "ka_bin_1,ka_bin_2,ka_bin_3,ka_bin_4,ka_bin_5,ka_bin_6,ka_bin_7,ka_bin_8,ka_bin_9,ka_bin_10,"
-        "ka_bin_11,ka_bin_12,ka_bin_13,ka_bin_14,ka_bin_15,ka_bin_16,ka_bin_17,ka_bin_18,ka_bin_19,ka_bin_20,"
-        "oa_bin_1,oa_bin_2,oa_bin_3,oa_bin_4,oa_bin_5,oa_bin_6,oa_bin_7,oa_bin_8,oa_bin_9,oa_bin_10,"
-        "oa_bin_11,oa_bin_12,oa_bin_13,oa_bin_14,oa_bin_15,oa_bin_16,oa_bin_17,oa_bin_18,oa_bin_19,oa_bin_20,"
-        "KL_AC1, KL_AC2, KL_AC3, KL_TailRatio, OL_TailRatio, KA_OA_Ratio,"
-        "KL_AsymMean, KL_AsymCV, KurtKL, KurtOL, ThicknessDrift,"
-        "SpectralEnergyLow, SpectralEnergyMid, SpectralEnergyHigh,"
-        "CKnot_ClusterMean, CKnot_ClusterMax, UserID, Timestamp"
-    )
-    _QM = ",".join(["?"] * len(params))
-
-    try:
-        rows = fetch_all("SELECT 1 FROM tbllabordtyomat WHERE TrialID = ?", (trial_id,))
-        exists = bool(rows)
-    except Exception:
-        exists = False
-
-    col_list = [c.strip() for c in _COLS.split(",") if c.strip()]
-
-    try:
-        if exists:
-            set_parts = [f"{c}=?" for c in col_list]
-            sql = f"UPDATE tbllabordtyomat SET {', '.join(set_parts)} WHERE TrialID=?"
-            execute(sql, params + [trial_id])
-        else:
-            cols_str = ", ".join(col_list)
-            sql = (
-                f"INSERT INTO tbllabordtyomat (TrialID, {cols_str}) "
-                f"VALUES (?, {_QM})"
-            )
-            execute(sql, [trial_id] + params)
-        return True
-    except Exception as e:
-        print(f"[DTY Batch] DB-Fehler TrialID={trial_id}: {e}")
-        return False
+    return _dty_service.save_analysis(trial_id, vals, app_meta.current_user)
 
 
 # ---------------------------------------------------------------------------

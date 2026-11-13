@@ -6,8 +6,9 @@ _patch_show_experiment_yarnscope()). Ausgelagert aus screen_show_experiment.py
 (reiner Code-Move, keine Verhaltensaenderung) - analog zu aty_yarnscope_tab.py,
 das denselben Aufbau fuer den ATY-Tab bereits verwendet.
 
-fetch_all wird bewusst lazy aus ui.screen_show_experiment importiert (nicht neu
-implementiert), damit exakt derselbe DB-Wrapper wie vorher verwendet wird.
+Alle Berechnungen (TDMS-Suche, Analyse, Trends, Prozesswelle, Vergleich,
+Garnspiegel-Daten, Speichern) liegen Qt-frei in ui/yarnscope/dty_service.py,
+das auch die Web-Version benutzt - hier bleiben nur Widgets und Zeichnen.
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.yarnscope.garngraf_canvas import GarnCanvas
+from ui.yarnscope import dty_service as _svc
 from ui.pathutil import resource_path
 from ui.widgets.friendly_error import show_error
 
@@ -45,339 +47,20 @@ _YS_DARK_FIELD_STYLE = (
 
 
 def _ys_tdms_base():
-    from pathlib import Path
-    return Path(r"H:\Technik\TrippleT\YarnScopeTDMS")
+    return _svc.tdms_base()
 
 
-def _ys_open_knot_midpoints(open_segs, knot_segs, x_axis):
-    """Liefert (Position, Mittelpunkt zwischen Offenstelle und Knoten) pro Paar.
-
-    Ein Paar ist eine Offenstelle mit dem direkt folgenden Knoten. Die Höhen
-    sind die gleichen Segmentmittelwerte, die im Segmentmittel-Plot gezeichnet
-    werden; die Position liegt genau zwischen den beiden Segmentmitten. Der
-    Höhenwert ist jeweils ``Tal + (Peak - Tal) / 2``.
-    """
-    import math
-
-    segments = [("open", g, mean) for g, mean in open_segs]
-    segments.extend(("knot", g, mean) for g, mean in knot_segs)
-    segments.sort(key=lambda item: int(item[1][0]) if len(item[1]) else -1)
-
-    positions, midpoints = [], []
-    for (kind_a, group_a, mean_a), (kind_b, group_b, mean_b) in zip(segments, segments[1:]):
-        if kind_a != "open" or kind_b != "knot" or not len(group_a) or not len(group_b):
-            continue
-        try:
-            lower, upper = sorted((float(mean_a), float(mean_b)))
-            midpoint = lower + (upper - lower) / 2.0
-            pos = (float(x_axis[int(group_a[len(group_a) // 2])]) +
-                   float(x_axis[int(group_b[len(group_b) // 2])])) / 2.0
-        except (IndexError, TypeError, ValueError):
-            continue
-        if math.isfinite(midpoint) and math.isfinite(pos):
-            positions.append(pos)
-            midpoints.append(midpoint)
-    return positions, midpoints
-
-
-def _ys_opening_segment_series(per_run, y_smooth, x_axis):
-    """Liefert (Positionen, Segmentmittelwerte) je Öffnungsstelle (Nicht-Knoten-
-    Segment) über das komplette Signal - dieselben grünen Öffnungsstellen-
-    Segmentmittel, die im Segmentmittel-Plot gezeichnet werden (siehe
-    open_segs dort), aber OHNE die Knoten-Mischung von
-    _ys_open_knot_midpoints - Grundlage für die reine "Öffnungsstellen-Trend"-
-    Linie im Prozessvergleich (Nutzerwunsch 2026-09-08).
-
-    `per_run` sind die (start, end, ...)-Knotensegmente aus
-    analyze_series()["classes"]["per_run"] (Indizes im vollen, ungefensterten
-    Signal) - alles ausserhalb dieser Segmente zaehlt als Öffnungsstelle.
-    """
-    import numpy as np
-
-    n = len(y_smooth)
-    mask_knot = np.zeros(n, dtype=bool)
-    for run in per_run or []:
-        if not isinstance(run, (list, tuple)) or len(run) < 2:
-            continue
-        s, e = max(0, int(run[0])), min(n, int(run[1]))
-        if e > s:
-            mask_knot[s:e] = True
-
-    positions, values = [], []
-    idx = np.where(~mask_knot)[0]
-    if idx.size:
-        splits = np.where(np.diff(idx) > 1)[0] + 1
-        for g in np.split(idx, splits):
-            if g.size == 0:
-                continue
-            values.append(float(np.mean(y_smooth[g])))
-            positions.append(float(x_axis[int(g[len(g) // 2])]))
-    return positions, values
-
-
-def _ys_rolling_mean(values, window_size: int):
-    """Gleitender (rückblickender) Mittelwert ohne künstliche Randwerte."""
-    window_size = max(1, int(window_size))
-    result = []
-    for end in range(1, len(values) + 1):
-        start = max(0, end - window_size)
-        result.append(sum(values[start:end]) / (end - start))
-    return result
-
-
-def _ys_rolling_mean_by_distance(positions, values, window_m: float):
-    """Rückblickender gleitender Mittelwert über eine physische Länge in m."""
-    window_m = max(0.001, float(window_m))
-    if len(positions) != len(values):
-        return []
-    result = []
-    left = 0
-    running_sum = 0.0
-    for right, (position, value) in enumerate(zip(positions, values)):
-        running_sum += float(value)
-        while left < right and float(position) - float(positions[left]) > window_m:
-            running_sum -= float(values[left])
-            left += 1
-        result.append(running_sum / (right - left + 1))
-    return result
-
-
-def _ys_roll_trend(positions, values, mode: str, amount: float):
-    """Wendet die in der UI gewählte Rollung an und liefert deren Beschriftung."""
-    if mode == "Meter":
-        return _ys_rolling_mean_by_distance(positions, values, amount), f"{amount:.1f} m"
-    pairs = max(1, int(round(amount)))
-    return _ys_rolling_mean(values, pairs), f"{pairs} Paare"
-
-
-def _ys_local_extrema(values):
-    """Lokale Peaks und Täler; flache Plateaus zählen als ein Ereignis."""
-    values = [float(value) for value in values]
-    if len(values) < 3:
-        return []
-    directions = [1 if right > left else (-1 if right < left else 0)
-                  for left, right in zip(values, values[1:])]
-    last = 0
-    for i, direction in enumerate(directions):
-        if direction:
-            last = direction
-        elif last:
-            directions[i] = last
-    last = 0
-    for i in range(len(directions) - 1, -1, -1):
-        if directions[i]:
-            last = directions[i]
-        elif last:
-            directions[i] = last
-    extrema = []
-    for i in range(1, len(directions)):
-        before, after = directions[i - 1], directions[i]
-        if before > 0 and after < 0:
-            extrema.append(("peak", i))
-        elif before < 0 and after > 0:
-            extrema.append(("valley", i))
-    return extrema
-
-
-def _ys_trend_metrics(positions, values):
-    """Kennzahlen einer sichtbaren Trendlinie für die Versuchsvergleichsansicht."""
-    import numpy as np
-
-    if len(positions) != len(values) or not values:
-        return None
-    x = np.asarray(positions, dtype=float)
-    y = np.asarray(values, dtype=float)
-    valid = np.isfinite(x) & np.isfinite(y)
-    x, y = x[valid], y[valid]
-    if y.size == 0:
-        return None
-
-    median = float(np.median(y))
-    p5, p95 = (float(value) for value in np.percentile(y, [5, 95]))
-    mad = float(np.median(np.abs(y - median)))
-    metrics = {
-        "count": int(y.size), "median": median, "p5_p95": p95 - p5, "mad": mad,
-        "slope": None, "end_delta": None, "wavelength": None,
-        "wavelength_cv": None, "peak_to_peak": None, "peak_to_peak_p95": None,
-    }
-    if y.size >= 2 and float(np.ptp(x)) > 0:
-        centered_x = x - float(np.mean(x))
-        metrics["slope"] = float(np.dot(centered_x, y - float(np.mean(y))) /
-                                 np.dot(centered_x, centered_x))
-        left_cut = float(np.min(x) + np.ptp(x) * 0.10)
-        right_cut = float(np.max(x) - np.ptp(x) * 0.10)
-        start_mean = float(np.mean(y[x <= left_cut]))
-        end_mean = float(np.mean(y[x >= right_cut]))
-        metrics["end_delta"] = end_mean - start_mean
-
-    extrema = _ys_local_extrema(y)
-    peak_indices = [index for kind, index in extrema if kind == "peak"]
-    if len(peak_indices) >= 2:
-        distances = np.diff(x[peak_indices])
-        distances = distances[distances > 0]
-        if distances.size:
-            metrics["wavelength"] = float(np.median(distances))
-            mean_distance = float(np.mean(distances))
-            metrics["wavelength_cv"] = (float(np.std(distances, ddof=0)) / mean_distance
-                                          if mean_distance > 0 else None)
-    amplitudes = []
-    for (kind_a, index_a), (kind_b, index_b) in zip(extrema, extrema[1:]):
-        if kind_a == "peak" and kind_b == "valley":
-            amplitudes.append(float(y[index_a] - y[index_b]))
-    if amplitudes:
-        metrics["peak_to_peak"] = float(np.median(amplitudes))
-        metrics["peak_to_peak_p95"] = float(np.percentile(amplitudes, 95))
-    return metrics
-
-
-def _ys_analyze_process_wave(x_values, y_values, bin_width_m: float = 0.05):
-    """Quantifiziert eine niederfrequente, räumlich periodische Prozesswelle.
-
-    Das hochaufgelöste Signal wird zunächst in gleich breite Meter-Bins
-    gemittelt. Anschließend wird ein linearer Drift entfernt und die stärkste
-    Frequenz im physikalisch sinnvollen Bereich (0.25 m bis mindestens drei
-    Zyklen im sichtbaren Fenster) gesucht. Ein Sinus-Fit liefert Amplitude
-    und R² als direkt interpretierbare Kenngrößen.
-    """
-    import numpy as np
-
-    x = np.asarray(x_values, dtype=float)
-    y = np.asarray(y_values, dtype=float)
-    valid = np.isfinite(x) & np.isfinite(y)
-    x, y = x[valid], y[valid]
-    bin_width_m = max(0.01, float(bin_width_m))
-    if x.size < 4 or float(np.ptp(x)) < bin_width_m * 6:
-        return None
-
-    start = float(np.min(x))
-    stop = float(np.max(x))
-    edges = np.arange(start, stop + bin_width_m, bin_width_m)
-    if edges[-1] < stop:
-        edges = np.append(edges, edges[-1] + bin_width_m)
-    bin_index = np.clip(np.digitize(x, edges) - 1, 0, len(edges) - 2)
-    counts = np.bincount(bin_index, minlength=len(edges) - 1)
-    sums = np.bincount(bin_index, weights=y, minlength=len(edges) - 1)
-    keep = counts > 0
-    bx = (edges[:-1] + edges[1:]) / 2.0
-    bx, by = bx[keep], (sums[keep] / counts[keep])
-    if bx.size < 6:
-        return None
-
-    # Gleichmäßiges Raster ist Voraussetzung für das Spektrum. Bei sehr
-    # kurzen Lücken wird linear interpoliert; TDMS hat normalerweise keine.
-    grid = np.arange(bx[0], bx[-1] + bin_width_m * 0.5, bin_width_m)
-    gy = np.interp(grid, bx, by)
-    span = float(grid[-1] - grid[0])
-    if grid.size < 8 or span < bin_width_m * 6:
-        return None
-
-    design_drift = np.column_stack((np.ones_like(grid), grid - np.mean(grid)))
-    drift_coef, *_ = np.linalg.lstsq(design_drift, gy, rcond=None)
-    drift = design_drift @ drift_coef
-    residual = gy - drift
-
-    frequencies = np.fft.rfftfreq(grid.size, d=bin_width_m)
-    powers = np.abs(np.fft.rfft(residual)) ** 2
-    min_wavelength = max(0.25, bin_width_m * 4.0)
-    max_wavelength = span / 3.0  # mindestens drei beobachtete Zyklen
-    wavelengths = np.full_like(frequencies, np.inf)
-    np.divide(1.0, frequencies, out=wavelengths, where=frequencies > 0)
-    allowed = (frequencies > 0) & (wavelengths >= min_wavelength) & (
-        wavelengths <= max_wavelength)
-    if not np.any(allowed):
-        return None
-    candidate_indices = np.flatnonzero(allowed)
-    best_index = candidate_indices[int(np.argmax(powers[candidate_indices]))]
-    frequency = float(frequencies[best_index])
-    wavelength = 1.0 / frequency
-
-    omega = 2.0 * np.pi * frequency
-    design = np.column_stack((
-        np.ones_like(grid), grid - np.mean(grid),
-        np.sin(omega * grid), np.cos(omega * grid),
-    ))
-    coef, *_ = np.linalg.lstsq(design, gy, rcond=None)
-    fitted = design @ coef
-    amplitude = float(np.hypot(coef[2], coef[3]))
-    ss_total = float(np.sum((gy - np.mean(gy)) ** 2))
-    ss_residual = float(np.sum((gy - fitted) ** 2))
-    r_squared = max(0.0, 1.0 - ss_residual / ss_total) if ss_total > 0 else 0.0
-    allowed_power = float(np.sum(powers[candidate_indices]))
-    spectral_share = float(powers[best_index] / allowed_power) if allowed_power > 0 else 0.0
-
-    return {
-        "x": grid, "binned": gy, "fitted": fitted, "drift_line": drift,
-        "bin_width": bin_width_m, "span": span,
-        "wavelength": wavelength, "amplitude": amplitude,
-        "r_squared": r_squared, "spectral_share": spectral_share,
-        "drift": float(drift_coef[1]),
-        "residual_rms": float(np.sqrt(np.mean((gy - fitted) ** 2))),
-    }
-
-
-def _ys_process_wave_reality_check(x_values, y_values, bin_width_m: float = 0.05,
-                                   segment_m: float = 10.0, n_surrogates: int = 30):
-    """Prüft, ob eine Prozesswelle über unabhängige Abschnitte reproduzierbar ist.
-
-    Jeder 10-m-Abschnitt wird separat ausgewertet. Für die Zufallskontrolle
-    wird seine gebinnte Mittellinie räumlich gemischt; so bleiben Verteilung
-    und Streuung erhalten, aber jede räumliche Periodik geht verloren.
-    """
-    import numpy as np
-
-    x = np.asarray(x_values, dtype=float)
-    y = np.asarray(y_values, dtype=float)
-    valid = np.isfinite(x) & np.isfinite(y)
-    x, y = x[valid], y[valid]
-    if x.size == 0 or float(np.ptp(x)) < segment_m:
-        return None
-    # Der letzte Datenpunkt liegt üblicherweise knapp vor dem nominellen
-    # Messende (z. B. 99.998 m bei 100 m). Eine Binbreite Toleranz nimmt den
-    # vollständigen letzten Abschnitt deshalb noch mit.
-    starts = np.arange(float(np.min(x)),
-                       float(np.max(x)) - segment_m + bin_width_m + 1e-9,
-                       segment_m)
-    rng = np.random.default_rng(20260907)
-    windows = []
-    for start in starts:
-        mask = (x >= start) & (x < start + segment_m)
-        analysis = _ys_analyze_process_wave(x[mask], y[mask], bin_width_m)
-        if analysis is None:
-            continue
-        surrogate_shares = []
-        for _ in range(n_surrogates):
-            shuffled = rng.permutation(analysis["binned"])
-            surrogate = _ys_analyze_process_wave(
-                analysis["x"], shuffled, bin_width_m)
-            if surrogate is not None:
-                surrogate_shares.append(surrogate["spectral_share"])
-        p_value = ((1 + sum(value >= analysis["spectral_share"] for value in surrogate_shares)) /
-                   (1 + len(surrogate_shares))) if surrogate_shares else None
-        windows.append({"analysis": analysis, "p_value": p_value})
-    if not windows:
-        return None
-
-    wavelengths = np.asarray([item["analysis"]["wavelength"] for item in windows], dtype=float)
-    amplitudes = np.asarray([item["analysis"]["amplitude"] for item in windows], dtype=float)
-    r_squared = np.asarray([item["analysis"]["r_squared"] for item in windows], dtype=float)
-    significant = sum(item["p_value"] is not None and item["p_value"] < 0.05 for item in windows)
-    lambda_mean = float(np.mean(wavelengths))
-    lambda_cv = float(np.std(wavelengths, ddof=0) / lambda_mean) if lambda_mean > 0 else None
-    fraction_significant = significant / len(windows)
-    median_r2 = float(np.median(r_squared))
-    if (len(windows) >= 5 and fraction_significant >= 0.70 and lambda_cv is not None
-            and lambda_cv <= 0.20 and median_r2 >= 0.20):
-        verdict = "robust wave evidence"
-    elif fraction_significant >= 0.30:
-        verdict = "inconsistent evidence"
-    else:
-        verdict = "not supported"
-    return {
-        "windows": len(windows), "significant": significant,
-        "lambda_median": float(np.median(wavelengths)), "lambda_cv": lambda_cv,
-        "amplitude_median": float(np.median(amplitudes)), "r2_median": median_r2,
-        "verdict": verdict,
-    }
+# Reine Berechnungen liegen Qt-frei in ui/yarnscope/dty_service.py (gemeinsam
+# mit der Web-Version); die alten Namen bleiben als Aliase erhalten.
+_ys_open_knot_midpoints = _svc.open_knot_midpoints
+_ys_opening_segment_series = _svc.opening_segment_series
+_ys_rolling_mean = _svc.rolling_mean
+_ys_rolling_mean_by_distance = _svc.rolling_mean_by_distance
+_ys_roll_trend = _svc.roll_trend
+_ys_local_extrema = _svc.local_extrema
+_ys_trend_metrics = _svc.trend_metrics
+_ys_analyze_process_wave = _svc.analyze_process_wave
+_ys_process_wave_reality_check = _svc.process_wave_reality_check
 
 
 def _ys_update_process_wave_card(label, analysis, enabled):
@@ -432,155 +115,10 @@ def _ys_update_trend_metric_card(label, title, color, enabled, positions, values
         f'P95 <b>{_number(metrics["peak_to_peak_p95"])} µm</b>')
 
 
-def _ys_peak_valley_midpoints(y_values, x_axis):
-    """Liefert (Talposition, Mittelpunkt von Peak und folgendem Tal) je Paar.
-
-    Flache Plateaus werden als ein Extrem behandelt. Die Funktion arbeitet auf
-    dem bereits für die Anzeige geglätteten Signal, damit Messrauschen nicht
-    als eigene Peak–Tal-Bewegung in die Trendlinie eingeht.
-    """
-    import math
-
-    n = min(len(y_values), len(x_axis))
-    if n < 3:
-        return [], []
-    values = [float(y_values[i]) for i in range(n)]
-    extrema = _ys_local_extrema(values)
-
-    positions, midpoints = [], []
-    for (kind_a, index_a), (kind_b, index_b) in zip(extrema, extrema[1:]):
-        if kind_a != "peak" or kind_b != "valley":
-            continue
-        valley, peak = values[index_b], values[index_a]
-        midpoint = valley + (peak - valley) / 2.0
-        position = float(x_axis[index_b])  # Trend gilt, sobald das Tal erreicht ist.
-        if math.isfinite(midpoint) and math.isfinite(position):
-            positions.append(position)
-            midpoints.append(midpoint)
-    return positions, midpoints
-
-
-def _ys_series_has_tdms(series_id: int) -> bool:
-    base = _ys_tdms_base()
-    if not base.exists():
-        return False
-    prefix = f"{series_id}_"
-    try:
-        for f in base.iterdir():
-            if f.suffix.lower() == ".tdms" and f.stem.startswith(prefix):
-                return True
-    except Exception:
-        pass
-    return False
-
-
-def _ys_find_tdms(series_id: int, versuch_no: int):
-    base = _ys_tdms_base()
-    if not base.exists():
-        return None
-    try:
-        for f in base.iterdir():
-            if f.suffix.lower() == ".tdms" and f.stem.startswith(f"{series_id}_{versuch_no}_"):
-                return f
-    except Exception:
-        pass
-    try:
-        from ui.screen_tdms_batch import TDMSFolderScanner
-        for f in base.iterdir():
-            if f.suffix.lower() == ".tdms":
-                ids = TDMSFolderScanner._parse_ids(f.stem)
-                if ids == (series_id, versuch_no):
-                    return f
-    except Exception:
-        pass
-    return None
-
-
-def _ys_extract_vals(res: dict) -> dict:
-    """Extrahiert DB-Feldnamen aus dem analyze_series-Ergebnis."""
-    import numpy as np
-    import math
-
-    def _safe(v):
-        if v is None: return None
-        try:
-            f = float(v)
-            return f if math.isfinite(f) else None
-        except Exception:
-            return None
-
-    out = {}
-    out["FPm"] = _safe(res.get("knots_per_m"))
-    ol_p = res.get("ol_period_mm_stats") or {}
-    mm = _safe(ol_p.get("mean"));
-    sd = _safe(ol_p.get("sd"))
-    out["AvgFP"] = mm / 10.0 if mm is not None else None
-    out["StdDevFP"] = sd / 10.0 if sd is not None else None
-    out["CV_FP"] = _safe(ol_p.get("cv"))
-
-    knot = res.get("knot") or {}
-    out["CV_KL"] = _safe(knot.get("cv"))
-    out["AvgKL"] = _safe(knot.get("mean"))
-    out["StdDevKL"] = _safe(knot.get("sd"))
-    out["maxKL"] = _safe(knot.get("max"))
-
-    open_ = res.get("open") or {}
-    out["CV_OL"] = _safe(open_.get("cv"))
-    out["AvgOL"] = _safe(open_.get("mean"))
-    out["StdDevOL"] = _safe(open_.get("sd"))
-    out["maxOL"] = _safe(open_.get("max"))
-
-    abc_per_m = res.get("abc_per_m") or {}
-    total_abc = sum(float(v) for v in abc_per_m.values() if v is not None and math.isfinite(float(v)))
-    if total_abc > 0:
-        out["AKnots"] = _safe(100.0 * abc_per_m.get("A", 0.0) / total_abc)
-        out["BKnots"] = _safe(100.0 * abc_per_m.get("B", 0.0) / total_abc)
-        out["CKnots"] = _safe(100.0 * abc_per_m.get("C", 0.0) / total_abc)
-    else:
-        out["AKnots"] = out["BKnots"] = out["CKnots"] = None
-
-    strength_per_m = res.get("knot_strength_per_m") or {}
-    total_str = sum(float(v) for v in strength_per_m.values() if v is not None and math.isfinite(float(v)))
-    for c in "abcdefghijklmnopqrst":
-        v = strength_per_m.get(c)
-        out[f"{c}_knots"] = _safe(100.0 * float(v) / total_str) if (total_str > 0 and v is not None) else None
-
-    def _bins10(lengths):
-        if not lengths: return [None] * 10
-        arr = np.array(lengths, dtype=float)
-        lo, hi = np.percentile(arr, 2), np.percentile(arr, 98)
-        if hi <= lo: return [None] * 10
-        counts, _ = np.histogram(arr, bins=np.linspace(lo, hi, 11))
-        total = counts.sum()
-        return [float(c / total * 100) if total > 0 else None for c in counts]
-
-    kl_b = _bins10(res.get("knot_lengths_mm") or [])
-    ol_b = _bins10(res.get("open_lengths_mm") or [])
-    for i in range(10):
-        out[f"kl_bin_{i + 1}"] = kl_b[i]
-        out[f"ol_bin_{i + 1}"] = ol_b[i]
-
-    out["SkewKL"] = _safe(res.get("skew_kl"))
-    out["SkewOL"] = _safe(res.get("skew_ol"))
-    out["RapportCV"] = _safe(res.get("rapport_cv_global"))
-    out["RapportCVLocal"] = _safe(res.get("rapport_cv_local"))
-    out["KL_AC1"] = _safe(res.get("kl_ac1"))
-    out["KL_AC2"] = _safe(res.get("kl_ac2"))
-    out["KL_AC3"] = _safe(res.get("kl_ac3"))
-    out["KL_TailRatio"] = _safe(res.get("kl_tail_ratio"))
-    out["OL_TailRatio"] = _safe(res.get("ol_tail_ratio"))
-    out["KA_OA_Ratio"] = _safe(res.get("ka_oa_ratio"))
-    out["KL_AsymMean"] = _safe(res.get("kl_asym_mean"))
-    out["KL_AsymCV"] = _safe(res.get("kl_asym_cv"))
-    out["KurtKL"] = _safe(res.get("kurt_kl"))
-    out["KurtOL"] = _safe(res.get("kurt_ol"))
-    out["ThicknessDrift"] = _safe(res.get("thickness_drift"))
-    out["SpectralEnergyLow"] = _safe(res.get("spectral_low"))
-    out["SpectralEnergyMid"] = _safe(res.get("spectral_mid"))
-    out["SpectralEnergyHigh"] = _safe(res.get("spectral_high"))
-    out["CKnot_ClusterMean"] = _safe(res.get("aknot_cluster_mean"))
-    out["CKnot_ClusterMax"] = _safe(res.get("aknot_cluster_max"))
-    return out
+_ys_peak_valley_midpoints = _svc.peak_valley_midpoints
+_ys_series_has_tdms = _svc.series_has_tdms
+_ys_find_tdms = _svc.find_tdms
+_ys_extract_vals = _svc.extract_basic_vals
 
 
 # ===========================================================================
@@ -1177,9 +715,6 @@ def _create_yarnscope_tab_if_needed(self):
 def _ys_populate_trial_list(self):
     from PySide6.QtWidgets import QListWidgetItem
     from PySide6.QtCore import Qt
-    # Lazy import (vermeidet Zirkularimport, screen_show_experiment importiert
-    # dieses Modul selbst) - derselbe fetch_all-Wrapper wie vorher.
-    from ui.screen_show_experiment import fetch_all
     if self._ys_trial_list is None:
         return
     # Aktuelle Auswahl (Trial-ID statt Zeilenindex) merken, damit ein
@@ -1196,24 +731,17 @@ def _ys_populate_trial_list(self):
     sid = self._series_pk
     all_have_tdms = True
     restore_row = -1
+    # Reference samples (customer originals) never have a TDMS file -
+    # listing them would also keep the auto-refresh timer running forever.
     refs = getattr(self, "_reference_names", {}) or {}
-    for t in self._trials:
-        tid = t.get("ID")
-        # Reference samples (customer originals) never have a TDMS file -
-        # listing them would also keep the auto-refresh timer running forever.
-        if tid is not None and int(tid) in refs:
-            continue
-        vno = t.get("Versuchsnummer") or t.get("versuchsnummer") or 0
-        tdms = _ys_find_tdms(sid, int(vno)) if sid else None
+    for entry in _svc.trial_files(sid, self._trials, refs, with_analysed=True):
+        tid = entry["trial_id"]
+        vno = entry["vno"]
+        tdms = entry["tdms"]
         if not tdms:
             all_have_tdms = False
         icon = "📄" if tdms else "—"
-        db_ok = False
-        try:
-            rows = fetch_all("SELECT 1 FROM tbllabordtyomat WHERE TrialID = ? AND Timestamp IS NOT NULL", (tid,))
-            db_ok = bool(rows)
-        except Exception:
-            pass
+        db_ok = entry["analysed"]
         status = "✅" if db_ok else ("⏳" if tdms else "")
         label = f"{icon} V{int(vno):03d}  {status}"
         item = QListWidgetItem(label)
@@ -1251,12 +779,10 @@ def _ys_populate_compare_trial_list(self):
     widget.clear()
     sid = getattr(self, "_series_pk", None)
     refs = getattr(self, "_reference_names", {}) or {}
-    for trial in getattr(self, "_trials", []):
-        trial_id = trial.get("ID")
-        if trial_id is not None and int(trial_id) in refs:
-            continue
-        vno = trial.get("Versuchsnummer") or trial.get("versuchsnummer") or 0
-        tdms = _ys_find_tdms(sid, int(vno)) if sid else None
+    for entry in _svc.trial_files(sid, getattr(self, "_trials", []), refs):
+        trial_id = entry["trial_id"]
+        vno = entry["vno"]
+        tdms = entry["tdms"]
         item = QListWidgetItem(f"V{int(vno):03d}" + ("" if tdms else "  (no TDMS)"))
         item.setData(Qt.UserRole, {"trial_id": trial_id, "vno": int(vno), "tdms": tdms})
         item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
@@ -1303,58 +829,9 @@ def _ys_run_process_comparison(self):
             self.setAutoDelete(True)
 
         def run(self):
-            import numpy as np
-            from ui.yarnscope.dty_analysis import _moving_average, analyze_series
-            from ui.yarnscope.dty_tdms_reader import read_dty_signal, read_step_mm_from_tdms
-
-            results, errors = [], []
-            for trial in self._trials:
-                try:
-                    trial_id = trial.get("trial_id")
-                    cached = self._cache.get(trial_id)
-                    if cached:
-                        res, _vals = cached
-                        y_raw = res.get("_y_raw")
-                        dx_mm = float(res.get("_dx_mm") or 0.25)
-                    else:
-                        res = None
-                        path = trial.get("tdms")
-                        y_raw = read_dty_signal(str(path))
-                        dx_mm = float(read_step_mm_from_tdms(str(path)) or 0.25)
-                    if y_raw is None or len(y_raw) == 0:
-                        raise ValueError("No signal")
-                    y = np.asarray(y_raw, dtype=float)
-                    # Vergleichswerte sind absichtlich unabhängig von der
-                    # aktuellen Fensteransicht: immer die ganze Messstrecke.
-                    yseg = _moving_average(y, 3)
-                    x = np.arange(len(y)) * dx_mm / 1000.0
-                    analysis = _ys_analyze_process_wave(x, yseg, self._bin_m)
-                    if analysis is None:
-                        raise ValueError("Window too short or incomplete data")
-                    reality = _ys_process_wave_reality_check(x, yseg, self._bin_m)
-
-                    # Öffnungsstellen-Trend (Nutzerwunsch 2026-09-08): braucht
-                    # dieselbe Knoten/Öffnung-Klassifikation wie der
-                    # Segmentmittel-Tab (analyze_series()["classes"]) - liegt
-                    # nur vor, wenn der Trial dort schon einmal analysiert
-                    # wurde (Cache-Treffer). Sonst hier einmalig nachrechnen,
-                    # exakt dieselbe Pipeline wie beim "Analyze"-Button.
-                    cls_info = res.get("classes") if res else None
-                    if not cls_info:
-                        cls_info = analyze_series(y, dx_mm, 3).get("classes")
-                    per_run = (cls_info or {}).get("per_run", [])
-                    open_seg_x, open_seg_y = _ys_opening_segment_series(per_run, yseg, x)
-
-                    results.append({
-                        "trial_id": trial_id, "vno": trial.get("vno"),
-                        "label": f'V{int(trial.get("vno") or 0):03d}',
-                        "median": float(np.median(analysis["binned"])),
-                        "analysis": analysis, "reality": reality, "visible": True,
-                        "open_seg_x": open_seg_x, "open_seg_y": open_seg_y,
-                    })
-                except Exception as exc:
-                    errors.append(f'V{int(trial.get("vno") or 0):03d}: {exc}')
-            self._sigs.done.emit(results, "; ".join(errors))
+            results, errors = _svc.run_process_comparison(
+                self._trials, self._bin_m, self._cache)
+            self._sigs.done.emit(results, errors)
 
     self._ys_compare_sigs = _Sigs()
     self._ys_compare_sigs.done.connect(
@@ -1368,19 +845,20 @@ def _ys_on_process_comparison_done(self, results, errors: str):
     self._ys_btn_run_comparison.setEnabled(True)
     self._ys_compare_results = results
     _ys_draw_process_comparison(self, results)
-    if results:
-        status = (f"{len(results)} trial(s) compared – values over the whole measured "
-                  "length, robustness check in independent 10 m sections.")
-        if errors:
-            status += f" Skipped: {errors}"
-    else:
-        status = "No comparable results. " + errors
-    self._ys_lbl_compare_status.setText(status)
+    self._ys_lbl_compare_status.setText(_svc.comparison_status_text(results, errors))
+
+
+# Linienstil je Kurvenart des Prozessvergleichs (Daten: _svc.comparison_traces)
+_YS_COMPARE_LINE_STYLE = {
+    "process_mean": dict(linewidth=1.0, alpha=0.45),
+    "drift": dict(linewidth=1.25, alpha=0.9),
+    "sine_fit": dict(linewidth=2.1, linestyle="--"),
+    "open_trend": dict(linewidth=1.6, linestyle=":"),
+}
 
 
 def _ys_draw_process_comparison(self, results):
     """Zeichnet Prozessmittel und Sinus-Fits überlagert sowie die Kennzahlentabelle."""
-    import numpy as np
     from PySide6.QtWidgets import QTableWidgetItem, QPushButton, QLabel
     from PySide6.QtCore import Qt
 
@@ -1393,7 +871,7 @@ def _ys_draw_process_comparison(self, results):
     ax.set_facecolor("#242424")
     ax.figure.patch.set_facecolor("#1e1e1e")
     table.setRowCount(0)
-    colors = ["#56d7d0", "#ff6bb5", "#ffd166", "#9b8cff", "#7ddf9a", "#ff9f1c"]
+    colors = _svc.COMPARE_COLOURS
     normalized = bool(getattr(self, "_ys_chk_compare_normalized", None)
                       and self._ys_chk_compare_normalized.isChecked())
     show_process_mean = bool(getattr(self, "_ys_chk_compare_show_process_mean", None)
@@ -1407,27 +885,14 @@ def _ys_draw_process_comparison(self, results):
     open_roll_amount = float(self._ys_spin_compare_open_roll.value()
                              if getattr(self, "_ys_spin_compare_open_roll", None) else 1.0)
 
+    for trace in _svc.comparison_traces(results, normalized, show_process_mean, show_drift,
+                                        show_open_trend, open_roll_mode, open_roll_amount):
+        ax.plot(trace["x"], trace["y"], color=trace["colour"], label=trace["label"],
+                **_YS_COMPARE_LINE_STYLE[trace["kind"]])
+
     for row, result in enumerate(results):
-        analysis = result["analysis"]
         color = colors[row % len(colors)]
-        offset = result["median"] if normalized else 0.0
         visible = result.get("visible", True)
-        if visible and show_process_mean:
-            ax.plot(analysis["x"], analysis["binned"] - offset, color=color,
-                    linewidth=1.0, alpha=0.45, label=f'{result["label"]} Prozessmittel')
-        if visible and show_drift:
-            ax.plot(analysis["x"], analysis["drift_line"] - offset, color=color,
-                    linewidth=1.25, alpha=0.9, label=f'{result["label"]} Drift')
-        if visible:
-            ax.plot(analysis["x"], analysis["fitted"] - offset, color=color,
-                    linewidth=2.1, linestyle="--", label=f'{result["label"]} Sinus-Fit')
-        if visible and show_open_trend:
-            seg_x, seg_y = result.get("open_seg_x") or [], result.get("open_seg_y") or []
-            if seg_x:
-                trend_y, _roll_label = _ys_roll_trend(seg_x, seg_y, open_roll_mode, open_roll_amount)
-                ax.plot(seg_x, np.asarray(trend_y) - offset, color=color,
-                        linewidth=1.6, linestyle=":",
-                        label=f'{result["label"]} open spot trend')
 
         table.insertRow(row)
         visibility_icon = "assets/images/visible_on.png" if visible else "assets/images/visible_off.png"
@@ -1450,42 +915,21 @@ def _ys_draw_process_comparison(self, results):
         color_swatch.setStyleSheet(
             f"background:{color}; border:1px solid #ddd; border-radius:2px;")
         table.setCellWidget(row, 1, color_swatch)
-        reality = result.get("reality")
-        if reality:
-            reality_values = [
-                f'{reality["significant"]}/{reality["windows"]}',
-                f'{reality["lambda_cv"] * 100:.0f} %' if reality["lambda_cv"] is not None else "—",
-                f'{reality["amplitude_median"]:.2f}', f'{reality["r2_median"]:.2f}',
-                reality["verdict"],
-            ]
-        else:
-            reality_values = ["—", "—", "—", "—", "not enough data"]
-        values = [
-            result["label"], f'{result["median"]:.1f}',
-            f'{analysis["wavelength"]:.2f}', f'{analysis["amplitude"]:.2f}',
-            f'{analysis["r_squared"]:.2f}', f'{analysis["spectral_share"] * 100:.0f} %',
-            f'{analysis["drift"]:.2f}', f'{analysis["residual_rms"]:.2f}',
-        ] + reality_values
+        values = _svc.comparison_table_values(result)
         for col, value in enumerate(values, start=2):
             item = QTableWidgetItem(value)
             item.setTextAlignment(Qt.AlignCenter)
             if col == 2:
                 item.setForeground(QColor(color))
             elif col == 14:
-                verdict_colors = {
-                    "robust wave evidence": "#7ddf9a",
-                    "inconsistent evidence": "#ffd166",
-                    "not supported": "#ff7b7b",
-                }
-                item.setForeground(QColor(verdict_colors.get(value, "#aaa")))
+                item.setForeground(QColor(_svc.VERDICT_COLOURS.get(value, "#aaa")))
             table.setItem(row, col, item)
 
     if results:
-        ax.set_title("Sine fits of the process waves" if not show_process_mean
-                     else "Process mean and sine fits", color="#ddd", fontsize=11)
-        ax.set_xlabel("Position [m]", color="#aaa", fontsize=9)
-        ax.set_ylabel("Deviation from median [µm]" if normalized else "Garndicke [µm]",
-                      color="#aaa", fontsize=9)
+        axis = _svc.comparison_axis_labels(normalized, show_process_mean)
+        ax.set_title(axis["title"], color="#ddd", fontsize=11)
+        ax.set_xlabel(axis["xlabel"], color="#aaa", fontsize=9)
+        ax.set_ylabel(axis["ylabel"], color="#aaa", fontsize=9)
         start_m = float(self._ys_spin_start.value() if self._ys_spin_start else 0.0)
         window_m = float(self._ys_spin_window.value() if self._ys_spin_window else 3.0)
         ax.set_xlim(start_m, start_m + window_m)
@@ -1613,18 +1057,7 @@ def _ys_on_analyze(self):
 
         def run(self):
             try:
-                import numpy as np
-                from ui.yarnscope.dty_analysis import analyze_series
-                from ui.yarnscope.dty_tdms_reader import (
-                    read_dty_signal, read_step_mm_from_tdms)
-                y = read_dty_signal(str(self._p))
-                dx_mm = read_step_mm_from_tdms(str(self._p)) or 0.25
-                if y is None or len(y) == 0:
-                    self._s.done.emit({}, "No signal in the TDMS file.")
-                    return
-                res = analyze_series(np.asarray(y, dtype=float), float(dx_mm), 3)
-                res["_y_raw"] = y  # numpy-Array direkt behalten (kein .tolist() → kein teurer Copy)
-                res["_dx_mm"] = float(dx_mm)
+                res = _svc.analyse_signal_file(self._p)
                 self._s.done.emit(res, "")
             except Exception as e:
                 self._s.done.emit({}, str(e))
@@ -1657,16 +1090,9 @@ def _ys_on_analysis_done(self, res: dict, err: str):
             self.setAutoDelete(True)
 
         def run(self):
-            try:
-                from ui.yarnscope.dty_analysis import full_extract_vals
-                y_raw = self._r.get("_y_raw")
-                dx_mm = float(self._r.get("_dx_mm") or 0.25)
-                vals = full_extract_vals(
-                    self._r, y_raw, dx_mm, 3, trial_id=self._tid,
-                    progress_cb=lambda msg: self._s.progress.emit(msg))
-            except Exception as e:
-                from ui.dty_yarnscope_tab import _ys_extract_vals
-                vals = _ys_extract_vals(self._r)
+            vals = _svc.extract_values(
+                self._r, trial_id=self._tid,
+                progress_cb=lambda msg: self._s.progress.emit(msg))
             self._s.done.emit(vals)
 
     self._ys_esigs = _ESigs()
@@ -1682,15 +1108,7 @@ def _ys_on_extract_done(self, vals: dict):
     tid = getattr(self, "_ys_current_trial_id", None)
     if tid is not None and self._ys_last_res:
         self._ys_cache[tid] = (self._ys_last_res, vals)
-    stab_info = []
-    for key, label in [("Stab_03", "0.3"), ("Stab_06", "0.6"),
-                       ("Stab_10", "1.0"), ("Stab_13", "1.3")]:
-        v = vals.get(key)
-        if v is not None:
-            stab_info.append(f"{label}: {v:.1f}%")
-    stab_str = "   ".join(stab_info) if stab_info else ""
-    status = "Analysis finished." + (f"  |  Stab: {stab_str}" if stab_str else "")
-    self._ys_lbl_status.setText(status)
+    self._ys_lbl_status.setText(_svc.analysis_status_text(vals))
     self._ys_btn_save.setEnabled(self._ys_current_trial_id is not None)
     _ys_update_metrics(self, vals)
     _ys_replot(self)
@@ -1738,34 +1156,47 @@ def _ys_update_metrics(self, vals: dict):
 def _ys_draw_plots(self, res: dict, vals: dict):
     _ys_clear_plot(self)
     try:
-        import numpy as np
         import math
         import matplotlib
         matplotlib.use("Agg")
         from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
         from matplotlib.figure import Figure
 
-        y_raw = res.get("_y_raw")
-        dx_mm = float(res.get("_dx_mm") or 0.25)
-        if y_raw is None:
+        def _trend_setting(chk, combo, spin):
+            """None = Linie aus, sonst (Rollungsart, Breite) aus den Widgets."""
+            if not bool(getattr(self, chk, None) and getattr(self, chk).isChecked()):
+                return None
+            combo_w, spin_w = getattr(self, combo), getattr(self, spin)
+            return ((combo_w.currentText() if combo_w else "Meter"),
+                    float(spin_w.value() if spin_w else 1.0))
+
+        process_wave_bin = None
+        if bool(getattr(self, "_ys_chk_process_wave", None)
+                and self._ys_chk_process_wave.isChecked()):
+            process_wave_bin = float(self._ys_spin_process_wave_bin.value()
+                                     if self._ys_spin_process_wave_bin else 0.05)
+
+        # Start/Fenster aus Spinboxes
+        view = _svc.segment_view(
+            res, vals,
+            float(self._ys_spin_start.value() if self._ys_spin_start else 0.0),
+            float(self._ys_spin_window.value() if self._ys_spin_window else 3.0),
+            open_knot=_trend_setting("_ys_chk_delta_trend", "_ys_combo_delta_roll_mode",
+                                     "_ys_spin_delta_roll"),
+            peak_valley=_trend_setting("_ys_chk_peak_valley_trend",
+                                       "_ys_combo_peak_valley_roll_mode",
+                                       "_ys_spin_peak_valley_roll"),
+            opening=_trend_setting("_ys_chk_opening_trend", "_ys_combo_opening_roll_mode",
+                                   "_ys_spin_opening_roll"),
+            process_wave_bin=process_wave_bin)
+        if view is None:
             lbl = QLabel("No signal available.")
             lbl.setStyleSheet("color:#ff6060; padding:8px;")
             self._ys_plot_layout.addWidget(lbl)
             return
 
-        y_arr = np.asarray(y_raw, dtype=float)
-        total_m = len(y_arr) * dx_mm / 1000.0
-
-        # Start/Fenster aus Spinboxes
-        start_m = float(self._ys_spin_start.value() if self._ys_spin_start else 0.0)
-        window_m = float(self._ys_spin_window.value() if self._ys_spin_window else 3.0)
-        start_m = max(0.0, min(start_m, total_m))
-        window_m = max(0.1, min(window_m, 100.0, total_m - start_m))
-
-        pts_per_m = int(round(1000.0 / dx_mm))
-        start_idx = int(round(start_m * pts_per_m))
-        count = max(1, int(round(window_m * pts_per_m)))
-        end_idx = min(start_idx + count, len(y_arr))
+        total_m = view["total_m"]
+        start_m, window_m = view["start_m"], view["window_m"]
 
         # Spinbox-Max anpassen
         if self._ys_spin_start:
@@ -1773,113 +1204,24 @@ def _ys_draw_plots(self, res: dict, vals: dict):
             self._ys_spin_start.setMaximum(max(0.0, total_m - 0.1))
             self._ys_spin_start.blockSignals(False)
 
-        yseg = y_arr[start_idx:end_idx]
-        x_axis = np.arange(start_idx, end_idx) * dx_mm / 1000.0
-
-        # Glätten
-        from ui.yarnscope.dty_analysis import _moving_average
-        y_smooth = _moving_average(yseg, 3)
-
-        # Threshold + Klassengrenzen
-        T = res.get("threshold")
-        cls_info = res.get("classes") or {}
-        thr = cls_info.get("thresholds", (None, None))
-        try:
-            tA, tB = thr if not isinstance(thr, dict) else (thr.get("tA"), thr.get("tB"))
-        except Exception:
-            tA, tB = None, None
-        y_cb = (float(T) - tA) if (T is not None and tA is not None) else None
-        y_ba = (float(T) - tB) if (T is not None and tB is not None) else None
-
-        def _class_from_mean(mv):
-            lo = y_cb if y_cb is not None else float("nan")
-            hi = y_ba if y_ba is not None else float("nan")
-            if not math.isfinite(lo) or not math.isfinite(hi):
-                lo, hi = (min(lo, hi), max(lo, hi)) if (math.isfinite(lo) and math.isfinite(hi)) else (float("nan"),
-                                                                                                       float("nan"))
-            lo2, hi2 = (min(lo, hi), max(lo, hi))
-            if math.isfinite(lo2) and mv <= lo2: return "A"
-            if math.isfinite(hi2) and mv <= hi2: return "B"
-            return "C"
-
-        # per_run aus res
-        per_run = cls_info.get("per_run", [])
-
-        # Knoten- und Öffnungssegmente berechnen
-        mask_knot = np.zeros(len(y_smooth), dtype=bool)
-        knot_segs = []
-        for run in per_run:
-            if not isinstance(run, (list, tuple)) or len(run) < 2:
-                continue
-            s, e = int(run[0]), int(run[1])
-            if e <= start_idx or s >= end_idx:
-                continue
-            ls = max(s, start_idx) - start_idx
-            le = min(e, end_idx) - start_idx
-            if le <= ls: continue
-            g = np.arange(ls, le)
-            mask_knot[ls:le] = True
-            mv = float(np.mean(y_smooth[g])) if g.size else float("nan")
-            knot_segs.append((g, mv))
-
-        open_segs = []
-        ii = np.where(~mask_knot)[0]
-        if ii.size:
-            splits = np.where(np.diff(ii) > 1)[0] + 1
-            for g in np.split(ii, splits):
-                if g.size == 0: continue
-                mv = float(np.mean(y_smooth[g]))
-                open_segs.append((g, mv))
-
-        # Optional: pro Offenstelle mit direkt folgendem Knoten die Mitte
-        # zwischen beiden Höhen bilden und als gleitenden Mittelwert darstellen.
-        open_knot_trend_x, open_knot_trend_y, open_knot_roll_label = [], [], ""
-        open_knot_enabled = bool(getattr(self, "_ys_chk_delta_trend", None)
-                                 and self._ys_chk_delta_trend.isChecked())
-        if open_knot_enabled:
-            open_knot_trend_x, raw_midpoints = _ys_open_knot_midpoints(
-                open_segs, knot_segs, x_axis)
-            roll_mode = (self._ys_combo_delta_roll_mode.currentText()
-                         if self._ys_combo_delta_roll_mode else "Meter")
-            roll_amount = float(self._ys_spin_delta_roll.value() if self._ys_spin_delta_roll else 1.0)
-            open_knot_trend_y, open_knot_roll_label = _ys_roll_trend(
-                open_knot_trend_x, raw_midpoints, roll_mode, roll_amount)
-
-        peak_valley_trend_x, peak_valley_trend_y, peak_valley_roll_label = [], [], ""
-        peak_valley_enabled = bool(getattr(self, "_ys_chk_peak_valley_trend", None)
-                                  and self._ys_chk_peak_valley_trend.isChecked())
-        if peak_valley_enabled:
-            peak_valley_trend_x, raw_midpoints = _ys_peak_valley_midpoints(y_smooth, x_axis)
-            roll_mode = (self._ys_combo_peak_valley_roll_mode.currentText()
-                         if self._ys_combo_peak_valley_roll_mode else "Meter")
-            roll_amount = float(self._ys_spin_peak_valley_roll.value()
-                                if self._ys_spin_peak_valley_roll else 1.0)
-            peak_valley_trend_y, peak_valley_roll_label = _ys_roll_trend(
-                peak_valley_trend_x, raw_midpoints, roll_mode, roll_amount)
-
-        # Öffnungsstellen-Trend (Nutzerwunsch 2026-09-08): rollender Mittelwert
-        # NUR über die grünen Öffnungsstellen-Segmentmittel (open_segs, siehe
-        # unten), ohne Knoten-Mischung wie bei open_knot_trend.
-        opening_trend_x, opening_trend_y, opening_roll_label = [], [], ""
-        opening_enabled = bool(getattr(self, "_ys_chk_opening_trend", None)
-                               and self._ys_chk_opening_trend.isChecked())
-        if opening_enabled:
-            opening_trend_x = [float(x_axis[int(g[len(g) // 2])]) for g, _mv in open_segs if len(g)]
-            raw_values = [mv for g, mv in open_segs if len(g)]
-            roll_mode = (self._ys_combo_opening_roll_mode.currentText()
-                         if self._ys_combo_opening_roll_mode else "Meter")
-            roll_amount = float(self._ys_spin_opening_roll.value()
-                                if self._ys_spin_opening_roll else 1.0)
-            opening_trend_y, opening_roll_label = _ys_roll_trend(
-                opening_trend_x, raw_values, roll_mode, roll_amount)
-
-        process_wave_enabled = bool(getattr(self, "_ys_chk_process_wave", None)
-                                    and self._ys_chk_process_wave.isChecked())
-        process_wave = None
-        if process_wave_enabled:
-            bin_width = float(self._ys_spin_process_wave_bin.value()
-                              if self._ys_spin_process_wave_bin else 0.05)
-            process_wave = _ys_analyze_process_wave(x_axis, y_smooth, bin_width)
+        x_axis, y_smooth = view["x"], view["y_smooth"]
+        T, y_cb, y_ba = view["threshold"], view["y_cb"], view["y_ba"]
+        open_segs, knot_segs = view["open_segments"], view["knot_segments"]
+        trends = view["trends"]
+        open_knot_enabled = trends["open_knot"]["enabled"]
+        open_knot_trend_x = trends["open_knot"]["x"]
+        open_knot_trend_y = trends["open_knot"]["y"]
+        open_knot_roll_label = trends["open_knot"]["roll_label"]
+        peak_valley_enabled = trends["peak_valley"]["enabled"]
+        peak_valley_trend_x = trends["peak_valley"]["x"]
+        peak_valley_trend_y = trends["peak_valley"]["y"]
+        peak_valley_roll_label = trends["peak_valley"]["roll_label"]
+        opening_enabled = trends["opening"]["enabled"]
+        opening_trend_x = trends["opening"]["x"]
+        opening_trend_y = trends["opening"]["y"]
+        opening_roll_label = trends["opening"]["roll_label"]
+        process_wave = view["process_wave"]
+        process_wave_enabled = view["process_wave_enabled"]
 
         _ys_update_trend_metric_card(
             getattr(self, "_ys_lbl_open_knot_metrics", None), "Centre open spot–knot",
@@ -1912,28 +1254,21 @@ def _ys_draw_plots(self, res: dict, vals: dict):
                     linewidth=2.0,
                     label=f'Sinus-Fit ({process_wave["wavelength"]:.2f} m)')
 
-        A_cnt = B_cnt = C_cnt = 0
         seen = set()
-        COLOR = {"A": "#e05050", "B": "#f0a030", "C": "#9060c0"}
+        COLOR = _svc.COLOR_ABC
 
         for g, mv in open_segs:
             lbl = "Opening: medium" if "Opening: medium" not in seen else None
             ax.plot(x_axis[g], [mv] * len(g), color="#39A650", linewidth=1.8, label=lbl)
             if lbl: seen.add(lbl)
 
-        for g, mv in knot_segs:
-            cls = _class_from_mean(mv)
+        for (g, mv), cls in zip(knot_segs, view["knot_classes"]):
             col = COLOR[cls]
             lbl_key = f"Knoten {cls}: Mittel"
             lbl = lbl_key if lbl_key not in seen else None
             ax.plot(x_axis[g], [mv] * len(g), color=col, linewidth=2.0, label=lbl)
             if lbl: seen.add(lbl)
-            if cls == "A":
-                A_cnt += 1
-            elif cls == "B":
-                B_cnt += 1
-            else:
-                C_cnt += 1
+        A_cnt, B_cnt, C_cnt = view["counts"]["A"], view["counts"]["B"], view["counts"]["C"]
 
         if T is not None and math.isfinite(float(T)):
             ax.axhline(float(T), color="#888", ls="--", lw=0.9, label="Schwelle T")
@@ -1982,9 +1317,7 @@ def _ys_draw_plots(self, res: dict, vals: dict):
 
         # ── ABC-Pie ────────────────────────────────────────────────────────
         axp.set_facecolor("#242424")
-        a = vals.get("AKnots") or 0.0
-        b = vals.get("BKnots") or 0.0
-        c = vals.get("CKnots") or 0.0
+        a, b, c = view["pie"]["A"], view["pie"]["B"], view["pie"]["C"]
         if a + b + c > 0:
             axp.pie([a, b, c],
                     labels=[f"A\n{a:.0f}%", f"B\n{b:.0f}%", f"C\n{c:.0f}%"],
@@ -2071,80 +1404,13 @@ def _ys_draw_garnspiegel(self, res: dict, vals: dict = None):
     if canvas is None:
         return
     try:
-        import numpy as np
-        import math
-        from ui.yarnscope.dty_analysis import _moving_average
-
-        y_raw = res.get("_y_raw")
-        dx_mm = float(res.get("_dx_mm") or 0.25)
-        if y_raw is None or len(y_raw) == 0:
-            return
-
-        y_um_full = np.asarray(y_raw, dtype=float)
-        if float(np.median(y_um_full)) < 50.0:
-            y_um_full = y_um_full * 1000.0
-
         # ── Startpunkt aus Spinbox (identisch zum Segmentmittel-Plot) ────────
-        total_m = len(y_um_full) * dx_mm / 1000.0
         start_m = float(getattr(self, "_ys_spin_start", None) and self._ys_spin_start.value() or 0.0)
-        start_m = max(0.0, min(start_m, total_m))
-        pts_per_m = int(round(1000.0 / dx_mm))
-        start_idx = int(round(start_m * pts_per_m))
-
-        # Ab Startpunkt schneiden – per_run Indizes entsprechend verschieben
-        y_um = y_um_full[start_idx:]
-        y_smooth = _moving_average(y_um, 3)
-
-        # ── Schwellenwerte ───────────────────────────────────────────────────
-        T = res.get("threshold")
-        cls_info = res.get("classes") or {}
-        thr = cls_info.get("thresholds", (None, None))
-        try:
-            tA, tB = thr if not isinstance(thr, dict) else (thr.get("tA"), thr.get("tB"))
-        except Exception:
-            tA, tB = None, None
-        y_cb = (float(T) - tA) if (T is not None and tA is not None) else None
-        y_ba = (float(T) - tB) if (T is not None and tB is not None) else None
-
-        def _class_from_mean(mv):
-            lo = y_cb if y_cb is not None else float("nan")
-            hi = y_ba if y_ba is not None else float("nan")
-            lo2, hi2 = min(lo, hi), max(lo, hi)
-            if math.isfinite(lo2) and mv <= lo2: return "A"
-            if math.isfinite(hi2) and mv <= hi2: return "B"
-            return "C"
-
-        # per_run: Indizes relativ zum vollen Signal -> auf geschnittenes verschieben
-        per_run_raw = cls_info.get("per_run", [])
-        per_run = []
-        for run in per_run_raw:
-            if not isinstance(run, (list, tuple)) or len(run) < 2:
-                continue
-            s, e = int(run[0]) - start_idx, int(run[1]) - start_idx
-            if e <= 0 or s >= len(y_um):
-                continue
-            per_run.append((max(0, s), min(len(y_um), e)))
-
-        COLOR_ABC = {"A": "#e05050", "B": "#f0a030", "C": "#9060c0"}
-        COLOR_OPEN = "#3a6a4a"  # gedaempftes Dunkelgruen fuer Oeffnungen
-
-        # Bandbreite direkt aus absolutem Signal normiert auf Segment-Mittelwert.
-        # Duennstellen (Knoten) -> kleiner Wert -> schmaleres Band.
-        # Dickstellen (Oeffnungen) -> groesserer Wert -> breiteres Band.
-        seg_mean = float(np.mean(y_smooth))
-        clip = seg_mean  # Normierungsreferenz
-
-        canvas.plot_garnspiegel_dty(
-            y_dev=y_smooth,  # absolutes Signal, nicht Abweichung
-            clip_um=clip,
-            per_run=per_run,
-            class_fn=_class_from_mean,
-            color_abc=COLOR_ABC,
-            color_open=COLOR_OPEN,
-            dx_mm=dx_mm,
-            y_um=y_um,
-            num_turns=20,
-        )
+        # Daten (Signal ab Startpunkt, Knotenläufe, Klassen) aus dty_service
+        kwargs = _svc.garnspiegel_inputs(res, start_m)
+        if kwargs is None:
+            return
+        canvas.plot_garnspiegel_dty(**kwargs)
     except Exception as _e:
         import traceback
         traceback.print_exc()
@@ -2158,49 +1424,18 @@ def _ys_draw_signal(self, res: dict):
     if ax is None or canvas is None:
         return
     try:
-        import numpy as np
         import math
-        from ui.yarnscope.dty_analysis import _moving_average
 
-        y_raw = res.get("_y_raw")
-        dx_mm = float(res.get("_dx_mm") or 0.25)
-        if y_raw is None or len(y_raw) == 0:
+        start_m = float(self._ys_spin_start.value() if self._ys_spin_start else 0.0)
+        window_m = float(self._ys_spin_window.value() if self._ys_spin_window else 3.0)
+        view = _svc.signal_view(res, start_m, window_m)
+        if view is None:
             ax.clear();
             canvas.draw_idle();
             return
 
-        y_um = np.asarray(y_raw, dtype=float)
-        if float(np.median(y_um)) < 50.0:
-            y_um = y_um * 1000.0
-
-        # Glaetten wie Segmentmittel (k=3)
-        y_smooth = _moving_average(y_um, 3)
-
-        total_m = len(y_smooth) * dx_mm / 1000.0
-        start_m = float(self._ys_spin_start.value() if self._ys_spin_start else 0.0)
-        window_m = float(self._ys_spin_window.value() if self._ys_spin_window else 3.0)
-        start_m = max(0.0, min(start_m, total_m))
-        window_m = max(0.1, min(window_m, total_m - start_m))
-
-        pts_per_m = int(round(1000.0 / dx_mm))
-        start_idx = int(round(start_m * pts_per_m))
-        count = max(1, int(round(window_m * pts_per_m)))
-        end_idx = min(start_idx + count, len(y_smooth))
-
-        yseg = y_smooth[start_idx:end_idx]
-        x_abs = np.arange(start_idx, end_idx) * dx_mm / 1000.0
-        step_m = dx_mm / 1000.0
-
-        # Schwellenwerte
-        T = res.get("threshold")
-        cls_info = res.get("classes") or {}
-        thr = cls_info.get("thresholds", (None, None))
-        try:
-            tA, tB = thr if not isinstance(thr, dict) else (thr.get("tA"), thr.get("tB"))
-        except Exception:
-            tA, tB = None, None
-        y_ab = (float(T) - tA) if (T is not None and tA is not None) else None
-        y_bc = (float(T) - tB) if (T is not None and tB is not None) else None
+        yseg, x_abs, step_m = view["y"], view["x"], view["step_m"]
+        T, y_ab, y_bc = view["threshold"], view["y_ab"], view["y_bc"]
 
         ax.clear()
         ax.set_facecolor("#1e1e1e")
@@ -2222,14 +1457,9 @@ def _ys_draw_signal(self, res: dict):
                        linewidth=1.2, label=f"B/C = {y_bc:.1f} µm")
 
         # Y-Limits: nicht bei 0 beginnen
-        candidates = [float(np.min(yseg)), float(np.max(yseg))]
-        for v in (T, y_ab, y_bc):
-            if v is not None and math.isfinite(float(v)):
-                candidates.append(float(v))
-        y_min, y_max = min(candidates), max(candidates)
-        rng = max(y_max - y_min, 1.0)
-        ax.set_ylim(y_min - rng * 0.05, y_max + rng * 0.05)
-        ax.set_xlim(x_abs[0], x_abs[0] + window_m)
+        ylim, xlim = _svc.signal_limits(view)
+        ax.set_ylim(*ylim)
+        ax.set_xlim(*xlim)
 
         ax.set_xlabel("Position [m]", color="#888", fontsize=8)
         ax.set_ylabel("Garndicke [µm]", color="#888", fontsize=8)

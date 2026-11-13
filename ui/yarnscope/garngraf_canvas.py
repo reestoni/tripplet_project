@@ -382,64 +382,26 @@ class GarnCanvas(FigureCanvas):
         (normalisiert pro Segment auf Mittelwert). Knoten als farbige Einschnoerung.
         """
         import numpy as np
+        # Geometrie (Zeilen, Bandbreiten, Knotenklassen) Qt-frei in dty_service
+        from ui.yarnscope.dty_service import garnspiegel_dty_geometry
 
         self.ax.clear()
         self.figure.patch.set_facecolor("black")
         self.ax.set_facecolor("black")
 
-        # Rohdaten: absolutes Signal in µm
-        src = y_um if y_um is not None else (y_dev + np.mean(y_dev))
-        n_total = len(src)
-        if n_total == 0:
+        geom = garnspiegel_dty_geometry(
+            y_dev, per_run, class_fn, dx_mm=dx_mm, y_um=y_um, num_turns=num_turns,
+            gap_factor=gap_factor, segment_len_mm=SEGMENT_LEN_MM)
+        if geom is None:
             self.draw_idle()
             return
 
-        pts_per_row = max(1, int(round(SEGMENT_LEN_MM / dx_mm)))
-        turns = max(1, min(int(num_turns), n_total // pts_per_row))
-        use   = turns * pts_per_row
-
-        seg_len_mm = pts_per_row * dx_mm
-        x_mm  = np.linspace(0.0, seg_len_mm, pts_per_row, endpoint=False)
-
-        # Globaler Mittelwert als Referenz fuer Zeilenabstand
-        global_mean = float(np.mean(src[:use]))
-        row_h = global_mean * gap_factor
-
-        # Knoten-Maske + Klasse
-        knot_mask  = np.zeros(use, dtype=bool)
-        knot_class = np.full(use, "", dtype=object)
-        for run in per_run:
-            if not isinstance(run, (list, tuple)) or len(run) < 2:
-                continue
-            s, e = int(run[0]), int(run[1])
-            if e <= s or s >= use:
-                continue
-            e = min(e, use)
-            mv  = float(np.mean(src[s:e])) if e > s else 0.0
-            cls = class_fn(mv)
-            knot_mask[s:e]  = True
-            knot_class[s:e] = cls
-
-        for row in range(turns):
-            s    = row * pts_per_row
-            e    = s + pts_per_row
-            seg  = src[s:e].copy()
-            km   = knot_mask[s:e]
-            kc   = knot_class[s:e]
-            base = -row * row_h
-            xr   = x_mm[:len(seg)]
-
-            # Normalisierung: Segment-Mittelwert = 1.0
-            seg_mean = float(np.mean(seg)) if len(seg) > 0 else global_mean
-            seg_norm = seg / max(seg_mean, 1e-9)  # ~1.0 ueberall, Knoten etwas kleiner
-
-            # Verstärkung der Variation fuer Sichtbarkeit
-            # Abweichung vom 1.0 wird stark verstaerkt
-            amp = 20.0
-            seg_vis = 1.0 + (seg_norm - 1.0) * amp
-            seg_vis = np.clip(seg_vis, 0.05, 3.0)
-
-            half = seg_vis * global_mean * 0.12
+        for r in geom["rows"]:
+            km   = r["knot_mask"]
+            kc   = r["knot_class"]
+            base = r["base"]
+            xr   = r["x"]
+            half = r["half"]
 
             # Weisses Band (Oeffnungen)
             om = ~km
@@ -465,11 +427,9 @@ class GarnCanvas(FigureCanvas):
         self.ax.set_xmargin(0)
         self.ax.set_ymargin(0)
         self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        y_top = row_h * 0.5
-        y_bot = -(turns - 1) * row_h - row_h * 0.5
-        self.ax.set_xlim(0.0, seg_len_mm)
-        self.ax.set_ylim(y_bot, y_top)
-        self.set_full_limits((0.0, seg_len_mm), (y_bot, y_top))
+        self.ax.set_xlim(*geom["xlim"])
+        self.ax.set_ylim(*geom["ylim"])
+        self.set_full_limits(geom["xlim"], geom["ylim"])
         self.draw_idle()
 
     def plot_aty(
