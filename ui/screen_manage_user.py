@@ -593,8 +593,9 @@ class ManageUserScreen(QWidget):
 
     # ---- data layer ----
     def _load_users(self) -> List[Dict]:
-        """Liest alle Benutzer aus tblUser und gibt sie als Liste von Dicts zurück."""
-        return fetch_all('SELECT * FROM [tblUser]', [])
+        """All users without password columns: db/user_admin.load_users (shared with the web app)."""
+        from db import user_admin
+        return user_admin.load_users()
 
     def reload_data(self):
         """Lädt alle Benutzerdaten neu aus der DB (inkl. AccessRight-Map) und baut Modell neu auf."""
@@ -698,19 +699,9 @@ class ManageUserScreen(QWidget):
         id_col = self.model.id_column() or 'ID'
         total = 0
         try:
-            for r in dirty_rows:
-                if id_col not in r:
-                    raise ValueError(
-                        f"Row has no '{id_col}' field; cannot save.")
-                rid = r[id_col]
-                cols = [c for c in self.model.headers() if c !=
-                        id_col and c in r]
-                if not cols:
-                    continue
-                set_sql = ', '.join([f'[{c}] = ?' for c in cols])
-                sql = f'UPDATE [tblUser] SET {set_sql} WHERE [{id_col}] = ?'
-                params = [r[c] for c in cols] + [rid]
-                total += execute(sql, params) or 0
+            from db import user_admin
+            headers = self.model.headers()
+            total = user_admin.save_changes([{c: r[c] for c in headers if c in r} for r in dirty_rows], id_col)
             self._set_status(f'Saved {total} update(s).')
             self.model.clear_dirty()
         except Exception as e:
@@ -723,176 +714,32 @@ class ManageUserScreen(QWidget):
         Legt den Benutzer in tblUser an, setzt Passwort-Hash (Argon2) und
         weist Standard-AccessRight zu. Lädt danach Tabelle neu.
         """
-        """Creates a new user row with sane defaults.
-        """
+        """Creates a new user row with sane defaults (data: db/user_admin, shared with the web app)."""
         try:
-            rows = self._load_users()
-            headers = list(rows[0].keys()) if rows else [
-                'ID', 'First Name', 'Last Name', 'Username', 'AccessRights', 'Active', 'Colour'
-            ]
-
-            # Exclude ID and any *legacy* password columns from INSERT.
-            # We DO include pw_hash because in MySQL it's typically NOT NULL.
-            exclude = set()
-            for h in headers:
-                ck = _canon(h)
-                if ck == 'id' or ck in {"pw", "password", "pass", "passwd"}:
-                    exclude.add(h)
-
-            # Identify pw_hash column (case/alias tolerant)
-            pw_hash_col = None
-            for h in headers:
-                if _canon(h) in {"pwhash", "pw_hash", "passwordhash", "password_hash", "passworthash"}:
-                    pw_hash_col = h
-                    break
-
-            if not pw_hash_col:
-                raise ValueError('tblUser has no pw_hash column (required for creating a new user).')
-
-            # Build a unique default username (respect DB column length)
-            existing_usernames = set()
-            for r in rows:
-                for h in r.keys():
-                    if _canon(h) == 'username':
-                        if r.get(h):
-                            existing_usernames.add(str(r.get(h)).strip().lower())
-                        break
-
-            # Determine maximum allowed username length from information_schema
-            # (fallback: 32). information_schema is MySQL-only (no SQLite
-            # equivalent, unlike db.connection.table_exists()/get_columns_map()
-            # which have an explicit SQLite branch) - skip it outright in
-            # offline mode instead of relying on the query failing into the
-            # except below, which used to silently mask the real reason.
-            max_len = 32
-            if not is_offline_mode():
-                try:
-                    rlen = fetch_all(
-                        """
-                        SELECT CHARACTER_MAXIMUM_LENGTH AS maxlen
-                        FROM information_schema.columns
-                        WHERE table_schema = DATABASE()
-                          AND table_name = 'tbluser'
-                          AND LOWER(column_name) = 'username'
-                        LIMIT 1
-                        """,
-                        [],
-                    )
-                    if rlen and (rlen[0].get('maxlen') is not None or rlen[0].get('MAXLEN') is not None):
-                        raw = rlen[0].get('maxlen') if rlen[0].get('maxlen') is not None else rlen[0].get('MAXLEN')
-                        max_len = int(raw)
-                except Exception:
-                    pass
-
-            base = 'newuser'
-            # Ensure base itself fits
-            if max_len and len(base) > max_len:
-                base = base[:max_len]
-
-            def _make_candidate(n: int) -> str:
-                suffix = '' if n <= 1 else str(n)
-                if not max_len:
-                    return f"{base}{suffix}"
-                allowed = max_len - len(suffix)
-                if allowed <= 0:
-                    # Extreme case: column too small; keep only rightmost chars of suffix
-                    return suffix[-max_len:]
-                return f"{base[:allowed]}{suffix}"
-
-            i = 1
-            candidate = _make_candidate(i)
-            # Avoid infinite loop if column is absurdly short
-            guard = 0
-            while candidate.lower() in existing_usernames and guard < 10_000:
-                i += 1
-                candidate = _make_candidate(i)
-                guard += 1
-            if candidate.lower() in existing_usernames:
-                raise ValueError('Could not generate a unique Username within the column length constraint.')
+            from db import user_admin
+            candidate = user_admin.next_username()
 
             # Ask for an initial password (pw_hash is typically NOT NULL)
             pw, ok = QInputDialog.getText(
-                self,
-                'New User – Set Password',
-                f'Enter an initial password for "{candidate}":',
-                QLineEdit.Password,
-                ''
-            )
+                self, 'New User – Set Password', f'Enter an initial password for "{candidate}":',
+                QLineEdit.Password, '')
             if not ok:
                 return
-            pw = (pw or '').strip()
-            if not pw:
+            if not (pw or '').strip():
                 QMessageBox.warning(self, 'New User', 'Password cannot be empty.')
                 return
-            if pw.lower() == candidate.lower():
+            if (pw or '').strip().lower() == candidate.lower():
                 QMessageBox.warning(self, 'New User', 'Password must not be the same as the username.')
                 return
-
-            rep, ok2 = QInputDialog.getText(
-                self,
-                'New User – Set Password',
-                'Repeat the password:',
-                QLineEdit.Password,
-                ''
-            )
+            rep, ok2 = QInputDialog.getText(self, 'New User – Set Password', 'Repeat the password:',
+                                            QLineEdit.Password, '')
             if not ok2:
                 return
-            rep = (rep or '').strip()
-            if pw != rep:
-                QMessageBox.warning(self, 'New User', 'Passwords do not match.')
+            problem = user_admin.check_new_password(candidate, pw, rep)
+            if problem:
+                QMessageBox.warning(self, 'New User', problem)
                 return
-
-            # Hash the password (Argon2)
-            from db.connection import hash_password
-            pw_hash = hash_password(pw)
-
-            # Default access right = smallest ID
-            default_access_id = None
-            if self._access_id2name:
-                default_access_id = sorted(self._access_id2name.keys())[0]
-            if default_access_id is None:
-                default_access_id = 1
-
-            cols: List[str] = []
-            values: List = []
-            for c in headers:
-                if c in exclude:
-                    continue
-                k = _canon(c)
-
-                val = None
-                if k in {'firstname', 'first_name', 'first'}:
-                    val = ''
-                elif k in {'lastname', 'last_name', 'surname', 'last'}:
-                    val = ''
-                elif k == 'username':
-                    val = candidate
-                elif c == pw_hash_col:
-                    val = pw_hash
-                elif k in {'accessrights', 'rights', 'role'}:
-                    val = default_access_id
-                elif k == 'active':
-                    val = 1
-                elif k in {'colour', 'color'}:
-                    val = ''
-                elif c == pw_hash_col:
-                    val = pw_hash
-                else:
-                    # Let Access defaults kick in when possible
-                    val = None
-
-                # Only include columns we explicitly set
-                if val is not None:
-                    cols.append(c)
-                    values.append(val)
-
-            if not cols:
-                raise ValueError('Could not determine insertable columns for tblUser.')
-
-            placeholders = ','.join(['?'] * len(cols))
-            cols_sql = ', '.join([f'[{c}]' for c in cols])
-            sql = f'INSERT INTO [tblUser] ({cols_sql}) VALUES ({placeholders})'
-            new_id = execute_insert(sql, values)
+            new_id = user_admin.create_user(candidate, pw)
 
             self.reload_data()
             if new_id is not None:
@@ -945,32 +792,22 @@ class ManageUserScreen(QWidget):
         )
         if not ok:
             return
-        pw = (pw or '').strip()
-        if not pw:
+        if not (pw or '').strip():
             QMessageBox.warning(self, 'Reset Password', 'Password cannot be empty.')
             return
-        if pw.lower() == username.lower():
+        if (pw or '').strip().lower() == username.lower():
             QMessageBox.warning(self, 'Reset Password', 'Password must not be the same as the username.')
             return
-
-        rep, ok2 = QInputDialog.getText(
-            self,
-            'Reset Password',
-            'Repeat the new password:',
-            QLineEdit.Password,
-            ''
-        )
+        rep, ok2 = QInputDialog.getText(self, 'Reset Password', 'Repeat the new password:', QLineEdit.Password, '')
         if not ok2:
             return
-        rep = (rep or '').strip()
-        if pw != rep:
-            QMessageBox.warning(self, 'Reset Password', 'Passwords do not match.')
+        from db import user_admin   # rules + Argon2 hash shared with the web app
+        problem = user_admin.check_new_password(username, pw, rep)
+        if problem:
+            QMessageBox.warning(self, 'Reset Password', problem)
             return
-
-        # Use dedicated DB helper when available (Argon2 hash)
         try:
-            from db.connection import update_user_password  # local import avoids cycles
-            if update_user_password(username, pw):
+            if user_admin.reset_password(username, pw):
                 QMessageBox.information(self, 'Reset Password', f'Password updated for "{username}".')
                 self._set_status(f'Password reset for {username}.')
             else:
@@ -1149,9 +986,8 @@ class ManageUserScreen(QWidget):
         if QMessageBox.question(self, 'Confirm Delete', f'Delete {len(ids)} user(s)?') != QMessageBox.Yes:
             return
         try:
-            placeholders = ','.join(['?'] * len(ids))
-            sql = f'DELETE FROM [tblUser] WHERE [{id_col}] IN ({placeholders})'
-            execute(sql, ids)
+            from db import user_admin
+            user_admin.delete_users(ids, id_col)
             self.reload_data()
             self._set_status(f'Deleted {len(ids)} user(s).')
         except Exception as e:
