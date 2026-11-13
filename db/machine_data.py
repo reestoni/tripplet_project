@@ -14,8 +14,10 @@ rows (QSettings) stay in Qt.
     md.cells[r][c] -> (raw value, CellBinding | GroupCellBinding | None)
     display_text(md, r, c, jets.map, housings.map) -> text the desktop shows
 
-Only the R&D Machine Data tab (RDSetting = 1) still builds inside
-ui/machine_tab.py; it gets fields_rd / col_specs / trial_rows from here.
+The R&D Machine Data tab (RDSetting = 1) is built on the same columns:
+
+    rd = build_rd_machine_data(md)               # RDMachineData, rd.visible = tab shown
+    rd_display_text(rd, r, c, jets.map, housings.map), rd_tooltip(rd, r, c, ...)
 """
 from __future__ import annotations
 
@@ -540,6 +542,7 @@ class MachineData:
     has_groups: bool = False
     trial_rows: List[Dict[str, Any]] = field(default_factory=list)   # tblTrial rows (+ JetName)
     settings_cols_map: Dict[str, str] = field(default_factory=dict)
+    reference_names: Dict[int, str] = field(default_factory=dict)    # TrialID -> name of the reference samples
 
 
 def view_mode_flags(view_mode: str) -> Tuple[bool, bool]:
@@ -556,7 +559,7 @@ def build_machine_data(st: SeriesTrials, view_mode: str = "single",
     machine_id = cache.get("machine_id")
     use_yarn_use_grouping, compact_mode = view_mode_flags(view_mode)
     md = MachineData(series_id=st.series_id, view_mode=view_mode, machine_id=machine_id,
-                     has_groups=bool(cache.get("has_groups", False)))
+                     has_groups=bool(cache.get("has_groups", False)), reference_names=st.reference_names)
 
     if not table_exists("tblMachineFields"):
         md.message = "Mapping table 'tblMachineFields' not found."
@@ -1062,7 +1065,7 @@ def build_machine_data(st: SeriesTrials, view_mode: str = "single",
     ]
 
     md.columns = [_column_info(cs, trial_hdr_vals[c + 1], ply_hdr_vals[c + 1], ply_tooltip_vals[c + 1],
-                               ply_colour_vals[c + 1], st)
+                               ply_colour_vals[c + 1], st.reference_names)
                   for c, cs in enumerate(col_specs)]
 
     _fill_cells(md, cache, col_specs, field_map, titles_fixed, reserved_originals,
@@ -1120,14 +1123,14 @@ def build_machine_data(st: SeriesTrials, view_mode: str = "single",
 
 
 def _column_info(cs: Dict, trial_label: str, ply_label: str, ply_tooltip: str, colour: str,
-                 st: SeriesTrials) -> Dict[str, Any]:
+                 reference_names: Dict[int, str]) -> Dict[str, Any]:
     sr = cs.get("sr")
     sr_all = cs.get("sr_all") if cs.get("is_group") else ([sr] if sr else [])
     return {
         "trial_id": cs["trial_id"],
         "vno": cs["vno"],
         "trial_label": trial_label,                        # header row 0 ("V12" / "REF ...")
-        "reference": st.reference_names.get(int(cs["trial_id"])),
+        "reference": reference_names.get(int(cs["trial_id"])),
         "ply": cs.get("ply") or "",                        # "Ply 1" / yarn use name (groups)
         "ply_label": ply_label,                            # header row 1 as shown ("div." in compact)
         "ply_tooltip": ply_tooltip,
@@ -1422,3 +1425,443 @@ def display_text(md: MachineData, r: int, c: int, jets_map: Optional[Dict[Any, s
     if r in md.dropdown_rows:
         return id_display(md.dropdown_rows[r], internal)
     return internal
+
+
+# --------------------------------------------------------------------------- R&D Machine Data tab
+# Moved out of ui/machine_tab.py (build_rd_machine_tab_impl) on 2026-11-13; queries and
+# rules unchanged. Rows = the 4 fixed rows + the RDSetting = 1 fields of the machine,
+# columns = those of the Machine Data tab (same view mode, same col_specs).
+RD_FIXED_KEYS = ["housing", "jet", "jetplate", "airpressure"]
+
+# Tooltip of the "W0-W1 OF (%)" row: Speed Shaft 2 / Shaft 1 DR x (100 + OF) / 100
+OF_SPEED_KEY = "speedshaft2mmin"      # Machine Data row (title_key)
+OF_DR_KEY = "shaft1dr"                # Machine Data row (title_key)
+OF_KEYS = ("w0w1of%", "w0w1of")       # R&D row (title_key), first one found wins
+
+
+@dataclass
+class RDMachineData:
+    """R&D Machine Data (tblMachineFields.RDSetting = 1) of one series. Built on a MachineData:
+    same columns (col_specs of its view mode). Row/column indexes are 0-based data indexes
+    (no header rows); rows = Housing, Jet, Jet Plate Number, Air Pressure + the R&D fields.
+    No read-only rows, no hidden rows, no Custom Group row."""
+    series_id: Any = None
+    machine_id: Any = None
+    view_mode: str = "single"
+    visible: bool = False                            # tab shown (the machine has RDSetting = 1 fields)
+    fields_rd: List[Dict[str, Any]] = field(default_factory=list)    # tblMachineFields rows (RDSetting = 1)
+    field_map: List[Dict[str, Any]] = field(default_factory=list)    # dynamic rows: Title/ColName/StorageTable/LookupTable
+    titles_fixed: List[str] = field(default_factory=list)            # the 4 fixed row titles
+    row_titles: List[str] = field(default_factory=list)
+    row_keys: List[Optional[str]] = field(default_factory=list)      # DB column lower case (Knowledge Base links)
+    validators: List[Optional[str]] = field(default_factory=list)    # canon_rule per row (onlyInteger, dropdown:tbl, ...)
+    read_only_rows: List[int] = field(default_factory=list)          # always empty
+    dropdown_rows: Dict[int, Dict[Any, str]] = field(default_factory=dict)   # row -> {id: name} (int and str keys)
+    dropdown_lists: Dict[int, List[Tuple[int, str]]] = field(default_factory=dict)  # row -> [(id, name)] A-Z
+    col_specs: List[Dict[str, Any]] = field(default_factory=list)    # = MachineData.col_specs (full DB rows)
+    columns: List[Dict[str, Any]] = field(default_factory=list)      # slim, JSON-friendly column info
+    header_rows: List[Dict[str, Any]] = field(default_factory=list)  # trial row + ply row (index 0 = title column)
+    cells: List[List[Tuple[Any, Any]]] = field(default_factory=list)  # [row][col] = (raw value, CellBinding | None)
+    cell_tooltips: Dict[Tuple[int, int], str] = field(default_factory=dict)  # always empty
+    cell_alerts: Dict[Tuple[int, int], str] = field(default_factory=dict)    # always empty
+    trial_spans: List[Tuple[int, int]] = field(default_factory=list)  # (first data col, number of cols)
+    trial_wide_rows: List[int] = field(default_factory=list)         # one cell per trial (spanned)
+    housing_rows: Set[int] = field(default_factory=set)              # rows whose title contains "housing"
+    jet_rows: Set[int] = field(default_factory=set)                  # rows whose title contains "jet"
+    of_row: Optional[int] = None                                     # "W0-W1 OF" row (speed tooltip)
+    of_speed_tooltips: Dict[int, str] = field(default_factory=dict)  # col -> "Speed: N m/min" (stored values)
+
+
+def title_key(title: str) -> str:
+    """Row title lower case without " _()-/" (the OF speed tooltip finds its rows by it)."""
+    n = title.lower()
+    for ch in " _()-/":
+        n = n.replace(ch, "")
+    return n
+
+
+def float_by_title(row_titles: List[str], key: str, matrix: List[List[Any]], col: int) -> Optional[float]:
+    """Value of the first row with title_key == key in column col as float (None = missing/no number)."""
+    for i, t in enumerate(row_titles or []):
+        if title_key(t) == key:
+            if 0 <= i < len(matrix) and 0 <= col < len(matrix[i]):
+                try:
+                    return float(matrix[i][col])
+                except Exception:
+                    return None
+    return None
+
+
+def of_speed_tooltip(machine_titles: List[str], machine_matrix: List[List[Any]],
+                     rd_titles: List[str], rd_matrix: List[List[Any]], col: int) -> Optional[str]:
+    """Tooltip of the OF row: "Speed: N m/min" = Speed Shaft 2 / Shaft 1 DR x (100 + OF) / 100,
+    None if a value is missing or the DR is 0. The matrices hold the cell texts ([row][col])."""
+    speed = float_by_title(machine_titles, OF_SPEED_KEY, machine_matrix, col)
+    dr = float_by_title(machine_titles, OF_DR_KEY, machine_matrix, col)
+    of_val = float_by_title(rd_titles, OF_KEYS[0], rd_matrix, col)
+    if of_val is None:
+        of_val = float_by_title(rd_titles, OF_KEYS[1], rd_matrix, col)
+    if speed is None or dr is None or of_val is None or dr == 0:
+        return None
+    result = speed / dr * (100 + of_val) / 100
+    return f"Speed: {int(round(result))} m/min"
+
+
+def trial_spans(col_specs: List[Dict]) -> List[Tuple[int, int]]:
+    """[(first data col, number of cols)] - one group per trial (consecutive columns)."""
+    out: List[Tuple[int, int]] = []
+    _last_tid = None
+    _grp_start = 0
+    _grp_count = 0
+    for ci, cs in enumerate(col_specs):
+        tid = cs["trial_id"]
+        if tid != _last_tid:
+            if _grp_count > 0:
+                out.append((_grp_start, _grp_count))
+            _grp_start = ci
+            _grp_count = 1
+            _last_tid = tid
+        else:
+            _grp_count += 1
+    if _grp_count > 0:
+        out.append((_grp_start, _grp_count))
+    return out
+
+
+def build_rd_machine_data(md: MachineData, cache: Optional[Dict[str, Any]] = None,
+                          reference_names: Optional[Dict[int, str]] = None) -> RDMachineData:
+    """Everything the R&D Machine Data tab shows, on the columns of md. Not visible when
+    md has no table (message) or no trials - the desktop then removes the tab as well.
+    cache = the one passed to build_machine_data (only trial_cols_map is used)."""
+    if md.message is not None or not md.col_specs:
+        return RDMachineData(series_id=md.series_id, machine_id=md.machine_id, view_mode=md.view_mode,
+                             fields_rd=list(md.fields_rd))
+    rd = rd_machine_data_from(md.fields_rd, md.col_specs, md.settings_cols_map, cache,
+                              md.reference_names if reference_names is None else reference_names,
+                              series_id=md.series_id, machine_id=md.machine_id, view_mode=md.view_mode)
+    if rd.of_row is not None:
+        m_matrix = [[_text(v) for v, _b in row] for row in md.cells]
+        rd_matrix = [[_text(v) for v, _b in row] for row in rd.cells]
+        for c in range(len(rd.col_specs)):
+            tip = of_speed_tooltip(md.row_titles, m_matrix, rd.row_titles, rd_matrix, c)
+            if tip:
+                rd.of_speed_tooltips[c] = tip
+    return rd
+
+
+def rd_machine_data_from(fields_rd: List[Dict], col_specs: List[Dict], settings_cols_map: Dict[str, str],
+                         cache: Optional[Dict[str, Any]] = None,
+                         reference_names: Optional[Dict[int, str]] = None, *,
+                         series_id: Any = None, machine_id: Any = None,
+                         view_mode: str = "single") -> RDMachineData:
+    """build_rd_machine_data from the pieces the desktop passes (MachineData.fields_rd /
+    col_specs / settings_cols_map). Leaves of_speed_tooltips empty (the desktop computes
+    it live from both models)."""
+    cache = cache or {}
+    reference_names = reference_names or {}
+    rd = RDMachineData(series_id=series_id, machine_id=machine_id, view_mode=view_mode,
+                       visible=bool(fields_rd), fields_rd=list(fields_rd or []), col_specs=col_specs)
+    if not fields_rd:
+        # Keine R&D-Felder -> Tab bleibt versteckt
+        return rd
+
+    trial_cols = get_columns_map("tblTrial")
+
+    # Fixe Titel (gleiche wie Machine Data)
+    titles_fixed = [FIX_HOUSING, FIX_JET, FIX_PLATE, FIX_AIR]
+    rd.titles_fixed = titles_fixed
+
+    reserved_titles = [
+        "Versuchsnummer", "Housing",
+        "Jet", "Jet Name",
+        "JetPlate", "Jet Plate Number",
+        "Air Pressure (bar)",
+        "Yarn Use", "YarnUse", "YarnUseID",
+    ]
+    reserved_norm = {norm(x) for x in reserved_titles}
+    reserved_validators: Dict[str, Optional[str]] = {FIX_PLATE: None, FIX_AIR: None}
+    reserved_originals: Dict[str, Optional[str]] = {FIX_PLATE: None, FIX_AIR: None}
+    reserved_norm.add(norm(FIX_HOUSING))
+
+    seen_norm_titles: set = set()
+    field_map: List[Dict[str, Optional[str]]] = []
+    field_validators: List[Optional[str]] = []
+
+    for f in fields_rd:
+        disp = str(f.get("FieldName") or "").strip()
+        orig = str(f.get("OriginalName") or "").strip()
+        ff = canon_rule((f.get("FieldFunction") or "").strip() or None)
+        if not disp:
+            continue
+        if ff == "hidden":
+            continue
+
+        disp_norm = norm(disp)
+        if disp_norm in reserved_norm:
+            if disp_norm in {norm(FIX_PLATE), norm("JetPlateNumber"), norm("JetPlate")}:
+                reserved_validators[FIX_PLATE] = ff
+                reserved_originals[FIX_PLATE] = orig or reserved_originals[FIX_PLATE]
+            elif disp_norm in {norm(FIX_AIR), norm("AirPressure")}:
+                reserved_validators[FIX_AIR] = ff
+                reserved_originals[FIX_AIR] = orig or reserved_originals[FIX_AIR]
+            continue
+
+        if disp_norm in seen_norm_titles:
+            continue
+
+        col = None
+        if orig:
+            col = trial_cols.get(orig.lower()) or resolve_field([orig], trial_cols)
+        if not col and disp:
+            col = trial_cols.get(disp.lower()) or resolve_field([disp], trial_cols)
+
+        lookup_table = None
+        if ff and ff.lower().startswith("dropdown:"):
+            lookup_table = ff[len("dropdown:"):].strip() or None
+
+        field_map.append({
+            "Title": disp,
+            "ColName": col or orig or disp,
+            "StorageTable": str(f.get("StorageTable") or "tbltrial").strip().lower(),
+            "LookupTable": lookup_table,
+        })
+        field_validators.append(ff)
+        seen_norm_titles.add(disp_norm)
+    rd.field_map = field_map
+
+    row_titles = titles_fixed + [f["Title"] for f in field_map]
+    rd.row_titles = row_titles
+    # row keys (DB column, lower case) for the Knowledge Base links (ui/kb_links.py)
+    rd.row_keys = (list(RD_FIXED_KEYS)
+                   + [str(f.get("ColName") or "").lower() for f in field_map])
+    row_validators: List[Optional[str]] = [None] * len(row_titles)
+    row_validators[2] = reserved_validators.get(FIX_PLATE)
+    row_validators[3] = reserved_validators.get(FIX_AIR)
+    for i, ff in enumerate(field_validators, start=len(titles_fixed)):
+        row_validators[i] = ff
+    rd.validators = row_validators
+
+    # Dropdown-Maps aufbauen (own query per lookup table, not the Machine Data cache)
+    dropdown_rows: Dict[int, Dict[Any, str]] = {}
+    for i, fdef in enumerate(field_map):
+        lt = fdef.get("LookupTable")
+        if not lt:
+            continue
+        row_idx = len(titles_fixed) + i
+        lk_map: Dict[Any, str] = {}
+        try:
+            if table_exists(lt):
+                lk_cmap = get_columns_map(lt)
+                lk_id = resolve_field(["ID"], lk_cmap) or "ID"
+                lk_name = resolve_field(
+                    ["DiscName", "Name", "Bezeichnung", "Caption",
+                     "HousingName", "Jet", "JetName", "MaterialName",
+                     "YarnName", "Description", "Label"],
+                    lk_cmap)
+                if lk_name:
+                    lk_rows = fetch_all(
+                        f"SELECT [{lk_id}] AS LID, [{lk_name}] AS LName "
+                        f"FROM {lt} ORDER BY [{lk_name}] ASC"
+                    )
+                    for lk in lk_rows:
+                        lid = lk.get("LID")
+                        lname = str(lk.get("LName") or "")
+                        if lid is None:
+                            continue
+                        try:
+                            lk_map[int(lid)] = lname
+                        except Exception:
+                            pass
+                        lk_map[str(lid)] = lname
+        except Exception:
+            pass
+        if lk_map:
+            dropdown_rows[row_idx] = lk_map
+    rd.dropdown_rows = dropdown_rows
+    # dropdown entries (desktop: LookupComboDelegate) - int keys only, A-Z
+    for row_idx, lk_map in dropdown_rows.items():
+        lk_list = [(k, v) for k, v in lk_map.items() if isinstance(k, int)]
+        lk_list.sort(key=lambda x: x[1])
+        rd.dropdown_lists[row_idx] = lk_list
+
+    # Header-Zeilen (ply row: the raw ply label in every view mode, own yarn colour per column)
+    trial_hdr_vals = [""]
+    ply_hdr_vals = [""]
+    ply_tooltip_vals = [""]
+    for cs in col_specs:
+        trial_hdr_vals.append(trial_hdr_label(cs, reference_names))
+        ply_hdr_vals.append(cs["ply"])
+        ply_tooltip_vals.append(cs.get("yarn_name") or "")
+    ply_colour_vals = [""] + [cs.get("yarn_colour") or "" for cs in col_specs]
+
+    rd.header_rows = [
+        {"values": trial_hdr_vals, "bg": None, "fg": None},
+        {"values": ply_hdr_vals, "bg": None, "fg": None, "tooltips": ply_tooltip_vals,
+         "colours": ply_colour_vals},
+    ]
+    rd.columns = [_column_info(cs, trial_hdr_vals[c + 1], ply_hdr_vals[c + 1], ply_tooltip_vals[c + 1],
+                               ply_colour_vals[c + 1], reference_names)
+                  for c, cs in enumerate(col_specs)]
+
+    _fill_rd_cells(rd, cache, col_specs, field_map, titles_fixed, reserved_originals, settings_cols_map)
+
+    # one cell per trial: Housing, Jet, Plate, Air Pressure + all tblTrial fields
+    rd.trial_spans = trial_spans(col_specs)
+    rd.trial_wide_rows = [0, 1, 2, 3]
+    for offset, fdef in enumerate(field_map):
+        if fdef.get("StorageTable", "tbltrial") != "tbltrialsettings":
+            rd.trial_wide_rows.append(len(titles_fixed) + offset)
+
+    # Tooltips: Housing-Zeilen (Bild), Jet-Zeilen (Geometrie), OF-Zeile (Geschwindigkeit)
+    housing_rows = set()
+    of_row_idx = None
+    for i, title in enumerate(row_titles):
+        tl = title.lower()
+        if "housing" in tl:
+            housing_rows.add(i)
+        if "w0" in tl and "w1" in tl and "of" in tl:
+            of_row_idx = i
+    rd.housing_rows = housing_rows
+    rd.of_row = of_row_idx
+
+    jet_rows = set()
+    for i, title in enumerate(row_titles):
+        if "jet" in title.lower():
+            jet_rows.add(i)
+    rd.jet_rows = jet_rows
+    return rd
+
+
+def _fill_rd_cells(rd: RDMachineData, cache: Dict[str, Any], col_specs: List[Dict], field_map: List[Dict],
+                   titles_fixed: List[str], reserved_originals: Dict[str, Optional[str]],
+                   settings_cols_map: Dict[str, str]) -> None:
+    n_rows, n_cols = len(rd.row_titles), len(col_specs)
+    cells: List[List[Tuple[Any, Any]]] = [[(None, None) for _ in range(n_cols)] for _ in range(n_rows)]
+    rd.cells = cells
+
+    def set_cell(r: int, c: int, value: Any, binding: Any) -> None:
+        cells[r][c] = (value, binding)
+
+    # Zellen befüllen (analog zu _build_machine_tab)
+    trial_cols_map = cache.get("trial_cols_map") or get_columns_map("tblTrial")
+
+    jet_plate_col = trial_cols_map.get("jetplate") or trial_cols_map.get("jet_plate")
+    if not jet_plate_col and reserved_originals.get(FIX_PLATE):
+        jet_plate_col = trial_cols_map.get(reserved_originals[FIX_PLATE].lower()) \
+                        or resolve_field([reserved_originals[FIX_PLATE]], trial_cols_map)
+    if not jet_plate_col:
+        jet_plate_col = resolve_field(
+            ["Jet Plate", "JetPlate", "Jet_Plate", "JetPlateNumber", "Jet Plate Number"], trial_cols_map)
+
+    air_press_col = trial_cols_map.get("airpressure") or trial_cols_map.get("air_pressure")
+    if not air_press_col and reserved_originals.get(FIX_AIR):
+        air_press_col = trial_cols_map.get(reserved_originals[FIX_AIR].lower()) \
+                        or resolve_field([reserved_originals[FIX_AIR]], trial_cols_map)
+    if not air_press_col:
+        air_press_col = resolve_field(
+            ["Air Pressure (bar)", "AirPressure(bar)", "AirPressure", "Air_Pressure_bar", "Air Pressure"],
+            trial_cols_map)
+
+    housing_id_col = resolve_field(["HousingID"], trial_cols_map)
+
+    # 0: Housing
+    for c_idx, cs in enumerate(col_specs):
+        trow = cs["trial"]
+        housing_id = trow.get("HousingID") if housing_id_col else None
+        set_cell(
+            0, c_idx, housing_id,
+            CellBinding("tblTrial", "ID", trow.get("ID"), "HousingID") if (
+                        housing_id_col and trow.get("ID")) else None,
+        )
+
+    # 1: Jet
+    for c_idx, cs in enumerate(col_specs):
+        trow = cs["trial"]
+        set_cell(
+            1, c_idx, trow.get("JetID"),
+            CellBinding("tblTrial", "ID", trow.get("ID"), "JetID") if trow.get("ID") else None,
+        )
+
+    # 2: Jet Plate Number
+    for c_idx, cs in enumerate(col_specs):
+        trow = cs["trial"]
+        jp_key = _pick_row_key(trow, jet_plate_col,
+                               ["JetPlate", "jetplate", "Jet_Plate", "jet_plate", "Jet Plate",
+                                "Jet Plate Number", "JetPlateNumber"])
+        jp_field = jet_plate_col or jp_key
+        set_cell(
+            2, c_idx,
+            trow.get(jp_key) if jp_key else None,
+            CellBinding("tblTrial", "ID", trow.get("ID"), jp_field) if (jp_field and trow.get("ID")) else None,
+        )
+
+    # 3: Air Pressure
+    for c_idx, cs in enumerate(col_specs):
+        trow = cs["trial"]
+        ap_key = _pick_row_key(trow, air_press_col,
+                               ["AirPressure", "airpressure", "Air_Pressure", "air_pressure",
+                                "Air Pressure", "Air Pressure (bar)", "AirPressure(bar)", "Air_Pressure_bar"])
+        ap_field = air_press_col or ap_key
+        set_cell(
+            3, c_idx,
+            trow.get(ap_key) if ap_key else None,
+            CellBinding("tblTrial", "ID", trow.get("ID"), ap_field) if (ap_field and trow.get("ID")) else None,
+        )
+
+    # Dynamische Felder (ply fields: the column's first ply "sr", also in the Groups view)
+    start_row = len(titles_fixed)
+    for offset, fdef in enumerate(field_map):
+        r_idx = start_row + offset
+        storage = fdef.get("StorageTable", "tbltrial")
+        colname = fdef["ColName"]
+
+        if storage == "tbltrialsettings" and settings_cols_map:
+            real_col = settings_cols_map.get(colname.lower()) or colname
+            for c_idx, cs in enumerate(col_specs):
+                sr = cs["sr"]
+                val = sr.get(real_col) if sr else None
+                binding = CellBinding("tblTrialSettings", "ID", sr["ID"], real_col) if sr else None
+                set_cell(r_idx, c_idx, val, binding)
+        else:
+            real_col = trial_cols_map.get(str(colname).lower()) or colname
+            for c_idx, cs in enumerate(col_specs):
+                trow = cs["trial"]
+                val = trow.get(real_col)
+                set_cell(
+                    r_idx, c_idx, val,
+                    CellBinding("tblTrial", "ID", trow.get("ID"), real_col) if trow.get("ID") else None,
+                )
+
+
+def rd_display_text(rd: RDMachineData, r: int, c: int, jets_map: Optional[Dict[Any, str]] = None,
+                    housing_map: Optional[Dict[Any, str]] = None) -> str:
+    """Cell text as the desktop shows it: row 0 = housing name, row 1 = jet name, dropdown
+    rows (W3 Jet, W3 Housing, Top Plate ...) = name from rd.dropdown_rows, else the value."""
+    internal = _text(rd.cells[r][c][0])
+    if r == HOUSING_ROW:
+        return id_display(housing_map or {}, internal)
+    if r == JET_ROW:
+        return id_display(jets_map or {}, internal)
+    if r in rd.dropdown_rows:
+        return id_display(rd.dropdown_rows[r], internal)
+    return internal
+
+
+def rd_tooltip(rd: RDMachineData, r: int, c: int, jets_tooltip_map: Optional[Dict[Any, str]] = None,
+               housing_image_map: Optional[Dict[Any, str]] = None) -> str:
+    """Cell tooltip as MachinePivotModel gives it (same order): jet rows -> jet geometry
+    (JetsLookup.tooltip_map, looked up by the stored value), housing rows -> housing image
+    link (HousingLookup.image_map; the desktop shows the picture), OF row -> "Speed: N m/min"."""
+    internal = _text(rd.cells[r][c][0])
+    for rows, lookup in ((rd.jet_rows, jets_tooltip_map), (rd.housing_rows, housing_image_map)):
+        if r in rows and internal not in (None, ""):
+            try:
+                key = int(internal)
+            except Exception:
+                key = internal
+            tip = (lookup or {}).get(key) or (lookup or {}).get(str(key))
+            if tip:
+                return tip
+    if rd.of_row is not None and r == rd.of_row and rd.of_speed_tooltips.get(c):
+        return rd.of_speed_tooltips[c]
+    return rd.cell_tooltips.get((r, c), "")

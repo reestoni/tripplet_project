@@ -121,3 +121,90 @@ def test_real_series_all_view_modes():
     assert out["groups"]["cols"] <= out["single"]["cols"]
     assert out["single"]["fixed"][-2:] == ["Yarn Use", "Spool"]
     assert out["compact"]["fixed"][-1] == "Plies" == out["groups"]["fixed"][-1]
+
+
+# --------------------------------------------------------------------------- R&D Machine Data
+def test_of_speed_tooltip_formula_and_title_key():
+    assert md.title_key("W0-W1 OF (%)") == "w0w1of%"
+    assert md.title_key("Speed Shaft 2 (m/min)") == md.OF_SPEED_KEY
+    m_titles, m_mx = ["Speed Shaft 2 (m/min)", "Shaft 1 DR"], [["600", "600"], ["1.5", "0"]]
+    rd_titles, rd_mx = ["Housing", "W0-W1 OF (%)"], [["", ""], ["3", "3"]]
+    # 600 / 1.5 * 103 / 100 = 412
+    assert md.of_speed_tooltip(m_titles, m_mx, rd_titles, rd_mx, 0) == "Speed: 412 m/min"
+    assert md.of_speed_tooltip(m_titles, m_mx, rd_titles, rd_mx, 1) is None   # DR 0
+    assert md.of_speed_tooltip(m_titles, m_mx, rd_titles, [["", ""], ["", "x"]], 0) is None
+
+
+def test_trial_spans_groups_consecutive_trials():
+    specs = [{"trial_id": 1}, {"trial_id": 1}, {"trial_id": 2}, {"trial_id": 3}, {"trial_id": 3}]
+    assert md.trial_spans(specs) == [(0, 2), (2, 1), (3, 2)]
+    assert md.trial_spans([]) == []
+
+
+def test_rd_without_fields_is_hidden():
+    rd = md.rd_machine_data_from([], [{"trial_id": 1}], {})
+    assert rd.visible is False and rd.row_titles == [] and rd.cells == []
+    empty = md.build_rd_machine_data(md.MachineData(series_id=1, view_mode="single", message="x"))
+    assert empty.visible is False
+
+
+def test_rd_display_and_tooltip():
+    rd = md.RDMachineData(visible=True, row_titles=["Housing", "Jet", "W3 Jet"],
+                          cells=[[(5, None)], [(7, None)], [("2", None)]],
+                          dropdown_rows={2: {2: "J2", "2": "J2"}}, jet_rows={1, 2}, housing_rows={0})
+    assert md.rd_display_text(rd, 0, 0, housing_map={5: "H5"}) == "H5"
+    assert md.rd_display_text(rd, 1, 0, jets_map={"7": "J7"}) == "J7"
+    assert md.rd_display_text(rd, 2, 0) == "J2"
+    assert md.rd_tooltip(rd, 1, 0, jets_tooltip_map={7: "geo"}) == "geo"
+    assert md.rd_tooltip(rd, 0, 0, housing_image_map={"5": "img.png"}) == "img.png"
+    assert md.rd_tooltip(rd, 2, 0) == ""
+
+
+_REAL_RD = r"""
+import json, sys
+from db.connection import fetch_all
+from db import series_tables as stb, machine_data as md
+rows = fetch_all("SELECT S.ID AS S FROM tblTrialSeries S JOIN tblTrial T ON T.TrialSeriesID = S.ID "
+                 "WHERE S.MachineID IN (SELECT MachineID FROM tblMachineFields WHERE RDSetting = 1) "
+                 "GROUP BY S.ID ORDER BY COUNT(*) DESC, S.ID DESC LIMIT 1")
+st = stb.load_trials(rows[0]["S"])
+cache = md.load_machine_cache(st.series_id, st.trial_ids)
+out = {}
+for mode in md.VIEW_MODES:
+    d = md.build_machine_data(st, mode, cache)
+    rd = md.build_rd_machine_data(d, cache)
+    n = len(rd.row_titles)
+    out[mode] = {
+        "visible": rd.visible, "rows": n, "keys": len(rd.row_keys), "val": len(rd.validators),
+        "cells_rows": len(rd.cells), "cells_cols": sorted({len(r) for r in rd.cells}),
+        "cols": len(d.col_specs), "columns": len(rd.columns), "hdr": [len(h["values"]) for h in rd.header_rows],
+        "spans": rd.trial_spans == d.trial_spans, "fixed": rd.titles_fixed, "keys0": rd.row_keys[:4],
+        "trial_hdr": rd.header_rows[0]["values"] == d.header_rows[0]["values"],
+        "same_cols": [c["trial_id"] for c in rd.columns] == [c["trial_id"] for c in d.columns],
+        "rows_ok": all(0 <= r < n for r in list(rd.dropdown_lists) + rd.trial_wide_rows
+                       + sorted(rd.housing_rows) + sorted(rd.jet_rows)),
+        "json": len(json.dumps({"columns": rd.columns, "header_rows": rd.header_rows,
+                                "of": rd.of_speed_tooltips}, default=str)) > 0,
+        "text": md.rd_display_text(rd, n - 1, 0) if rd.cells and rd.cells[0] else "",
+        "tip": md.rd_tooltip(rd, 0, 0) if rd.cells and rd.cells[0] else "",
+    }
+print("PYSIDE", "PySide6" in sys.modules)
+print(json.dumps(out))
+"""
+
+
+def test_real_rd_series_all_view_modes():
+    r = _run(_REAL_RD)
+    if r.returncode != 0:
+        pytest.skip("dev_local not reachable: " + (r.stderr.strip().splitlines() or ["?"])[-1])
+    lines = r.stdout.strip().splitlines()
+    assert lines[0] == "PYSIDE False"
+    out = json.loads(lines[-1])
+    for mode, d in out.items():
+        assert d["visible"] and d["rows"] > 4
+        assert d["rows"] == d["keys"] == d["val"] == d["cells_rows"]
+        assert d["cells_cols"] == [d["cols"]] and d["columns"] == d["cols"]
+        assert d["hdr"] == [d["cols"] + 1, d["cols"] + 1]
+        assert d["spans"] and d["trial_hdr"] and d["same_cols"] and d["rows_ok"] and d["json"]
+        assert d["fixed"] == ["Housing", "Jet", "Jet Plate Number", "Air Pressure (bar)"]
+        assert d["keys0"] == md.RD_FIXED_KEYS
