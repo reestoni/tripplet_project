@@ -170,8 +170,8 @@ class SmartChartScreen(QWidget):
             self.refresh()
 
     def settings(self) -> Dict[str, Any]:
-        return {"filters": [dict(f) for f in self.filters], "ply_scope": self.ply_scope,
-                "mode": "dashboard", "dashboard": self.dashboard.spec}
+        from ui.smart_dashboard_core import view_settings
+        return view_settings(self.filters, self.ply_scope, self.dashboard.spec)
 
     def refresh(self) -> None:
         if self.ds is None:
@@ -250,16 +250,9 @@ class SmartChartScreen(QWidget):
 
     def apply_settings(self, cfg: Dict[str, Any]) -> List[str]:
         """Apply a saved configuration; returns the names of unknown fields."""
-        missing = []
-        known = set(self.ds.fields) if self.ds else set()
-        self.filters = []
-        for f in cfg.get("filters") or []:
-            if f.get("key") in known:
-                self.filters.append(f)
-            else:
-                missing.append(str(f.get("key")))
-        self.ply_scope = cfg.get("ply_scope") if cfg.get("ply_scope") in te.PLY_SCOPES else "any"
-        self.dashboard.set_spec(cfg.get("dashboard"))
+        from ui.smart_dashboard_core import read_view_settings
+        self.filters, self.ply_scope, spec, missing = read_view_settings(cfg, set(self.ds.fields) if self.ds else set())
+        self.dashboard.set_spec(spec)
         self.refresh()
         return missing
 
@@ -557,10 +550,9 @@ class _SaveViewDialog(QDialog):
 
 def _view_kind(cfg: Dict[str, Any]) -> str:
     """'Dashboard · 2 pages · 9 visuals'."""
-    d = cfg.get("dashboard") if isinstance(cfg.get("dashboard"), dict) else {}
-    pages = d.get("pages") or ([{"visuals": d.get("visuals") or []}])
-    n_v = sum(len(p.get("visuals") or []) for p in pages)
-    return f"Dashboard · {len(pages)} page{'s' if len(pages) != 1 else ''} · {n_v} visuals"
+    from ui.smart_dashboard_core import view_kind
+    k = view_kind(cfg)
+    return f"Dashboard · {k['pages']} page{'s' if k['pages'] != 1 else ''} · {k['visuals']} visuals"
 
 
 def _uid():

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from db import trial_explorer as te
+from ui.smart_dashboard_core import filter_hits, make_filter, parse_num, snap
 
 ACCENT = "#1F7A3A"
 INSIDE = QColor("#1F7A3A")
@@ -106,12 +107,7 @@ class HistogramWidget(QWidget):
         p.end()
 
 
-def _snap(v: float) -> float:
-    """Round a dragged value to a readable number."""
-    if v == 0:
-        return 0.0
-    mag = 10 ** (len(str(int(abs(v)))) - 2) if abs(v) >= 10 else 0.1
-    return round(round(v / mag) * mag, 4)
+_snap = snap      # Qt-free in ui/smart_dashboard_core.py (the web uses it too)
 
 
 class AddFilterDialog(QDialog):
@@ -518,35 +514,16 @@ class AddFilterDialog(QDialog):
         if f is None:
             return None
         if f.kind == "num":
-            lo, hi = _parse(self.txt_lo.text()), _parse(self.txt_hi.text())
-            if lo is not None and hi is not None and lo > hi:
-                lo, hi = hi, lo
-            flt: Dict[str, Any] = {"key": f.key, "min": lo, "max": hi}
-            if self.rb_step.isChecked():
-                step = _parse(self.cmb_step.currentText())
-                if step and step > 0:
-                    flt["step"] = step
-            elif self.rb_pick.isChecked():
-                picked = [self.lst_values.item(i).data(Qt.UserRole) for i in range(self.lst_values.count())
-                          if self.lst_values.item(i).checkState() == Qt.Checked]
-                if not picked:
-                    return None
-                flt["only"] = picked
-            return flt
-        p = self._period()
-        if p:
-            flt = {"key": f.key, "period": p}
-            if p == "range":
-                lo, hi = self.cmb_from.currentData() or None, self.cmb_to.currentData() or None
-                if lo and hi and lo > hi:
-                    lo, hi = hi, lo
-                if not lo and not hi:
-                    return None
-                flt.update({"from": lo, "to": hi})
-            return flt
-        vals = [self.lst_cats.item(i).data(Qt.UserRole) for i in range(self.lst_cats.count())
-                if self.lst_cats.item(i).checkState() == Qt.Checked]
-        return {"key": f.key, "values": vals} if vals else None
+            mode = "step" if self.rb_step.isChecked() else "pick" if self.rb_pick.isChecked() else "all"
+            raw = {"min": self.txt_lo.text(), "max": self.txt_hi.text(), "mode": mode,
+                   "step": self.cmb_step.currentText(),
+                   "only": [self.lst_values.item(i).data(Qt.UserRole) for i in range(self.lst_values.count())
+                            if self.lst_values.item(i).checkState() == Qt.Checked]}
+        else:
+            raw = {"period": self._period(), "from": self.cmb_from.currentData(), "to": self.cmb_to.currentData(),
+                   "values": [self.lst_cats.item(i).data(Qt.UserRole) for i in range(self.lst_cats.count())
+                              if self.lst_cats.item(i).checkState() == Qt.Checked]}
+        return make_filter(f, raw)    # rules in ui/smart_dashboard_core.py (web uses them too)
 
     def _update_hits(self) -> None:
         flt = self.current_filter()
@@ -554,15 +531,14 @@ class AddFilterDialog(QDialog):
             self.lbl_hits.setText("")
             self.btn_ok.setEnabled(False)
             return
-        base = self.ds.apply(self.others, self.ply_scope).count
+        h = filter_hits(self.ds, self.others, flt, self.ply_scope)
+        nf = lambda v: f"{v:,}".replace(",", "'")
         if flt is None:
-            self.lbl_hits.setText(f"Tick at least one value. Your other filters leave {base:,} trials.".replace(",", "'"))
+            self.lbl_hits.setText(f"Tick at least one value. Your other filters leave {nf(h['base'])} trials.")
             self.btn_ok.setEnabled(False)
             return
-        n = self.ds.apply(self.others + [flt], self.ply_scope).count
-        what = te.describe_filter(self.field, flt)
-        nf = lambda v: f"{v:,}".replace(",", "'")
-        self.lbl_hits.setText(f"<b>{nf(n)} trials</b> with {html.escape(what)} (of {nf(base)} left by your other filters)")
+        self.lbl_hits.setText(f"<b>{nf(h['n'])} trials</b> with {html.escape(h['text'])} "
+                              f"(of {nf(h['base'])} left by your other filters)")
         self.btn_ok.setEnabled(True)
 
     def _accept(self) -> None:
@@ -573,11 +549,4 @@ class AddFilterDialog(QDialog):
         self.accept()
 
 
-def _parse(t: str) -> Optional[float]:
-    t = (t or "").strip().replace(",", ".")
-    if not t:
-        return None
-    try:
-        return float(t)
-    except ValueError:
-        return None
+_parse = parse_num

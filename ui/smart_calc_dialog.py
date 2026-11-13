@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from db import formula as fm
 from db import trial_explorer as te
+from ui.smart_dashboard_core import calc_definition, calc_preview
 
 
 class CalcFieldDialog(QDialog):
@@ -107,42 +108,29 @@ class CalcFieldDialog(QDialog):
         self.txt.insertPlainText(text)
         self.txt.setFocus()
 
-    def _compile(self):
-        stored = fm.from_display(self.txt.toPlainText(), self.ds.fields.values())
-        compiled, keys = fm.compile_formula(stored, self.ds.fields, exclude=self.key)
-        return stored, compiled, keys
-
     def _preview(self) -> None:
-        try:
-            stored, compiled, keys = self._compile()
-        except fm.FormulaError as e:
-            self.lbl_preview.setText(f"<span style='color:#C62828'>{e}</span>")
+        p = calc_preview(self.ds, self.txt.toPlainText(), self.key)     # ui/smart_dashboard_core.py
+        if p.get("error"):
+            self.lbl_preview.setText(f"<span style='color:#C62828'>{p['error']}</span>")
             self.btn_ok.setEnabled(False)
             return
-        vals = []
-        for t in self.ds.trials:
-            r = fm.evaluate(compiled, {k: _num(self.ds.value(k, t.id)) for k in keys})
-            if r is not None:
-                vals.append(r)
-        if not vals:
+        if not p.get("n"):
             self.lbl_preview.setText("The formula is fine, but no trial has values for all its fields.")
         else:
-            avg = sum(vals) / len(vals)
-            self.lbl_preview.setText(f"<b>{len(vals):,} trials</b> get a value · min {fmt(min(vals))} · "
-                                     f"average {fmt(avg)} · max {fmt(max(vals))}".replace(",", "'"))
+            self.lbl_preview.setText(f"<b>{p['n']:,} trials</b> get a value · min {fmt(p['min'])} · "
+                                     f"average {fmt(p['avg'])} · max {fmt(p['max'])}".replace(",", "'"))
         self.btn_ok.setEnabled(True)
 
     def _accept(self) -> None:
-        name = self.txt_name.text().strip()
-        if not name:
+        if not self.txt_name.text().strip():
             self.txt_name.setFocus()
             return
         try:
-            stored, _c, _k = self._compile()
+            self.result_def = calc_definition(self.ds, self.key, self.txt_name.text(), self.txt_unit.text(),
+                                              self.txt.toPlainText())
         except fm.FormulaError as e:
             QMessageBox.information(self, "Calculated field", str(e))
             return
-        self.result_def = {"key": self.key, "name": name, "unit": self.txt_unit.text().strip(), "formula": stored}
         self.accept()
 
     def _delete(self) -> None:
@@ -151,13 +139,6 @@ class CalcFieldDialog(QDialog):
                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
             self.deleted = True
             self.accept()
-
-
-def _num(v):
-    try:
-        return None if v is None else float(v)
-    except (TypeError, ValueError):
-        return None
 
 
 def fmt(x: float) -> str:
