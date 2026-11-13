@@ -40,25 +40,13 @@ SEGMENT_LEN_MM  = 200.0
 NUM_TURNS       = 20
 DEFAULT_GAP_FACTOR = 2.0
 
-# Farben Dickstellen (rosa/rot)
-DI_COLORS = {
-    "Di11": "#ffd1e6", "Di12": "#ffb3d1", "Di13": "#ff94bd",
-    "Di21": "#ff7aa9", "Di22": "#ff5c94", "Di23": "#ff3d80",
-    "Di31": "#ff1f6b", "Di32": "#e60057", "Di33": "#b30045",
-}
-# Farben Dünnstellen (blau)
-DUE_COLORS = {
-    "Dü11": "#d6ecff", "Dü12": "#b9e0ff", "Dü13": "#9cd4ff",
-    "Dü21": "#7fc8ff", "Dü22": "#62bbff", "Dü23": "#45afff",
-    "Dü31": "#279fff", "Dü32": "#0f87e6", "Dü33": "#065da8",
-}
+# Klassen-Farben und -Schwellen liegen Qt-frei in thickness_classes.py
+# (gemeinsam mit der Web-App)
+from ui.yarnscope.thickness_classes import (  # noqa: E402
+    DI_COLORS, DUE_COLORS, CLASS_THRESHOLDS, garnspiegel_layout as _garnspiegel_layout,
+)
 
 LOAD_SAVED_COLORS_ON_START = False
-
-CLASS_THRESHOLDS = {
-    "Di": {"pct": [10.0, 20.0, 30.0], "mm": [1.0, 2.0, 3.0]},
-    "Dü": {"pct": [10.0, 20.0, 30.0], "mm": [1.0, 2.0, 3.0]},
-}
 
 
 # ------------------ Farbstate ------------------
@@ -233,7 +221,7 @@ class GarnCanvas(FigureCanvas):
 
     def plot_garnspiegel(
         # Zeichnet ein Rohsignal-Garnspiegeldiagramm (ohne Knoten-Markierung).
-        # Für die vollständige Signatur siehe den Funktionskörper.
+        # Geometrie + Klassen: thickness_classes.garnspiegel_layout() (Qt-frei).
         self,
         data_mm_all: np.ndarray,
         gap_factor:      float = DEFAULT_GAP_FACTOR,
@@ -246,101 +234,34 @@ class GarnCanvas(FigureCanvas):
         self.figure.patch.set_facecolor("black")
         self.ax.set_facecolor("black")
 
-        turns = int(num_turns) if num_turns is not None else NUM_TURNS
-        turns = max(1, min(NUM_TURNS, turns))
-        if data_mm_all is None or len(data_mm_all) < turns:
+        lay = _garnspiegel_layout(data_mm_all, gap_factor, show_colors, row_spacing_ref,
+                                  num_turns, mm_per_point)
+        if lay is None:
             self.draw_idle()
             return
-
-        # mm_step aus übergebenem Messabstand ableiten (wie in YarnScope),
-        # nicht aus Array-Länge – sonst stimmen need1/need2/need3 nicht.
-        if mm_per_point is not None and mm_per_point > 0:
-            mm_step = float(mm_per_point)
-            points_per_segment = max(1, int(round(SEGMENT_LEN_MM / mm_step)))
-        else:
-            points_per_segment = max(1, len(data_mm_all) // turns)
-            mm_step = SEGMENT_LEN_MM / float(points_per_segment) if points_per_segment > 0 else MM_PER_POINT
-        segments  = np.split(data_mm_all[:points_per_segment * turns], turns)
-        global_max = float(np.max(data_mm_all))
-        row_spacing_base = float(row_spacing_ref) if row_spacing_ref is not None else global_max
-        row_spacing = row_spacing_base * float(gap_factor)
-        x_mm = np.linspace(0.0, SEGMENT_LEN_MM, points_per_segment, endpoint=False)
+        turns, x_mm, mm_step = lay["turns"], lay["x_mm"], lay["mm_step"]
 
         # Weisse Basisbänder
-        for i, seg in enumerate(segments):
-            seg    = np.asarray(seg, dtype=float)
-            base   = -i * row_spacing
+        for seg, base in zip(lay["segments"], lay["bases"]):
             y_top  = base + seg / 2.0
             y_bot  = base - seg / 2.0
             self.ax.fill_between(x_mm, y_bot, y_top, color="white", linewidth=0)
 
         spans_per_segment = [[] for _ in range(turns)]
-
-        if show_colors:
-            mean_all = float(np.mean(data_mm_all))
-            di_pct   = CLASS_THRESHOLDS["Di"]["pct"]
-            due_pct  = CLASS_THRESHOLDS["Dü"]["pct"]
-            di_len   = CLASS_THRESHOLDS["Di"]["mm"]
-            due_len  = CLASS_THRESHOLDS["Dü"]["mm"]
-
-            def runs(mask):
-                res = []
-                s = None
-                for idx, flag in enumerate(mask):
-                    if flag and s is None:
-                        s = idx
-                    if (not flag or idx == len(mask) - 1) and s is not None:
-                        e = idx if not flag else idx
-                        res.append((s, e))
-                        s = None
-                return res
-
-            need1_di  = max(1, int((di_len[0]  + 1e-9) / mm_step))
-            need2_di  = max(1, int((di_len[1]  + 1e-9) / mm_step))
-            need3_di  = max(1, int((di_len[2]  + 1e-9) / mm_step))
-            need1_due = max(1, int((due_len[0] + 1e-9) / mm_step))
-            need2_due = max(1, int((due_len[1] + 1e-9) / mm_step))
-            need3_due = max(1, int((due_len[2] + 1e-9) / mm_step))
-
-            for i, seg in enumerate(segments):
-                seg  = np.asarray(seg, dtype=float)
-                base = -i * row_spacing
-
-                # Dickstellen
-                b1 = (seg >= (1.0 + di_pct[0]/100.0)*mean_all) & (seg < (1.0 + di_pct[1]/100.0)*mean_all)
-                b2 = (seg >= (1.0 + di_pct[1]/100.0)*mean_all) & (seg < (1.0 + di_pct[2]/100.0)*mean_all)
-                b3 = (seg >= (1.0 + di_pct[2]/100.0)*mean_all)
-                for mask, row in ((b1, '1'), (b2, '2'), (b3, '3')):
-                    for s, e in runs(mask):
-                        L   = e - s + 1
-                        if L < need1_di: continue
-                        col = '1' if L < need2_di else '2' if L < need3_di else '3'
-                        key = f"Di{row}{col}"
-                        if not VISIBILITY_STATE.is_enabled(key): continue
-                        xs    = x_mm[s:e+1]
-                        y_top = base + seg[s:e+1] / 2.0
-                        y_bot = base - seg[s:e+1] / 2.0
-                        color = COLOR_STATE.di_colors.get(key, DI_COLORS.get(key))
-                        self.ax.fill_between(xs, y_bot, y_top, color=color, alpha=0.9, linewidth=0)
-                        spans_per_segment[i].append((float(x_mm[s]), float(x_mm[e] + mm_step), color))
-
-                # Dünnstellen
-                t1 = (seg <= (1.0 - due_pct[0]/100.0)*mean_all) & (seg > (1.0 - due_pct[1]/100.0)*mean_all)
-                t2 = (seg <= (1.0 - due_pct[1]/100.0)*mean_all) & (seg > (1.0 - due_pct[2]/100.0)*mean_all)
-                t3 = (seg <= (1.0 - due_pct[2]/100.0)*mean_all)
-                for mask, row in ((t1, '1'), (t2, '2'), (t3, '3')):
-                    for s, e in runs(mask):
-                        L   = e - s + 1
-                        if L < need1_due: continue
-                        col = '1' if L < need2_due else '2' if L < need3_due else '3'
-                        key = f"Dü{row}{col}"
-                        if not VISIBILITY_STATE.is_enabled(key): continue
-                        xs    = x_mm[s:e+1]
-                        y_top = base + seg[s:e+1] / 2.0
-                        y_bot = base - seg[s:e+1] / 2.0
-                        color = COLOR_STATE.due_colors.get(key, DUE_COLORS.get(key))
-                        self.ax.fill_between(xs, y_bot, y_top, color=color, alpha=0.9, linewidth=0)
-                        spans_per_segment[i].append((float(x_mm[s]), float(x_mm[e] + mm_step), color))
+        for i, spans in enumerate(lay["spans"]):
+            seg, base = lay["segments"][i], lay["bases"][i]
+            for s, e, key in spans:
+                if not VISIBILITY_STATE.is_enabled(key):
+                    continue
+                xs    = x_mm[s:e+1]
+                y_top = base + seg[s:e+1] / 2.0
+                y_bot = base - seg[s:e+1] / 2.0
+                if key.startswith("Di"):
+                    color = COLOR_STATE.di_colors.get(key, DI_COLORS.get(key))
+                else:
+                    color = COLOR_STATE.due_colors.get(key, DUE_COLORS.get(key))
+                self.ax.fill_between(xs, y_bot, y_top, color=color, alpha=0.9, linewidth=0)
+                spans_per_segment[i].append((float(x_mm[s]), float(x_mm[e] + mm_step), color))
 
         # Achsen & Limits
         self.ax.axis("off")
@@ -348,11 +269,7 @@ class GarnCanvas(FigureCanvas):
         self.ax.set_xmargin(0)
         self.ax.set_ymargin(0)
         self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        y_top_first   =  0               + np.max(segments[0])  / 2.0
-        y_bottom_last = -(turns-1) * row_spacing - np.max(segments[-1]) / 2.0
-        y_margin = 0.05 * global_max
-        xlim = (0.0, SEGMENT_LEN_MM)
-        ylim = (y_bottom_last - y_margin, y_top_first + y_margin)
+        xlim, ylim = lay["xlim"], lay["ylim"]
         self.ax.set_xlim(*xlim)
         self.ax.set_ylim(*ylim)
         self.set_full_limits(xlim, ylim)

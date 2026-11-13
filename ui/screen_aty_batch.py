@@ -349,69 +349,10 @@ class _ScanWorker(QRunnable):
 # ---------------------------------------------------------------------------
 def _save_aty_to_db(trial_id: int, db_vals: Dict[str, Any],
                     tdms_path: Optional[Path] = None) -> bool:
-    """Schreibt ATY-Analyse-Ergebnisse in tblLaborATYoMat (INSERT oder UPDATE).
-
-    GlobalID identifiziert diese eine Zeile stabil ueber Merges hinweg
-    (Offline-Arbeit + spaeteres Zusammenfuehren zweier DBs), nicht den Trial
-    selbst (der hat sein eigenes GlobalID in tblTrial). Beim INSERT frisch
-    vergeben (new_global_id(), UUID); beim UPDATE per COALESCE nur dann
-    (neu) gesetzt, wenn die Zeile noch keins hat (z.B. Altzeilen von vor
-    2026-08-13) -- ein bestehendes GlobalID wird nie ueberschrieben, sonst
-    wuerde ein Merge-Schluessel unter der Zeile wegrutschen. UserID wird bei
-    jedem Speichern (INSERT wie UPDATE) auf den aktuell eingeloggten User
-    gesetzt.
-    """
-
-    def _v(key):
-        v = db_vals.get(key)
-        if key == "ParamsVersion":  # only non-numeric column -- keep as string
-            return str(v) if v is not None else None
-        try:
-            f = float(v) if v is not None else None
-        except Exception:
-            return None
-        # NaN/Inf reach here whenever a metric legitimately couldn't be
-        # computed (e.g. Bin1HeightMedianUm with zero Bin1 loops, or
-        # Ellipticity* on a trial with zero detected peaks) - mysql-connector
-        # renders a bare Python NaN as the unquoted SQL token `nan`, not a
-        # numeric literal, which MySQL then parses as a column reference
-        # ("Unknown column 'nan' in 'field list'"). Store NULL instead.
-        if f is not None and not np.isfinite(f):
-            return None
-        return f
-
-    ts = _dt.now().strftime("%Y-%m-%d %H:%M:%S")
-    params = [_v(c) for c in _ALL_DB_COLS]
-    user_id = (getattr(app_meta, "current_user", {}) or {}).get("id")
-
-    try:
-        exists = bool(fetch_all(
-            "SELECT 1 FROM tblLaborATYoMat WHERE TrialID = ?", (trial_id,)
-        ))
-    except Exception:
-        exists = False
-
-    try:
-        if exists:
-            set_parts = [f"{c}=?" for c in _ALL_DB_COLS]
-            sql = (
-                f"UPDATE tblLaborATYoMat SET {', '.join(set_parts)}, "
-                f"Timestamp=?, UserID=?, GlobalID=COALESCE(GlobalID, ?) WHERE TrialID=?"
-            )
-            execute(sql, params + [ts, user_id, new_global_id(), trial_id])
-        else:
-            cols_str = ", ".join(_ALL_DB_COLS)
-            ph = ", ".join(["?"] * len(_ALL_DB_COLS))
-            sql = (
-                f"INSERT INTO tblLaborATYoMat "
-                f"(TrialID, GlobalID, {cols_str}, Timestamp, UserID) "
-                f"VALUES (?, ?, {ph}, ?, ?)"
-            )
-            execute(sql, [trial_id, new_global_id()] + params + [ts, user_id])
-        return True
-    except Exception as e:
-        print(f"[ATY Batch] DB-Fehler TrialID={trial_id}: {e}")
-        return False
+    """Writes ATY results into tblLaborATYoMat - Qt-free in
+    ui/yarnscope/aty_service.save_db_row() (shared with the web app)."""
+    from ui.yarnscope import aty_service
+    return aty_service.save_db_row(trial_id, db_vals)
 
 
 # ---------------------------------------------------------------------------
@@ -999,17 +940,8 @@ class ATYBatchScreen(QWidget):
             QApplication.processEvents()
 
             try:
-                from ui.yarnscope.dty_tdms_reader import read_aty_signal, read_step_mm_from_tdms
-
-                arr, ell = read_aty_signal(str(row.tdms_path))
-                mm_pp = read_step_mm_from_tdms(str(row.tdms_path))
-                if arr is None or len(arr) == 0:
-                    raise ValueError("No signal in the TDMS file.")
-                if mm_pp is None or mm_pp <= 0:
-                    mm_pp = 0.25
-
-                metrics = _core_analyze_trial(arr, float(mm_pp), ellipticity_pct=ell)
-                db_vals = _core_to_db_row(metrics)
+                from ui.yarnscope import aty_service
+                db_vals = aty_service.analyse_core_file(row.tdms_path)
 
                 row.db_vals = db_vals
 

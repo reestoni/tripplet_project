@@ -65,6 +65,9 @@ from ui.yarnscope.aty_core_analysis import (
     RADAR_LABELS as _ATY_RADAR_LABELS,
 )
 from ui.theme import get_accent, CARD_BG, LIGHT_BG, TEXT
+# Berechnungen/Daten Qt-frei (gemeinsam mit der Web-App)
+from ui.yarnscope import aty_service as _asvc
+from ui.yarnscope import thickness_classes as _tc
 from ui.widgets.friendly_error import show_error
 
 # ---------------------------------------------------------------------------
@@ -72,33 +75,13 @@ from ui.widgets.friendly_error import show_error
 # ---------------------------------------------------------------------------
 
 def _aty_tdms_base():
-    return Path(r"H:\Technik\TrippleT\ATYtdms")
+    return _asvc.tdms_base()
 
 def _aty_series_has_tdms(series_id: int) -> bool:
-    base = _aty_tdms_base()
-    if not base.exists():
-        return False
-    prefix = f"{series_id}_"
-    try:
-        for f in base.iterdir():
-            if f.suffix.lower() == ".tdms" and f.stem.startswith(prefix):
-                return True
-    except Exception:
-        pass
-    return False
+    return _asvc.series_has_tdms(series_id)
 
 def _aty_find_tdms(series_id: int, versuch_no: int):
-    base = _aty_tdms_base()
-    if not base.exists():
-        return None
-    prefix = f"{series_id}_{versuch_no}_"
-    try:
-        for f in base.iterdir():
-            if f.suffix.lower() == ".tdms" and f.stem.startswith(prefix):
-                return f
-    except Exception:
-        pass
-    return None
+    return _asvc.find_tdms(series_id, versuch_no)
 
 # ---------------------------------------------------------------------------
 # Tab aufbauen / entfernen
@@ -919,23 +902,13 @@ def _aty_populate_trial_list(self):
     all_have_tdms = True
     restore_row = -1
     refs = getattr(self, "_reference_names", {}) or {}
-    for t in self._trials:
-        tl = {k.lower(): v for k, v in t.items()}
-        tid = tl.get("id")
-        # Reference samples (customer originals) never have a TDMS file -
-        # listing them would also keep the auto-refresh timer running forever.
-        if tid is not None and int(tid) in refs:
-            continue
-        vno = int(tl.get("versuchsnummer") or 0)
-        tdms = _aty_find_tdms(sid, vno) if sid else None
+    # Reference samples (customer originals) never have a TDMS file -
+    # listing them would also keep the auto-refresh timer running forever.
+    for entry in _asvc.trial_files(sid, self._trials, refs, with_analysed=True):
+        tid, vno, tdms = entry["trial_id"], entry["vno"], entry["tdms"]
         if not tdms:
             all_have_tdms = False
-        db_ok = False
-        try:
-            rows = fetch_all("SELECT 1 FROM tblLaborATYoMat WHERE TrialID=? AND Timestamp IS NOT NULL",(tid,))
-            db_ok = bool(rows)
-        except Exception:
-            pass
+        db_ok = entry["analysed"]
         icon   = "📄" if tdms else "—"
         status = "✅" if db_ok else ("⏳" if tdms else "")
         item   = QListWidgetItem(f"{icon} V{vno:03d}  {status}")
@@ -1070,9 +1043,8 @@ def _aty_get_arr_mm_pp(self, trial_id, tdms_path):
         return cached
     if not tdms_path:
         return None, None, None
-    arr, ell = read_aty_signal(str(tdms_path))
-    mm_pp = float(read_step_mm_from_tdms(str(tdms_path)) or 0.25)
-    if arr is None or len(arr) == 0:
+    arr, mm_pp, ell = _asvc.read_signal(tdms_path)
+    if arr is None:
         return None, None, None
     if trial_id is not None:
         self._aty_raw_cache[trial_id] = (arr, mm_pp, ell)
@@ -1103,7 +1075,7 @@ def _aty_on_compare_run(self):
                 continue
             cached = self._aty_core_cache.get(tid) if tid is not None else None
             if cached is None:
-                cached = _aty_analyze_trial_core(arr, mm_pp, ellipticity_pct=ell)
+                cached = _asvc.core_analysis(arr, mm_pp, ell)
                 if tid is not None:
                     self._aty_core_cache[tid] = cached
             results.append((vno, cached, arr, mm_pp))
@@ -1356,11 +1328,12 @@ def _aty_render_signal_cards(self, results, zoom_start_mm, window_mm=40.0):
         card.setMinimumWidth(340)
         self._aty_cmp_signal_layout.addWidget(card, 1)
 
-        pos_mm, raw_mm, base_mm = _aty_get_zoom_segment(arr, mm_pp, zoom_start_mm, window_mm)
+        z = _asvc.zoom_view(arr, mm_pp, r, zoom_start_mm, window_mm)
+        pos_mm, raw_mm, base_mm = z["pos_mm"], z["raw_mm"], z["base_mm"]
         if len(pos_mm) == 0:
             continue
-        global_mean_mm = r["global_mean_um"] / 1000.0
-        label = f"V{vno:03d}" if isinstance(vno, int) else "?"
+        global_mean_mm = z["global_mean_mm"]
+        label = _asvc.trial_label(vno)
 
         ax.clear(); ax.set_facecolor(CARD_BG); ax.figure.patch.set_facecolor(CARD_BG)
         ax.set_title(f"{label} @ {zoom_start_mm/1000:.2f}m", color=TEXT, fontsize=9, fontweight="bold")
@@ -1422,17 +1395,14 @@ def _aty_render_radar(self, results):
     summary_lines = []
     for i, (vno, r, _arr, _mm_pp) in enumerate(results):
         color = _CMP_COLORS[i % len(_CMP_COLORS)]
-        label = f"V{vno:03d}" if isinstance(vno, int) else "?"
-        scores = _aty_compute_radar_scores(r)
-        values = [scores[a] if math.isfinite(scores[a]) else 0.0 for a in _ATY_RADAR_AXES]
+        entry = _asvc.radar_entry(vno, r)
+        label = entry["label"]
+        values = list(entry["values"])
         values += values[:1]
         ax.plot(angles, values, color=color, linewidth=2, label=label, zorder=3)
         ax.fill(angles, values, color=color, alpha=0.12, zorder=2)
-        sentence = _aty_describe_yarn(scores)
-        raw_line = " &middot; ".join(
-            f"{_ATY_RADAR_LABELS[a]} "
-            f"{(f'{scores[a]:.1f}' if math.isfinite(scores[a]) else '–')}"
-            for a in _ATY_RADAR_AXES)
+        sentence = entry["sentence"]
+        raw_line = entry["score_line"].replace(" · ", " &middot; ")
         summary_lines.append(
             f'<span style="color:{color}; font-weight:700;">{label}</span> &ndash; {sentence}'
             f'<br><span style="font-size:10px; color:#8a938c;">{raw_line}</span>')
@@ -1446,34 +1416,8 @@ def _aty_render_radar(self, results):
 
 
 def _aty_fetch_garnspiegel_cv(self) -> dict:
-    """{Versuchsnummer: CVPct} for the current TrialSeries, from photo-based
-    Garnspiegel analysis (tblTrialSeriesImageAnalysis, see
-    ui/yarnscope/garnspiegel_analysis.py) - independent of and complementary
-    to the TDMS-based metrics in the rest of this Compare tab. Table may not
-    exist yet on every environment (rolled out gradually), so this quietly
-    returns {} rather than erroring. If a trial has more than one analyzed
-    photo, the most recently analyzed one wins."""
-    sid = getattr(self, "_series_pk", None)
-    if sid is None or not table_exists("tblTrialSeriesImageAnalysis"):
-        return {}
-    try:
-        from ui.yarnscope.garnspiegel_analysis import parse_versuchsnummer
-        rows = fetch_all(
-            "SELECT img.OriginalFilename, a.CVPct, a.Timestamp "
-            "FROM tblTrialSeriesImageAnalysis a "
-            "JOIN tblTrialSeriesImage img ON img.ID = a.TrialSeriesImageID "
-            "WHERE img.TrialSeriesID = ? AND a.Status = 'ok' "
-            "ORDER BY a.Timestamp ASC",
-            [sid],
-        )
-        result = {}
-        for r in rows:
-            vno = parse_versuchsnummer(r.get("OriginalFilename") or "")
-            if vno is not None and r.get("CVPct") is not None:
-                result[vno] = float(r["CVPct"])  # later (more recent) rows overwrite earlier ones
-        return result
-    except Exception:
-        return {}
+    """{Versuchsnummer: CVPct} of the photo-based Garnspiegel analysis (aty_service)."""
+    return _asvc.garnspiegel_cv_by_vno(getattr(self, "_series_pk", None))
 
 
 def _aty_render_compare(self, results, zoom_start_mm=0.0):
@@ -1483,58 +1427,16 @@ def _aty_render_compare(self, results, zoom_start_mm=0.0):
     _aty_render_radar(self, results)
 
     tbl = self._aty_cmp_table
-    tbl.setRowCount(len(results))
-
-    def _fmt(v, dec=1):
-        try:
-            vv = float(v)
-            return f"{vv:.{dec}f}" if math.isfinite(vv) else "–"
-        except Exception:
-            return "–"
-
-    for row, (vno, r, _arr, _mm_pp) in enumerate(results):
-        vals = [
-            f"V{vno:03d}" if isinstance(vno, int) else "?",
-            _fmt(r["global_mean_um"]), _fmt(r["core_mean_um"]), _fmt(r["delta_pct"]),
-            _fmt(r["core_cv_pct"], 2), _fmt(r["density_per_m"]), _fmt(r["spacing_cv_pct"]),
-            _fmt(r["height_median_um"]), _fmt(r["rel_height_median_pct"]),
-        ]
-        for col, v in enumerate(vals):
-            item = QTableWidgetItem(v)
-            item.setTextAlignment(Qt.AlignCenter)
-            tbl.setItem(row, col, item)
-
     garnspiegel_cv_by_vno = _aty_fetch_garnspiegel_cv(self)
-
-    tbl2 = self._aty_cmp_table2
-    tbl2.setRowCount(len(results))
+    tables = (tbl, self._aty_cmp_table2, self._aty_cmp_table3)
+    for t in tables:
+        t.setRowCount(len(results))
     for row, (vno, r, _arr, _mm_pp) in enumerate(results):
-        cv = garnspiegel_cv_by_vno.get(vno)
-        vals2 = [
-            f"V{vno:03d}" if isinstance(vno, int) else "?",
-            _fmt(r["bulk_index_pct"]), (_fmt(cv) if cv is not None else "–"),
-            _fmt(r["bin1_pct"]), _fmt(r["bin2_pct"]),
-            _fmt(r["bin1_density_per_m"]), _fmt(r["bin2_density_per_m"]),
-            _fmt(r["core_cv_short_pct"]), _fmt(r["core_cv_long_pct"]),
-            _fmt(r["rel_height_p99_pct"]), _fmt(r["rel_height_max_pct"]),
-        ]
-        for col, v in enumerate(vals2):
-            item = QTableWidgetItem(v)
-            item.setTextAlignment(Qt.AlignCenter)
-            tbl2.setItem(row, col, item)
-
-    tbl3 = self._aty_cmp_table3
-    tbl3.setRowCount(len(results))
-    for row, (vno, r, _arr, _mm_pp) in enumerate(results):
-        vals3 = [
-            f"V{vno:03d}" if isinstance(vno, int) else "?",
-            _fmt(r["bin1_height_median_um"]), _fmt(r["bin1_rel_height_median_pct"]), _fmt(r["bin1_bulk_pct"]),
-            _fmt(r["bin2_height_median_um"]), _fmt(r["bin2_rel_height_median_pct"]), _fmt(r["bin2_bulk_pct"]),
-        ]
-        for col, v in enumerate(vals3):
-            item = QTableWidgetItem(v)
-            item.setTextAlignment(Qt.AlignCenter)
-            tbl3.setItem(row, col, item)
+        for t, vals in zip(tables, _asvc.compare_table_values(vno, r, garnspiegel_cv_by_vno.get(vno))):
+            for col, v in enumerate(vals):
+                item = QTableWidgetItem(v)
+                item.setTextAlignment(Qt.AlignCenter)
+                t.setItem(row, col, item)
 
     _aty_render_signal_cards(self, results, zoom_start_mm)
 
@@ -1556,32 +1458,17 @@ def _aty_render_compare(self, results, zoom_start_mm=0.0):
     ax_rh = self._aty_cmp_relheight_ax
     _style_ax(ax_rh, "Height relative to core", "%")
 
-    self._aty_cmp_spacing_hist_data = []
-    self._aty_cmp_relheight_hist_data = []
-    sp_bins = np.arange(0, 16.5, 0.5)
-    rh_bins = np.arange(0, 105, 5)
-
-    for i, (vno, r, _arr, _mm_pp) in enumerate(results):
-        color = _CMP_COLORS[i % len(_CMP_COLORS)]
-        label = f"V{vno:03d}" if isinstance(vno, int) else "?"
-        spacing = r.get("spacing_mm")
-        if spacing is not None and len(spacing):
-            w = np.full(len(spacing), 100.0/len(spacing))
-            counts, _e = np.histogram(spacing, bins=sp_bins, weights=w)
-            self._aty_cmp_spacing_hist_data.append((label, color, sp_bins, counts))
-            ax_sp.hist(spacing, bins=sp_bins, weights=w, histtype="stepfilled",
-                       color=color, alpha=0.18, zorder=2)
-            ax_sp.hist(spacing, bins=sp_bins, weights=w, histtype="step",
-                       color=color, linewidth=1.8, label=label, zorder=3)
-        rel = r.get("rel_height_pct")
-        if rel is not None and len(rel):
-            w = np.full(len(rel), 100.0/len(rel))
-            counts, _e = np.histogram(rel, bins=rh_bins, weights=w)
-            self._aty_cmp_relheight_hist_data.append((label, color, rh_bins, counts))
-            ax_rh.hist(rel, bins=rh_bins, weights=w, histtype="stepfilled",
-                       color=color, alpha=0.18, zorder=2)
-            ax_rh.hist(rel, bins=rh_bins, weights=w, histtype="step",
-                       color=color, linewidth=1.8, label=label, zorder=3)
+    hists = _asvc.compare_histograms(results)
+    self._aty_cmp_spacing_hist_data = hists["spacing"]
+    self._aty_cmp_relheight_hist_data = hists["relheight"]
+    for ax, data in ((ax_sp, hists["spacing"]), (ax_rh, hists["relheight"])):
+        for label, color, bins, counts in data:
+            # % per bin already computed -> weights on the bin centres
+            mids = 0.5 * (bins[:-1] + bins[1:])
+            ax.hist(mids, bins=bins, weights=counts, histtype="stepfilled",
+                    color=color, alpha=0.18, zorder=2)
+            ax.hist(mids, bins=bins, weights=counts, histtype="step",
+                    color=color, linewidth=1.8, label=label, zorder=3)
 
     if results:
         for ax in (ax_sp, ax_rh):
@@ -1633,19 +1520,18 @@ def _aty_on_analyze(self):
     QApplication.processEvents()
 
     try:
-        arr, ell = read_aty_signal(str(tdms))
-        mm_pp = float(read_step_mm_from_tdms(str(tdms)) or 0.25)
-        if arr is None or len(arr) == 0:
+        arr, mm_pp, ell = _asvc.read_signal(tdms)
+        if arr is None:
             self._aty_lbl_status.setText("Error: no signal.")
             return
 
         self._aty_lbl_status.setText("Analysiere Dickstellen…")
         QApplication.processEvents()
 
-        spots    = detect_thick_spots(arr, mm_pp)
-        total_mm = float(len(arr) * mm_pp)
-        db_vals  = compute_db_values(spots, total_mm)
-        hists    = compute_histograms(spots, total_mm)
+        _an      = _asvc.analyse_arrays(arr, mm_pp, ell)
+        spots    = _an["spots"]
+        db_vals  = _an["db_vals"]
+        hists    = _an["hists"]
 
         # Fabric/Knitted-Spans einmalig berechnen und cachen
         self._aty_lbl_status.setText("Berechne Fabric-Spans…")
@@ -1711,25 +1597,7 @@ def _aty_get_window(self):
     try:   num_turns = int(self._aty_spin_turns.value())
     except: num_turns = 10
 
-    start_idx = max(0, min(int(start_m * 1000.0 / mm_pp), len(arr)-1))
-    needed    = int(num_turns * 200.0 / mm_pp)
-    arr_view  = arr[start_idx : start_idx + needed]
-    if len(arr_view) == 0:
-        return None, [], mm_pp, float(np.max(arr))
-
-    spots_view = []
-    for sp in (spots or []):
-        s = int(sp["start_idx"]) - start_idx
-        e = s + int(sp["n_pts"])
-        if e <= 0 or s >= len(arr_view):
-            continue
-        sp2 = dict(sp)
-        sp2["start_idx"] = max(0, s)
-        sp2["n_pts"]     = min(e, len(arr_view)) - sp2["start_idx"]
-        if sp2["n_pts"] > 0:
-            spots_view.append(sp2)
-
-    row_spacing_ref = float(np.max(arr))
+    arr_view, spots_view, row_spacing_ref = _asvc.window(arr, spots, mm_pp, start_m, num_turns)
     return arr_view, spots_view, mm_pp, row_spacing_ref
 
 
@@ -1775,163 +1643,18 @@ def _aty_draw_garnspiegel(self):
 
 
 def _aty_compute_fabric_spans(arr, mm_pp, n_bands, bin_colors=None, bin_visible=None):
-    """Berechnet Di/Dü-Farbspans für n_bands Fabric-Bänder.
-
-    Segment-Länge wird dynamisch berechnet: seg_mm = total_mm / n_bands.
-    Damit füllen die n_bands Bänder immer das gesamte Garn ohne Leerraum.
-    Klassifikation identisch zu GarnCanvas.plot_garnspiegel:
-    CLASS_THRESHOLDS, COLOR_STATE, VISIBILITY_STATE aus garngraf_canvas.py.
-    """
-    arr      = np.asarray(arr, dtype=float)
-    total_mm = float(len(arr)) * mm_pp
-    seg_mm   = total_mm / max(1, n_bands)      # dynamisch – füllt ganzen Bildschirm
-    pts_seg  = max(1, int(round(seg_mm / mm_pp)))
-    actual   = min(n_bands, len(arr) // pts_seg)
-    if actual == 0:
-        return [[] for _ in range(n_bands)], seg_mm
-
-    mean_all = float(np.mean(arr[:actual * pts_seg]))
-    mm_step  = seg_mm / pts_seg
-
-    di_pct  = CLASS_THRESHOLDS["Di"]["pct"]
-    due_pct = CLASS_THRESHOLDS["Dü"]["pct"]
-    di_len  = CLASS_THRESHOLDS["Di"]["mm"]
-    due_len = CLASS_THRESHOLDS["Dü"]["mm"]
-    need1_di  = max(1, int((di_len[0]  + 1e-9) / mm_step))
-    need2_di  = max(1, int((di_len[1]  + 1e-9) / mm_step))
-    need3_di  = max(1, int((di_len[2]  + 1e-9) / mm_step))
-    need1_due = max(1, int((due_len[0] + 1e-9) / mm_step))
-    need2_due = max(1, int((due_len[1] + 1e-9) / mm_step))
-    need3_due = max(1, int((due_len[2] + 1e-9) / mm_step))
-
-    def _runs_np(mask):
-        """Vektorisierte Run-Erkennung via np.diff."""
-        if not mask.any():
-            return np.empty(0, int), np.empty(0, int)
-        padded = np.concatenate(([0], mask.view(np.uint8), [0]))
-        diff   = np.diff(padded)
-        return np.where(diff == 1)[0], (np.where(diff == -1)[0] - 1)
-
-    x_mm = np.linspace(0.0, seg_mm, pts_seg, endpoint=False)
-    spans_per_band = []
-
-    for b in range(actual):
-        seg    = np.asarray(arr[b*pts_seg:(b+1)*pts_seg], dtype=float)
-        spans  = []
-
-        # Dickstellen
-        b1 = (seg >= (1.0+di_pct[0]/100.0)*mean_all) & (seg < (1.0+di_pct[1]/100.0)*mean_all)
-        b2 = (seg >= (1.0+di_pct[1]/100.0)*mean_all) & (seg < (1.0+di_pct[2]/100.0)*mean_all)
-        b3 = (seg >= (1.0+di_pct[2]/100.0)*mean_all)
-        for mask, row in ((b1,'1'),(b2,'2'),(b3,'3')):
-            ss, ee = _runs_np(mask)
-            for s, e in zip(ss, ee):
-                L = int(e)-int(s)+1
-                if L < need1_di: continue
-                col   = '1' if L < need2_di else '2' if L < need3_di else '3'
-                key   = f"Di{row}{col}"
-                if not VISIBILITY_STATE.is_enabled(key): continue
-                color = COLOR_STATE.di_colors.get(key, DI_COLORS.get(key,"#ff0000"))
-                spans.append((float(x_mm[s]), float(x_mm[min(int(e),pts_seg-1)]+mm_step), color))
-
-        # Dünnstellen
-        t1 = (seg <= (1.0-due_pct[0]/100.0)*mean_all) & (seg > (1.0-due_pct[1]/100.0)*mean_all)
-        t2 = (seg <= (1.0-due_pct[1]/100.0)*mean_all) & (seg > (1.0-due_pct[2]/100.0)*mean_all)
-        t3 = (seg <= (1.0-due_pct[2]/100.0)*mean_all)
-        for mask, row in ((t1,'1'),(t2,'2'),(t3,'3')):
-            ss, ee = _runs_np(mask)
-            for s, e in zip(ss, ee):
-                L = int(e)-int(s)+1
-                if L < need1_due: continue
-                col   = '1' if L < need2_due else '2' if L < need3_due else '3'
-                key   = f"Dü{row}{col}"
-                if not VISIBILITY_STATE.is_enabled(key): continue
-                color = COLOR_STATE.due_colors.get(key, DUE_COLORS.get(key,"#0000ff"))
-                spans.append((float(x_mm[s]), float(x_mm[min(int(e),pts_seg-1)]+mm_step), color))
-
-        spans_per_band.append(spans)
-
-    while len(spans_per_band) < n_bands:
-        spans_per_band.append([])
-    return spans_per_band, seg_mm
+    """Di/Dü colour spans for n_bands Fabric bands (thickness_classes.fabric_spans,
+    colours/visibility from COLOR_STATE / VISIBILITY_STATE). bin_* unused (legacy)."""
+    spans, seg_mm = _tc.fabric_spans(arr, mm_pp, n_bands)
+    return _tc.colourize(spans, COLOR_STATE.di_colors, COLOR_STATE.due_colors,
+                         VISIBILITY_STATE.enabled), seg_mm
 
 
 def _aty_compute_knitted_spans(arr, mm_pp, n_rows, row_len_mm=400.0, bin_colors=None, bin_visible=None):
-    """Berechnet Di/Dü-Farbspans für n_rows Knitted-Reihen.
-
-    Jede Reihe = row_len_mm (Standard 400mm) des Garns, fortlaufend.
-    x-Koordinaten werden auf 0..200mm skaliert (Canvas-Darstellungsfenster).
-    Klassifikation identisch zu _aty_compute_fabric_spans.
-    """
-    arr      = np.asarray(arr, dtype=float)
-    pts_row  = max(1, int(round(row_len_mm / mm_pp)))
-    actual   = min(n_rows, len(arr) // pts_row)
-    if actual == 0:
-        return [[] for _ in range(n_rows)]
-
-    mean_all  = float(np.mean(arr[:actual * pts_row]))
-    mm_step   = row_len_mm / pts_row
-    display_mm = 200.0
-    scale     = display_mm / row_len_mm   # Skalierung auf Canvas-X-Achse
-
-    di_pct  = CLASS_THRESHOLDS["Di"]["pct"]
-    due_pct = CLASS_THRESHOLDS["Dü"]["pct"]
-    di_len  = CLASS_THRESHOLDS["Di"]["mm"]
-    due_len = CLASS_THRESHOLDS["Dü"]["mm"]
-    need1_di  = max(1, int((di_len[0]  + 1e-9) / mm_step))
-    need2_di  = max(1, int((di_len[1]  + 1e-9) / mm_step))
-    need3_di  = max(1, int((di_len[2]  + 1e-9) / mm_step))
-    need1_due = max(1, int((due_len[0] + 1e-9) / mm_step))
-    need2_due = max(1, int((due_len[1] + 1e-9) / mm_step))
-    need3_due = max(1, int((due_len[2] + 1e-9) / mm_step))
-
-    def _runs_np(mask):
-        if not mask.any():
-            return np.empty(0, int), np.empty(0, int)
-        padded = np.concatenate(([0], mask.view(np.uint8), [0]))
-        diff   = np.diff(padded)
-        return np.where(diff == 1)[0], (np.where(diff == -1)[0] - 1)
-
-    x_mm = np.linspace(0.0, row_len_mm, pts_row, endpoint=False)
-    spans_per_row = []
-
-    for r in range(actual):
-        seg   = np.asarray(arr[r*pts_row:(r+1)*pts_row], dtype=float)
-        spans = []
-
-        b1 = (seg >= (1.0+di_pct[0]/100.0)*mean_all) & (seg < (1.0+di_pct[1]/100.0)*mean_all)
-        b2 = (seg >= (1.0+di_pct[1]/100.0)*mean_all) & (seg < (1.0+di_pct[2]/100.0)*mean_all)
-        b3 = (seg >= (1.0+di_pct[2]/100.0)*mean_all)
-        for mask, row in ((b1,'1'),(b2,'2'),(b3,'3')):
-            ss, ee = _runs_np(mask)
-            for s, e in zip(ss, ee):
-                L = int(e)-int(s)+1
-                if L < need1_di: continue
-                col   = '1' if L < need2_di else '2' if L < need3_di else '3'
-                key   = f"Di{row}{col}"
-                if not VISIBILITY_STATE.is_enabled(key): continue
-                color = COLOR_STATE.di_colors.get(key, DI_COLORS.get(key,"#ff0000"))
-                spans.append((float(x_mm[s])*scale, float(x_mm[min(int(e),pts_row-1)]+mm_step)*scale, color))
-
-        t1 = (seg <= (1.0-due_pct[0]/100.0)*mean_all) & (seg > (1.0-due_pct[1]/100.0)*mean_all)
-        t2 = (seg <= (1.0-due_pct[1]/100.0)*mean_all) & (seg > (1.0-due_pct[2]/100.0)*mean_all)
-        t3 = (seg <= (1.0-due_pct[2]/100.0)*mean_all)
-        for mask, row in ((t1,'1'),(t2,'2'),(t3,'3')):
-            ss, ee = _runs_np(mask)
-            for s, e in zip(ss, ee):
-                L = int(e)-int(s)+1
-                if L < need1_due: continue
-                col   = '1' if L < need2_due else '2' if L < need3_due else '3'
-                key   = f"Dü{row}{col}"
-                if not VISIBILITY_STATE.is_enabled(key): continue
-                color = COLOR_STATE.due_colors.get(key, DUE_COLORS.get(key,"#0000ff"))
-                spans.append((float(x_mm[s])*scale, float(x_mm[min(int(e),pts_row-1)]+mm_step)*scale, color))
-
-        spans_per_row.append(spans)
-
-    while len(spans_per_row) < n_rows:
-        spans_per_row.append([])
-    return spans_per_row
+    """Di/Dü colour spans for n_rows Knitted rows of row_len_mm (x scaled to 0..200 mm)."""
+    spans = _tc.knitted_spans(arr, mm_pp, n_rows, row_len_mm)
+    return _tc.colourize(spans, COLOR_STATE.di_colors, COLOR_STATE.due_colors,
+                         VISIBILITY_STATE.enabled)
 
 
 def _aty_draw_fabric(self):
@@ -1984,15 +1707,7 @@ def _aty_draw_fabric(self):
 # ---------------------------------------------------------------------------
 
 def _aty_update_metrics(self, db_vals: dict):
-    def _f(k, dec=1):
-        v = db_vals.get(k)
-        try:
-            vv = float(v)
-            return f"{vv:,.{dec}f}".replace(",","'") if math.isfinite(vv) else "-"
-        except: return "-"
-    l1 = f"Length: {_f('TotalLen_m')} m  |  Kurzhocker: {_f('N_B1')} /100m  |  Langwelle: {_f('N_B2')} /100m"
-    l2 = f"Ø Len B1: {_f('AvgLen_B1',2)} mm  |  Ø Len B2: {_f('AvgLen_B2',2)} mm  |  Ø Hgt B1: {_f('AvgHeight_B1',1)} um  |  Ø Hgt B2: {_f('AvgHeight_B2',1)} um"
-    try: self._aty_lbl_metrics.setText(l1 + "\n" + l2)
+    try: self._aty_lbl_metrics.setText(_asvc.metrics_text(db_vals))
     except: pass
 
 
@@ -2005,13 +1720,10 @@ def _aty_redraw_histogram(self):
     if not hists: return
     fk    = self._aty_feature_combo.currentData()
     label = self._aty_feature_combo.currentText()
-    if fk not in hists: return
-    h      = hists[fk]
-    edges  = np.asarray(h["edges"])
-    c1     = np.asarray(h["counts_1"])
-    c2     = np.asarray(h["counts_2"])
-    width  = (edges[1]-edges[0])*0.42
-    centers = 0.5*(edges[:-1]+edges[1:])
+    hv = _asvc.histogram_view(hists, fk)
+    if hv is None: return
+    edges, c1, c2 = hv["edges"], hv["counts_1"], hv["counts_2"]
+    width, centers = hv["width"], hv["centers"]
     ax = self._aty_hist_ax
     ax.clear(); ax.set_facecolor("#1e1e1e"); ax.figure.patch.set_facecolor("#1e1e1e")
     ax.bar(centers-width/2, c1, width=width, color="#e07b00", alpha=0.85, label="Bin 1 – Kurzhocker")
@@ -2023,23 +1735,13 @@ def _aty_redraw_histogram(self):
     for sp in ax.spines.values(): sp.set_color("#444")
     ax.legend(fontsize=6, framealpha=0.5, facecolor="#222", edgecolor="#555", labelcolor="#ddd")
     self._aty_hist_canvas.draw_idle()
-    def _fmt(v):
-        try:
-            vv=float(v)
-            if not np.isfinite(vv): return "-"
-            if abs(vv)>=10000: return f"{vv:,.0f}".replace(",","'")
-            elif abs(vv)>=100: return f"{vv:.1f}"
-            elif abs(vv)>=1:   return f"{vv:.2f}"
-            else:              return f"{vv:.4f}"
-        except: return "-"
     tbl = self._aty_hist_table
     tbl.blockSignals(True)
     try:
-        for i in range(20):
-            lo,hi = float(edges[i]),float(edges[i+1])
-            it0 = QTableWidgetItem(f"{_fmt(lo)} – {_fmt(hi)}"); it0.setTextAlignment(Qt.AlignCenter); tbl.setItem(i,0,it0)
-            it1 = QTableWidgetItem(_fmt(c1[i])); it1.setTextAlignment(Qt.AlignCenter); it1.setBackground(QColor("#2a1a00")); tbl.setItem(i,1,it1)
-            it2 = QTableWidgetItem(_fmt(c2[i])); it2.setTextAlignment(Qt.AlignCenter); it2.setBackground(QColor("#001a1a")); tbl.setItem(i,2,it2)
+        for i, (t0, t1, t2) in enumerate(hv["rows"]):
+            it0 = QTableWidgetItem(t0); it0.setTextAlignment(Qt.AlignCenter); tbl.setItem(i,0,it0)
+            it1 = QTableWidgetItem(t1); it1.setTextAlignment(Qt.AlignCenter); it1.setBackground(QColor("#2a1a00")); tbl.setItem(i,1,it1)
+            it2 = QTableWidgetItem(t2); it2.setTextAlignment(Qt.AlignCenter); it2.setBackground(QColor("#001a1a")); tbl.setItem(i,2,it2)
     finally:
         tbl.blockSignals(False)
 
@@ -2063,11 +1765,8 @@ def _aty_on_save(self):
     ell = entry[7] if len(entry) > 7 else None
     if arr is None:
         return
-    metrics = _aty_analyze_trial_core(arr, float(mm_pp), ellipticity_pct=ell)
-    db_vals = _aty_to_db_row(metrics)
     try:
-        from ui.screen_aty_batch import _save_aty_to_db  # noqa: lazy import OK here
-        ok = _save_aty_to_db(tid, db_vals, tdms)
+        ok = _asvc.save_trial(tid, arr, float(mm_pp), ell)
         if ok:
             self._aty_lbl_status.setText("Gespeichert.")
             self._aty_btn_save.setEnabled(False)
