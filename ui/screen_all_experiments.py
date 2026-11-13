@@ -1327,100 +1327,16 @@ class AllExperimentsScreen(QWidget):
 
     def _series_has_joker_machine(self, series_id) -> bool:
         """Gibt True zurück wenn die Serie eine Joker-Maschine (Platzhalter) hat."""
-        """Prüft, ob die gegebene TrialSeries aktuell eine Joker-Maschine zugewiesen hat."""
-        sql = """
-              SELECT s.[ID] AS [SeriesID],
-                m.[ID]           AS [MachineID],
-                m.[IsJoker]      AS [IsJoker]
-              FROM tblTrialSeries AS s
-                  LEFT JOIN tblMaschine AS m
-              ON m.[ID] = s.[MachineID]
-              WHERE s.[ID] = ?; \
-              """
-        try:
-            rows = fetch_all(sql, [series_id])
-        except Exception:
-            return False
-        if not rows:
-            return False
-        row = rows[0]
-        val = row.get("IsJoker")
-        try:
-            return bool(int(val))
-        except Exception:
-            return bool(val)
+        from db.backlog_moves import series_has_joker_machine   # gemeinsam mit Backlog + Web-App
+        return series_has_joker_machine(series_id)
 
     def _update_backlog_status(self, series_id, new_status, old_status, user_id, new_machine_id=None):
-        """Schreibt einen geänderten Status in tblBacklog."""
-        # Wenn ein Auftrag zurück in den Status 'Backlog' (1) gesetzt wird,
-        # und es sich um eine Joker-TrialSeries handelt, dann soll wieder die
-        # Original-Joker-Maschine zugewiesen werden.
-        if new_status == 1 and old_status != 1:
-            try:
-                rows = fetch_all(
-                    "SELECT [IsJoker], [OriginalJoker] FROM tblTrialSeries WHERE [ID] = ?;",
-                    [series_id],
-                )
-                if rows:
-                    row = rows[0]
-                    val = row.get("IsJoker")
-                    try:
-                        is_joker = bool(int(val))
-                    except Exception:
-                        is_joker = bool(val)
-                    orig = row.get("OriginalJoker")
-                    if is_joker and orig is not None:
-                        new_machine_id = orig
-            except Exception:
-                pass
-
-        # Gleiche Logik wie im Backlog-Screen:
-        # Wenn von Backlog (1) auf etwas anderes gewechselt wird und ein User bekannt ist,
-        # wird der BacklogOwner gesetzt.
-        set_owner = (old_status == 1 and new_status !=
-                     1 and user_id is not None)
-
-        if set_owner and new_machine_id is not None:
-            sql = """
-                  UPDATE tblTrialSeries
-                  SET [BacklogStatusID] = ?, [BacklogOwner] = ?, [MachineID] = ?
-                  WHERE [ID] = ?; \
-                  """
-            params = [new_status, user_id, new_machine_id, series_id]
-        elif set_owner:
-            sql = """
-                  UPDATE tblTrialSeries
-                  SET [BacklogStatusID] = ?, [BacklogOwner] = ?
-                  WHERE [ID] = ?; \
-                  """
-            params = [new_status, user_id, series_id]
-        elif new_machine_id is not None:
-            sql = """
-                  UPDATE tblTrialSeries
-                  SET [BacklogStatusID] = ?, [MachineID] = ?
-                  WHERE [ID] = ?; \
-                  """
-            params = [new_status, new_machine_id, series_id]
-        else:
-            sql = """
-                  UPDATE tblTrialSeries
-                  SET [BacklogStatusID] = ?
-                  WHERE [ID] = ?; \
-                  """
-            params = [new_status, series_id]
-
-        execute(sql, params)
-
-        # Notifications erstellen wenn Status → Done (ID 3)
-        if new_status == 3 and old_status != 3:
-            try:
-                from ui.notifications import create_done_notifications
-                create_done_notifications(
-                    series_id=series_id,
-                    sender_user_id=user_id,
-                )
-            except Exception:
-                pass
+        """Schreibt einen geänderten Status - dieselbe Funktion wie das Backlog (db/backlog_moves.py,
+        seit 2026-11-13; vorher fehlten hier der Timestamp-Fallback bei "Done" und die
+        Retest-Freigabe bei "To Be Cleaned")."""
+        from db import backlog_moves
+        backlog_moves.update_backlog_status(series_id, new_status, old_status, user_id, new_machine_id)
+        backlog_moves.after_move(series_id, new_status, user_id)
 
     def _on_filter(self, name: str):
         """Aktiviert einen vordefinierten Filter (Maschinengruppe o.ä.)."""
