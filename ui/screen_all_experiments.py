@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QMessageBox, QDialog, QMenu, QHeaderView
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor, QPixmap
 
 from db.connection import (
     fetch_experiments_with_series,
@@ -291,6 +291,7 @@ class AllExperimentsScreen(QWidget):
         # Textfilter
         self._series_filter = ""  # filtert "Trial Series Name"
         self._expid_filter = ""  # filtert "Experiment ID"
+        self._concl_filter = ""  # "", "any", "none" or an outcome key (db/series_conclusion.py)
 
         # Sortierung
         # 0 = Experiment ID, 1 = Trial Series Name, 2 = Machine,
@@ -418,6 +419,19 @@ class AllExperimentsScreen(QWidget):
             self._on_series_filter_change)
         flay.addWidget(self.series_filter_le, stretch=7)
 
+        # Conclusion filter (db/series_conclusion.py)
+        from PySide6.QtWidgets import QComboBox as _QComboBox
+        from db import series_conclusion as _sc
+        self.concl_filter_cb = _QComboBox()
+        self.concl_filter_cb.addItem("Conclusion: all", "")
+        self.concl_filter_cb.addItem("With conclusion", "any")
+        self.concl_filter_cb.addItem("Without conclusion", "none")
+        for _k in _sc.OUTCOMES:
+            self.concl_filter_cb.addItem(_sc.OUTCOME_LABELS[_k], _k)
+        self.concl_filter_cb.currentIndexChanged.connect(self._on_concl_filter_change)
+        self.concl_filter_cb.setVisible(_sc.table_ready())
+        flay.addWidget(self.concl_filter_cb, stretch=0)
+
         # Copy TrialSeries Button
         self.butCopyTS = QPushButton("Copy TrialSeries")
         self.butCopyTS.setEnabled(False)
@@ -428,10 +442,11 @@ class AllExperimentsScreen(QWidget):
         # ---------------------------------------------------------------------------------------
 
         # Tabelle
-        self.table = QTableWidget(0, 10, parent=self)
+        self.table = QTableWidget(0, 12, parent=self)
         self.table.setObjectName("ExpTable")
         self.table.setHorizontalHeaderLabels(
-            ["Experiment ID", "Trial Series Name", "Machine", "Creation Date", "Owner", "Status", "AM", "ER", "NT", "RE"]
+            ["Experiment ID", "Trial Series Name", "Machine", "Creation Date", "Owner", "Status", "AM", "ER", "NT", "RE",
+             "Outcome", "Conclusion"]   # last two: db/series_conclusion.py (2026-11-14)
         )
         self.table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows)
@@ -521,6 +536,18 @@ class AllExperimentsScreen(QWidget):
         # Bulk-Lookup: welche TrialSeries haben gespeicherte Smart-Chart-
         # Reports (RE-Icon-Spalte, 2026-08-27)
         self._series_report_map = series_overview.series_report_map()
+        from db import series_conclusion
+        self._conclusion_map = series_conclusion.summary_map() if series_conclusion.table_ready() else {}
+        cf = getattr(self, "_concl_filter", "")
+        if cf:
+            def _keep_c(rec):
+                c = self._conclusion_map.get(rec.get("series_id_pk"))
+                if cf == "any":
+                    return c is not None
+                if cf == "none":
+                    return c is None
+                return bool(c) and c.get("outcome") == cf
+            rows = [r for r in rows if _keep_c(r)]
 
         # Textfilter anwenden
         sf = (self._series_filter or "").strip().lower()
@@ -568,6 +595,13 @@ class AllExperimentsScreen(QWidget):
                     return 1 if rec.get('has_notes') else 0
                 elif col == 9:  # RE
                     return 1 if self._series_report_map.get(rec.get("series_id_pk")) else 0
+                elif col in (10, 11):  # Outcome / Conclusion
+                    c = self._conclusion_map.get(rec.get("series_id_pk")) or {}
+                    if col == 10:
+                        from db.series_conclusion import OUTCOMES
+                        o = c.get("outcome")
+                        return OUTCOMES.index(o) + 1 if o in OUTCOMES else (9 if c else 99)
+                    return (c.get("summary") or "").lower()
             except Exception:
                 return 0
             return 0
@@ -627,6 +661,17 @@ class AllExperimentsScreen(QWidget):
 
             # Report icon (RE) - 2026-08-27
             self._set_report_cell(r, 9, rec.get("series_id_pk"))
+
+            # Conclusion (db/series_conclusion.py): coloured outcome + summary
+            c = self._conclusion_map.get(rec.get("series_id_pk"))
+            from db.series_conclusion import OUTCOME_COLOURS, OUTCOME_LABELS
+            it_o = QTableWidgetItem(("● " + OUTCOME_LABELS.get(c.get("outcome"), "")) if c and c.get("outcome") else ("●" if c else ""))
+            if c:
+                it_o.setForeground(QColor(OUTCOME_COLOURS.get(c.get("outcome") or "open", "#8a94a0")))
+            self.table.setItem(r, 10, it_o)
+            it_s = QTableWidgetItem((c or {}).get("summary") or "")
+            it_s.setToolTip((c or {}).get("summary") or "")
+            self.table.setItem(r, 11, it_s)
 
             # Payload für spätere Navigation
             self._row_payload.append(
@@ -822,6 +867,16 @@ class AllExperimentsScreen(QWidget):
                              "Only superusers may set or remove the 'Archived' or 'To Be Cleaned' status.")
                 continue
 
+            # no conclusion yet -> ask before archiving (db/series_conclusion.py)
+            if new_id == 5 and not self._confirm_archive_without_conclusion(series_pk):
+                if old_id is not None:
+                    idx = w.findData(old_id)
+                    if idx >= 0:
+                        w.blockSignals(True)
+                        w.setCurrentIndex(idx)
+                        w.blockSignals(False)
+                continue
+
             # Wenn wir von Backlog (1) auf einen anderen Status wechseln und die Serie
             # aktuell eine Joker-Maschine hat, muss zuerst eine Nicht-Joker-Maschine
             # gewählt werden.
@@ -999,6 +1054,16 @@ class AllExperimentsScreen(QWidget):
                     combo.blockSignals(False)
             self._notify("warning", "Change status",
                          "Only superusers may set or remove the 'Archived' or 'To Be Cleaned' status.")
+            return
+
+        # no conclusion yet -> ask before archiving (db/series_conclusion.py)
+        if new_id == 5 and not self._confirm_archive_without_conclusion(series_pk):
+            if old_id is not None:
+                idx = combo.findData(old_id)
+                if idx >= 0:
+                    combo.blockSignals(True)
+                    combo.setCurrentIndex(idx)
+                    combo.blockSignals(False)
             return
 
         # Wenn wir von Backlog (1) auf einen anderen Status wechseln und die Serie
@@ -1330,6 +1395,20 @@ class AllExperimentsScreen(QWidget):
         from db.backlog_moves import series_has_joker_machine   # gemeinsam mit Backlog + Web-App
         return series_has_joker_machine(series_id)
 
+    def _confirm_archive_without_conclusion(self, series_pk) -> bool:
+        """Moving to Archived without a conclusion: ask (a hint, not a block). True = go on."""
+        from db import series_conclusion
+        try:
+            missing = series_conclusion.missing_for_archive(int(series_pk))
+        except Exception:
+            missing = False
+        if not missing:
+            return True
+        return QMessageBox.question(
+            self, "No conclusion yet",
+            "This series has no conclusion yet (tab \"Conclusion\" in Show Experiment).\n\nArchive it anyway?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
+
     def _update_backlog_status(self, series_id, new_status, old_status, user_id, new_machine_id=None):
         """Schreibt einen geänderten Status - dieselbe Funktion wie das Backlog (db/backlog_moves.py,
         seit 2026-11-13; vorher fehlten hier der Timestamp-Fallback bei "Done" und die
@@ -1348,6 +1427,12 @@ class AllExperimentsScreen(QWidget):
         """Aktualisiert den Freitext-Filter für Serien-/Experiment-Namen."""
         """Filtert 'Trial Series Name' (contains, case-insensitive)."""
         self._series_filter = text or ""
+        maschine_id = self._filter_map.get(self._active_filter, None)
+        self._load_data(maschine_id)
+
+    def _on_concl_filter_change(self, *_):
+        """Conclusion filter: all / with / without / one outcome."""
+        self._concl_filter = self.concl_filter_cb.currentData() or ""
         maschine_id = self._filter_map.get(self._active_filter, None)
         self._load_data(maschine_id)
 
@@ -1371,7 +1456,7 @@ class AllExperimentsScreen(QWidget):
 
     _NAME_COL_MIN = 200
     # Feste Spaltenbreiten bei Massstab 1.0 (Spalte 0 nach Inhalt, Spalte 1 = Rest)
-    _BASE_COL_WIDTHS = {2: 120, 3: 160, 4: 110, 5: 110, 6: 50, 7: 60, 8: 50, 9: 50}
+    _BASE_COL_WIDTHS = {2: 120, 3: 160, 4: 110, 5: 110, 6: 50, 7: 60, 8: 50, 9: 50, 10: 130, 11: 260}
     # Groessenabhaengige Darstellung (Nutzerwunsch 2026-10-13: "wenn wir genug
     # Platz haben, mach das ganze etwas groesser"): Massstab 1.0 bei einer
     # Tabellenbreite wie im 1600-px-Fenster, darueber in 5-%-Schritten bis

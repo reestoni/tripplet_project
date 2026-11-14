@@ -300,6 +300,22 @@ def remove_legacy_batch_yarn_stock_notifications() -> int:
         return 0
 
 
+def create_series_message_notification(recipient_user_id: Any, series_id: Any, message: str,
+                                       notification_type: str) -> bool:
+    """Notification about a series with its own text and type (e.g. "series_conclusion": the conclusion of a
+    series whose experiment request the recipient created, db/series_conclusion.py). Click opens the series."""
+    if not _tables_ready() or recipient_user_id in (None, ""):
+        return False
+    try:
+        _execute("INSERT INTO tblNotification (RecipientUserID, TrialSeriesID, CreatedAt, ReadAt, Message, "
+                 "NotificationType) VALUES (?, ?, NOW(), NULL, ?, ?)",
+                 [recipient_user_id, series_id, message, notification_type])
+        return True
+    except Exception as e:
+        print(f"[Notification] {notification_type}-Insert fehlgeschlagen fuer uid={recipient_user_id}: {e}")
+        return False
+
+
 def create_experiment_request_notification(
     recipient_user_id: Any, request_id: Any, message: str, *,
     notification_type: str = "experiment_request",

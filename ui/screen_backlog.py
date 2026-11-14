@@ -92,6 +92,7 @@ ROLE_HAS_PDF = Qt.UserRole + 31
 ROLE_HAS_NOTES = Qt.UserRole + 32
 ROLE_HAS_RETEST_FLAG = Qt.UserRole + 33
 ROLE_HAS_REPORT = Qt.UserRole + 34
+ROLE_CONCLUSION = Qt.UserRole + 35   # outcome key of the conclusion ("" = none), db/series_conclusion.py
 ROLE_YEAR = Qt.UserRole + 40  # Jahresgruppe für Archived
 
 _ER_ICON_PIXMAP = None  # cached QPixmap
@@ -336,6 +337,7 @@ class CardRowDelegate(QStyledItemDelegate):
         has_notes = index.data(ROLE_HAS_NOTES)
         has_retest = bool(index.data(ROLE_HAS_RETEST_FLAG))
         has_report = bool(index.data(ROLE_HAS_REPORT))
+        conclusion = index.data(ROLE_CONCLUSION)          # None = feature off, "" = no conclusion yet
         has_attach = False
         try:
             has_attach = bool(int(has_img or 0)) or bool(int(has_pdf or 0))
@@ -490,6 +492,26 @@ class CardRowDelegate(QStyledItemDelegate):
                 ix = right_x - iw
                 iy = center_y - (ih // 2)
                 painter.drawPixmap(ix, iy, pm)
+                right_x = ix - 6
+
+        # conclusion (drawn left of the report icon, so the report hit test stays the same):
+        # filled dot in the outcome colour = conclusion written; hollow amber ring on "Done" = still missing
+        if conclusion is not None:
+            from db.series_conclusion import OUTCOME_COLOURS
+            d = 12
+            ix, iy = right_x - d, center_y - d // 2
+            if conclusion:
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QColor(OUTCOME_COLOURS.get(conclusion, "#2e9e4f")))
+                painter.drawEllipse(ix, iy, d, d)
+                painter.setPen(QPen(QColor("#FFFFFF"), 1.6))
+                painter.drawLine(ix + 3, iy + 6, ix + 5, iy + 9)
+                painter.drawLine(ix + 5, iy + 9, ix + 9, iy + 3)
+                right_x = ix - 6
+            elif status_id == 3:
+                painter.setPen(QPen(QColor("#E0A800"), 1.6, Qt.DashLine))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(ix, iy, d, d)
                 right_x = ix - 6
 
         painter.restore()
@@ -2565,6 +2587,8 @@ class BacklogScreen(QWidget):
         # gemeinsam mit der Web-App: db/series_overview.py
         from db import series_overview
         self._bl_stamp = series_overview.backlog_fingerprint()
+        from db import series_conclusion
+        self._conclusion_map = series_conclusion.summary_map() if series_conclusion.table_ready() else None
         self._retest_flags_map = series_overview.retest_flags_map()
         self._series_report_map = series_overview.series_report_map()
         self._load_status_into(self.tbl_backlog["table"], 1)
@@ -2660,6 +2684,17 @@ class BacklogScreen(QWidget):
             item.setData(ROLE_HAS_NOTES, row.get("HasNotes", 0) or 0)
             has_report = bool(getattr(self, "_series_report_map", {}).get(int(series_id))) if series_id else False
             item.setData(ROLE_HAS_REPORT, has_report)
+            concl_map = getattr(self, "_conclusion_map", None)
+            tips = []
+            if concl_map is not None and series_id:
+                c = concl_map.get(int(series_id))
+                item.setData(ROLE_CONCLUSION, (c.get("outcome") or "open") if c else "")
+                if c:
+                    from db.series_conclusion import OUTCOME_LABELS
+                    tips.append("Conclusion: " + (OUTCOME_LABELS.get(c.get("outcome"), "") + " – " if c.get("outcome") else "")
+                                + (c.get("summary") or ""))
+                elif int(status_id) == 3:
+                    tips.append("Done – no conclusion yet")
 
             open_flags = getattr(self, "_retest_flags_map", {}).get(int(series_id), []) if series_id else []
             if open_flags:
@@ -2670,7 +2705,9 @@ class BacklogScreen(QWidget):
                     v_label = format_trial_number(vno) if vno not in (None, "") else "?"
                     labels.append(f"{v_label} · {f.get('LabSource') or ''}"
                                   + (f" — {f.get('Note')}" if f.get("Note") else ""))
-                item.setToolTip("Open retest flag:\n" + "\n".join(labels))
+                tips.insert(0, "Open retest flag:\n" + "\n".join(labels))
+            if tips:
+                item.setToolTip("\n\n".join(tips))
 
             item.setData(ROLE_EXP_PK, row.get("ExperimentPK"))
             # Owner-Farbe: nur ausserhalb Backlog anzeigen
@@ -2770,9 +2807,15 @@ class BacklogScreen(QWidget):
                 self._handle_dnd_move(sid, old_status_id, new_status_id)
             return
         names = {1: "Backlog", 2: "In Progress", 3: "Done", 4: "To Be Cleaned", 5: "Archived"}
+        extra = ""
+        if new_status_id == 5:
+            from db import series_conclusion
+            n_missing = sum(1 for sid in series_ids if series_conclusion.missing_for_archive(sid))
+            if n_missing:
+                extra = f"\n\n{n_missing} of them have no conclusion yet."
         if QMessageBox.question(
                 self, "Move series",
-                f"Move {len(series_ids)} series to '{names.get(new_status_id, new_status_id)}'?",
+                f"Move {len(series_ids)} series to '{names.get(new_status_id, new_status_id)}'?{extra}",
                 QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Yes) != QMessageBox.Yes:
             return
         problems = []
@@ -2815,6 +2858,15 @@ class BacklogScreen(QWidget):
         if reason:
             _deny(self, "No permission", backlog_moves.DENY_MESSAGES[reason])
             return False
+
+        # no conclusion yet -> ask before archiving (one card; several cards are asked once above)
+        if new_status_id == 5 and problems is None:
+            from db import series_conclusion
+            if series_conclusion.missing_for_archive(series_id) and QMessageBox.question(
+                    self, "No conclusion yet",
+                    "This series has no conclusion yet (tab \"Conclusion\" in Show Experiment).\n\nArchive it anyway?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+                return False
 
         # Joker-Maschine Regel: von Backlog weg nur mit Nicht-Joker-Maschine
         new_machine_id = None

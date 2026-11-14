@@ -31,6 +31,12 @@ Ausnahmen nur auf ausdrückliche Ansage des Nutzers.
 
 **Git / GitHub** (Nutzerentscheid 2026-11-14): beide Repos haben `origin` = privates GitHub (`reestoni/tripplet_project`, `reestoni/tripplet_web`). **Nach jedem Commit sofort pushen** (aktueller Zweig; Desktop arbeitet auf `ref-comparison`, Web auf `main`) - GitHub ist die Sicherung gegen Totalverlust. Fehlgeschlagenen Push melden. Zugangsdaten nie einchecken (`db_secrets.json`, `secrets.enc` sind ignoriert).
 
+**Fazit pro Serie** (2026-11-14, beide Apps): `db/series_conclusion.py` + `tblSeriesConclusion` (nur über
+`tools/series_conclusion_migration.py`, dev_local erledigt, dev/prod am Montag 2026-11-16). Reiter "Conclusion"
+(`ui/widgets/conclusion_tab.py`), Backlog-Karte (Punkt / gestrichelter Ring bei Done ohne Fazit), All Experiments Spalten +
+Filter, Quick Search Feld "Conclusion", Request-Popup, Hinweis beim Archivieren, Glocke `series_conclusion` an den Request-Ersteller.
+Details in der Web-`CLAUDE.md`.
+
 **Live-Backlog** (2026-11-14, beide Apps): Backlog lädt sich selbst neu, wenn `series_overview.backlog_fingerprint()` sich ändert
 (`BacklogScreen._live_check`, QTimer 30 s, nicht bei Menü/Dialog/gedrückter Maus). "Link kopieren" gibt es bewusst nur im Web
 (Nutzerentscheid 2026-11-14), nicht im Desktop.

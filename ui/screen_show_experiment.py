@@ -644,6 +644,16 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
         scroll.setWidget(host)
         root.addWidget(scroll, 1)
 
+        # Results of the series linked to this request (db/series_conclusion.for_request, same in the web popup)
+        self._concl_label = QLabel()
+        self._concl_label.setWordWrap(True)
+        self._concl_label.setTextFormat(Qt.RichText)
+        self._concl_label.setStyleSheet("QLabel{background:#f4f8f4; border:1px solid #d6e6d6; border-radius:6px; padding:8px;}")
+        self._concl_label.setVisible(False)
+        root.addWidget(self._concl_label, 0)
+        if not self._title_prefix:          # archived versions show the request only
+            self._load_conclusions()
+
         btns = QDialogButtonBox(QDialogButtonBox.Close)
         btns.rejected.connect(self.reject)
         btns.accepted.connect(self.accept)
@@ -657,6 +667,30 @@ class _ExperimentRequestReadOnlyDialog(QDialog):
 
         # Initial state for the images indicator
         self._update_images_icon()
+
+    def _load_conclusions(self) -> None:
+        from html import escape as _esc
+        from db import series_conclusion as _sc
+        try:
+            items = _sc.for_request(int(self._request_id)) if self._request_id not in (None, "") else []
+        except Exception:
+            items = []
+        if not items:
+            return
+        parts = ["<b>Results of the linked series</b>"]
+        for c in items:
+            col = _sc.OUTCOME_COLOURS.get(c.get("outcome") or "open", "#8a94a0")
+            line = (f"<br><span style='color:{col}'>●</span> <b>{_esc(c['experiment_id'])} – {_esc(c['series_name'])}</b>"
+                    + (f" · {_sc.OUTCOME_LABELS.get(c['outcome'], '')}" if c.get("outcome") else ""))
+            if c.get("summary"):
+                line += f"<br>&nbsp;&nbsp;&nbsp;{_esc(c['summary'])}"
+            rec = " – ".join(x for x in (_sc.RECOMMENDATION_LABELS.get(c.get("recommendation") or "", ""),
+                                         c.get("recommendation_text") or "") if x)
+            if rec:
+                line += f"<br>&nbsp;&nbsp;&nbsp;<i>Recommendation: {_esc(rec)}</i>"
+            parts.append(line)
+        self._concl_label.setText("".join(parts))
+        self._concl_label.setVisible(True)
 
     def _request_has_images(self, request_id: Any) -> bool:
         """True if at least one image row exists for this request."""
@@ -2700,7 +2734,7 @@ class ShowExperimentScreen(QWidget):
         if not want:
             return
         for i in range(self.tabs.count()):
-            if self.tabs.tabText(i) == want and self.tabs.isTabVisible(i):
+            if self.tabs.tabText(i).replace(" ✓", "") == want.replace(" ✓", "") and self.tabs.isTabVisible(i):
                 self.tabs.setCurrentIndex(i)
                 return
 
@@ -2718,7 +2752,29 @@ class ShowExperimentScreen(QWidget):
 
     # ---------- PUBLIC API ----------
 
+    def _show_conclusion_tab(self) -> None:
+        from db import series_conclusion as _sc
+        tab = getattr(self, "tab_conclusion", None)
+        if tab is None:
+            return
+        idx = self.tabs.indexOf(tab)
+        if idx != -1:
+            self.tabs.removeTab(idx)
+        if not _sc.table_ready() or self._series_pk is None:
+            return
+        tab.load(self._series_pk, list(self._trial_ids), list(self._trial_labels))
+        self.tabs.addTab(tab, "Conclusion")
+        self._update_conclusion_tab_title()
+
+    def _update_conclusion_tab_title(self) -> None:
+        tab = getattr(self, "tab_conclusion", None)
+        idx = self.tabs.indexOf(tab) if tab is not None else -1
+        if idx != -1:
+            self.tabs.setTabText(idx, "Conclusion ✓" if tab.has_conclusion() else "Conclusion")
+
     def load_record(self, exp_pk: int, series_pk: int, experiment_id: str):
+        if getattr(self, "tab_conclusion", None) is not None:
+            self.tab_conclusion.ask_save_if_dirty()
         # Unsaved changes of the series shown before (e.g. left via the
         # sidebar, then another series opened from the Backlog) were lost
         # silently - ask Save / Discard first (Nutzerwunsch 2026-10-16).
@@ -2873,6 +2929,9 @@ class ShowExperimentScreen(QWidget):
             if idx != -1:
                 self.tabs.removeTab(idx)
             self.tabs.addTab(self.tab_notes, "Notes")
+
+        # Conclusion tab right of Notes (only when the database has tblSeriesConclusion)
+        self._show_conclusion_tab()
 
         # Notizen an Werten laden (Dreiecke + Liste im Notes-Tab)
         _cell_notes_ui.reload_notes(self)
@@ -3400,6 +3459,11 @@ class ShowExperimentScreen(QWidget):
         vrd.addWidget(self.tbl_rd_machine, 1)
         # Tab wird erst durch _build_rd_machine_tab eingefügt
 
+        # Conclusion tab (db/series_conclusion.py, shared with the web) - added in _load_record_inner
+        from ui.widgets.conclusion_tab import ConclusionTab
+        self.tab_conclusion = ConclusionTab()
+        self.tab_conclusion.saved.connect(self._update_conclusion_tab_title)
+
         # Notes Tab (always visible)
         self.tab_notes = QWidget()
         vn = QVBoxLayout(self.tab_notes)
@@ -3620,6 +3684,8 @@ class ShowExperimentScreen(QWidget):
 
     def confirm_close_with_unsaved(self) -> bool:
         """Asks Save / Discard / Cancel if something is unsaved. True = go on."""
+        if getattr(self, "tab_conclusion", None) is not None:
+            self.tab_conclusion.ask_save_if_dirty()
         if not self._has_unsaved():
             return True
         n = self.unsaved_count()

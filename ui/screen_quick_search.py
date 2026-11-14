@@ -312,7 +312,7 @@ class QuickSearchDialog(QDialog):
         # aber eckig mit sichtbaren Artefakten (siehe Moduldocstring).
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setModal(True)
-        self.setFixedWidth(860)
+        self.setFixedWidth(1040)   # 5 fields since the conclusion search (2026-11-14)
 
         accent = get_accent()
         # Der eigentliche Karten-Look sitzt auf `_card` statt direkt auf dem
@@ -360,11 +360,13 @@ class QuickSearchDialog(QDialog):
         self._f_jet     = _SearchField("JET(S)", "e.g. P213, APh213")
         self._f_yarn    = _SearchField("YARN(S)", "e.g. PES 78f36")
         self._f_machine = _SearchField("MACHINE(S)", "e.g. eAFK")
+        self._f_concl   = _SearchField("CONCLUSION", "e.g. soft knot")   # db/series_conclusion.py
 
         bar_lay.addWidget(self._f_series, 2)
         bar_lay.addWidget(self._f_jet, 2)
         bar_lay.addWidget(self._f_yarn, 2)
         bar_lay.addWidget(self._f_machine, 1)
+        bar_lay.addWidget(self._f_concl, 2)
 
         btn_close = _CloseButton()
         btn_close.setToolTip("Close (Esc)")
@@ -415,7 +417,7 @@ class QuickSearchDialog(QDialog):
         self._timer.setInterval(350)
         self._timer.timeout.connect(self._do_search)
 
-        for f in (self._f_series, self._f_jet, self._f_yarn, self._f_machine):
+        for f in (self._f_series, self._f_jet, self._f_yarn, self._f_machine, self._f_concl):
             f.edit.textChanged.connect(self._on_text_changed)
             f.edit.installEventFilter(self)
 
@@ -450,7 +452,7 @@ class QuickSearchDialog(QDialog):
 
     def eventFilter(self, obj, ev):
         """Fängt Pfeil- und Enter-Tasten in den Suchfeldern ab für Tastaturnavigation."""
-        edits = [f.edit for f in (self._f_series, self._f_jet, self._f_yarn, self._f_machine)]
+        edits = [f.edit for f in (self._f_series, self._f_jet, self._f_yarn, self._f_machine, self._f_concl)]
         if obj in edits and ev.type() == ev.Type.KeyPress:
             if ev.key() == Qt.Key_Down:
                 self._move_selection(1); return True
@@ -466,7 +468,8 @@ class QuickSearchDialog(QDialog):
         machines = _terms(self._f_machine.edit.text())
         series  = _terms(self._f_series.edit.text())
         yarns   = _terms(self._f_yarn.edit.text())
-        if not jets and not machines and not series and not yarns:
+        concl   = _terms(self._f_concl.edit.text())
+        if not jets and not machines and not series and not yarns and not concl:
             self._show_hint("Fill in at least one field to search…")
             self._timer.stop()
             return
@@ -478,9 +481,10 @@ class QuickSearchDialog(QDialog):
         machines = _terms(self._f_machine.edit.text())
         series   = _terms(self._f_series.edit.text())
         yarns    = _terms(self._f_yarn.edit.text())
-        if not jets and not machines and not series and not yarns:
+        concl    = _terms(self._f_concl.edit.text())
+        if not jets and not machines and not series and not yarns and not concl:
             return
-        results = _search(jets, machines, series, yarns)
+        results = _search(jets, machines, series, yarns, concl)
         self._populate(results)
 
     def _populate(self, results: List[Dict]):

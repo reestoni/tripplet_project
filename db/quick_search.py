@@ -15,7 +15,8 @@ def _terms(text: str) -> List[str]:
     return [t.strip() for t in text.split(",") if t.strip()]
 
 
-def _search(jets: List[str], machines: List[str], series_names: List[str], yarns: List[str]) -> List[Dict]:
+def _search(jets: List[str], machines: List[str], series_names: List[str], yarns: List[str],
+            conclusions: List[str] = None) -> List[Dict]:
     """Führt die Datenbanksuche aus und gibt Treffer-Dicts zurück.
 
     Sucht gleichzeitig in Jet-, Maschinen-, Serien- und Garn-Feldern.
@@ -26,6 +27,8 @@ def _search(jets: List[str], machines: List[str], series_names: List[str], yarns
         machines:     Suchbegriffe für Maschinen-Spalten.
         series_names: Suchbegriffe für Serien-Namen.
         yarns:        Suchbegriffe für Garn-Spalten.
+        conclusions:  Begriffe im Fazit der Serie (db/series_conclusion.py: Ziel, Kurzfazit, Erkenntnisse,
+                      Empfehlung) - alle müssen vorkommen.
 
     Returns:
         Liste von Dicts mit Keys: exp_pk, exp_id, series_pk, series_name, maschine, reason.
@@ -103,6 +106,11 @@ def _search(jets: List[str], machines: List[str], series_names: List[str], yarns
     except Exception:
         return []
 
+    concl_hits: Dict[int, str] = {}
+    if conclusions:
+        from db import series_conclusion
+        concl_hits = series_conclusion.search(conclusions)
+
     # --- Filter in Python (AND across filters, AND within multi-term) ---
     result = []
     for spk, s in all_series.items():
@@ -159,6 +167,12 @@ def _search(jets: List[str], machines: List[str], series_names: List[str], yarns
             if not all_found_y:
                 continue
             reasons.append("Yarn: " + ", ".join(matched_y))
+
+        # Filter: conclusion text (all terms in the conclusion of the series)
+        if conclusions:
+            if spk not in concl_hits:
+                continue
+            reasons.append("Conclusion: " + concl_hits[spk][:80])
 
         result.append({**s, "reasons": reasons})
 

@@ -59,10 +59,11 @@ class _NotifItem(QFrame):
     request_changed_clicked = Signal(int, int)  # payload_experiment_request_id, payload_archived_version_id
     read_toggled = Signal()
 
-    _TYPE_ICON = {"yarn_stock": "🧵", "experiment_request": "📝", "experiment_request_changed": "🔄"}
+    _TYPE_ICON = {"yarn_stock": "🧵", "experiment_request": "📝", "experiment_request_changed": "🔄",
+                  "series_conclusion": "✅"}
     _TYPE_TAG = {
         "yarn_stock": "YARN STOCK", "experiment_request": "EXPERIMENT REQUEST",
-        "experiment_request_changed": "REQUEST CHANGED",
+        "experiment_request_changed": "REQUEST CHANGED", "series_conclusion": "CONCLUSION",
     }
 
     def __init__(self, n: dict, parent: QWidget | None = None):
