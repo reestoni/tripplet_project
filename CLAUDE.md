@@ -18,6 +18,9 @@ Desktop-App (PySide6) für Textil-/Garnlabor-Tests (Heberlein). MySQL-Backend, h
 
 ## Grundregel ab 2026-11-14: jedes neue Feature in BEIDEN Apps
 
+Ablageorte auf dem Fileserver stehen zentral in `db/file_roots.py` (Default dev = `C:\ttt\...`, prod = H:-Freigabe,
+Override `TRIPPLET_DIR_<KEY>` für den Web-Server) - neue Ordner dort eintragen, nie `H:` fest in Code schreiben.
+
 Die Web-App (`C:\python\tripplet_web`) soll den Desktop ersetzen; sind alle Tests gut, wird diese
 Desktop-App eingestellt (Nutzerentscheid 2026-11-14). **Bis dahin muss jedes neue Feature, jede Änderung
 und jede Fehlerkorrektur in beiden Apps umgesetzt werden**, auch wenn der Nutzer nur eine nennt: Logik

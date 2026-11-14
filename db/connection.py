@@ -70,6 +70,10 @@ def _load_master_key() -> Optional[bytes]:
     else:
         candidates.append(pathlib.Path(__file__).parent.parent / "secrets.enc")
         candidates.append(pathlib.Path("secrets.enc"))
+    # servers (web app): key outside the code folder, so a new release needs no copy of it
+    candidates.append(pathlib.Path(r"C:\ProgramData\TrippleT\secrets.enc"))
+    if os.environ.get("TRIPPLET_MASTER_KEY_PATH"):
+        candidates.insert(0, pathlib.Path(os.environ["TRIPPLET_MASTER_KEY_PATH"]))
 
     for p in candidates:
         if p.exists():
@@ -318,7 +322,8 @@ def raw_mysql_connect(mode: str):
 
 _POOL = None
 _POOL_LOCK = threading.Lock()
-_POOL_SIZE = 5
+# web server: more parallel requests than one desktop user (env TRIPPLET_DB_POOL_SIZE, 1..32)
+_POOL_SIZE = max(1, min(32, int(os.environ.get("TRIPPLET_DB_POOL_SIZE") or 5)))
 # Verhindert lange (OS-Default-)Haenger bei unerreichbarem Host - vorher war
 # gar kein Timeout gesetzt, ein Netz-Hänger führte zu ~20s+ Warten ohne
 # jede Rückmeldung (siehe TestLoginScreenSicherheit-Timing).

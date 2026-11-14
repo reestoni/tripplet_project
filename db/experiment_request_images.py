@@ -26,15 +26,14 @@ import uuid
 import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from db.connection import get_connection, is_dev_mode
+from db import file_roots
+from db.connection import get_connection, is_dev_mode  # noqa: F401
 from db import experiment_requests as er
 
 # Basisordner fuer Experiment-Request-Bilder
 # - PROD: Netzlaufwerk (gemeinsame Ablage)
 # - DEV:  lokaler Testordner
-REQUEST_IMAGES_BASE_DIR = (
-    r"C:\ttt\images\ExperimentRequestImages" if is_dev_mode() else r"H:\Technik\TrippleT\ExperimentRequestImages"
-)
+REQUEST_IMAGES_BASE_DIR = file_roots.folder("REQUEST_IMAGES")   # env TRIPPLET_DIR_REQUEST_IMAGES
 
 IMAGE_TABLE = "tblExperimentRequestImage"
 IMAGE_FK = "ExperimentRequestID"

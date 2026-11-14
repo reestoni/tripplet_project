@@ -300,14 +300,9 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".gif", ".webp"}
 
 
 def files_root() -> str:
-    """JetFiles folder (any dev database: C:\\ttt\\JetFiles, else the H: share)."""
-    try:
-        from db.connection import is_dev_mode
-        if is_dev_mode():
-            return "C:\\ttt\\JetFiles"
-    except Exception:
-        pass
-    return "H:\\Technik\\TrippleT\\JetFiles"
+    """JetFiles folder (dev databases: C:\\ttt\\JetFiles, else the H: share; env TRIPPLET_DIR_JET_FILES)."""
+    from db import file_roots
+    return file_roots.folder("JET_FILES")
 
 
 def list_files(jet_id) -> List[Dict]:

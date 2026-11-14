@@ -1092,6 +1092,7 @@ def sync_models_async(force: bool = False, blocking: bool = False) -> None:
 
     def _sync():
         global _MODELS_DIR_CACHE
+        import os
         import shutil as _shutil
         log = _get_model_sync_logger()
 
@@ -1101,7 +1102,7 @@ def sync_models_async(force: bool = False, blocking: bool = False) -> None:
         log.info("Sync gestartet. Lokaler Mirror: %s", local)
 
         # Dann Netzwerk-Sync versuchen (darf scheitern)
-        central = Path(r"H:\Technik\YarnScope\models")
+        central = Path(os.environ.get("TRIPPLET_YARNSCOPE_MODELS_DIR") or r"H:\Technik\YarnScope\models")
         try:
             # central.exists() kann auf langsamen/kalten Netzwerken laenger
             # blockieren – darum in eigenem Thread mit Timeout

@@ -43,7 +43,7 @@ import app_meta
 # ---------------------------------------------------------------------------
 # Konstanten
 # ---------------------------------------------------------------------------
-ATY_TDMS_BASE_DIR = r"H:\Technik\TrippleT\ATYtdms"
+ATY_TDMS_BASE_DIR = os.environ.get("TRIPPLET_YARNSCOPE_ATY_DIR") or r"H:\Technik\TrippleT\ATYtdms"
 
 # Status-Werte
 ST_NO_FILE  = "—"

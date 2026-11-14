@@ -10,21 +10,18 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
-from db.connection import get_connection, is_dev_mode
+from db import file_roots
+from db.connection import get_connection, is_dev_mode  # noqa: F401 (is_dev_mode re-exported)
 
 # Basisordner fuer TrialSeries-Bilder
 # - PROD: Netzlaufwerk (gemeinsame Ablage)
 # - DEV:  lokaler Testordner
-TRIALSERIES_IMAGES_BASE_DIR = (
-    r"C:\ttt\images\TrialSeriesImages" if is_dev_mode() else r"H:\\Technik\\TrippleT\\TrialSeriesImages"
-)
+TRIALSERIES_IMAGES_BASE_DIR = file_roots.folder("TRIALSERIES_IMAGES")   # env TRIPPLET_DIR_TRIALSERIES_IMAGES
 
 # Basisordner fuer TrialSeries-PDFs
 # - DEV + DEV_LOCAL: lokaler Testordner
 # - PROD: Netzlaufwerk (gemeinsame Ablage)
-TRIALSERIES_PDFS_BASE_DIR = (
-    r"C:\ttt\pdfs" if is_dev_mode() else r"H:\\Technik\\TrippleT\\TrialSeriesPDF"
-)
+TRIALSERIES_PDFS_BASE_DIR = file_roots.folder("TRIALSERIES_PDFS")       # env TRIPPLET_DIR_TRIALSERIES_PDFS
 
 
 def _row(rid: Any, rel_path: Any, stored: Any, orig_name: Any, created_by: Any) -> Dict[str, Any]:
@@ -93,8 +90,8 @@ def list_pdfs(series_id: Any) -> List[Dict[str, Any]]:
 # folders a download may come from (the DB keeps absolute folders; copies of prod data on
 # dev/dev_local still point to the share, so both variants are allowed)
 DOWNLOAD_ROOTS = {
-    "image": (r"C:\ttt\images\TrialSeriesImages", r"H:\Technik\TrippleT\TrialSeriesImages"),
-    "pdf": (r"C:\ttt\pdfs", r"H:\Technik\TrippleT\TrialSeriesPDF"),
+    "image": file_roots.known_folders("TRIALSERIES_IMAGES"),
+    "pdf": file_roots.known_folders("TRIALSERIES_PDFS"),
 }
 
 

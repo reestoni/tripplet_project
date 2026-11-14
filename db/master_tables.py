@@ -223,14 +223,9 @@ def yarn_label(y: Dict[str, Any]) -> str:
 
 # ---------------------------------------------------------------------------------------------------- top plate files
 def files_root() -> str:
-    """TopPlateFiles folder (dev databases: C:\\ttt\\TopPlateFiles, else the H: share)."""
-    try:
-        from db.connection import is_dev_mode
-        if is_dev_mode():
-            return "C:\\ttt\\TopPlateFiles"
-    except Exception:
-        pass
-    return "H:\\Technik\\TrippleT\\TopPlateFiles"
+    """TopPlateFiles folder (dev databases: C:\\ttt\\TopPlateFiles, else the H: share; env TRIPPLET_DIR_TOPPLATE_FILES)."""
+    from db import file_roots
+    return file_roots.folder("TOPPLATE_FILES")
 
 
 def file_type(filename: str) -> str:

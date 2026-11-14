@@ -1710,12 +1710,8 @@ class MainWindow(QMainWindow):
 
         EXCLUDE = {"ID", "Timestamp", "RequestStatus", "CreatedBy"}
 
-        from db.connection import is_dev_mode as _is_dev
-        IMAGE_BASE = (
-            "C:\\ttt\\images\\ExperimentRequestImages"
-            if _is_dev()
-            else "H:\\Technik\\TrippleT\\ExperimentRequestImages"
-        )
+        from db import file_roots as _file_roots
+        IMAGE_BASE = _file_roots.folder("REQUEST_IMAGES")
 
         def _show_image(i):
             images = img_state["images"]
