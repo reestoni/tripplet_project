@@ -284,6 +284,34 @@ def archived_rows(er_field: Optional[str] = None) -> List[Dict[str, Any]]:
         return []
 
 
+def backlog_fingerprint() -> str:
+    """Short fingerprint of everything the Backlog shows (status, prio, name, machine, owner, notes, attachment
+    and retest-flag counts). Both apps poll it and reload the Backlog only when it changed - cheap enough for
+    every 30 s. Empty string if the database cannot be read."""
+    import hashlib
+    try:
+        rows = fetch_all(
+            "SELECT [ID], [BacklogStatusID], [BacklogPrio], [SeriesName], [MachineID], [BacklogOwner], "
+            "CASE WHEN ([Notes] IS NOT NULL AND [Notes] <> '') THEN 1 ELSE 0 END AS [N] "
+            "FROM tblTrialSeries ORDER BY [ID]", [])
+        extra = []
+        for tbl in ("tblTrialSeriesImage", "tblTrialSeriesPDF"):
+            try:
+                extra.append(fetch_all(f"SELECT COUNT(*) AS [C] FROM {tbl}", [])[0]["C"])
+            except Exception:
+                extra.append(None)
+        flags = retest_flags_map()
+        extra.append(sorted((int(k), len(v)) for k, v in flags.items()))
+    except Exception:
+        return ""
+    h = hashlib.sha1()
+    for r in rows:
+        h.update(repr((r.get("ID"), r.get("BacklogStatusID"), r.get("BacklogPrio"), r.get("SeriesName"),
+                       r.get("MachineID"), r.get("BacklogOwner"), r.get("N"))).encode("utf-8"))
+    h.update(repr(extra).encode("utf-8"))
+    return h.hexdigest()[:16]
+
+
 def retest_flags_map() -> Dict[int, list]:
     """{TrialSeriesID: [open retest flags]} (db/retest_flags.py)."""
     try:

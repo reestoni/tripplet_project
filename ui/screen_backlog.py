@@ -878,6 +878,9 @@ class BacklogDnDTable(QTableWidget):
         act_open_new_window.setEnabled(
             callable(getattr(getattr(self, "_screen", None), "on_open_in_new_os_window", None))
         )
+        from db import web_links
+        act_link = menu.addAction("🔗  Copy web link")
+        act_link.setEnabled(bool(web_links.base_url()))
         menu.addSeparator()
         act_prio = menu.addAction("Change priority…")
         act_status = menu.addAction("Change status…")
@@ -912,6 +915,11 @@ class BacklogDnDTable(QTableWidget):
                     cb(int(exp_pk), int(series_id), exp_id)
                 except Exception:
                     pass
+        elif chosen == act_link:
+            url = web_links.series_url(int(series_id))
+            if url:
+                from PySide6.QtGui import QGuiApplication
+                QGuiApplication.clipboard().setText(url)
         elif chosen == act_prio:
             self._ctx_change_prio(int(series_id), it)
         elif chosen == act_status:
@@ -2062,6 +2070,14 @@ class BacklogScreen(QWidget):
         self._build_ui()
         self.reload_all()
 
+        # Live update (2026-11-14, same as the web Backlog): every 30 s compare the fingerprint of the Backlog
+        # (db/series_overview.backlog_fingerprint) and reload only when someone else changed something.
+        from PySide6.QtCore import QTimer as _QTimer
+        self._live_timer = _QTimer(self)
+        self._live_timer.setInterval(30000)
+        self._live_timer.timeout.connect(self._live_check)
+        self._live_timer.start()
+
     def showEvent(self, event):
         """Lädt den Backlog bei jedem Öffnen neu (damit Status-Änderungen sichtbar sind)."""
         """Wird aufgerufen, wenn der Screen angezeigt wird – Backlog immer neu laden."""
@@ -2556,6 +2572,7 @@ class BacklogScreen(QWidget):
         """Lädt alle fünf Status-Boxen neu."""
         # gemeinsam mit der Web-App: db/series_overview.py
         from db import series_overview
+        self._bl_stamp = series_overview.backlog_fingerprint()
         self._retest_flags_map = series_overview.retest_flags_map()
         self._series_report_map = series_overview.series_report_map()
         self._load_status_into(self.tbl_backlog["table"], 1)
@@ -2563,6 +2580,27 @@ class BacklogScreen(QWidget):
         self._load_status_into(self.tbl_done["table"], 3)
         self._load_status_into(self.tbl_tbc["table"], 4)
         self._load_archived()
+
+    def _live_check(self):
+        """Timer: reload when the Backlog changed elsewhere - not while hidden, dragging, a menu or a dialog is open."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication
+        if not self.isVisible() or QApplication.activePopupWidget() or QApplication.activeModalWidget():
+            return
+        if QApplication.mouseButtons() != Qt.NoButton:
+            return
+        from db import series_overview
+        stamp = series_overview.backlog_fingerprint()
+        if not stamp or stamp == getattr(self, "_bl_stamp", None):
+            return
+        try:
+            self.reload_all()
+        except Exception:
+            return
+        try:
+            self._refresh_sidebar()
+        except Exception:
+            pass
 
     def _load_archived(self):
         """Lädt Archived-Daten (BacklogStatusID=5) und befüllt ArchivedPanel — sortiert nach Experiment ID absteigend."""
