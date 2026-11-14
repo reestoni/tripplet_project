@@ -179,6 +179,11 @@ class ChangePasswordScreen(QWidget):
         elif err == ua.PW_INCOMPLETE:
             QMessageBox.warning(self, "Incomplete input",
                                 "Please fill out all three fields.")
+        elif err == ua.PW_LOCKED:
+            from db.login_guard import WINDOW_MINUTES
+            QMessageBox.warning(self, "Locked",
+                                f"Too many wrong passwords for this user. Please try again in up to "
+                                f"{WINDOW_MINUTES} minutes.")
         elif err == ua.PW_WRONG_OLD:
             QMessageBox.warning(self, "Wrong password",
                                 "The old password is not correct.")

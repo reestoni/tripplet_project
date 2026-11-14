@@ -183,6 +183,15 @@ class LoginScreen(QWidget):
             self.on_change_pw(user)
             return
 
+        # protection against password guessing (db/login_guard.py, shared with the web login)
+        from db import login_guard
+        locked, minutes = login_guard.lock_status(user)
+        if locked:
+            QMessageBox.warning(self, "Login locked",
+                                f"Too many wrong passwords for this user.\n"
+                                f"Please try again in {minutes} minute{'s' if minutes != 1 else ''}.")
+            return
+
         try:
             ok = check_credentials(user, pw)
         except Exception as e:
@@ -190,6 +199,7 @@ class LoginScreen(QWidget):
             return
 
         if ok:
+            login_guard.record_success(user, "desktop")
             # --- Benutzerinfos aus DB laden ---
             # gemeinsame Logik mit der Web-App (db/user_profile.py)
             from db.user_profile import load_profile
@@ -298,11 +308,18 @@ class LoginScreen(QWidget):
                 pass
 
             # Standard-Fehlermeldung
+            left = login_guard.record_failure(user, "desktop")
             m = QMessageBox(self)
             m.setIcon(QMessageBox.Warning)
             m.setWindowTitle("Login failed")
             m.setText("Username or password is incorrect.")
-            m.setInformativeText("Please check your entries.")
+            if left == 0:
+                m.setInformativeText(f"This user is now locked for {login_guard.WINDOW_MINUTES} minutes.")
+            elif left is not None and left <= 2:
+                m.setInformativeText(f"Please check your entries. {left} attempt{'s' if left != 1 else ''} left "
+                                     f"before the login is locked for {login_guard.WINDOW_MINUTES} minutes.")
+            else:
+                m.setInformativeText("Please check your entries.")
             m.exec()
 
     def _open_change_pw_if_valid(self):

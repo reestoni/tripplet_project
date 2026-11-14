@@ -67,6 +67,7 @@ PW_MISMATCH = "mismatch"          # new != repeat (case-sensitive)
 PW_SAME_AS_OLD = "same_as_old"
 PW_SAME_AS_USER = "same_as_user"  # case-insensitive
 PW_UPDATE_FAILED = "update_failed"
+PW_LOCKED = "locked"              # too many wrong passwords (db/login_guard.py)
 
 
 def check_password_change(username: str, old: str, new: str, repeat: str) -> Optional[str]:
@@ -77,7 +78,11 @@ def check_password_change(username: str, old: str, new: str, repeat: str) -> Opt
         return PW_NO_USER
     if not (old and new and repeat):
         return PW_INCOMPLETE
+    from db import login_guard
+    if login_guard.lock_status(u)[0]:
+        return PW_LOCKED
     if not verify_user_password(u, old):
+        login_guard.record_failure(u, "change_password")
         return PW_WRONG_OLD
     if new != repeat:
         return PW_MISMATCH
