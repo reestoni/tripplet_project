@@ -29,6 +29,8 @@ Ausnahmen nur auf ausdrückliche Ansage des Nutzers.
 
 **Login-Sperre** (2026-11-14, beide Apps): `db/login_guard.py` - nach 5 falschen Passwörtern für einen Benutzernamen innerhalb 15 Min. ist er 15 Min. gesperrt (ab dem letzten Fehlversuch); Erfolg setzt zurück. Gezählt in `tblUsageLog` (EventType `security`, `login_failed`/`login_ok`, Username klein) mit DB-Zeit, Desktop und Web zusammen; auch das alte Passwort beim Passwortwechsel (`user_account.PW_LOCKED`). Fehler beim Log = niemand gesperrt. Web: 429 `locked` {minutes}, 401 `invalid` {left}.
 
+**Git / GitHub** (Nutzerentscheid 2026-11-14): beide Repos haben `origin` = privates GitHub (`reestoni/tripplet_project`, `reestoni/tripplet_web`). **Nach jedem Commit sofort pushen** (aktueller Zweig; Desktop arbeitet auf `ref-comparison`, Web auf `main`) - GitHub ist die Sicherung gegen Totalverlust. Fehlgeschlagenen Push melden. Zugangsdaten nie einchecken (`db_secrets.json`, `secrets.enc` sind ignoriert).
+
 ## Aktuell offene Threads (Codewords)
 
 - **"Jet Engineering"** (seit 2026-08-25, Nutzer trainiert ca. 1 Woche lang ML-Modelle
