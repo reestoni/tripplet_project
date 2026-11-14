@@ -22,6 +22,7 @@ FOLDERS: Dict[str, Tuple[str, str]] = {
     "REQUEST_IMAGES": (r"C:\ttt\images\ExperimentRequestImages", SHARE + r"\ExperimentRequestImages"),
     "JET_FILES": (r"C:\ttt\JetFiles", SHARE + r"\JetFiles"),
     "TOPPLATE_FILES": (r"C:\ttt\TopPlateFiles", SHARE + r"\TopPlateFiles"),
+    "USER_AVATARS": (r"C:\ttt\UserAvatars", SHARE + r"\UserAvatars"),
 }
 
 

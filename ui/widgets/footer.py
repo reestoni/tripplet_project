@@ -111,12 +111,20 @@ class FooterBar(QFrame):
         except Exception:
             full = ""
 
-        # Icon (assets/images/user_white.png)
+        # Icon: the profile picture (db/user_avatar.py) if there is one, else assets/images/user_white.png
         try:
-            icon_path = resource_path("assets/images/user_white.png")
-            pm = QPixmap(icon_path)
+            pm = None
+            try:
+                from ui.widgets.avatar import round_pixmap
+                pm = round_pixmap((app_meta.current_user or {}).get("id"), 18)
+            except Exception:
+                pm = None
+            self.user_icon.setFixedSize(18 if pm is not None else 14, 18 if pm is not None else 14)
+            if pm is None:
+                pm = QPixmap(resource_path("assets/images/user_white.png"))
+                if not pm.isNull():
+                    pm = pm.scaled(14, 14, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             if not pm.isNull():
-                pm = pm.scaled(14, 14, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.user_icon.setPixmap(pm)
                 self.user_icon.setVisible(True)
             else:

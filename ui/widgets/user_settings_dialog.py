@@ -2,6 +2,7 @@
 (replaces the former "Accent Colour" button), Nutzerwunsch 2026-10-15.
 
 One place for the personal settings:
+- Profile picture (optional, db/user_avatar.py - file on the share, same picture as the web app)
 - Welcome message (tblUser.WelcomeMessage, shown on the Backlog screen)
 - Accent colour (tblUser.AccentColour)
 - Display of the Show Experiment tables (ui/display_prefs.py): text size,
@@ -98,6 +99,28 @@ class UserSettingsDialog(QDialog):
         self._orig_welcome = _load_welcome_message()
 
         lay = QVBoxLayout(self)
+
+        # ── Profile picture (optional; stored on Save) ───────────────────
+        self._avatar_new = None        # normalised PNG bytes chosen in this dialog
+        self._avatar_remove = False
+        g_pic = QGroupBox("Profile picture")
+        pl = QHBoxLayout(g_pic)
+        self.lbl_avatar = QLabel()
+        self.lbl_avatar.setFixedSize(64, 64)
+        self.lbl_avatar.setAlignment(Qt.AlignCenter)
+        pl.addWidget(self.lbl_avatar)
+        btn_pic = QPushButton("Choose picture…")
+        btn_pic.clicked.connect(self._choose_avatar)
+        pl.addWidget(btn_pic)
+        self.btn_pic_remove = QPushButton("Remove")
+        self.btn_pic_remove.clicked.connect(self._remove_avatar)
+        pl.addWidget(self.btn_pic_remove)
+        pic_hint = QLabel("Optional. Shown next to your name\n(also in the web version).")
+        pic_hint.setStyleSheet("color:#666;")
+        pl.addWidget(pic_hint)
+        pl.addStretch(1)
+        lay.addWidget(g_pic)
+        self._show_avatar()
 
         # ── Welcome message ──────────────────────────────────────────────
         g_welcome = QGroupBox("Welcome message")
@@ -253,9 +276,81 @@ class UserSettingsDialog(QDialog):
         self._update_swatch()
         apply_accent(hex_val)
 
+    # ── profile picture ──────────────────────────────────────────────────
+    def _uid(self):
+        return (app_meta.current_user or {}).get("id")
+
+    def _show_avatar(self) -> None:
+        from db import user_avatar
+        from ui.widgets.avatar import round_pixmap, round_pixmap_from_bytes
+        if self._avatar_new:
+            pm = round_pixmap_from_bytes(self._avatar_new, 64)
+        elif self._avatar_remove:
+            pm = None
+        else:
+            pm = round_pixmap(self._uid(), 64)
+        if pm is not None:
+            self.lbl_avatar.setPixmap(pm)
+            self.lbl_avatar.setStyleSheet("")
+        else:
+            fn = (app_meta.current_user or {}).get("first_name") or ""
+            ln = (app_meta.current_user or {}).get("last_name") or ""
+            self.lbl_avatar.clear()
+            self.lbl_avatar.setText(((fn[:1] + ln[:1]) or "?").upper())
+            from ui.theme import get_accent
+            self.lbl_avatar.setStyleSheet(f"background:{self._accent if hasattr(self, '_accent') else get_accent()};"
+                                          "color:white;font-weight:bold;font-size:18px;border-radius:32px;")
+        has = bool(self._avatar_new) or (not self._avatar_remove and user_avatar.has_avatar(self._uid()))
+        self.btn_pic_remove.setEnabled(has)
+
+    def _choose_avatar(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        from db import user_avatar
+        exts = " ".join("*" + e for e in user_avatar.EXTENSIONS)
+        path, _ = QFileDialog.getOpenFileName(self, "Profile picture", "", f"Pictures ({exts})")
+        if not path:
+            return
+        try:
+            with open(path, "rb") as fh:
+                self._avatar_new = user_avatar.normalise(fh.read())
+            self._avatar_remove = False
+        except (user_avatar.AvatarError, OSError) as e:
+            show_error(self, "Profile picture", str(e), None, warning=True)
+            return
+        self._show_avatar()
+
+    def _remove_avatar(self) -> None:
+        self._avatar_new = None
+        self._avatar_remove = True
+        self._show_avatar()
+
+    def _save_avatar(self) -> None:
+        from db import user_avatar
+        uid = self._uid()
+        if uid is None:
+            return
+        if self._avatar_new:
+            user_avatar.save(uid, self._avatar_new)
+        elif self._avatar_remove:
+            user_avatar.delete(uid)
+        else:
+            return
+        # repaint the footers of the open screens
+        from ui.widgets.footer import FooterBar
+        for w in QApplication.allWidgets():
+            if isinstance(w, FooterBar):
+                try:
+                    w.refresh()
+                except Exception:
+                    pass
+
     # ── save / cancel ────────────────────────────────────────────────────
     def _save(self) -> None:
         from PySide6.QtWidgets import QMessageBox
+        try:
+            self._save_avatar()
+        except Exception as e:
+            show_error(self, "Settings", "The profile picture could not be saved.", e, warning=True)
         try:
             if self.ed_welcome.text().strip() != self._orig_welcome.strip():
                 _save_welcome_message(self.ed_welcome.text())
