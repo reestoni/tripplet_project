@@ -3035,6 +3035,13 @@ class ShowExperimentScreen(QWidget):
         self.btn_report.clicked.connect(self._open_report)
         tl.addWidget(self.btn_report)
 
+        # Canvas boards of this series (db/canvas_boards.py, same boards as the web app)
+        self.btn_boards = QPushButton("🖼 Board")
+        self.btn_boards.setMinimumHeight(30)
+        self.btn_boards.setToolTip("Canvas boards of this series (pictures, PDFs and notes on one surface)")
+        self.btn_boards.clicked.connect(self._open_boards)
+        tl.addWidget(self.btn_boards)
+
         # Gespeicherte Reports zu dieser TrialSeries: Dropdown + "Go!"-Button
         # (2026-08-27, Nutzerwunsch) - beide nur sichtbar, wenn tatsächlich
         # mind. ein Report für diese Series existiert (siehe load_record()/
@@ -3662,6 +3669,24 @@ class ShowExperimentScreen(QWidget):
 
     # ---------- Navigation & Save ----------
 
+    def _open_boards(self) -> None:
+        if self._series_pk is None or not callable(getattr(app_meta, "open_canvas_board", None)):
+            return
+        app_meta.open_canvas_board(series_id=self._series_pk)
+
+    def _refresh_boards_button(self) -> None:
+        """Board button: visible with the Canvas right and the table; shows the number of boards."""
+        try:
+            from db import canvas_boards as cb
+            from db import feature_access as fa
+            ok = bool(self._series_pk) and cb.table_ready() and fa.can_use("canvas")
+            self.btn_boards.setVisible(ok)
+            if ok:
+                n = cb.board_counts([self._series_pk]).get(int(self._series_pk), 0)
+                self.btn_boards.setText(f"🖼 Board ({n})" if n else "🖼 Board")
+        except Exception:
+            self.btn_boards.setVisible(False)
+
     def _open_report(self) -> None:
         """Opens the report screen for the current trial series.
 
@@ -3685,6 +3710,7 @@ class ShowExperimentScreen(QWidget):
         Chart-Reports für die aktuelle TrialSeries (siehe _build_ui()).
         Dropdown + Go-Button bleiben unsichtbar, solange es keinen einzigen
         Report für diese Series gibt."""
+        self._refresh_boards_button()
         self.cmb_saved_reports.clear()
         if not self._series_pk or not table_exists("tblSmartChartReport"):
             self.cmb_saved_reports.setVisible(False)

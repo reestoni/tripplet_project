@@ -13,6 +13,8 @@ Features:
   - Gitternetz-Overlay (konfigurierbare Teilungen)
   - Hintergrundfarbe ändern
   - Projekt speichern/laden (.ttcanvas, JSON-Format)
+  - Bretter in der Datenbank (db/canvas_boards.py, seit 2026-11-14, gleiche Bretter wie die Web-App):
+    Titel, optional an eine Serie gehängt, automatisch gespeichert, Versionsprüfung gegen Überschreiben
   - VK4-Kanal-Toggle für selektierte VK4-Bilder
   - Pinch-to-Zoom (Touch-Gesten)
   - Clipboard-Paste (Ctrl+V)
@@ -99,6 +101,47 @@ ANNO_COLORS = {
 }
 
 _DEFAULT_BG = QColor(30, 30, 30)
+
+
+# ---------------------------------------------------------------------------
+# Boards in the database (db/canvas_boards.py) - source of an item -> file
+# ---------------------------------------------------------------------------
+def _board_source_path(src: dict, board_id) -> str:
+    """Path of a board item's file: series image / series PDF / file stored with the board."""
+    try:
+        kind = (src or {}).get("kind")
+        if kind == "series_image":
+            for r in _fetch_images_for_series(int(src["series"])):
+                if int(r["ID"]) == int(src["id"]):
+                    return _build_full_path(r)
+        elif kind == "series_pdf":
+            for r in _fetch_pdfs_for_series(int(src["series"])):
+                if int(r["ID"]) == int(src["id"]):
+                    return str(r.get("FullPath") or "")
+        elif kind == "file" and board_id:
+            from db import canvas_boards as _cb
+            return _cb.file_path(board_id, src.get("file") or "") or ""
+        elif kind == "local":
+            return str(src.get("path") or "")
+    except Exception:
+        pass
+    return ""
+
+
+def _load_board_pixmap(path: str, page: int, sheet: int, channel: str):
+    """Same loading rules as the project files (PDF/Word page, Excel sheet, VK4 channel)."""
+    if _is_pdf(path):
+        pm, _ = _load_pdf_as_pixmap(path, page=page or 0)
+    elif _is_excel(path):
+        pm, _ = _load_excel_as_pixmap(path, sheet=sheet or 0)
+    elif _is_word(path):
+        pm, _ = _load_word_as_pixmap(path, page=page or 0)
+    else:
+        pm = _load_pixmap_from_path(path, channel or "")
+    if pm is not None and not pm.isNull() and max(pm.width(), pm.height()) > 2400 and not _is_vk4(path) \
+            and (_is_pdf(path) or _is_excel(path) or _is_word(path)):
+        pm = pm.scaled(2400, 2400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    return pm
 
 
 # ---------------------------------------------------------------------------
@@ -639,6 +682,7 @@ class CanvasView(QGraphicsView):
                 result.append({
                     "label":        item._label,
                     "path":         getattr(item, "_source_path", ""),
+                    "src":          getattr(item, "_src", None),
                     "vk4_channel":  getattr(item, "_vk4_channel",  ""),
                     "pdf_page":     getattr(item, "_pdf_page",    None),
                     "excel_sheet":  getattr(item, "_excel_sheet", None),
@@ -717,6 +761,7 @@ class CanvasView(QGraphicsView):
                                        Qt.SmoothTransformation)
                     item = CanvasImageItem(pm, img_data.get("label", ""))
                     item._source_path  = src
+                    item._src          = img_data.get("src")
                     item._vk4_channel  = vk4_ch
                     item._pdf_page     = pdf_page
                     item._excel_sheet  = excel_sheet
@@ -1096,7 +1141,10 @@ class CanvasView(QGraphicsView):
             if not pm.isNull():
                 if max(pm.width(), pm.height()) > 2400:
                     pm = pm.scaled(2400, 2400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.add_image(pm, "clipboard")
+                import tempfile, uuid as _uuid
+                tmp = os.path.join(tempfile.gettempdir(), f"tripplet_clip_{_uuid.uuid4().hex[:10]}.png")
+                pm.save(tmp, "PNG")
+                self.add_image(pm, "clipboard", source_path=tmp)
                 return
         if ev.key() == Qt.Key_Delete:
             removed = False
@@ -1135,6 +1183,96 @@ class CanvasView(QGraphicsView):
         self.scene().render(painter, target=QRectF(0, 0, w, h), source=items_rect)
         painter.end()
         return pm
+
+    # -----------------------------------------------------------------------
+    # Boards (db/canvas_boards.py): app-neutral document, centre/size/angle
+    # (here the rotation is around the item's top-left corner -> converted)
+    # -----------------------------------------------------------------------
+    def board_document(self) -> dict:
+        items = []
+        for item in reversed(self.scene().items()):        # bottom first = drawing order
+            if not isinstance(item, CanvasImageItem):
+                continue
+            src = getattr(item, "_src", None) or ({"kind": "local", "path": getattr(item, "_source_path", "")}
+                                                  if getattr(item, "_source_path", "") else None)
+            if not src:
+                continue
+            if not getattr(item, "_board_id", None):
+                item._board_id = os.urandom(4).hex()      # stable id of this item on the board
+            pm = item._pixmap
+            s = item._scale_f
+            w, h = pm.width() * s, pm.height() * s
+            a = math.radians(item._angle)
+            ox, oy = w / 2, h / 2
+            items.append({
+                "id": item._board_id,
+                "label": item._label, "src": src,
+                "page": int(getattr(item, "_pdf_page", None) or getattr(item, "_word_page", None) or 0),
+                "sheet": int(getattr(item, "_excel_sheet", None) or 0),
+                "channel": getattr(item, "_vk4_channel", "") or "",
+                "cx": item.pos().x() + ox * math.cos(a) - oy * math.sin(a),
+                "cy": item.pos().y() + ox * math.sin(a) + oy * math.cos(a),
+                "w": w, "h": h, "angle": item._angle,
+            })
+        annos = [{"tool": a.tool, "color": a.color, "size": a.size, "text": a.text,
+                  "points": [list(p) for p in a.points]} for a in self._anno_layer.annotations]
+        return {"format": "tripplet-board", "version": 1, "bg": self._bg_color.name(), "items": items, "annos": annos}
+
+    def load_board(self, content: dict, board_id) -> list:
+        """Replaces the canvas with a board; returns the labels of files that could not be loaded."""
+        self._bg_color = QColor(content.get("bg") or _DEFAULT_BG.name())
+        self.setBackgroundBrush(self._bg_color)
+        for item in list(self.scene().items()):
+            if isinstance(item, CanvasImageItem):
+                self.scene().removeItem(item)
+        self._anno_layer.clear()
+        self._undo_stack = []
+        missing = []
+        for it in content.get("items") or []:
+            src = it.get("src") or {}
+            path = _board_source_path(src, board_id)
+            pm = _load_board_pixmap(path, it.get("page") or 0, it.get("sheet") or 0, it.get("channel") or "") \
+                if path and os.path.isfile(path) else None
+            if pm is None or pm.isNull():
+                missing.append(it.get("label") or "?")
+                continue
+            item = CanvasImageItem(pm, it.get("label") or "")
+            item._source_path = path
+            item._src = src
+            item._board_id = it.get("id")
+            item._vk4_channel = it.get("channel") or ""
+            ext = os.path.splitext(path)[1].lower()
+            item._pdf_page = it.get("page") or 0 if _is_pdf(path) else None
+            item._word_page = it.get("page") or 0 if _is_word(path) else None
+            item._excel_sheet = it.get("sheet") or 0 if _is_excel(path) else None
+            s = float(it.get("w") or pm.width()) / max(1, pm.width())
+            w, h = pm.width() * s, pm.height() * s
+            a = math.radians(float(it.get("angle") or 0))
+            ox, oy = w / 2, h / 2
+            item.set_scale(s)
+            item.set_angle(float(it.get("angle") or 0))
+            item.setPos(float(it.get("cx") or 0) - (ox * math.cos(a) - oy * math.sin(a)),
+                        float(it.get("cy") or 0) - (ox * math.sin(a) + oy * math.cos(a)))
+            self.scene().addItem(item)
+            del ext
+        for ad in content.get("annos") or []:
+            self._anno_layer._annotations.append(Annotation(
+                tool=ad["tool"], color=ad["color"], size=ad.get("size", 2), text=ad.get("text", ""),
+                points=[tuple(p) for p in ad.get("points") or []]))
+        self._anno_layer.setZValue(1000)
+        self._anno_layer.update()
+        self.update_canvas_bounds()
+        return missing
+
+    def clear_all(self):
+        for item in list(self.scene().items()):
+            if isinstance(item, CanvasImageItem):
+                self.scene().removeItem(item)
+        self._anno_layer.clear()
+        self._undo_stack = []
+        self._bg_color = QColor(_DEFAULT_BG)
+        self.setBackgroundBrush(self._bg_color)
+        self.update_canvas_bounds()
 
     # -----------------------------------------------------------------------
     # Projekt speichern / laden  (inkl. Undo-Stack und Hintergrundfarbe)
@@ -1591,7 +1729,20 @@ class CanvasScreen(QWidget):
         self._sigs_list    = []
         self._sidebar_nav_callbacks = sidebar_callbacks or {}
         self._sidebar_built_for_level = None
+        # board in the database (db/canvas_boards.py); None id = not saved yet
+        self._board = {"id": None, "title": "", "series_id": None, "version": 0}
+        self._ctx_series = None
+        self._saved_json = None
+        self._last_json = None
+        self._conflict = False
         self._build_ui()
+        self._saved_json = self._doc_json()
+        self._board_timer = QTimer(self)
+        self._board_timer.setInterval(2000)
+        self._board_timer.timeout.connect(self._board_tick)
+        self._board_timer.start()
+        from PySide6.QtGui import QShortcut, QKeySequence
+        QShortcut(QKeySequence("Ctrl+S"), self, activated=self._board_save)
 
     def _build_ui(self):
         """Erstellt Sidebar, Toolbar, Splitter (Liste | Canvas) und Footer."""
@@ -1615,6 +1766,7 @@ class CanvasScreen(QWidget):
         splitter.setStretchFactor(0, 0); splitter.setStretchFactor(1, 1)
         splitter.setSizes([260, 900])
 
+        content_layout.addWidget(self._build_board_bar())
         content_layout.addWidget(self._build_toolbar())
         # VK4-Toolbar aktualisieren wenn Selektion wechselt
         self._scene.selectionChanged.connect(self._update_vk4_toolbar)
@@ -1972,6 +2124,7 @@ class CanvasScreen(QWidget):
             item = self._view.add_image(pm, str(meta.get("OriginalFilename") or ""),
                                         source_path=_build_full_path(meta))
             if item is not None:
+                item._src = self._meta_src(meta)
                 item._vk4_channel = ""
                 item._pdf_page    = meta.get("_pdf_page",    None)
                 item._excel_sheet = meta.get("_excel_sheet", None)
@@ -2001,6 +2154,7 @@ class CanvasScreen(QWidget):
             item = self._view.add_image(pm, str(meta.get("OriginalFilename") or ""),
                                         source_path=path)
             if item is not None:
+                item._src = self._meta_src(meta)
                 item._vk4_channel = vk4_ch
                 item._pdf_page    = None
                 item._excel_sheet = None
@@ -2039,6 +2193,336 @@ class CanvasScreen(QWidget):
                 f"border:1px solid #888;}}QPushButton:hover{{opacity:0.85;}}")
         except Exception as e:
             QMessageBox.critical(self, "Error while loading", str(e))
+
+    # -----------------------------------------------------------------------
+    # Boards (db/canvas_boards.py, shared with the web app)
+    # -----------------------------------------------------------------------
+    @staticmethod
+    def _meta_src(meta):
+        """Board source of a list entry: series image / series PDF (local files: None = path)."""
+        if not isinstance(meta, dict) or meta.get("_local") or "TrialSeriesID" not in meta or "ID" not in meta:
+            return None
+        kind = "series_pdf" if meta.get("_is_db_pdf") else "series_image"
+        try:
+            return {"kind": kind, "series": int(meta["TrialSeriesID"]), "id": int(meta["ID"])}
+        except (TypeError, ValueError):
+            return None
+
+    def _boards_ready(self) -> bool:
+        from db import canvas_boards as cb
+        return cb.table_ready()
+
+    def _build_board_bar(self):
+        bar = QFrame(); bar.setObjectName("BoardBar"); bar.setFixedHeight(40)
+        bar.setStyleSheet("QFrame#BoardBar{background:#202020;border-bottom:1px solid #444;}"
+                          "QLabel{color:#ccc;font-size:11px;}"
+                          "QPushButton{background:#444;color:#ddd;border-radius:3px;font-size:11px;padding:3px 10px;}"
+                          "QPushButton:hover{background:#555;}"
+                          "QPushButton#BoardSave{background:#39A650;color:white;font-weight:bold;}"
+                          "QPushButton:disabled{background:#333;color:#777;}")
+        lay = QHBoxLayout(bar); lay.setContentsMargins(10, 4, 10, 4); lay.setSpacing(6)
+        lay.addWidget(QLabel("Board:"))
+        self._ed_board_title = QLineEdit(); self._ed_board_title.setPlaceholderText("Untitled board")
+        self._ed_board_title.setMaxLength(200); self._ed_board_title.setMinimumWidth(240)
+        self._ed_board_title.setStyleSheet("QLineEdit{background:#333;color:#fff;border:1px solid #555;border-radius:3px;"
+                                           "padding:2px 6px;font-size:12px;font-weight:bold;}")
+        self._ed_board_title.textEdited.connect(lambda _t: self._board_tick(force_dirty=True))
+        lay.addWidget(self._ed_board_title)
+        self._lbl_board_series = QLabel(""); lay.addWidget(self._lbl_board_series)
+        self._lbl_board_status = QLabel(""); lay.addWidget(self._lbl_board_status)
+        lay.addStretch(1)
+        btn_list = QPushButton("📋 Boards…"); btn_list.clicked.connect(self._board_open_dialog); lay.addWidget(btn_list)
+        btn_new = QPushButton("＋ New board"); btn_new.clicked.connect(self._board_new); lay.addWidget(btn_new)
+        self._btn_board_save = QPushButton("Save"); self._btn_board_save.setObjectName("BoardSave")
+        self._btn_board_save.setToolTip("Save the board for everyone (Ctrl+S)")
+        self._btn_board_save.clicked.connect(self._board_save); lay.addWidget(self._btn_board_save)
+        self._btn_board_copy = QPushButton("Save as copy…"); self._btn_board_copy.clicked.connect(lambda: self._board_ask_create(copy=True))
+        lay.addWidget(self._btn_board_copy)
+        self._btn_board_del = QPushButton("🗑"); self._btn_board_del.setToolTip("Delete this board for everyone")
+        self._btn_board_del.clicked.connect(self._board_delete); lay.addWidget(self._btn_board_del)
+        self._board_bar = bar
+        QTimer.singleShot(0, self._board_refresh_bar)
+        return bar
+
+    def _doc_json(self) -> str:
+        try:
+            doc = self._view.board_document()
+        except Exception:
+            return ""
+        return json.dumps(doc, sort_keys=True) + "|" + self._ed_board_title.text()
+
+    def _board_dirty(self) -> bool:
+        return self._saved_json is not None and self._doc_json() != self._saved_json
+
+    def _board_refresh_bar(self):
+        from db import canvas_boards as cb
+        ready = self._boards_ready()
+        b = self._board
+        can = ready and cb.can_edit()
+        self._board_bar.setVisible(ready)
+        self._btn_board_save.setEnabled(can and (b["id"] is None or self._board_dirty()))
+        self._btn_board_copy.setEnabled(can and b["id"] is not None)
+        self._btn_board_del.setVisible(b["id"] is not None)
+        self._ed_board_title.setReadOnly(not can)
+        sid = b["series_id"]
+        self._lbl_board_series.setText(f"🔬 {self._series_label(sid)}" if sid else "")
+        if b["id"] is None:
+            st = "not saved yet"
+        elif self._conflict:
+            st = "⚠ changed by someone else"
+        elif self._board_dirty():
+            st = "unsaved changes"
+        else:
+            st = f"saved · version {b['version']}"
+        if ready and not can:
+            st += " · read only (access level 2 needed)"
+        self._lbl_board_status.setText(st)
+
+    def _series_label(self, sid) -> str:
+        try:
+            for g in _fetch_series_groups() if sid else []:
+                if int(g["TrialSeriesID"]) == int(sid):
+                    return f"{g.get('ExperimentID') or ''} · {g.get('SeriesName') or ''}"
+            from db.connection import fetch_all
+            r = fetch_all("SELECT s.SeriesName, e.[Experiment ID] AS ExperimentID FROM tblTrialSeries s "
+                          "LEFT JOIN tblExperimente e ON e.ID = s.ExperimentID WHERE s.ID = ?", [int(sid)])
+            if r:
+                return f"{r[0].get('ExperimentID') or ''} · {r[0].get('SeriesName') or ''}"
+        except Exception:
+            pass
+        return f"#{sid}" if sid else ""
+
+    def _board_tick(self, force_dirty: bool = False):
+        """Every 2 s: status; autosave when the board is saved once and the content stayed the same for one tick."""
+        try:
+            if not self.isVisible() and not force_dirty:
+                return
+            cur = self._doc_json()
+            b = self._board
+            if b["id"] is not None and not self._conflict and cur != self._saved_json and cur == self._last_json:
+                from db import canvas_boards as cb
+                if cb.can_edit():
+                    self._board_save(silent=True)
+            self._last_json = cur
+            self._board_refresh_bar()
+        except Exception:
+            pass
+
+    def _store_local_files(self, board_id: int, doc: dict) -> dict:
+        """Local files / clipboard pictures -> files stored with the board (shared with everyone)."""
+        from db import canvas_boards as cb
+        by_id = {}
+        for it in doc["items"]:
+            if it["src"].get("kind") == "local":
+                it["src"] = {"kind": "file", "file": cb.add_file_from_path(board_id, it["src"]["path"])}
+            by_id[it["id"]] = it["src"]
+        # remember the new sources on the scene items
+        for item in self._scene.items():
+            if isinstance(item, CanvasImageItem):
+                bid = getattr(item, "_board_id", None)
+                if bid in by_id:
+                    item._src = by_id[bid]
+        return doc
+
+    def _assign_item_ids(self):
+        for item in self._scene.items():
+            if isinstance(item, CanvasImageItem) and not getattr(item, "_board_id", None):
+                item._board_id = os.urandom(4).hex()
+
+    def _board_save(self, silent: bool = False):
+        from db import canvas_boards as cb
+        if not self._boards_ready():
+            return
+        if self._board["id"] is None:
+            if not silent:
+                self._board_ask_create(copy=False)
+            return
+        self._assign_item_ids()
+        b = self._board
+        try:
+            doc = self._store_local_files(b["id"], self._view.board_document())
+            b["version"] = cb.save_board(b["id"], doc, b["version"], title=self._ed_board_title.text())
+            b["title"] = self._ed_board_title.text()
+            self._saved_json = self._doc_json()
+            self._conflict = False
+        except cb.BoardConflict as e:
+            self._conflict = True
+            self._board_refresh_bar()
+            box = QMessageBox(self); box.setIcon(QMessageBox.Warning); box.setWindowTitle("Board changed")
+            box.setText(f"{e.updated_by or 'Someone else'} saved this board in the meantime.\nYour changes were not saved.")
+            b_load = box.addButton("Load their version", QMessageBox.AcceptRole)
+            b_copy = box.addButton("Save mine as copy…", QMessageBox.ActionRole)
+            box.addButton("Cancel", QMessageBox.RejectRole)
+            box.exec()
+            if box.clickedButton() is b_load:
+                self._board_load(b["id"])
+            elif box.clickedButton() is b_copy:
+                self._board_ask_create(copy=True)
+        except cb.BoardError as e:
+            if not silent:
+                QMessageBox.warning(self, "Board", str(e))
+        except Exception as e:
+            if not silent:
+                QMessageBox.critical(self, "Board", f"The board could not be saved:\n{e}")
+        self._board_refresh_bar()
+
+    def _board_ask_create(self, copy: bool):
+        from db import canvas_boards as cb
+        if not self._boards_ready():
+            return
+        if not cb.can_edit():
+            QMessageBox.information(self, "Board", "Saving boards needs access level 2.")
+            return
+        dlg = QDialog(self); dlg.setWindowTitle("Save as copy" if copy else "Save board")
+        v = QVBoxLayout(dlg)
+        v.addWidget(QLabel("Title:"))
+        ed = QLineEdit((self._ed_board_title.text() + " (2)") if copy else self._ed_board_title.text())
+        ed.setMaxLength(200); v.addWidget(ed)
+        sid = self._board["series_id"] if copy else (self._board["series_id"] or self._ctx_series)
+        chk = None
+        if sid:
+            from PySide6.QtWidgets import QCheckBox
+            chk = QCheckBox(f"Belongs to the series {self._series_label(sid)}"); chk.setChecked(True); v.addWidget(chk)
+        hint = QLabel("Saved boards can be opened by everyone with Canvas - also in the web version.\n"
+                      "Files from your computer are stored with the board.")
+        hint.setStyleSheet("color:#666;"); v.addWidget(hint)
+        from PySide6.QtWidgets import QDialogButtonBox
+        bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject); v.addWidget(bb)
+        if dlg.exec() != QDialog.Accepted or not ed.text().strip():
+            return
+        series_id = sid if (chk is not None and chk.isChecked()) else None
+        try:
+            self._assign_item_ids()
+            new_id = cb.create_board(ed.text().strip(), series_id)
+            doc = self._store_local_files(new_id, self._view.board_document())
+            version = cb.save_board(new_id, doc, 1)
+            self._board = {"id": new_id, "title": ed.text().strip(), "series_id": series_id, "version": version}
+            self._ed_board_title.setText(ed.text().strip())
+            self._conflict = False
+            self._saved_json = self._doc_json()
+        except cb.BoardError as e:
+            QMessageBox.warning(self, "Board", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Board", f"The board could not be saved:\n{e}")
+        self._board_refresh_bar()
+
+    def _confirm_discard(self) -> bool:
+        if not self._board_dirty() or (self._board["id"] is None and not self._view.board_document()["items"]
+                                       and not self._view.board_document()["annos"]):
+            return True
+        return QMessageBox.question(self, "Board", "Discard the unsaved changes on this board?",
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
+
+    def _board_new(self):
+        if not self._confirm_discard():
+            return
+        self._view.clear_all()
+        self._board = {"id": None, "title": "", "series_id": self._ctx_series, "version": 0}
+        self._ed_board_title.setText("")
+        self._conflict = False
+        self._saved_json = self._doc_json()
+        self._board_refresh_bar()
+
+    def _board_load(self, board_id: int):
+        from db import canvas_boards as cb
+        b = cb.get_board(board_id)
+        if b is None:
+            QMessageBox.warning(self, "Board", "The board does not exist (any more).")
+            return
+        missing = self._view.load_board(b["content"], board_id)
+        self._board = {"id": int(b["ID"]), "title": b["Title"], "series_id": b.get("TrialSeriesID"), "version": int(b["Version"])}
+        self._ed_board_title.setText(b["Title"])
+        self._conflict = False
+        self._saved_json = self._doc_json()
+        self._board_refresh_bar()
+        try:
+            self._view.resetTransform()
+            r = self._scene.itemsBoundingRect()
+            if not r.isEmpty():
+                self._view.fitInView(r.adjusted(-40, -40, 40, 40), Qt.KeepAspectRatio)
+        except Exception:
+            pass
+        if missing:
+            QMessageBox.warning(self, "Board", "These files could not be loaded:\n\n" + "\n".join(missing))
+
+    def _board_delete(self):
+        from db import canvas_boards as cb
+        b = self._board
+        if b["id"] is None:
+            return
+        if QMessageBox.question(self, "Delete board", f"Delete the board \"{b['title']}\" for everyone?\n"
+                                "This cannot be undone.", QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No) != QMessageBox.Yes:
+            return
+        try:
+            cb.delete_board(b["id"])
+        except cb.BoardError as e:
+            QMessageBox.warning(self, "Board", str(e))
+            return
+        self._saved_json = self._doc_json()
+        self._board_new()
+
+    def _board_open_dialog(self):
+        from db import canvas_boards as cb
+        if not self._boards_ready():
+            return
+        from PySide6.QtWidgets import QAbstractItemView, QDialogButtonBox, QHeaderView, QTableWidget, QTableWidgetItem
+        dlg = QDialog(self); dlg.setWindowTitle("Boards"); dlg.resize(820, 480)
+        v = QVBoxLayout(dlg)
+        row = QHBoxLayout()
+        from PySide6.QtWidgets import QRadioButton
+        rb_series = QRadioButton(f"Series {self._series_label(self._ctx_series)}") if self._ctx_series else None
+        rb_all = QRadioButton("All boards")
+        if rb_series is not None:
+            rb_series.setChecked(True); row.addWidget(rb_series)
+        else:
+            rb_all.setChecked(True)
+        row.addWidget(rb_all); row.addStretch(1); v.addLayout(row)
+        tbl = QTableWidget(0, 4); tbl.setHorizontalHeaderLabels(["Title", "Series", "Changed", "Created by"])
+        tbl.setSelectionBehavior(QAbstractItemView.SelectRows); tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch); tbl.verticalHeader().setVisible(False)
+        v.addWidget(tbl, 1)
+        empty = QLabel("No boards yet."); empty.setStyleSheet("color:#888;"); v.addWidget(empty)
+
+        def fill():
+            rows = cb.list_boards(self._ctx_series if (rb_series is not None and rb_series.isChecked()) else None)
+            tbl.setRowCount(len(rows))
+            for i, r in enumerate(rows):
+                upd = r["UpdatedAt"].strftime("%Y-%m-%d %H:%M") if r.get("UpdatedAt") else ""
+                vals = [r["Title"], f"{r.get('ExperimentID') or ''} · {r.get('SeriesName') or ''}" if r.get("TrialSeriesID") else "–",
+                        upd + (f" · {r['UpdatedByName']}" if r.get("UpdatedByName") else ""), r.get("CreatedByName") or ""]
+                for c, val in enumerate(vals):
+                    it = QTableWidgetItem(str(val)); it.setData(Qt.UserRole, int(r["ID"])); tbl.setItem(i, c, it)
+            empty.setVisible(not rows)
+        fill()
+        if rb_series is not None:
+            rb_series.toggled.connect(lambda _c: fill())
+        bb = QDialogButtonBox()
+        b_open = bb.addButton("Open", QDialogButtonBox.AcceptRole)
+        b_new = bb.addButton("＋ New board", QDialogButtonBox.ActionRole)
+        bb.addButton(QDialogButtonBox.Cancel)
+        v.addWidget(bb)
+        choice = {"id": None, "new": False}
+        tbl.itemDoubleClicked.connect(lambda it: (choice.update(id=it.data(Qt.UserRole)), dlg.accept()))
+        b_open.clicked.connect(lambda: (choice.update(id=tbl.item(tbl.currentRow(), 0).data(Qt.UserRole)) if tbl.currentRow() >= 0 else None, dlg.accept()))
+        b_new.clicked.connect(lambda: (choice.update(new=True), dlg.accept()))
+        bb.rejected.connect(dlg.reject)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        if choice["new"]:
+            self._board_new()
+        elif choice["id"] and self._confirm_discard():
+            self._board_load(int(choice["id"]))
+
+    def open_series_boards(self, series_id):
+        """From Show Experiment: boards of this series (new boards are tied to it)."""
+        self._ctx_series = int(series_id) if series_id else None
+        if self._board["id"] is None and self._ctx_series:
+            self._board["series_id"] = self._ctx_series
+        self._board_refresh_bar()
+        if self._ctx_series and self._boards_ready():
+            QTimer.singleShot(200, self._board_open_dialog)
 
     def _go_home(self):
         """Navigiert zurück zum Home-Screen."""

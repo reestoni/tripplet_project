@@ -618,6 +618,8 @@ class MainWindow(QMainWindow):
         # Process Playground (ui/screen_process_playground.py) - erst beim ersten Oeffnen gebaut
         self.process_playground_screen = None
         app_meta.open_process_playground = self._go_process_playground
+        # Canvas-Bretter einer Serie (Show Experiment "Board", db/canvas_boards.py)
+        app_meta.open_canvas_board = lambda series_id=None: self._go_canvas(series_id=series_id)
         # Onboarding (ui/screen_onboarding.py) - erst beim ersten Oeffnen gebaut
         self.onboarding_screen = None
         app_meta.open_onboarding = self._go_onboarding
@@ -1378,8 +1380,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("TrippleT – Quick Scan")
         self.stack.setCurrentWidget(self.quick_scan)
 
-    def _go_canvas(self):
-        """Navigiert zum Canvas-Screen."""
+    def _go_canvas(self, *_args, series_id=None):
+        """Navigiert zum Canvas-Screen (series_id = Bretter dieser Serie, aus Show Experiment)."""
         if CanvasScreen is None:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Canvas", "Canvas not available – import failed.")
@@ -1389,6 +1391,8 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(self.canvas)
         self.setWindowTitle("TrippleT – Canvas")
         self.stack.setCurrentWidget(self.canvas)
+        if series_id:
+            self.canvas.open_series_boards(series_id)
 
     def _go_tdms_batch(self):
         """Navigiert zum TDMS-Batch-Screen."""
