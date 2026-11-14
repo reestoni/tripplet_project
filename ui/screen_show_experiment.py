@@ -3042,13 +3042,6 @@ class ShowExperimentScreen(QWidget):
         self.btn_boards.clicked.connect(self._open_boards)
         tl.addWidget(self.btn_boards)
 
-        # Link to this series (and the open tab) in the web app (db/web_links.py, same format as the web)
-        self.btn_web_link = QPushButton("🔗 Web link")
-        self.btn_web_link.setMinimumHeight(30)
-        self.btn_web_link.clicked.connect(lambda: self._copy_web_link())
-        tl.addWidget(self.btn_web_link)
-        self._refresh_web_link_button()
-
         # Gespeicherte Reports zu dieser TrialSeries: Dropdown + "Go!"-Button
         # (2026-08-27, Nutzerwunsch) - beide nur sichtbar, wenn tatsächlich
         # mind. ein Report für diese Series existiert (siehe load_record()/
@@ -3059,8 +3052,6 @@ class ShowExperimentScreen(QWidget):
         self.cmb_saved_reports.setMinimumWidth(220)
         self.cmb_saved_reports.setToolTip("Saved Smart Chart reports for this trial series")
         self.cmb_saved_reports.setVisible(False)
-        self.cmb_saved_reports.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.cmb_saved_reports.customContextMenuRequested.connect(self._saved_report_menu)
         tl.addWidget(self.cmb_saved_reports)
 
         self.btn_go_saved_report = QPushButton("Go!")
@@ -3683,42 +3674,6 @@ class ShowExperimentScreen(QWidget):
             return
         app_meta.open_canvas_board(series_id=self._series_pk)
 
-    def _refresh_web_link_button(self) -> None:
-        from db import web_links
-        ok = bool(web_links.base_url())
-        self.btn_web_link.setEnabled(ok)
-        self.btn_web_link.setToolTip(
-            "Copy a link to this series and the open tab in TrippleT Web - to paste into a mail or chat" if ok
-            else "The address of TrippleT Web is not set (TRIPPLET_WEB_URL)")
-
-    def _web_tab_key(self) -> Optional[str]:
-        """Key of the open tab in the web link format (db/web_links.py), None for tabs the web has no key for."""
-        from db.series_tables import LAB_TABS
-        w = self.tabs.currentWidget() if getattr(self, "tabs", None) is not None else None
-        attrs = {"machine": "tab_machine", "rd": "tab_rd_machine", "notes": "tab_notes"}
-        attrs.update({t.key: f"tab_{t.key}" for t in LAB_TABS})
-        for key, attr in attrs.items():
-            if w is not None and getattr(self, attr, None) is w:
-                return key
-        return None
-
-    def _copy_web_link(self, trial_id: Optional[int] = None) -> None:
-        """Copies the web link of the series (open tab, optionally a trial column) to the clipboard."""
-        from db import web_links
-        if self._series_pk is None:
-            return
-        tab = self._web_tab_key()
-        if trial_id is not None and tab in (None, "notes"):
-            tab = "machine"
-        url = web_links.series_url(self._series_pk, tab=tab, trial_id=trial_id)
-        if not url:
-            QMessageBox.information(self, "Web link", "The address of TrippleT Web is not set (TRIPPLET_WEB_URL).")
-            return
-        QApplication.clipboard().setText(url)
-        from PySide6.QtGui import QCursor
-        from PySide6.QtWidgets import QToolTip
-        QToolTip.showText(QCursor.pos(), "Link copied", self)
-
     def _refresh_boards_button(self) -> None:
         """Board button: visible with the Canvas right and the table; shows the number of boards."""
         try:
@@ -3749,19 +3704,6 @@ class ShowExperimentScreen(QWidget):
             self.on_open_report_in_new_tab(self._series_pk)
         elif callable(self.on_open_report):
             self.on_open_report(self._series_pk)
-
-    def _saved_report_menu(self, pos) -> None:
-        """Right-click on the saved-report drop-down: copy the web link of the chosen report."""
-        from db import web_links
-        rid = self.cmb_saved_reports.currentData()
-        if rid is None or self._series_pk is None:
-            return
-        menu = QMenu(self)
-        act = menu.addAction("Copy web link to this report")
-        url = web_links.report_url(self._series_pk, int(rid))
-        act.setEnabled(bool(url))
-        if menu.exec(self.cmb_saved_reports.mapToGlobal(pos)) is act and url:
-            QApplication.clipboard().setText(url)
 
     def _refresh_saved_reports_dropdown(self) -> None:
         """Füllt das "Saved Reports"-Dropdown mit allen gespeicherten Smart-
@@ -4855,9 +4797,6 @@ class ShowExperimentScreen(QWidget):
             act_playground.setToolTip("What happens to the lab values if you change air pressure, overfeed "
                                       "or speed - starting from this trial")
             menu.setToolTipsVisible(True)
-        from db import web_links as _wl
-        act_link = menu.addAction(f"Copy web link to V{vno}")
-        act_link.setEnabled(bool(_wl.base_url()))
         menu.addSeparator()
         act_add = menu.addAction("Add reference sample…")
         act_mark = act_rename = act_unmark = None
@@ -4904,8 +4843,6 @@ class ShowExperimentScreen(QWidget):
             self._open_ref_compare(trial_id)
         elif act_playground is not None and chosen is act_playground:
             app_meta.open_process_playground(trial_id=trial_id)
-        elif chosen is act_link:
-            self._copy_web_link(trial_id=trial_id)
 
     def _process_playground_available(self) -> bool:
         """Right-click "Open in Process Playground…": DTY series only, the

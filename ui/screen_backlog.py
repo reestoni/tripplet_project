@@ -878,9 +878,6 @@ class BacklogDnDTable(QTableWidget):
         act_open_new_window.setEnabled(
             callable(getattr(getattr(self, "_screen", None), "on_open_in_new_os_window", None))
         )
-        from db import web_links
-        act_link = menu.addAction("🔗  Copy web link")
-        act_link.setEnabled(bool(web_links.base_url()))
         menu.addSeparator()
         act_prio = menu.addAction("Change priority…")
         act_status = menu.addAction("Change status…")
@@ -915,11 +912,6 @@ class BacklogDnDTable(QTableWidget):
                     cb(int(exp_pk), int(series_id), exp_id)
                 except Exception:
                     pass
-        elif chosen == act_link:
-            url = web_links.series_url(int(series_id))
-            if url:
-                from PySide6.QtGui import QGuiApplication
-                QGuiApplication.clipboard().setText(url)
         elif chosen == act_prio:
             self._ctx_change_prio(int(series_id), it)
         elif chosen == act_status:

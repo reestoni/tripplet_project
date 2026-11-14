@@ -1490,9 +1490,6 @@ class AllExperimentsScreen(QWidget):
         act_open_new.setEnabled(callable(getattr(self, "on_open_in_new_window", None)))
         act_open_new_window = menu.addAction("🗗  Open in New Window")
         act_open_new_window.setEnabled(callable(getattr(self, "on_open_in_new_os_window", None)))
-        from db import web_links
-        act_link = menu.addAction("🔗  Copy web link")
-        act_link.setEnabled(bool(web_links.base_url()))
         menu.addSeparator()
         act_rename = menu.addAction("Rename Trial Series…")
         act_rename.setEnabled(bool(can_rename))
@@ -1512,14 +1509,6 @@ class AllExperimentsScreen(QWidget):
             self._open_in_new_window(row)
         elif chosen == act_open_new_window:
             self._open_in_new_os_window(row)
-        elif chosen == act_link:
-            try:
-                url = web_links.series_url(int(self._row_payload[row][1]))
-            except Exception:
-                url = None
-            if url:
-                from PySide6.QtGui import QGuiApplication
-                QGuiApplication.clipboard().setText(url)
         elif chosen == act_rename:
             if not can_rename:
                 QMessageBox.warning(

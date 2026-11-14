@@ -31,11 +31,9 @@ Ausnahmen nur auf ausdrückliche Ansage des Nutzers.
 
 **Git / GitHub** (Nutzerentscheid 2026-11-14): beide Repos haben `origin` = privates GitHub (`reestoni/tripplet_project`, `reestoni/tripplet_web`). **Nach jedem Commit sofort pushen** (aktueller Zweig; Desktop arbeitet auf `ref-comparison`, Web auf `main`) - GitHub ist die Sicherung gegen Totalverlust. Fehlgeschlagenen Push melden. Zugangsdaten nie einchecken (`db_secrets.json`, `secrets.enc` sind ignoriert).
 
-**Web-Links + Live-Backlog** (2026-11-14, beide Apps): `db/web_links.py` = Linkformat der Web-App (`series_url(id, tab, trial_id)`,
-`report_url`, `board_url`); Adresse aus `TRIPPLET_WEB_URL` oder `DEFAULT_BASE[MODE]` (dev/prod nachtragen, sobald die VM steht; ohne
-Adresse sind die Einträge grau). Desktop: "🔗 Web link" in Show Experiment (Reiter-Schlüssel `_web_tab_key`), "Copy web link to V…"
-im Versuchsmenü, Rechtsklick Backlog/All Experiments, Report-Dropdown, Brett-Leiste. Backlog lädt sich selbst neu, wenn
-`series_overview.backlog_fingerprint()` sich ändert (`BacklogScreen._live_check`, QTimer 30 s, nicht bei Menü/Dialog/gedrückter Maus).
+**Live-Backlog** (2026-11-14, beide Apps): Backlog lädt sich selbst neu, wenn `series_overview.backlog_fingerprint()` sich ändert
+(`BacklogScreen._live_check`, QTimer 30 s, nicht bei Menü/Dialog/gedrückter Maus). "Link kopieren" gibt es bewusst nur im Web
+(Nutzerentscheid 2026-11-14), nicht im Desktop.
 
 **Canvas-Bretter** (2026-11-14, beide Apps): `db/canvas_boards.py` (Tabelle `tblCanvasBoard` nur über
 `tools/canvas_board_migration.py`; dev_local angelegt, dev/prod am Montag 2026-11-16 zusammen mit den anderen DB-Änderungen, siehe

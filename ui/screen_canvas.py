@@ -2238,23 +2238,11 @@ class CanvasScreen(QWidget):
         self._btn_board_save.clicked.connect(self._board_save); lay.addWidget(self._btn_board_save)
         self._btn_board_copy = QPushButton("Save as copy…"); self._btn_board_copy.clicked.connect(lambda: self._board_ask_create(copy=True))
         lay.addWidget(self._btn_board_copy)
-        self._btn_board_link = QPushButton("🔗"); self._btn_board_link.clicked.connect(self._board_copy_link)
-        lay.addWidget(self._btn_board_link)
         self._btn_board_del = QPushButton("🗑"); self._btn_board_del.setToolTip("Delete this board for everyone")
         self._btn_board_del.clicked.connect(self._board_delete); lay.addWidget(self._btn_board_del)
         self._board_bar = bar
         QTimer.singleShot(0, self._board_refresh_bar)
         return bar
-
-    def _board_copy_link(self):
-        from db import web_links
-        url = web_links.board_url(self._board["id"]) if self._board.get("id") else None
-        if not url:
-            return
-        from PySide6.QtGui import QCursor, QGuiApplication
-        from PySide6.QtWidgets import QToolTip
-        QGuiApplication.clipboard().setText(url)
-        QToolTip.showText(QCursor.pos(), "Link copied", self)
 
     def _doc_json(self) -> str:
         try:
@@ -2275,11 +2263,6 @@ class CanvasScreen(QWidget):
         self._btn_board_save.setEnabled(can and (b["id"] is None or self._board_dirty()))
         self._btn_board_copy.setEnabled(can and b["id"] is not None)
         self._btn_board_del.setVisible(b["id"] is not None)
-        from db import web_links
-        self._btn_board_link.setVisible(b["id"] is not None)
-        self._btn_board_link.setEnabled(bool(web_links.base_url()))
-        self._btn_board_link.setToolTip("Copy a link to this board in TrippleT Web" if web_links.base_url()
-                                        else "The address of TrippleT Web is not set (TRIPPLET_WEB_URL)")
         self._ed_board_title.setReadOnly(not can)
         sid = b["series_id"]
         self._lbl_board_series.setText(f"🔬 {self._series_label(sid)}" if sid else "")
