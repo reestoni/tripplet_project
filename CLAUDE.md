@@ -31,6 +31,10 @@ Ausnahmen nur auf ausdrückliche Ansage des Nutzers.
 
 **Git / GitHub** (Nutzerentscheid 2026-11-14): beide Repos haben `origin` = privates GitHub (`reestoni/tripplet_project`, `reestoni/tripplet_web`). **Nach jedem Commit sofort pushen** (aktueller Zweig; Desktop arbeitet auf `ref-comparison`, Web auf `main`) - GitHub ist die Sicherung gegen Totalverlust. Fehlgeschlagenen Push melden. Zugangsdaten nie einchecken (`db_secrets.json`, `secrets.enc` sind ignoriert).
 
+**Jet Advisor** (2026-11-15, beide Apps): `ui/jet_advisor.py` (Qt-frei) - Ziele + Garn + Düsenfilter -> Düsen mit Einstellungen,
+auf den Fits von `ui/dty_whatif.py`, nie extrapoliert. Screen `ui/screen_jet_advisor.py`, Feature `jet_advisor`, Sidebar Tools.
+`dty_whatif.clean_rows`: Punkte/m = 0 = nicht gemessen (betrifft auch die Process Playground). Details in der Web-`CLAUDE.md`.
+
 **Fazit pro Serie** (2026-11-14, beide Apps): `db/series_conclusion.py` + `tblSeriesConclusion` (nur über
 `tools/series_conclusion_migration.py`, dev_local erledigt, dev/prod am Montag 2026-11-16). Reiter "Conclusion"
 (`ui/widgets/conclusion_tab.py`), Backlog-Karte (Punkt / gestrichelter Ring bei Done ohne Fazit), All Experiments Spalten +

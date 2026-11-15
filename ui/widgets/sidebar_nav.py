@@ -444,6 +444,12 @@ def build_tools_group(
     offline_gated_buttons.append(btn_playground)
     _add_if(sidebar, btn_playground, "process_playground")
 
+    # Jet Advisor: Ziele + Garn -> Duesen mit Einstellungen (aus unseren Versuchen) - fuer alle
+    btn_jet_advisor = icon_btn("Jet Advisor", "jet_advisor.png", "SidebarItem",
+                               trigger_jet_advisor, tab_capable=True, open_in_new_tab=open_in_new_tab)
+    offline_gated_buttons.append(btn_jet_advisor)
+    _add_if(sidebar, btn_jet_advisor, "jet_advisor")
+
     # Dashboards: anschauen, was man selbst gebaut hat oder was einem freigegeben wurde - fuer alle
     btn_dashboards = icon_btn("Dashboards", "dashboards.png", "SidebarItem", trigger_dashboards,
                               tab_capable=True, open_in_new_tab=open_in_new_tab)
@@ -613,6 +619,16 @@ def trigger_process_playground():
         import app_meta
         if callable(app_meta.open_process_playground):
             app_meta.open_process_playground()
+    except Exception:
+        pass
+
+
+def trigger_jet_advisor():
+    """Sidebar "Jet Advisor" (ui/screen_jet_advisor.py) - main.py setzt app_meta.open_jet_advisor."""
+    try:
+        import app_meta
+        if callable(app_meta.open_jet_advisor):
+            app_meta.open_jet_advisor()
     except Exception:
         pass
 

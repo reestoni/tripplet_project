@@ -105,6 +105,8 @@ open_dashboards = None     # callable or None
 open_yarn_count = None     # callable or None
 # Process Playground (Sidebar Tools, ui/screen_process_playground.py) - von MainWindow gesetzt.
 open_process_playground = None     # callable or None
+# Jet Advisor (Sidebar Tools, ui/screen_jet_advisor.py) - von MainWindow gesetzt.
+open_jet_advisor = None     # callable or None
 # Canvas-Bretter einer Serie (Show Experiment "Board", ui/screen_canvas.py) - von MainWindow gesetzt.
 open_canvas_board = None     # callable(series_id) or None
 

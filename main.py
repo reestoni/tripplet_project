@@ -618,6 +618,9 @@ class MainWindow(QMainWindow):
         # Process Playground (ui/screen_process_playground.py) - erst beim ersten Oeffnen gebaut
         self.process_playground_screen = None
         app_meta.open_process_playground = self._go_process_playground
+        # Jet Advisor (ui/screen_jet_advisor.py) - erst beim ersten Oeffnen gebaut
+        self.jet_advisor_screen = None
+        app_meta.open_jet_advisor = self._go_jet_advisor
         # Canvas-Bretter einer Serie (Show Experiment "Board", db/canvas_boards.py)
         app_meta.open_canvas_board = lambda series_id=None: self._go_canvas(series_id=series_id)
         # Onboarding (ui/screen_onboarding.py) - erst beim ersten Oeffnen gebaut
@@ -1486,6 +1489,7 @@ class MainWindow(QMainWindow):
             "manage_jets": self._go_add_jet,
             "yarn_stock": self._go_yarn_stock,
             "process_playground": self._go_process_playground,
+            "jet_advisor": self._go_jet_advisor,
         }
         fn = targets.get(screen)
         if callable(fn):
@@ -2215,6 +2219,20 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.process_playground_screen)
         if trial_id is not None:
             self.process_playground_screen.open_trial(trial_id)
+
+    def _go_jet_advisor(self) -> None:
+        """Jet Advisor (ui/screen_jet_advisor.py): Ziele + Garn -> welche Duesen mit
+        welchen Einstellungen (aus unseren DTY-Versuchen, ui/jet_advisor.py)."""
+        if self.jet_advisor_screen is None:
+            try:
+                from ui.screen_jet_advisor import JetAdvisorScreen
+            except Exception as e:
+                show_error(self, "Jet Advisor", "The Jet Advisor could not be opened.", e)
+                return
+            self.jet_advisor_screen = JetAdvisorScreen(sidebar_callbacks=self._sidebar_nav_kwargs())
+            self.stack.addWidget(self.jet_advisor_screen)
+        self.setWindowTitle("TrippleT – Jet Advisor")
+        self.stack.setCurrentWidget(self.jet_advisor_screen)
 
     def _go_onboarding(self) -> None:
         """Onboarding (ui/screen_onboarding.py): animierte Einfuehrungen, Vollbild."""

@@ -142,6 +142,15 @@ def clean_rows(rows: Sequence[dict]) -> List[dict]:
         for k in ("stab03", "stab06", "stab10", "stab13"):
             if d[k] is not None and not 0 <= d[k] <= STAB_MAX:
                 d[k] = None
+        # points/m 0 = no Itemat measurement (always with CV 0 and no stability,
+        # 438 trials on dev_local 2026-11-15) - not a real zero
+        if not d["fpm"]:
+            d["fpm"] = d["fpm_cv"] = None
+            for k in ("stab03", "stab06", "stab10", "stab13"):
+                if d[k] == 0:
+                    d[k] = None
+        elif d["fpm_cv"] == 0:
+            d["fpm_cv"] = None
         out.append(d)
     return out
 
