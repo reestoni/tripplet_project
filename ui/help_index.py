@@ -29,6 +29,7 @@ SOURCES: List[Tuple[str, str, str, str]] = [
     ("manage_yarn", "Manage Yarn", "ui.widgets.help_texts_manage_yarn", "multilang"),
     ("manage_jets", "Manage Jets", "ui.widgets.help_texts_manage_jets", "multilang"),
     ("process_playground", "Process Playground", "ui.widgets.help_texts_process_playground", "multilang"),
+    ("jet_advisor", "Jet Advisor", "ui.widgets.help_texts_jet_advisor", "multilang"),
     ("yarn_stock", "Yarn Stock", "ui.widgets.yarn_stock_help_texts", "yarn_stock"),
 ]
 SCREEN_NAMES = {k: name for k, name, _, _ in SOURCES}

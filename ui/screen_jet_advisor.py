@@ -7,7 +7,8 @@ Standard), maker, group, titer range of the jet, limits for the settings.
 Logic: ui/jet_advisor.py (Qt-free, the web page /tools/jet-advisor uses it
 too; fits from ui/dty_whatif.py, reads only). Wired like the Process
 Playground: app_meta.open_jet_advisor / sidebar_nav.trigger_jet_advisor,
-feature key "jet_advisor" (db/feature_access.py).
+feature key "jet_advisor" (db/feature_access.py). Help: ui/widgets/help_texts_jet_advisor.py
+(also the web help) + assets/images/help_jet_advisor.svg.
 """
 from __future__ import annotations
 
@@ -44,12 +45,6 @@ PARAM_DEC = {"pressure": 1, "of": 1, "speed": 0}
 REACH = [("very close (±10 %)", 0.3), ("close (±17 %)", 0.6), ("normal (±30 %)", 1.0), ("wide (±50 %)", 1.5)]
 _GOOD, _BAD = QColor("#1F7A3A"), QColor("#B03A2E")
 
-HOW = ("1. Similar yarns are searched: same material (if wanted), final titer and filament count close to yours. "
-       "2. For every jet that ran with these yarns, the measured settings are checked and - where pressure, overfeed "
-       "or speed were varied - the model of the Process Playground fills the gaps between them (never beyond what "
-       "was measured). 3. For each setting the chance that a new run meets all targets is estimated (spread of "
-       "repeated trials, model uncertainty, differences between series). Each jet shows its best setting and the "
-       "window around it. Ties: largest safety margin, or least air.")
 
 
 def _card(title: str, subtitle: str = ""):
@@ -174,24 +169,15 @@ class JetAdvisorScreen(QWidget):
         for x in (k, t, s):
             tbox.addWidget(x)
         head.addLayout(tbox, 1)
-        self.btn_how = QPushButton("How does it work?")
-        self.btn_how.setStyleSheet(BTN)
-        self.btn_how.setCheckable(True)
-        head.addWidget(self.btn_how, 0, Qt.AlignVCenter)
         self.btn_reload = QPushButton("Reload")
         self.btn_reload.setToolTip("Load the latest trials from the database (F5)")
         self.btn_reload.setShortcut("F5")
         self.btn_reload.setStyleSheet(BTN)
         self.btn_reload.clicked.connect(self.reload)
         head.addWidget(self.btn_reload, 0, Qt.AlignVCenter)
+        from ui.widgets.multilang_help import make_help_button
+        head.addWidget(make_help_button("How does the Jet Advisor work?", self._open_help), 0, Qt.AlignVCenter)
         pv.addLayout(head)
-        self.lbl_how = QLabel(HOW)
-        self.lbl_how.setWordWrap(True)
-        self.lbl_how.setStyleSheet("background:#FFFFFF;border:1px solid #DADFD8;border-radius:6px;padding:8px;"
-                                   "color:#3B4541;font-size:12px;")
-        self.lbl_how.setVisible(False)
-        self.btn_how.toggled.connect(self.lbl_how.setVisible)
-        pv.addWidget(self.lbl_how)
 
         split = QSplitter(Qt.Horizontal)
         split.setChildrenCollapsible(False)
@@ -617,6 +603,11 @@ class JetAdvisorScreen(QWidget):
         import app_meta
         if res is not None and res.trial_id is not None and callable(getattr(app_meta, "open_process_playground", None)):
             app_meta.open_process_playground(trial_id=res.trial_id)
+
+    def _open_help(self) -> None:
+        from ui.widgets.help_texts_jet_advisor import TEXTS
+        from ui.widgets.multilang_help import show_help
+        show_help(TEXTS, self)
 
     def _reset(self) -> None:
         for lo, hi in list(self._target_edits.values()) + list(self._limit_edits.values()):
