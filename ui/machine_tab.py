@@ -185,6 +185,13 @@ def build_machine_tab_impl(self) -> None:
     model._cell_alerts.update(md.cell_alerts)
     if md.dy_ratio is not None:
         _wire_dy_ratio_row(model, *md.dy_ratio)
+    # OF row in Machine Data (RDSetting = 2): live speed tooltip like the R&D tab - reads the current cells
+    of_m = _md.of_row_index(md.row_titles)
+    if of_m is not None:
+        model._of_tooltip_row = of_m
+        model._of_tooltip_calc = lambda col, _m=model: _md.of_speed_tooltip(
+            getattr(_m, "_row_titles", []), getattr(_m, "_matrix", []),
+            getattr(_m, "_row_titles", []), getattr(_m, "_matrix", []), col)
 
     self.tbl_machine.setModel(self.model_machine)
     self.tbl_machine.resizeColumnsToContents(fixed_data_column_width=90)

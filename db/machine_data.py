@@ -1470,6 +1470,7 @@ class RDMachineData:
     jet_rows: Set[int] = field(default_factory=set)                  # rows holding a JetID (title has "jet", not "plate")
     of_row: Optional[int] = None                                     # "W0-W1 OF" row (speed tooltip)
     of_speed_tooltips: Dict[int, str] = field(default_factory=dict)  # col -> "Speed: N m/min" (stored values)
+    of_speed_base: Dict[int, float] = field(default_factory=dict)  # col -> Speed Shaft 2 / Shaft 1 DR (web: live tooltip)
 
 
 def title_key(title: str) -> str:
@@ -1490,6 +1491,27 @@ def float_by_title(row_titles: List[str], key: str, matrix: List[List[Any]], col
                 except Exception:
                     return None
     return None
+
+
+def of_row_index(row_titles: List[str]) -> Optional[int]:
+    """Row of "W0-W1 OF (%)" (last match, same rule as the R&D tab) or None. Since the field moved from R&D to
+    Machine Data (tblMachineFields.RDSetting = 2) the speed tooltip belongs there too (2026-11-16, both apps)."""
+    idx = None
+    for i, title in enumerate(row_titles or []):
+        tl = str(title or "").lower()
+        if "w0" in tl and "w1" in tl and "of" in tl:
+            idx = i
+    return idx
+
+
+def of_speed_base(machine_titles: List[str], machine_matrix: List[List[Any]], col: int) -> Optional[float]:
+    """Speed Shaft 2 / Shaft 1 DR of a column - the OF tooltip is base x (100 + OF) / 100. None if missing / DR 0.
+    The web app gets it per column and computes the tooltip live from the OF typed in the cell."""
+    speed = float_by_title(machine_titles, OF_SPEED_KEY, machine_matrix, col)
+    dr = float_by_title(machine_titles, OF_DR_KEY, machine_matrix, col)
+    if speed is None or dr is None or dr == 0:
+        return None
+    return speed / dr
 
 
 def of_speed_tooltip(machine_titles: List[str], machine_matrix: List[List[Any]],
@@ -1546,6 +1568,9 @@ def build_rd_machine_data(md: MachineData, cache: Optional[Dict[str, Any]] = Non
             tip = of_speed_tooltip(md.row_titles, m_matrix, rd.row_titles, rd_matrix, c)
             if tip:
                 rd.of_speed_tooltips[c] = tip
+            base = of_speed_base(md.row_titles, m_matrix, c)
+            if base is not None:
+                rd.of_speed_base[c] = base
     return rd
 
 

@@ -258,3 +258,15 @@ def test_rd_jet_plate_rows_are_not_jet_rows():
     rd = mdm.build_rd_machine_data(mdm.build_machine_data(st, "single"), reference_names=st.reference_names)
     titles = {rd.row_titles[i] for i in rd.jet_rows}
     assert "Jet" in titles and not any("plate" in t.lower() for t in titles)
+
+
+def test_of_row_and_speed_base():
+    """OF speed tooltip (both apps): row found in Machine Data too (RDSetting = 2), base = speed / DR."""
+    from db import machine_data as m
+    titles = ["Housing", "Jet", "Shaft 1 DR", "Speed Shaft 2 (m/min)", "W0-W1 OF (%)"]
+    matrix = [["", ""], ["", ""], ["1.6", "2"], ["800", "0"], ["3.5", "x"]]
+    assert m.of_row_index(titles) == 4 and m.of_row_index(["Speed"]) is None
+    assert m.of_speed_base(titles, matrix, 0) == 500.0
+    assert m.of_speed_base(titles, matrix, 1) == 0.0          # speed 0 -> base 0, DR 2
+    assert m.of_speed_tooltip(titles, matrix, titles, matrix, 0) == "Speed: 518 m/min"   # 800/1.6 * 103.5/100
+    assert m.of_speed_tooltip(titles, matrix, titles, matrix, 1) is None                 # OF not a number
