@@ -1,11 +1,11 @@
 # ui/widgets/help_texts_dashboards.py
-"""Hilfetexte Dashboards (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte Dashboards (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Spiegelt ui/screen_dashboards.py (Liste My dashboards / Shared with me mit
 Suche, Dashboard schreibgeschuetzt: Slicer, Klick in Balken/Zellen,
 Drill-down, Seiten, Tooltips; PDF; Edit in Smart Chart fuer Ersteller und
 Personen mit Bearbeiten-Recht) und das Teilen in Smart Chart
-(ui/smart_share_dialog.py). Bei Aenderungen dort hier (alle 3 Sprachen)
+(ui/smart_share_dialog.py). Bei Aenderungen dort hier (alle 4 Sprachen)
 nachziehen.
 """
 
@@ -135,6 +135,46 @@ TEXTS = {
                   f"Haz clic en {B('Save')}."],
                  "Solo el creador puede compartir o borrar un dashboard. Quien puede editarlo guarda sus cambios, "
                  "pero no puede compartirlo."),
+            ]},
+        ],
+    },
+    "zh": {
+        "window_title": "仪表板如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "在这里<b>查看</b>仪表板：您自己的仪表板以及同事共享给您的仪表板。"
+                      "仪表板在 <i>Smart Chart → Dashboard</i> 中创建。"),
+                ("h", "查看"),
+                ("task", "打开仪表板",
+                 ["在左侧列表中点击它：<i>My dashboards</i> 是您自己的，<i>Shared with me</i> 来自"
+                  "同事（显示其姓名）。",
+                  "在 <i>Search a dashboard or owner…</i> 中输入内容可快速查找。"],
+                 "页面会打开您上次查看的仪表板。"),
+                ("task", "筛选显示内容",
+                 ["在<b>切片器</b>（列表、下拉框、磁贴、范围）中选择数值。",
+                  "点击条形、扇区或数据点：其他视觉对象会将其余内容变灰（卡片、表格和矩阵只显示该数值）。再次点击可撤销。",
+                  "双击条形可深入下一层级（drill-down），前提是仪表板提供此功能。",
+                  "底部的选项卡用于切换页面。"],
+                 "以上操作都不会被保存，下次打开时仪表板仍是创建者保存时的样子。打开右侧的"
+                 " <i>Filters</i> 栏可查看仪表板使用了哪些筛选。"),
+                ("task", "打印或发送仪表板",
+                 [f"点击 {B('PDF')}，选择当前页或所有页。"]),
+                ("task", "查看最新数据",
+                 [f"点击 {B('Reload')}（F5），会加载新的试验以及新的或已更改的仪表板。"]),
+                ("h", "修改和共享"),
+                ("task", "修改仪表板",
+                 [f"点击 {B('Edit in Smart Chart')}，该按钮仅在您自己的仪表板以及"
+                  "以 <i>to edit</i> 方式共享给您的仪表板上显示。",
+                  f"在 Smart Chart 中修改后点击 {B('Save view')}。"],
+                 "在 Dashboards 页面上，除切片器外无法修改任何内容。"),
+                ("task", "与同事共享我的仪表板",
+                 [f"在 Smart Chart 中打开它并点击 {B('Share…')}。",
+                  "勾选 <i>Everybody can view it</i>，或添加人员和组（read、write、admin、superuser），"
+                  "分别设置为 <i>Can view</i> 或 <i>Can view and edit</i>。",
+                  f"点击 {B('Save')}。"],
+                 "只有创建者可以共享或删除仪表板。有编辑权限的人可以保存其更改，"
+                 "但不能再共享给他人。"),
             ]},
         ],
     },

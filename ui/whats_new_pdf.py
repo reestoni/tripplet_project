@@ -29,11 +29,47 @@ NAVY = "#1D3557"
 SKETCH_SCALE = 4
 
 _FONTS: Optional[Tuple[str, str, bool]] = None
+_FONTS_ZH: Optional[Tuple[str, str, bool]] = None
 
 
-def _fonts() -> Tuple[str, str, bool]:
+def _fonts_zh() -> Tuple[str, str, bool]:
+    """Chinese (2026-11-16): Microsoft YaHei from the Windows font folder (has Latin + Chinese +
+    the arrow), else the CID font STSong-Light built into ReportLab (no bold)."""
+    global _FONTS_ZH
+    if _FONTS_ZH is not None:
+        return _FONTS_ZH
+    from reportlab.lib.fonts import addMapping
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    font_dir = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+    regular, bold = os.path.join(font_dir, "msyh.ttc"), os.path.join(font_dir, "msyhbd.ttc")
+    try:
+        if os.path.isfile(regular) and os.path.isfile(bold):
+            pdfmetrics.registerFont(TTFont("WN-YaHei", regular, subfontIndex=0))
+            pdfmetrics.registerFont(TTFont("WN-YaHei-Bold", bold, subfontIndex=0))
+            addMapping("WN-YaHei", 0, 0, "WN-YaHei")
+            addMapping("WN-YaHei", 1, 0, "WN-YaHei-Bold")
+            addMapping("WN-YaHei", 0, 1, "WN-YaHei")
+            addMapping("WN-YaHei", 1, 1, "WN-YaHei-Bold")
+            _FONTS_ZH = ("WN-YaHei", "WN-YaHei-Bold", True)
+            return _FONTS_ZH
+    except Exception:
+        pass
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+    addMapping("STSong-Light", 0, 0, "STSong-Light")
+    addMapping("STSong-Light", 1, 0, "STSong-Light")
+    addMapping("STSong-Light", 0, 1, "STSong-Light")
+    addMapping("STSong-Light", 1, 1, "STSong-Light")
+    _FONTS_ZH = ("STSong-Light", "STSong-Light", False)
+    return _FONTS_ZH
+
+
+def _fonts(lang: str = "en") -> Tuple[str, str, bool]:
     """(regular, bold, unicode_ok) - registered once."""
     global _FONTS
+    if lang == "zh":
+        return _fonts_zh()
     if _FONTS is not None:
         return _FONTS
     from reportlab.lib.fonts import addMapping
@@ -139,7 +175,7 @@ def export_release_pdf(release_idx: int, lang: str, path: str) -> int:
     from reportlab.lib.utils import ImageReader
     from ui.whats_new import LOGO, SKETCH_H, SKETCH_W, release_version, release_when
 
-    regular, bold, uni = _fonts()
+    regular, bold, uni = _fonts(lang)
     release = RELEASES[release_idx]
     version = release_version(release)
     title = f"{WINDOW_TITLE[lang]} - {VERSION_LABEL[lang]} {version}"
@@ -153,6 +189,9 @@ def export_release_pdf(release_idx: int, lang: str, path: str) -> int:
     s_w = ParagraphStyle("wn_w", fontName=regular, fontSize=8.5, leading=11, textColor=colors.HexColor("#2b2b2b"),
                          spaceBefore=4)
     s_p = ParagraphStyle("wn_p", parent=s_b, spaceAfter=4)
+    if lang == "zh":   # Chinese has no spaces: break between characters
+        for st in (s_h, s_t, s_b, s_w, s_p):
+            st.wordWrap = "CJK"
 
     PW, PH = A4
     ml = mr = 16 * mm

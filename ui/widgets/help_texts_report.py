@@ -1,12 +1,12 @@
 # ui/widgets/help_texts_report.py
-"""Hilfetexte Report / Smart Chart (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte Report / Smart Chart (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Die eigentliche Oberflaeche ist HTML/JS in ui/report_html_template.py
 (Werkzeugleiste #global-toolbar, Diagramm-Kacheln, Drill-down _drillDown(),
 Speichern/Oeffnen/PDF/Layout-Templates). Seit 2026-10-30 nur noch der
 Report einer Serie - der neue Smart Chart (ui/screen_smart_chart.py) hat
 seine eigene Hilfe help_texts_smart_chart.py. Bei Aenderungen dort hier
-(alle 3 Sprachen) und in assets/images/help_report.svg nachziehen.
+(alle 4 Sprachen) und in assets/images/help_report.svg nachziehen.
 """
 
 SVG = "assets/images/help_report.svg"
@@ -241,6 +241,81 @@ TEXTS = {
                                                 "botones para mover, ampliar y quitar."),
                     ("(3) Clic para profundizar", "Muestra los ensayos individuales detrás de una barra o un punto."),
                     ("(4) Camino de profundización", "Los pasos del drill-down; clic en un paso anterior vuelve atrás."),
+                ]),
+            ]},
+        ],
+    },
+
+    # ═══════════════════════════════ ZH ═══════════════════════════════
+    "zh": {
+        "window_title": "报告如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "<b>Report</b> 显示一个试验系列的图表（从 Show Experiment 或 Backlog 打开）。"
+                      "要跨多个系列绘制试验图表，请使用侧边栏中的 <b>Smart Chart</b>，它有自己的帮助。"
+                      "编号 (1)–(4) 对应 <i>界面说明</i> 选项卡。"),
+                ("h", "创建图表"),
+                ("task", "选择图表显示的内容",
+                 ["在图表卡片 (2) 顶部的第一个列表中选择数值（Y 轴）。",
+                  "在第二个列表中选择 X 轴。<i>to all</i> 会把该 X 轴应用到所有图表。",
+                  "Y 列表旁的 <b>+</b> 可在同一图表中再添加一个数值。"]),
+                ("task", "X 轴上的两个层级，例如纱线及其下方的喷嘴",
+                 ["在 X 列表中选择第一层级，例如 <i>Yarn</i>（纱线简称）。",
+                  "在其右侧的列表（› 之后）中选择第二层级，例如 <i>Jet</i>。X 轴随后显示"
+                  "每种纱线及其下方的喷嘴，仅显示实际测试过的组合。",
+                  "<i>— none —</i> 恢复为一个层级。"],
+                 "适用于分组和堆叠条形图、箱线图和散点图。双击条形可显示恰好该纱线和喷嘴的"
+                 "试验。使用多种纱线的试验会同时归在所有这些纱线下"
+                 "（\"A / B\"）。"),
+                ("task", "显示更多或更少的图表",
+                 ["在工具栏 (1) 中修改 <i>Charts:</i> 中的数字。"]),
+                ("task", "显示离散度和范围",
+                 [f"{B('± SD')} 开关标准差误差线，{B('↕ Min/Max')} 开关最小/最大值标记。"]),
+                ("task", "与其他试验系列比较",
+                 [f"点击 {B('+ Compare')}，搜索并选择该系列。",
+                  "每个系列在工具栏中显示为一个彩色标签；点击标签上的小 x 可将其移除。"],
+                 f"{B('Legend')} 设置系列的顺序和颜色。"),
+                ("task", "查看某个数值背后的单个试验",
+                 ["点击条形或数据点 (3)。所有图表都会切换为该数值的单个试验。",
+                  "<i>DRILL</i> 栏 (4) 显示路径；点击之前的步骤可返回。"]),
+                ("task", "添加备注和图片",
+                 ["每个图表都有自己的备注栏。" + B("Note") + " 为整个报告添加备注。",
+                  f"{B('+ Image')} 在图表之间插入图片。"],
+                 "参考线：在图表的参考线栏中输入数值，例如 <i>5, 10, 15</i>。"),
+                ("task", "重新排列图表",
+                 ["拖动图表的拖动柄，或用 ▲ ▼ 移动、用 [ ] 放大、用 x 移除。"]),
+                ("h", "保存和分享"),
+                ("task", "保存报告",
+                 [f"点击 {B('Save')}，输入标题（以及作者、信息框位置、总体备注）。",
+                  f"点击 {B('Save Report')}。对于已有报告，{B('Save as New')} 会保留旧报告。"],
+                 "已保存的系列报告可在 Show Experiment 中打开（Report 旁的列表，然后点 Go!），"
+                 "也可通过 Backlog 中的报告图标打开。"),
+                ("task", "打开已保存的报告",
+                 [f"点击 {B('Open')}，按标题或作者搜索，选中后点击 {B('Open Selected')}。"],
+                 "列表中的垃圾桶图标可删除报告。"),
+                ("task", "在图表中查看数值备注",
+                 [f"点击工具栏中的 {B('Notes')}。带有备注（在 Show Experiment 中填写）的条形和数据点"
+                  "会显示紫色轮廓；将鼠标指向它们即可阅读备注。"],
+                 "默认关闭。针对整个试验的备注会出现在其所有数值的提示框中，但不显示轮廓。"),
+                ("task", "导出为 PDF",
+                 [f"点击 {B('PDF')}，输入标题，选择布局模板，然后点击 {B('Export')}。"],
+                 "数值备注不会被打印，即使屏幕上已显示。只有在导出窗口中勾选"
+                 " <i>Include notes on values</i> 时，PDF 才会包含紫色轮廓，并在每个图表下方"
+                 "列出备注，仅限内部报告使用。"),
+                ("task", "重复使用布局",
+                 [f"{B('Templates')}：将当前布局保存为模板，或应用/覆盖已有模板。"]),
+            ]},
+            {"key": "screen", "title": "界面说明", "blocks": [
+                ("svg", SVG, {"drill_hint": "点击条形或数据点可深入查看单个试验（5 显示返回路径）。"},
+                 SVG_W, SVG_H),
+                ("areas", [
+                    ("(1) 工具栏", "图表数量、SD 和 Min/Max、Notes、图例、系列标签（Series / + Compare / "
+                                 "+ Image）、报告备注、模板、Save、Open 和 PDF。"),
+                    ("(2) 图表卡片", "每张一个图表：顶部为 Y 轴和 X 轴，下方为备注和参考线，以及"
+                                   "移动、放大和移除按钮。"),
+                    ("(3) 点击深入", "显示条形或数据点背后的单个试验。"),
+                    ("(4) 深入路径", "深入查看的各个步骤；点击之前的步骤可返回。"),
                 ]),
             ]},
         ],

@@ -1,10 +1,10 @@
 # ui/widgets/help_texts_smart_chart.py
-"""Hilfetexte Smart Chart (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte Smart Chart (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Spiegelt ui/screen_smart_chart.py: seit 2026-11-02 nur noch das Dashboard
 (ui/smart_dashboard*.py); "1 Find trials" = Filter auf allen Seiten in der
 Filters-Leiste ("+ Add filter" -> ui/smart_chart_filter_dialog.py). Bei
-Aenderungen dort hier (alle 3 Sprachen) nachziehen.
+Aenderungen dort hier (alle 4 Sprachen) nachziehen.
 """
 
 
@@ -960,6 +960,270 @@ TEXTS = {
                     ("Visualizations", "Los tipos de visual; Build (campos, opciones) y Format (orden, números, colores, "
                                        "ejes …) del visual elegido, o el tema del dashboard."),
                     ("Fields", "Todos los campos de todas las tablas en carpetas, con buscador y + New calculated field."),
+                ]),
+            ]},
+        ],
+    },
+
+    # ═══════════════════════════════ ZH ═══════════════════════════════
+    "zh": {
+        "window_title": "Smart Chart 如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "Smart Chart 按属性（纱线、机器设置、实验室结果）在<b>所有</b>试验系列中查找试验，并以类似 "
+                      "Power BI 的仪表板显示：包含图表、卡片、表格和切片器的页面。<b>所有页面上的筛选</b>（右侧 "
+                      "Filters 窗格）决定哪些试验参与。"),
+                ("h", "1 查找试验"),
+                ("task", "例如查找所有 70–80 dtex、30–40 根单丝的涤纶试验",
+                 [f"点击 {B('+ Add filter')}，选择 <i>Material</i>，勾选 <i>PES</i>，再点击 {B('Add filter')}。",
+                  f"再次点击 {B('+ Add filter')}，选择 <i>End titer</i>，输入 From 70 To 80（或在柱条上拖动），"
+                  "然后添加。",
+                  "对 <i>Filaments</i> 30 到 40 做同样操作。"],
+                 "顶部绿色框始终显示有多少试验符合条件、分布在多少个系列中。参考样永远不包括在内。"),
+                ("task", "修改或删除筛选",
+                 ["在 Filters 窗格的 <i>On all pages</i> 下，点击筛选可修改，点击其 <b>×</b> 可删除。"]),
+                ("task", "只看芯纱（或效果纱）",
+                 ["在 <i>Yarn filters apply to</i> 下选择 <i>Core only</i> 或 <i>Effect only</i>。"],
+                 "选择 <i>Any ply</i> 时，所有纱线筛选必须符合试验的<b>同一</b>股纱：PES + 70–80 dtex "
+                 "表示同时满足两者的一根纱线，而不是一股 PES 加另一股 75 dtex。"),
+                ("task", "理解“Add filter”中的直方图",
+                 ["柱条显示数值在其他筛选剩余的试验中如何分布。绿色柱条在您设定的范围内。",
+                  "下方一行告诉您新筛选会剩下多少试验，在添加之前就能看到。"]),
+                ("task", "快速找到字段",
+                 [f"在 {B('+ Add filter')} 中，字段已分组（Yarn、Jet、Machine、Lab、General）；点击分组可展开或折叠。",
+                  "或在 <i>Search a field…</i> 中输入部分名称，匹配的分组会自动展开。",
+                  "仪表板的 <i>Fields</i> 窗格分组方式相同，并有自己的搜索框。"],
+                 "<i>Jet</i> 分组包含试验所用喷嘴的数据：气孔、纱道、涡流室、锥体、纤度范围、制造商、材料等。"
+                 "所有实验室表（Statimat、Itemat、DTYoMat、收缩 …）都在 <i>Lab</i> 文件夹中。"),
+                ("task", "只要整数，或只要 1、1.5、2 …",
+                 ["选择数值字段，例如 Overfeed，输入 From 和 To。",
+                  "在下方选择 <i>Only every</i> 1（仅整数）或 0.5（1、1.5、2 …），也可输入自定义步长。",
+                  "或选择 <i>Pick values</i>：范围内出现的每个值都会列出并显示试验数；勾选所需的值。"],
+                 "筛选卡片会显示出来，例如 <i>Overfeed 1 – 5 % · every 0.5</i>。"),
+                ("h", "2 阅读图表"),
+                ("task", "并排比较机器（或材料）",
+                 ["将字段拖入 <i>Small multiples</i>，例如 Machine。每个值得到一个小图，坐标轴均相同。"],
+                 "最多显示 9 个面板（出现最多的值）。单击图例项可隐藏，双击则只显示该项。"),
+                ("task", "查出某个点是哪个试验",
+                 ["将鼠标指向它：提示框显示试验、系列和纱线。",
+                  "点击视觉对象标题栏中的 ⤢（Focus）：图表下方是其试验列表。"
+                  "点击点可找到对应行，双击行可在 Show Experiment 中打开该系列。"]),
+                ("task", "判断比较是否公平",
+                 ["注意图表标题栏中的彩色圆点。它检查所比较的组（颜色、面板或 X 类别，或 X 范围）是否在其他会影响 "
+                  "Y 值的条件上也不同：材料、纤度、单丝数、纱线类型、机器、喷嘴、气压、超喂、速度。",
+                  "<b>绿色</b>：无明显问题。<b>黄色</b>：部分公平或数据较少。<b>红色</b>：图表可能显示的是这些条件的"
+                  "影响，而不是所比较对象的影响。",
+                  "点击圆点查看详情：每个条件、它在各组间分布的差异以及对 Y 的影响程度。<i>Make it fairer</i> "
+                  "会为该视觉对象添加一个筛选，只保留所有组共有的部分。"],
+                 "它还会对试验很少的组、只来自单个试验系列的组以及位于不同 X 范围的组发出警告。这只是警示灯，"
+                 "不是证明：只检查 TrippleT 中记录的条件。"),
+                ("h", "仪表板"),
+                ("task", "搭建包含多个视觉对象的页面（类似 Power BI）",
+                 ["Smart Chart 直接在仪表板中打开（左上角 <i>Report</i>）。",
+                  "点击页面上的视觉对象可选中它，或点击 <i>Visualizations</i> 中的类型添加新的视觉对象"
+                  f"（{B('+ New visual')} 添加空白视觉对象）。",
+                  "将字段从 <i>Fields</i>（所有表，已分组、可折叠）拖入字段区"
+                  "（X axis、Y axis、Legend、Small multiples、Rows、Columns、Value）。点击字段会将其放入所选视觉对象的"
+                  "下一个空闲字段区。",
+                  "拖动标题可移动视觉对象，拖动右下角可放大或缩小。鼠标悬停可进行<i>复制</i>和<i>删除</i>。",
+                  "需要更多空间？<b>›</b> 按钮可将 <i>Visualizations</i> 或 <i>Fields</i> 折叠成窄条；"
+                  "点击窄条可重新打开。TrippleT 会记住此设置。"],
+                 "视觉对象类型：各种图表类型，以及 <i>Matrix</i>（每行每列一个值，着色，空白 = 尚无试验）、"
+                 "<i>Card</i>（一个数字：计数、平均值、最小值、最大值 …）和 <i>Table</i>。左侧的筛选适用于所有视觉对象；"
+                 "每个图表都有自己的公平性圆点。"),
+                ("task", "添加切片器（选择值来筛选页面）",
+                 ["点击 Visualizations 中的 <i>Slicer</i> 类型，并将字段拖入 <i>Field</i>。",
+                  "选择 <i>Style</i>：<b>List</b>（带计数和搜索的勾选框）、<b>Dropdown</b>（同上，折叠）、"
+                  "<b>Tiles</b>（按钮）、<b>Between</b>（带两个滑块的范围，仅限数值字段）或 <b>Year › Month</b>"
+                  "（用于年/月字段：年份可展开，下方为 Jan–Dec 各月；点击年份选择其全部月份，或选择单个月份）。",
+                  "如果只能选一个值，请关闭 <i>Multi-select</i>。<i>Clear selection</i> 或 <i>All</i> 可撤销选择。",
+                  "<i>Applies to</i>：页面上所有视觉对象（默认）或仅勾选的视觉对象；选中切片器时，它们会显示虚线框。"],
+                 "切片器筛选页面上所有其他视觉对象，包括其他切片器；它自己的列表始终显示其他筛选剩余的所有值及其试验数。"
+                 "所选内容随视图一起保存。"),
+                ("task", "使用多个页面",
+                 ["底部的选项卡就是页面。<b>+</b> 添加页面，复制按钮复制当前页面，双击选项卡可重命名，"
+                  "当前选项卡上的 <b>✕</b> 可删除它。"],
+                 "点击和切片器只筛选其所在页面的视觉对象。所有页面都保存在视图中。"),
+                ("task", "只筛选一个页面或一个视觉对象",
+                 ["打开 <b>Filters</b> 窗格（在 Visualizations 旁边）。它分三部分：<i>On all pages</i>"
+                  "（Find trials 的筛选，含 Yarn filters apply to）、<i>On this page</i> 和 <i>On this visual</i>"
+                  "（针对所选视觉对象，该视觉对象会显示一个小的 <i>filter</i> 标记）。",
+                  "在所需部分使用 " + B("+ Add filter") + "，窗口与 Find trials 中相同。",
+                  "点击筛选标签可修改，点击其 × 可删除。"],
+                 "三个层级，与 Power BI 相同：左侧 Find trials = 所有页面，然后是页面，再是视觉对象。"),
+                ("task", "用公式创建自己的数值（计算字段）",
+                 [f"在 <i>Fields</i> 中点击 {B('+ New calculated field')}，输入名称和单位。",
+                  "构建公式：双击右侧列表中的字段（显示在 [方括号] 中），并使用 + − × ÷ ( ) ^ 以及 abs、sqrt、log10、"
+                  "min、max，例如 [Intermingling Points (FP/m)] / [Air Consumption (m3/h)]。",
+                  "预览显示多少试验得到数值以及最小值 / 平均值 / 最大值。点击 OK。"],
+                 "该字段出现在 <i>Calculated</i> 文件夹中，可在任何地方使用：视觉对象、切片器和筛选。"
+                 "点击旁边的 ✎ 可修改或删除。它随仪表板一起保存。"),
+                ("task", "设置目标值",
+                 ["选择卡片、图表或矩阵，在 Visualizations 中输入 <i>Target</i>，并选择 "
+                  "<i>higher is better</i> 或 <i>lower is better</i>。"],
+                 "卡片变为绿色或红色，图表显示虚线目标线，矩阵在目标的好的一侧着绿色、差的一侧着红色。"),
+                ("task", "添加平均线、± 标准差或规格限（Analytics）",
+                 ["选择图表，并点击 Visualizations 中的 <i>Analytics</i>（在 Build 和 Format 旁边）。",
+                  "选择 <i>+ Add a line…</i>：Average、Median、Mean ± 1/2/3 SD、Percentile、Min、Max、"
+                  "<i>Constant line</i> 或从 - 到的 <i>Band</i>（例如规格限）。",
+                  "可以设置标签和颜色；× 可删除。"],
+                 "平均值、中位数等根据图表中的单个试验计算，在每个 Small multiples 中分别计算（Columns 则根据各柱）。"
+                 "适用于条形图、箱线图、小提琴图、折线图、散点图、趋势图、直方图、Columns 和控制图。Copy format 不会复制这些线。"),
+                ("task", "跳转到某台机器、某个喷嘴 … 的详情页（Drill-through）",
+                 ["创建详情页：打开该页面，在 <i>Filters</i> 中的 <i>Drill-through to this page</i> 下选择字段，"
+                  "例如 <i>Machine</i>。",
+                  "在另一页面上，右键单击使用 Machine 的视觉对象中的柱条、箱体、矩阵单元格或饼图扇区，"
+                  "并在 <i>Drill through</i> 下选择该页面。",
+                  "详情页只显示该机器。<i>← Back to …</i> 返回，<i>Clear</i> 显示不带 Drill-through 筛选的页面。"],
+                 "勾选 <i>Keep all filters of the clicked visual</i>（默认）时，被点击视觉对象的页面、视觉对象、点击和切片器"
+                 "筛选也会一起带过去。Drill-through 不随仪表板保存。在 Dashboards 页面上同样可用。"),
+                ("task", "向下钻取（例如机器 → 喷嘴）",
+                 ["在条形图、箱线图、小提琴图或折线图视觉对象中，将一个或多个字段拖入 <i>Drill down to</i>。",
+                  "双击柱条：视觉对象显示该值的下一层级。路径显示在标题栏中，点击 ⤴ 返回上一层。"]),
+                ("task", "选择点来筛选页面",
+                 ["在散点图中，围绕点拖出一个矩形。所有其他视觉对象只显示这些试验（Filters 中显示 "
+                  "<i>Selected n trials</i>）。",
+                  "在图表中双击，或在 Filters 中删除，即可清除选择。"]),
+                ("task", "从模板开始",
+                 [f"在仪表板模式下点击 {B('New')}，选择 <i>Empty page</i>、<i>Example page</i> 或模板："
+                  "Jet comparison、Yarn overview、Machine check 或 Lab overview。"],
+                 "模板是普通页面，可随意修改并另存为自己的视图。"),
+                ("task", "打印或共享仪表板（PDF、Excel）",
+                 [f"{B('PDF')}：当前页面或所有页面，每页一张 A4，视觉对象位于原位置，并附筛选和公平性警告。",
+                  f"{B('Excel')}：页面上每个视觉对象的数据，各占一个工作表。视觉对象上的 ⤓ 按钮只导出该视觉对象。"]),
+                ("task", "让切片器跳过某个视觉对象（直接在页面上）",
+                 ["选择切片器。其他每个视觉对象的标题栏会显示 <i>slicer: on</i> 或 <i>slicer: off</i>，点击即可切换。"],
+                 "与 Visualizations 中的 <i>Applies to</i> 相同。"),
+                ("task", "统计实验、系列或试验数量（统计）",
+                 [f"点击 {B('New')} → <i>Lab statistics</i> 获取现成页面，或添加视觉对象 <i>Columns</i>"
+                  "（或 Card、Matrix），并选择聚合方式 <i>Count of experiments</i>、<i>Count of trial series</i> 或 "
+                  "<i>Count of trials</i>，无需 Value。",
+                  "将字段放入 X axis：例如 <i>Experiment month</i>、<i>Product group</i>、<i>Order type</i>、"
+                  "<i>Owner</i> 或 <i>Tested on (lab machine)</i>。Legend 中的字段会拆分柱子；在 Bars 下选择 "
+                  "<i>Stacked</i>、<i>Side by side</i> 或 <i>100 % stacked</i>。",
+                  "月份和年份按顺序排列，没有数据的月份显示为 0。"],
+                 "没有试验的系列和没有系列的实验也会被计数。在两台实验室机器上测量的试验在每台机器上各计一次。"),
+                ("task", "统计运行过多少种不同的喷嘴、纱线 …",
+                 ["添加 <i>Card</i>，选择聚合方式 <i>Count (distinct)</i>。",
+                  "将字段拖入 Value，例如 <i>Jet</i>、<i>Yarn</i> 或 <i>Machine</i>，这里任何字段都可以，不限于数值。",
+                  "卡片统计经过所有筛选、切片器和点击后剩余试验中的不同值。使用 <i>Columns</i> 或 <i>Matrix</i> "
+                  "可得到每个类别的数量，例如每年不同喷嘴的数量。"],
+                 "空值（未记录喷嘴）不计数。"),
+                ("task", "列出具体是哪些喷嘴、纱线 …（每项一行）",
+                 ["添加 <i>Table</i>，将字段拖入 Columns，例如 <i>Jet</i>。",
+                  "在 Build 中勾选 <i>One row per value (e.g. a list of the jets)</i>。表格现在每个喷嘴只显示一次，"
+                  "并显示 <i>Trials</i> 和 <i>Series</i> 的数量。",
+                  "可按需添加更多字段：第二个文本字段（例如 <i>Machine</i>）会每种组合一行，数值字段（例如 FP/m）"
+                  "显示每行的平均值。点击列标题可排序。"],
+                 "在相同筛选下，表格的行数与使用 <i>Count (distinct)</i> 的卡片计数相同。没有值的试验会被省略"
+                 "（表格下方的提示说明数量）。"),
+                ("task", "显示各部分如何构成总数，例如每个试验的 A、B、C 网络结",
+                 ["添加视觉对象 <i>Stacked fields</i>（Visualizations 中三种颜色的柱子）。",
+                  "将数值字段拖入 <i>Values</i>，例如 DTYoMat <i>AKnots</i>、<i>BKnots</i>、<i>CKnots</i>。"
+                  "每个字段成为柱子的一种颜色。",
+                  "将 <i>Trial</i>（General）拖入 <i>X axis</i>，每个试验一根柱子；或拖入系列、机器、喷嘴 … 来比较各组。"
+                  "没有 X 时，所有试验合为一根柱子。",
+                  "在 <i>Bars</i> 下：<i>100 % stacked</i>（默认，各部分所占比例）、<i>Stacked</i>（数值）或 "
+                  "<i>Side by side</i>。",
+                  "组合图：将一个或多个数值字段拖入 <i>Line (right axis)</i>，例如 <i>FP/m DTYoMat</i>。"
+                  "它们以折线绘制，右侧有自己的坐标轴。"],
+                 "先筛选到一个系列（Filters 或切片器），柱子就会标为 V1、V2 …"),
+                ("task", "只显示今年、去年或最近 12 个月",
+                 [f"在时间字段上添加筛选（{B('Add filter')}，或 Filters 窗格中的 <i>+ Add filter</i>）："
+                  "<i>Month</i>、<i>Year</i>、<i>Trial month</i>、<i>Experiment month</i> …",
+                  "在 <i>Period</i> 下选择 <i>This year</i>、<i>Last year</i>、<i>Last 12 months</i>、"
+                  "<i>This month</i>、<i>Last month</i>，或用 <i>From – to</i> 指定起止月份。"],
+                 "这些时间段随日历变化：到了一月，<i>This year</i> 就表示新的一年，无需修改仪表板。"
+                 "选择单个值（例如 2026）则保持不变。"),
+                ("task", "对齐多个视觉对象",
+                 ["按住 Ctrl+单击（或 Shift+单击）所需的视觉对象，它们会显示绿色虚线框。Ctrl+A 选中页面上所有视觉对象，"
+                  "Esc 结束选择。",
+                  "页面上方会出现一个工具栏：左对齐、居中、右对齐、顶端、垂直居中或底端对齐；与最后点击的视觉对象同宽、"
+                  "同高或同尺寸；水平或垂直等间距分布。",
+                  "拖动其中一个选中视觉对象的标题栏，所有选中的会一起移动。方向键可将选中的视觉对象移动一步。"],
+                 "Ctrl+Z 可撤销。"),
+                ("task", "格式化视觉对象：排序、Top N、小数位、标签、颜色、坐标轴、图例",
+                 ["点击视觉对象，然后点击 Visualizations 顶部的 <i>Format</i> 选项卡（<i>Build</i> 返回字段）。"
+                  "点击空白页面或按 Esc 可取消选择。",
+                  "<i>Sort and Top N</i>：按值（从高到低、从低到高）或按名称排序，并只显示前 5、10 …，"
+                  "例如最好的 10 个喷嘴。图表下方的提示说明省略了多少。",
+                  "<i>Numbers</i>：坐标轴、卡片、矩阵和图表数值的小数位。"
+                  "<i>Data labels</i>：在柱条和折线上显示数值，或关闭。<i>Error bars</i>（Bars、Mean line）：<i>Standard deviation</i>（试验的离散程度）、<i>95 % confidence</i>（真实平均值所在范围：如果两根柱条几乎不重叠，差异很可能是真实的；试验少时范围会变宽，只有一个试验时则没有）、<i>Min – Max</i>（最差和最好的试验）或 <i>Off</i>。",
+                  "<i>Axes</i>：自定义标题，或 <i>hide</i>（隐藏）；固定 Y 轴的起点和终点（一个或两个）。"
+                  "<i>Legend</i>：右、上、下或关闭。",
+                  "<i>Colours</i>：换一个调色板，或点击某个值旁的颜色框自选颜色（× 恢复）。矩阵：色阶。"
+                  "<i>Text and grid</i>：文字大小、网格线开或关。",
+                  "卡片：数字大小、显示或隐藏单位及下方一行。表格：点击列标题排序（再次点击 = 反向）；"
+                  "<i>+ Add colour rule</i> 为单元格着色，例如 FP/m 大于 100 为绿色、Machine 为 SSM 时为红色。",
+                  "每项修改立即可见。绿色圆点标出与默认不同的地方；<i>Reset</i> 恢复一个部分，<i>Reset all</i> "
+                  "恢复整个视觉对象。",
+                  "<b>仪表板主题</b>：点击空白页面（未选中任何对象），然后点击 <i>Format</i>。其中的调色板、文字大小、"
+                  "网格线、小数位、柱条数值和图例适用于所有页面上的所有视觉对象；视觉对象自己的 Format 优先。"
+                  "在视觉对象中，<i>Dashboard: …</i> 显示主题给出的设置。",
+                  "<b>复制格式</b>：点击格式正确的视觉对象，然后点击页面顶部的 <i>Copy format</i>（在 + New visual "
+                  "旁边），再点击要应用该格式的视觉对象。双击 <i>Copy format</i> 可对多个视觉对象连续使用，Esc 结束。"
+                  "坐标轴标题和范围不会被复制，它们属于字段。",
+                  "<i>Points and lines</i>：每种颜色使用不同形状、点的大小。<i>Axes</i>：也可使用对数 X / Y 轴。"],
+                 "PDF 和 Dashboards 页面以相同方式显示视觉对象。Ctrl+Z 可撤销修改。"),
+                ("task", "放大查看单个视觉对象及其试验（Focus）",
+                 ["将鼠标指向视觉对象，点击其标题栏中的 ⤢。",
+                  "视觉对象占满页面；下方列出构成它的所有试验及所用字段。点击点可找到对应行，点击行可高亮对应点，"
+                  "双击行可在 Show Experiment 中打开该试验。",
+                  "<i>Back to the page</i> 或 Esc 返回。点击标题栏中的彩色圆点可查看公平性详情，并可使用 "
+                  "<i>Make it fairer</i>。"],
+                 "在 Dashboards 页面上同样可用。"),
+                ("task", "饼图、环形图、控制图、雷达图、文本",
+                 ["<i>Pie / donut</i>：将字段拖入 Legend，统计试验（或系列、实验）数量；或将数值拖入 Value 并选择 Sum。"
+                  "Build 中的 <i>Shape</i>：饼图或环形图（中间显示总数）。点击扇区可筛选页面。",
+                  "<i>Control chart</i>：将数值放入 Y axis。试验按系列和试验编号排序，或按 X axis 中的字段排序"
+                  "（例如 Trial month）。线条：平均值和 ±3σ 控制限；红色 = 超出控制限，琥珀色 = 连续 7 个或更多点位于"
+                  "平均值同一侧。",
+                  "<i>Radar</i>：将三个或更多数值字段放入 Values，一个字段放入 Legend（喷嘴、纱线、机器 …）。"
+                  "每条轴从最低的组（内侧）到最高的组（外侧）；实际数值在提示框中。",
+                  "<i>Text</i>：在 Build 中书写。以 # 开头的行是标题，**文字** 为粗体。"],
+                 "所有这些也都会出现在 PDF 中。"),
+                ("task", "查看各表之间的关系（Model）",
+                 ["点击仪表板左上角的 <i>Model</i>（<i>Report</i> 返回页面）。",
+                  "试验位于中间；左侧是它所引用的内容（纱线、喷嘴、实验、时间、机器），右侧是实验室表。"
+                  "1 : n = 每个试验多行，取平均；n : 1 = 多个试验共用一行。",
+                  "点击某个表：查看其内容、每个试验的值如何得出，以及每个字段有多少试验有值。"],
+                 "只读，任何人都不能在此修改关联。"),
+                ("task", "调宽或调窄侧边窗格",
+                 ["拖动 Filters、Visualizations 或 Fields 的左边缘。双击边缘恢复默认宽度；› 可折叠窗格。"],
+                 "TrippleT 会为您记住宽度。"),
+                ("task", "撤销修改、查看备注",
+                 ["Ctrl+Z 撤销页面的上一次修改（布局、字段、筛选 …），Ctrl+Y 重做。Delete 删除所选视觉对象。",
+                  "在散点图中勾选 <i>Show notes on values</i>：带备注的值会显示紫色圆环，备注在提示框中。"]),
+                ("task", "点击一个视觉对象，在所有视觉对象中高亮",
+                 ["点击柱条、柱子、扇区、箱体或矩阵单元格，顶部的蓝色标签会说明点击了什么。",
+                  "条形图、柱形图、饼图、散点图、平均线和控制图保留所有试验，其余部分变灰（被点击的视觉对象也是如此）。"
+                  "柱形图在每根柱子内显示高亮部分，平均值条形图在淡化的柱条上方显示高亮试验的平均值。",
+                  "卡片、矩阵、表格、雷达图、箱线图、小提琴图、直方图和切片器只显示被点击的值。",
+                  "再次点击同一位置或蓝色标签即可撤销。",
+                  "若要改为筛选所有视觉对象：在未选中任何对象时打开 Format → <i>Clicks</i> → "
+                  "<i>Filters the other visuals</i>。"]),
+                ("h", "保存与共享"),
+                ("task", "保存仪表板以便以后再次打开",
+                 [f"点击 {B('Save view')}，输入名称；如果其他人也应看到，请勾选 <i>Share with everybody</i>。",
+                  f"用 {B('Open view')} 再次打开。",
+                  f"要与个人或组（read、write、admin、superuser）共享：{B('Share…')}，每人可设为<i>查看</i>或"
+                  "<i>查看和编辑</i>。共享的仪表板会出现在 <i>Dashboards</i> 页面上。"],
+                 "保存的是筛选，而不是试验列表，因此视图始终显示当前数据。只有创建者可以共享；修改：创建者、拥有 "
+                 "<i>edit</i> 权限的人和超级用户；删除：创建者或超级用户。"),
+                ("task", "获取最新数据",
+                 [f"点击 {B('Reload')} 或按 F5。您的筛选和仪表板保持不变。"]),
+            ]},
+            {"key": "screen", "title": "界面说明", "blocks": [
+                ("areas", [
+                    ("顶部", "New（空白页、示例或模板）、Open view、Save view、Share…、Excel、Reload (F5)、"
+                             "PDF 以及本帮助。"),
+                    ("绿色框", "有多少试验符合所有页面上的筛选，分布在多少个系列、机器和喷嘴中。"),
+                    ("页面", "Report | Model、页面名称、+ New visual、Copy format；视觉对象；底部的页面选项卡。"),
+                    ("Filters", "On all pages（= 查找试验，Yarn filters apply to）、本页面、本视觉对象、点击和切片器。"),
+                    ("Visualizations", "视觉对象类型；所选视觉对象的 Build（字段、选项）和 Format（排序、数字、颜色、"
+                                       "坐标轴 …），或仪表板主题。"),
+                    ("Fields", "所有表的所有字段（按文件夹分组），带搜索框和 + New calculated field。"),
                 ]),
             ]},
         ],

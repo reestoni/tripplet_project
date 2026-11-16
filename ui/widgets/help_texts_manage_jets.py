@@ -1,11 +1,11 @@
 # ui/widgets/help_texts_manage_jets.py
-"""Hilfetexte Manage Jets (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte Manage Jets (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Spiegelt ui/screen_manage_jets.py (Suche ueber Jet/Remarks mit ";" = ODER,
 Spaltenfilter per Rechtsklick auf den Kopf = UND, Spalten verschiebbar +
 Columns…, New Jet / Copy (Formular vorbelegt, Feld Jet leer) / Edit in Form /
 Delete / Save Changes; nur bearbeitbar mit can_use_admin_box(), sonst
-read-only). Bei Aenderungen dort hier (alle 3 Sprachen) und in
+read-only). Bei Aenderungen dort hier (alle 4 Sprachen) und in
 assets/images/help_manage_jets.svg nachziehen.
 """
 
@@ -150,6 +150,51 @@ TEXTS = {
                                                "New Jet, Copy, Edit in Form, Delete, Save Changes, Columns…."),
                     ("(2) Encabezados", "Clic derecho para filtrar, arrastrar para reordenar. La columna de la tobera "
                                         "queda fija a la izquierda."),
+                ]),
+            ]},
+        ],
+    },
+    "zh": {
+        "window_title": "Manage Jets 如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "Manage Jets 是所有喷嘴及其几何参数的目录。编号 (1)–(2) 对应"
+                      " <i>界面说明</i> 选项卡。"),
+                ("warn", "修改喷嘴需要管理员权限。其他人只能以只读方式查看此界面。"),
+                ("h", "查找"),
+                ("task", "搜索喷嘴",
+                 ["在 <i>Search Jet or Remarks…</i> (1) 中输入内容。会搜索喷嘴名称和备注。",
+                  "用 <b>;</b> 分隔多个关键词，可找到包含其中<i>任意</i>一个的行，例如 <i>S+ 1.2; S+ 1.4</i>。"]),
+                ("task", "按列筛选（例如气孔或工艺）",
+                 ["右键点击列标题 (2)。",
+                  "输入文本（<i>contains…</i>），数字列则输入起止范围。",
+                  "绿色 ▼ 表示该列已筛选。再次右键 → <i>Clear this filter</i> 或 <i>Clear all filters</i>。"],
+                 "多个列筛选同时生效（必须全部满足），并与搜索叠加。"),
+                ("h", "修改"),
+                ("task", "添加新喷嘴",
+                 [f"点击 {B('New Jet')}，填写表单并保存。"]),
+                ("task", "添加与现有喷嘴相似的喷嘴",
+                 ["选中现有喷嘴。",
+                  f"点击 {B('Copy')}。表单会带着它的所有数值打开，只有名称 <i>Jet</i> 为空。",
+                  "输入新名称，调整数值后保存。"]),
+                ("task", "修改喷嘴",
+                 [f"双击该行（或点击 {B('Edit in Form')}）在表单中编辑，或",
+                  f"直接在表格中编辑单元格，然后点击 {B('Save Changes')}。"]),
+                ("task", "删除喷嘴",
+                 [f"选中一行或多行，点击 {B('Delete')} 并确认。"]),
+                ("task", "重新排列列",
+                 ["将列标题拖到其他位置，或",
+                  f"点击 {B('Columns…')}，将列拖成所需顺序，然后点击 <i>Save layout</i> 保存。"]),
+            ]},
+            {"key": "screen", "title": "界面说明", "blocks": [
+                ("svg", SVG, {"hint_edit": "双击一行：打开表单 · 或直接编辑单元格，然后点 Save Changes",
+                              "hint_filter": "右键点击列标题进行筛选（绿色 ▼ = 筛选已启用）"},
+                 SVG_W, SVG_H),
+                ("areas", [
+                    ("(1) 搜索和按钮", "在喷嘴名称和备注中搜索（; = 多个关键词）；Reload、New Jet、"
+                                     "Copy、Edit in Form、Delete、Save Changes、Columns…。"),
+                    ("(2) 列标题", "右键筛选，拖动重新排列。喷嘴列固定在最左侧。"),
                 ]),
             ]},
         ],

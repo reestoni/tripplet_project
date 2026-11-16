@@ -1,11 +1,11 @@
 # ui/widgets/help_texts_jet_advisor.py
-"""Hilfetexte Jet Advisor (EN/DE/ES) fuer ui/widgets/multilang_help.py (Desktop) und
+"""Hilfetexte Jet Advisor (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py (Desktop) und
 /api/help/screen/jet_advisor (Web, tripplet_web/backend/app/help.py).
 
 Spiegelt ui/screen_jet_advisor.py bzw. die Web-Seite /tools/jet-advisor (1 Yarn, 2 Targets,
 3 Jets, 4 Machine settings, Ergebnis + Detail) und die Methode in ui/jet_advisor.py.
 Skizze: assets/images/help_jet_advisor.svg (Platzhalter {{hint_*}} pro Sprache).
-Knopfnamen bleiben die englischen des Desktops. Bei Aenderungen alle 3 Sprachen nachziehen.
+Knopfnamen bleiben die englischen des Desktops. Bei Aenderungen alle 4 Sprachen nachziehen.
 """
 
 SVG = "assets/images/help_jet_advisor.svg"
@@ -304,6 +304,90 @@ TEXTS = {
                     ("(5) Resultado", "Una línea por tobera: probabilidad, ajuste recomendado con ventana, valores "
                                       "esperados ± dispersión (✓ / ✗), aire en Nm³/h, fuente, hilo y ensayos detrás."),
                     ("(6) Detalle", "Por qué este ajuste, margen o fallo, series de ensayos, Process Playground."),
+                ]),
+            ]},
+        ],
+    },
+    "zh": {
+        "window_title": "Jet Advisor（喷嘴顾问）如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "Jet Advisor 回答这个问题：<i>对这种纱线，哪个喷嘴用什么设置能达到我的目标？</i>——依据是我们"
+                      "自己用这种纱线或类似纱线做过的 <b>DTY</b> 试验。它列出各喷嘴及推荐的 <b>气压</b>、<b>超喂</b> "
+                      "和 <b>速度</b>、预期的实验室数值，以及新一次运行达到目标的概率。"),
+                ("h", "查找喷嘴"),
+                ("task", "为一种纱线找到最合适的喷嘴",
+                 ["在 <i>1 Yarn</i> 下选择已有纱线（输入即可搜索）——或选择 <i>Own values</i>，为我们从未运行过的"
+                  "纱线填写材料、终纤度和单丝数。",
+                  "在 <i>2 Targets</i> 下填写关心的指标，例如 网络点/m min 90、稳定性 1.0 min 75、CV max 15。"
+                  "留空 = 无目标。",
+                  f"单击 {B('Find jets')}。"],
+                 "列表按达到全部目标的概率排序。在网页版中，表单内容会保留，直到你修改它。"),
+                ("task", "只看标准喷嘴（或其他喷嘴类型）",
+                 ["在 <i>3 Jets</i> 下勾选 <i>Standard</i>（可勾选多种类型）。",
+                  "可选：勾选制造商或分组，或勾选 <i>Only jets whose titer range fits the final titer</i>。",
+                  f"再次单击 {B('Find jets')}。"],
+                 "不勾选 = 所有喷嘴。没有类型的喷嘴显示为 <i>(none)</i>。"),
+                ("task", "固定机器设置，例如速度 800 m/min",
+                 ["在 <i>4 Machine settings</i> 下，在 <i>Speed</i> 的 <i>from</i> 和 <i>to</i> 中都输入 800。",
+                  "用同样方式限制气压，例如 <i>to</i> 4 bar。",
+                  f"单击 {B('Find jets')}。"],
+                 "只考虑这些范围内的设置。如果该范围内没有任何试验，就不显示喷嘴——顾问从不超出我们的测量范围去猜测。"),
+                ("task", "节省用气",
+                 ["将 <i>When equally good, prefer</i> 设为 <i>Less air</i>。",
+                  f"单击 {B('Find jets')}。"],
+                 "在同样好的设置中，耗气量较低的（气压更低、孔径更小）胜出。<i>Air</i> 列显示每个锭位的 Nm³/h，"
+                 "计算方法与 Jet ROI Calculator 相同。"),
+                ("task", "检查推荐从何而来",
+                 ["在结果中单击某个喷嘴。",
+                  "下方显示选择该设置的原因、依据的试验数量以及相关试验系列（双击 / 单击即可打开；桌面版中 "
+                  "Ctrl = 新标签页）。",
+                  f"{B('Open in Process Playground')} 在工艺模拟中打开这种纱线和喷嘴——查看推荐设置附近会发生什么。"]),
+                ("h", "如果什么都没找到"),
+                ("task", "没有类似纱线 / 没有找到喷嘴",
+                 ["将 <i>Similar yarns</i> 设为 <i>wide (±50 %)</i>。",
+                  "取消勾选 <i>Only the same material</i>。",
+                  "放宽喷嘴筛选条件或机器设置。"],
+                 "结果上方的一行显示使用了哪些纱线，以及它们与你的纱线相差多远。"),
+            ]},
+            {"key": "method", "title": "如何决策", "blocks": [
+                ("h", "1  类似纱线"),
+                ("p", "在我们的试验中查找与你的纱线相似的纱线：材料相同（如已勾选），终纤度和单丝数接近。"
+                      "<i>距离</i> 对同一纱线为 0；纤度相差约 30 % 或单丝数相差约 50 % 时为 1。多股纱线按纤度和"
+                      "单丝数之和计算。"),
+                ("h", "2  每个喷嘴：实测与模型设置"),
+                ("p", "对每个用这些纱线运行过的喷嘴，我们实际运行过的每个设置都是一个候选（<i>measured</i>）。"
+                      "在改变过气压、超喂或速度的地方，Process Playground 的模型填补它们之间的空隙（<i>model</i>）"
+                      "——只在运行过的设置附近，绝不超出测量范围。"),
+                ("h", "3  达到目标的概率"),
+                ("p", "对每个候选，估计每个目标的预期值及新一次运行的离散：包括重复试验的离散、模型的不确定性以及"
+                      "系列之间的差异。由此得出新一次运行满足全部目标的概率。"),
+                ("h", "4  排序"),
+                ("ul", ["每个喷嘴显示其最佳设置；数值下方的 <i>窗口范围</i> 是几乎同样好的区间（至少达到最佳概率的 "
+                        "90 %）。",
+                        "排序依据：概率（纱线相似度越低，概率略低），其次是目标偏离程度，然后是 <i>安全余量</i>"
+                        "（以离散为单位到最近目标界限的距离）或 <i>耗气更少</i>。",
+                        "如果没有喷嘴能达到目标，仍会列出最接近的喷嘴——未达到的目标处标有 ✗。"]),
+                ("warn", "概率是根据我们的试验得出的估计，并非保证。务必用试验验证推荐——并留意 <i>Source</i> "
+                         "和试验数量。"),
+                ("p", "仅限 DTY。实验室数值：网络点/m 和 CV（Itemat）、稳定性 0.3 / 0.6 / 1.0 / 1.3。不使用参考样；"
+                      "网络点/m = 0 视为未测量。"),
+            ]},
+            {"key": "screen", "title": "界面说明", "blocks": [
+                ("svg", SVG, {"hint_chance": "Chance：条形 = 新一次运行满足全部目标的概率",
+                              "hint_window": "设置下方的灰色小数字：几乎同样好的窗口范围",
+                              "hint_source": "measured = 按此实际运行过 · model = 介于实测设置之间",
+                              "hint_click": "单击喷嘴：原因、相关试验、在工艺模拟中打开"},
+                 SVG_W, SVG_H),
+                ("areas", [
+                    ("(1) Yarn", "已有纱线或自定义数值（材料、终纤度、单丝数）；所用纱线允许的相似程度；仅限相同材料。"),
+                    ("(2) Targets", "每个实验室数值的 min 和/或 max。留空 = 无目标。"),
+                    ("(3) Jets", "喷嘴类型（如 Standard）、制造商、分组、喷嘴的纤度范围。不勾选 = 全部。"),
+                    ("(4) Machine settings", "气压、超喂和速度的范围；两个设置同样好时优先选哪个。Find jets / Reset。"),
+                    ("(5) 结果", "每个喷嘴一行：概率、推荐设置及窗口范围、预期值 ± 离散（✓ / ✗）、耗气量 Nm³/h、"
+                                "来源、依据的纱线和试验。"),
+                    ("(6) 详情", "选择该设置的原因、安全余量或偏离、试验系列、Process Playground。"),
                 ]),
             ]},
         ],

@@ -1,6 +1,6 @@
 # ui/widgets/yarn_stock_help_texts.py
 """Texte der Yarn-Stock-Hilfe (ui/widgets/yarn_stock_help_dialog.py) in
-Englisch, Deutsch und Spanisch (Nutzerwunsch 2026-10-13: Sprachumschaltung
+Englisch, Deutsch, Spanisch und Chinesisch (Nutzerwunsch 2026-10-13: Sprachumschaltung
 per Flagge - bewusste Ausnahme von der "UI-Texte auf Englisch"-Regel).
 
 Button-/Spaltennamen des Screens (New spool(s), Save Changes, Weight (kg) ...)
@@ -14,7 +14,8 @@ assets/images/yarn_stock_spool_flow.svg bzw. yarn_stock_screen_map.svg
 
 LANGUAGES = [("en", "English", "flag_gb.svg"),
              ("de", "Deutsch", "flag_de.svg"),
-             ("es", "Español", "flag_es.svg")]
+             ("es", "Español", "flag_es.svg"),
+             ("zh", "中文", "flag_cn.svg")]
 DEFAULT_LANGUAGE = "en"
 
 # Bereichsmarkierungen (sprachneutral, verweisen auf die Skizze im Screen guide).
@@ -594,6 +595,189 @@ TEXTS = {
         "svg_map": {
             "help": "esta ayuda",
             "hint": "clic en la casilla para marcar · doble clic en Weight / Location / Colour / Producer para editar",
+        },
+    },
+
+    # ───────────────────────────── 中文 ─────────────────────────────
+    "zh": {
+        "window_title": "Yarn Stock 如何使用？",
+        "close": "关闭",
+        "tab_tasks": "我该如何……？",
+        "tab_screen": "界面说明",
+        "tab_background": "背景知识",
+
+        "tasks_intro": (f"在下方找到你的问题，按步骤操作。{A} 和 {S1}–{S4} 指界面上的各个区域，"
+                        "见<i>界面说明</i>选项卡。"),
+        "h_find": "查找信息",
+        "tasks_find": [
+            ("某种纱线我们还有多少？",
+             [f"在概览 {S1} 上方的 <i>Search yarn / batch…</i> 中输入纱线名称或批次的一部分。",
+              "<i>Total (kg)</i> 和 <i>Spools</i> 显示每个批次的库存，<i>Yarn total (kg)</i> "
+              "显示该纱线所有批次的合计。"],
+             ""),
+            ("某种纱线存放在哪里？",
+             [f"在 {S1} 中搜索该纱线。<i>Locations</i> 列列出该批次的所有库位。",
+              f"点击该行。Spools 区域 {S2} 随即显示每个筒子的确切库位。"],
+             ""),
+            ("我手里有一个筒子，它是什么？",
+             [f"读取标签上的筒子编号（例如 <i>#213</i>），输入到 <i>Go to spool #</i> {A} 中。",
+              f"按 Enter 或 {B('Go')}。界面会跳转到它的批次，并在 {S2} 中高亮该筒子。"],
+             "已报废的筒子不会显示。也可以使用二维码扫描枪：将标签扫描到该输入框中。"),
+            ("某个货架上放了什么？",
+             [f"在 <i>Rack lookup</i> {S4} 中输入货架字母（例如 <i>E</i>），以该字母开头的所有库位都会列出。",
+              f"如需可打印的清单，点击旁边的 {B('Export to Excel')}。"],
+             ""),
+            ("哪些需要补货？",
+             [f"将概览 {S1} 上方的状态筛选设为 <i>Low</i>。"],
+             "完全用完的纱线不再显示在 Yarn Stock 中。超级用户会在铃铛中收到每种纱线的 "
+             "<i>Low</i> 或 <i>Empty</i> 提醒，Manage Yarn 中显示 0 kg。"
+             "<i>Low</i> 仅对设有最低库存的纱线有效（<i>Min. stock (kg)</i> 列）。"),
+            ("某个筒子用在了哪些试验中？",
+             [f"在 {S1} 中点击该批次。",
+              f"在 {S2} 中勾选筒子或点击其所在行。",
+              f"点击 {B('Used in…')}。将列出实验、系列、试验和 ply。"],
+             ""),
+            ("谁在什么时候修改了某个筒子？",
+             [f"在 {S1} 中点击该批次。",
+              f"在 {S2} 中勾选或选中筒子。不选择则显示整个批次，包括已报废的筒子。",
+              f"点击 {B('History…')}。将列出日期、用户以及哪个值从什么改成了什么。"],
+             f"单个已报废的筒子：在 <i>Go to spool #</i> {A} 中输入其编号，然后选择 "
+             "<i>Show history</i>。修改记录从该功能上线时开始保存。"),
+            ("如何把库存导出到 Excel？",
+             [f"如有需要，先筛选概览 {S1}（搜索 / 状态）。",
+              f"点击 {B('Export to Excel')}。导出的正是当前显示的行。"],
+             ""),
+            ("为什么列表中缺少某种纱线？",
+             ["概览只列出当前有筒子在库的纱线。从未到货的纱线，或其筒子已全部用完并报废的纱线，"
+              "在这里没有对应行。",
+              "所有纱线（包括无库存的）都在 <b>Manage Yarn</b> 中。"
+              f"要添加库存，请用 {B('New spool(s)')} 登记到货（见下文）。"],
+             ""),
+        ],
+        "h_change": "修改库存",
+        "change_note": "需要访问级别 2 或以上。否则界面显示“View only”。",
+        "tasks_change": [
+            ("登记新到货",
+             [f"如果该纱线/批次已存在，先在 {S1} 中点击其所在行，纱线和批次会自动填入。",
+              f"在 {S2} 中点击 {B('New spool(s)')}。",
+              "填写纱线、批次、每个筒子的重量、筒子数量和库位"
+              "（可选：筒管颜色和生产商）。点击 OK。",
+              "新筒子会自动加入标签打印队列（对话框中的复选框，默认勾选）。"
+              f"用 {S3} 中的 {B('Print Labels…')} 打印。"],
+             "之后概览中会自动选中新筒子所属的批次。"
+             "每个实物筒子创建一条记录。如果列表中没有该生产商，"
+             f"可用对话框中的 {B('+ New')} 按钮或 {B('New producer…')} 添加。"),
+            ("打印标签",
+             [f"在 {S2} 中勾选第一列的筒子（或 {B('Select all')}）。",
+              f"点击 {B('Add to label queue')}。筒子会出现在 {S3} 中。",
+              f"点击 {S3} 中的 {B('Print Labels…')}。如果标签纸已部分使用，"
+              "在预览中点击第一个空白标签位。",
+              "保存 PDF 并打印。"],
+             "已打印的筒子会自动移出队列。未能排进本张标签纸的筒子保留在队列中。"),
+            ("录入剩余重量或移动筒子",
+             [f"在 {S1} 中点击该批次。",
+              f"在 {S2} 中双击该筒子的 <i>Weight (kg)</i> 或 <i>Location</i>，输入新值，按 Enter。",
+              f"点击 {B('Save Changes')}。"],
+             "如果保存前点击了其他行或按钮，TrippleT 会询问是否保存修改。"),
+            ("将空的或不可用的筒子出库",
+             [f"在 {S2} 中勾选筒子。",
+              f"点击 {B('Discard')} 并确认。"],
+             "该筒子从列表中消失，但仍保留在数据库中，"
+             "因此对其用过的试验，<i>Used in…</i> 依然有效。"),
+            ("修改整个批次的批次名称或生产商",
+             [f"在概览 {S1}（或货架查询 {S4}）中双击 <i>Batch</i> 或 <i>Producer</i> 单元格。",
+              "输入新的批次名称或选择生产商，按 Enter。"],
+             "这会一次性修改该批次的所有筒子（包括已报废的），并立即保存。"),
+            ("进行盘点（所有货架，逐个库位）",
+             [f"在 <i>Rack lookup</i> {S4} 中点击 {B('Stock take…')}。概览以磁贴形式显示每个库位。",
+              "点击一个灰色（未盘点）的库位，扫描在那里找到的每个筒子，然后点击 "
+              f"{B('Finish stock take…')}。",
+              "磁贴变为绿色（全部正确）或橙色（有差异）。继续下一个灰色库位。"],
+             "盘点轮次由超级用户开始和结束。详细说明见<i>盘点</i>选项卡。"),
+            ("设置或修改最低库存（仅限超级用户）",
+             [f"在概览 {S1} 中双击该纱线的 <i>Min. stock (kg)</i> 单元格。",
+              "输入以 kg 为单位的最低值并按 Enter。留空表示不设最低库存。"],
+             "最低库存适用于整种纱线（所有批次合计），并立即保存。"
+             "也可以在 Manage Yarn 中设置。"),
+        ],
+
+        "screen_caption": "带示例行的草图。界面自上而下使用：在 (1) 中选择一行，在 (2) 中处理其筒子。",
+        "screen_areas": [
+            ("(A) Go to spool #", "按编号直接跳转到某个筒子，例如标签上的编号。也可以扫描标签上的二维码。"),
+            ("(1) Overview",
+             "<b>起点。</b>每个仍有筒子在库的纱线 + 批次占一行：生产商、筒子数量、该批次的 kg、"
+             "整种纱线的 kg、最低库存、库位和状态（绿色 OK、黄色 Low、红色 Empty；状态针对整种纱线）。"
+             "搜索和状态筛选可缩小列表范围；<i>Export to Excel</i> 导出当前显示的内容。双击 "
+             "<i>Batch</i> 或 <i>Producer</i> 可修改整个批次的值，双击 <i>Min. stock (kg)</i> "
+             "（超级用户）可修改整种纱线的值。"),
+            ("(2) Spools",
+             "<b>单个筒子：</b>(1) 中所选行的筒子，每个实物筒子一行。"
+             "复选框用于为 <i>Add to label queue</i> 和 <i>Discard</i> 选择筒子。重量、库位、"
+             "筒管颜色和生产商通过双击编辑，并用 <i>Save Changes</i> 保存。"
+             "<i>New spool(s)</i> 登记到货，<i>Used in…</i> 显示试验，<i>History…</i> "
+             "显示所勾选或选中筒子的修改历史。可用 ▾ 按钮折叠。"),
+            ("(3) Label queue",
+             "<b>等待打印标签的筒子。</b>先在这里收集，然后用 "
+             "<i>Print Labels…</i> 一起打印，以充分利用标签纸。<i>Remove selected</i> "
+             "将筒子移出队列而不打印。"),
+            ("(4) Rack lookup",
+             "<b>按货架而非按纱线查看库存。</b>输入库位的开头（例如 <i>E</i> 或 "
+             "<i>E1</i>），即可看到存放在那里的所有纱线/批次；可导出到 Excel。"
+             "<i>Stock take…</i> 打开包含所有库位的盘点概览（见<i>盘点</i>选项卡）。"),
+        ],
+        "h_elsewhere": "库存还会显示在哪里",
+        "elsewhere": _ul([
+            "<b>Create Experiment</b>：为某个 ply 添加纱线时，可以选择具体的筒子。"
+            "只提供该纱线在库且重量大于 0 kg 的筒子。",
+            "<b>Manage Yarn</b>：每种纱线的库存 kg（所有批次），包括无库存的纱线，以及 "
+            "<i>MinStock</i> 字段。",
+            "<b>Show Experiment</b>：鼠标悬停在纱线上会显示其筒子的存放位置。",
+            "<b>铃铛</b>：为超级用户提供每种纱线一条 Low/Empty 警告，可跳转到该纱线。",
+        ]),
+
+        "h_levels": "三个层级：纱线、批次、筒子",
+        "levels": ("<b>纱线</b>来自纱线目录（Manage Yarn）。其下有一个或多个"
+                   "<b>批次</b>（生产批号，例如 <tt>989G</tt>）。每个批次由若干带有自己编号"
+                   "（例如 <tt>#213</tt>）的<b>筒子</b>组成，每个筒子都有重量、库位、"
+                   "筒管颜色、生产商和状态。概览中每个纱线 + 批次占一行。"),
+        "h_life": "筒子的生命周期",
+        "life_note": ("<b>重要：</b>在试验中使用筒子<b>不会</b>自动减少其重量。"
+                      "只有当有人在 Spools 区域录入剩余重量或将空筒子出库后，库存数字才正确。"),
+        "h_status": "状态：OK、Low、Empty",
+        "status": ("对每种<b>纱线</b>，将其所有<i>在库</i>筒子的公斤数跨所有批次相加"
+                   "（<i>Yarn total (kg)</i>），并与其最低库存"
+                   "（<i>Min. stock (kg)</i>）比较。因此同一纱线的所有批次行显示相同的状态。"
+                   + _status_table("纱线合计为 0 kg。",
+                                   "纱线合计低于最低库存。超级用户会收到通知。",
+                                   "纱线合计达到或高于最低库存，或未设置最低库存。")),
+        "h_good": "须知",
+        "good": _ul([
+            "库存不是记账流水：每个筒子保存其当前重量、库位和状态。"
+            "在 Yarn Stock 中所做的每次修改还会记录在筒子历史中（<i>History…</i>）。",
+            "已报废的筒子不会被删除，只是被隐藏。没有在库筒子的批次不显示；"
+            "完全用完的纱线会从 Yarn Stock 中消失（Manage Yarn 中仍会列出）。",
+            "所有人都可以查看。创建、编辑和报废筒子需要访问级别 2 或以上。"
+            "只有超级用户可以修改最低库存。离线模式下无法使用 Yarn Stock。",
+        ]),
+
+        "tab_stocktake": '盘点',
+        "st_intro": '盘点用于核对 TrippleT 中某个货架或货位登记的筒子是否真的在那里，并可当场修正差异。',
+        "st_note": '<b>提示：</b>大货架请逐个货位盘点（E1、E2、…）。这样列表较短，可以中途停下、稍后继续，而不会失去整体把握。',
+        "stocktake": [('在哪里找到', 'Yarn Stock → <i>Rack lookup</i> <b>(4)</b> → <b>[Stock take…]</b>。将打开盘点概览：每个库位一个磁贴。需要访问级别 2 或以上。如果筒子列表中有未保存的修改，TrippleT 会先询问是否保存。'), ('盘点轮次', "一个盘点轮次（例如 <i>Stock take October 2026</i>）涵盖所有库位。它可以持续开放数天，多人可同时工作——点击 <b>[Refresh]</b> 查看同事已完成的部分。<ul style='margin-left:-20px'><li><b>开始</b>（超级用户）：<b>[Start new round…]</b>。所有库位默认勾选；取消勾选本轮不盘点的库位（例如已清空的货架）。</li><li><b>磁贴</b>：灰色 = 尚未盘点，绿色 = 已盘点且全部正确，橙色 = 已盘点且有差异，虚线 = 已排除。磁贴显示<i>找到/应有</i>（以及在那里扫描到的其他筒子 <i>+n</i>）；未盘点的磁贴显示当前登记在那里的筒子数量。</li><li><b>点击</b>灰色磁贴即可盘点该库位。<b>右键</b>可选 <i>Check again</i>、<i>Show results</i> 以及（超级用户）<i>Leave out of this round</i> / <i>Include in this round</i>。</li><li>轮次进行中新出现的库位（筒子被移到新货位）会自动加入。</li><li><b>结束</b>（超级用户）：<b>[Close round…]</b> 列出尚未盘点的库位。已结束的轮次只能查看和导出；可在顶部（<i>Round</i>）选择以前的轮次。</li></ul>没有开放的轮次时，仍可用 <b>[Check a location without a round…]</b> 盘点单个货架或货位——此时不会记录到任何轮次中。"), ('开始之前', "<ul style='margin-left:-20px'><li>确保货架上的每个筒子都贴有标签。没有标签的筒子，如果知道编号，可以手动输入编号来核对。</li><li>逐个库位进行——概览会显示哪些尚未盘点，因此可以停下来改天继续。</li><li>二维码扫描枪不是必需的。输入编号并按 Enter 效果相同。</li></ul>"), ('操作步骤', "<ol style='margin-left:-20px'><li>在概览中点击该库位的磁贴（例如 <i>E12</i>）。扫描窗口会针对该库位打开，并列出系统中应在那里的所有筒子。（无轮次时：输入货架或货位，然后点击 <b>[Load]</b>。）</li><li>点击大输入框 <i>Scan or type spool #</i>，扫描找到的每个筒子的标签，或输入编号并按 Enter。每次扫描后输入框会清空，可以直接继续。</li><li>注意输入框下方的彩色提示：它说明上一次扫描的结果（见下表）。<i>Found X of Y</i> 显示进度。</li><li>整个库位核对完毕后，点击 <b>[Finish stock take…]</b>，并决定如何处理未找到的筒子。结果将保存到该库位，磁贴变为绿色或橙色。</li></ol>"), ('扫描时会发生什么', "<table cellspacing='0' cellpadding='6' border='1' style='border-color:#d0d0d0'><tr><th align='left' style='background:#e9f6e9'>情况</th><th align='left' style='background:#e9f6e9'>你看到的</th><th align='left' style='background:#e9f6e9'>保存的内容</th></tr><tr><td valign='top'>筒子应在此处</td><td valign='top'>标记为已找到并显示为绿色。</td><td valign='top'>不做任何修改。</td></tr><tr><td valign='top'>筒子登记在其他库位</td><td valign='top'>TrippleT 询问它实际在哪里（建议：正在盘点的库位）。</td><td valign='top'><b>OK</b> 立即移动它。<b>Cancel</b> 保留其登记的库位。</td></tr><tr><td valign='top'>筒子标记为已报废</td><td valign='top'>TrippleT 询问是否将其重新入库以及放在哪里。</td><td valign='top'><b>OK</b> 立即将其重新入库。之后请在筒子列表中检查其重量。</td></tr><tr><td valign='top'>编号不存在</td><td valign='top'>以红色显示在 <i>Other scans</i> 下。</td><td valign='top'>不做任何修改。请检查标签。</td></tr><tr><td valign='top'>筒子已扫描过</td><td valign='top'>仅显示简短提示。</td><td valign='top'>不做任何修改。</td></tr></table>"), ('完成', "点击 <b>[Finish stock take…]</b> 后，TrippleT 显示汇总：找到多少个筒子、哪些修正已保存、哪些筒子缺失。对缺失的筒子，你可以选择：<ul style='margin-left:-20px'><li><b>Discard missing spools</b>：将其标记为已报废（历史备注：<i>stock take</i>）。</li><li><b>Keep them (no change)</b>：不做任何操作，例如它们此刻正在机器上使用。</li><li><b>Back to scanning</b>：继续盘点。</li></ul>"), ('结果与导出', "<b>Results</b> 选项卡按筒子列出在哪里找到了什么：库位、筒子、纱线、批次、结果、操作人和时间。顶部的汇总行统计已找到、缺失、已移动、已重新入库和未知的筒子数。<ul style='margin-left:-20px'><li><i>Only differences</i>（默认开启）隐藏恰好在预期位置的筒子。<i>Location</i> 用于筛选，例如 <i>C</i> 或 <i>C21</i>。</li><li>某个筒子在一个库位缺失、但在同一轮次中于另一个库位被扫描到时，会标记为 <i>seen at …</i>——它并没有丢失。</li><li><b>[Export to Excel…]</b> 将本轮保存为三个工作表：汇总、库位（状态、应有、找到、操作人、时间）和全部结果。</li></ul>"), ('何时保存什么', "<ul style='margin-left:-20px'><li>移动和重新入库在你确认时<b>立即</b>保存。</li><li>缺失的筒子<b>只有</b>在最后点击 <i>Discard missing spools</i> 时才会报废。</li><li>如果提前关闭窗口（<b>Cancel</b>），TrippleT 会要求确认。已确认的修正仍会保留，但不会报废任何筒子。</li><li>加载另一个库位会重新开始。之前的扫描将被丢弃，已保存的修正保留。</li><li>在轮次中，库位的结果在完成时保存。如果提前关闭扫描窗口，该库位保持未盘点（灰色）。再次盘点某个库位会替换其之前的结果。</li></ul>"), ('须知', "<ul style='margin-left:-20px'><li>没有标签，或扫描枪读不出来？在列表中<b>双击</b>该筒子即可手动标记为已找到。它会显示为蓝色，并在结果中注明 <i>marked by hand</i>，以表明它不是扫描的。<b>右键</b> → <i>Undo - not found</i> 可撤销已找到标记（扫错后也可用）。</li><li>每次修正都会以你的名字和备注 <i>stock take</i> 记录在筒子历史（<i>History…</i>）中。</li><li>盘点只检查筒子是否存在及其库位，不检查重量；如有需要，之后在筒子列表中修正。</li><li>正在机器上使用的筒子不在货架上。对这些筒子请选择 <i>Keep them</i>，或事先核实。</li></ul>")],
+
+        "svg_flow": {
+            "status": "状态",
+            "t1": "1  到货入库", "t1b": "纱线、批次、kg、", "t1c": "数量、库位",
+            "t2": "2  标签", "t2c": "贴在筒子上",
+            "t3": "3  上架", "t3a": "计入库存，", "t3b": "显示在", "t3c": "概览中",
+            "t4": "4  用于试验", "t4a": "创建试验时", "t4b": "按 ply", "t4c": "选择筒子",
+            "t5": "5  报废出库", "t5a": "空的或不可用，", "t5b": "从筒子列表", "t5c": "中隐藏",
+            "loop": "手动更新重量",
+            "trace": "可追溯性：", "trace2": "“Used in…”列出筒子的所有试验",
+        },
+        "svg_map": {
+            "help": "本帮助",
+            "hint": "点击方框勾选筒子 · 双击 Weight / Location / Colour / Producer 进行编辑",
         },
     },
 }

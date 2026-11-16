@@ -1,9 +1,9 @@
 # ui/widgets/help_texts_process_playground.py
-"""Hilfetexte Process Playground (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte Process Playground (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Spiegelt ui/screen_process_playground.py (1 Yarn and jet, 2 Start from,
 3 Change, 4 What happens, Diagramm) und die Statistik in ui/dty_whatif.py.
-Bei Aenderungen dort hier (alle 3 Sprachen) nachziehen.
+Bei Aenderungen dort hier (alle 4 Sprachen) nachziehen.
 """
 
 
@@ -206,6 +206,61 @@ TEXTS = {
                   "<i>only 1 series - check it</i>: todo lo que sabemos viene de una sola serie."],
                  "Solo DTY. Valores: puntos/m y CV (Itemat), estabilidad 0.3 / 0.6 / 1.0 / 1.3, tensión antes y "
                  "después de la tobera (Machine Data). No se usan muestras de referencia."),
+            ]},
+        ],
+    },
+    "zh": {
+        "window_title": "Process Playground（工艺模拟）如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "Process Playground 告诉你：改变 <b>气压</b>、<b>超喂</b> 或 <b>速度</b> 时，一种 <b>DTY</b> "
+                      "纱线的实验室数值会如何变化——依据是我们自己用正是这种纱线和喷嘴做过的试验。它给出 "
+                      "<i>更多</i>、<i>更少</i> 或 <i>大致相同</i>，以及这一结论有多可靠。它不预测精确数值。"),
+                ("h", "试一试"),
+                ("task", "看看提高气压会发生什么",
+                 ["在左侧选择纱线和喷嘴（<i>Search yarn or jet…</i> 可帮助查找）。<i>Varied</i> 列显示我们的试验中"
+                  "改变过哪些参数：P = 气压，OF = 超喂，S = 速度。",
+                  "在 <i>2 Start conditions</i> 下输入你的气压、超喂和速度——或选择 <i>Take from a trial…</i>，"
+                  "采用我们做过的某个试验的设置。",
+                  "在 <i>3 Change</i> 下拖动 <i>Air pressure</i> 滑块或输入数值。",
+                  "在 <i>4 What happens</i> 中查看结果。"],
+                 f"{B('Back to start')} 将所有滑块恢复到起始值。F5 / {B('Reload')} 加载最新试验。起始值下方的红色"
+                 "提示表示：我们从未用这种纱线和喷嘴在该值下运行过——此时没有结论。"),
+                ("task", "从 Show Experiment 中的某个试验开始",
+                 ["在 Show Experiment（DTY 系列）的 <i>Machine Data</i> 中，右键单击试验编号。",
+                  "选择 <i>Open V… in Process Playground…</i>——纱线、喷嘴和起始条件均取自该试验。"]),
+                ("task", "找到能达到我目标的设置",
+                 ["在表格上方选择 <b>主要目标</b>，例如 <i>Stability 1.0</i> + <i>higher</i>。",
+                  "在 <i>Goal</i> 列设置其他目标：<i>higher</i>、<i>lower</i> 或 <i>keep</i>（大致不变），"
+                  "例如 CV points/m = keep，Tension after jet = lower。",
+                  f"单击 {B('Find settings')}。<i>Suggestions</i> 标签页列出最多 5 个接近我们实际运行过的设置——"
+                  "粗体 = 已更改，括号内为相对于起始值的变化。",
+                  "单击某条建议：滑块移到该位置，表格显示所有实验室数值。"],
+                 "每条建议都能以有结论的方式改善主要目标。对其他目标：<i>met</i> = 有结论地达到，<i>not proven</i> "
+                 "= 无明显变化，<i>can't tell</i> = 试验太少，<i>BROKEN</i> = 朝错误方向变化。最好的建议不破坏任何"
+                 "目标，并能检验每个目标；如果只调一个旋钮就能实现，这种方案一定在其中。"),
+                ("task", "理解一条结论",
+                 ["<i>clearly</i> = 非常可靠（p &lt; 0.01），<i>probably</i> = 可靠（p &lt; 0.05），"
+                  "<i>tendency</i> = 弱提示（p &lt; 0.10）。",
+                  "<i>about the same</i> = 该变化肯定小于重复同一试验本身带来的变化。",
+                  "<i>no clear effect</i> = 既不明显改变，也不明显相同；<i>unclear</i> = 试验太少或离散太大。",
+                  "<i>Change</i> 显示估计的变化及其 95 % 范围；<i>Based on</i> 显示有多少系列指向同一方向。"],
+                 "这里“更多”并不代表更好或更差——颜色只表示结论的强弱。"),
+                ("task", "查看结论从何而来",
+                 ["在表格中单击某个实验室数值。",
+                  "下方图表显示我们的试验相对该设置的分布（颜色 = 系列）、结论所用的曲线及其 95 % 置信带。"
+                  "虚线 = 起始值，绿色 = 你的新值。",
+                  "在 <i>Show against</i> 下选择其他设置。"],
+                 "这些点已校正系列之间的差异和其他设置的影响，因此你只看到这一个设置的作用。"),
+                ("h", "限制"),
+                ("task", "为什么滑块变灰或数值显示 'no statement'",
+                 ["用这种纱线和喷嘴从未改变过的设置无法评估——其滑块被锁定。",
+                  "滑块只能移动到我们测量过的范围。超出该范围没有结论。",
+                  "黄色提示表示这组设置从未同时运行过：结论是把各数值分别改变时观察到的结果组合起来。",
+                  "<i>only 1 series - check it</i>：我们所知的一切都来自同一个系列。"],
+                 "仅限 DTY。实验室数值：网络点/m 和 CV（Itemat）、稳定性 0.3 / 0.6 / 1.0 / 1.3、喷嘴前/后张力"
+                 "（Machine Data）。不使用参考样。"),
             ]},
         ],
     },

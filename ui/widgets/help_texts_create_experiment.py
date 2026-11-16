@@ -1,5 +1,5 @@
 # ui/widgets/help_texts_create_experiment.py
-"""Hilfetexte Create Experiment (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte Create Experiment (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Spiegelt ui/screen_create_experiment.py: Tabs General / Material / Jet /
 Machine / Lab Machines (gruener Punkt = Tab vollstaendig), vier Modi
@@ -279,6 +279,91 @@ TEXTS = {
                 ]),
                 ("note", "<b>¿Cuántos ensayos?</b> Cada plaquita de cada fila de toberas da un ensayo. Dos toberas con "
                          "3 plaquitas cada una dan 6 ensayos."),
+            ]},
+        ],
+    },
+
+    # ═══════════════════════════════ ZH ═══════════════════════════════
+    "zh": {
+        "window_title": "Create Experiment 如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "Create Experiment 用于新建实验、试验系列、试验和实验室设备。请从左到右依次填写"
+                      "各选项卡；选项卡填写完整后，其圆点变为绿色。编号 (1)–(4) 对应 <i>界面说明</i> 选项卡，"
+                      "打开本界面的四种方式见 <i>模式</i> 选项卡。"),
+                ("h", "新建实验"),
+                ("task", "新建实验及其第一个试验系列",
+                 ["在侧边栏点击 " + M("New Experiment") + "。",
+                  "<i>General</i>：选择 product group 和 order type（二者构成实验编号），"
+                  "可选实验申请和项目；输入系列名称、Backlog 状态和优先级。",
+                  "填写 <i>Material</i>、<i>Jet</i>、<i>Machine</i>，如有需要还有 <i>Lab Machines</i>（见下文）。",
+                  f"点击 {B('Save')} (1)。"],
+                 "实验编号（例如 2026-73-035）自动分配。选择实验申请后，"
+                 "相应字段会自动填写。"),
+                ("h", "填写选项卡"),
+                ("task", "添加纱线作为股 (Material)",
+                 ["在左侧的目录树 (3) 中选择纱线，或在目录树上方的搜索框中输入其名称的一部分"
+                  "（搜索所有分组，按 Enter 选择第一个结果）。纱线后面的绿色筒子 = 有库存"
+                  "（点击查看存放位置），带删除线的纸管 = 无库存。",
+                  "设置 <i>Ends</i>（纱线使用的根数），可选设置 <i>Yarn Use</i>。",
+                  f"点击 {B('+')}。如有需要，可从纱线库中选择筒子（可选）。",
+                  "该股连同编号出现在表格 (4) 中。"],
+                 f"{B('+ Trial')} 则把一个已有试验的产出作为输入（例如来自另一台机器的"
+                 "半成品纱线）。"),
+                ("task", "添加喷嘴 (Jet)",
+                 ["选择喷嘴座 (Housing) 和喷嘴（喷嘴列表上方的搜索框在所有分组中搜索名称和开发名称），"
+                  "输入喷嘴板数量、喷嘴板编号以及气压。",
+                  f"点击 {B('+')}。如需更多喷嘴，重复此步骤。"],
+                 "<b>每个喷嘴板对应一个试验。</b>可用 Up/Down 或拖动调整行的顺序，"
+                 f"并可用 {B('Copy selected')} 复制。"),
+                ("task", "设置机器参数 (Machine)",
+                 ["选择机器。其字段随即出现，请逐一填写。"]),
+                ("task", "规划实验室测试 (Lab Machines)",
+                 ["选择实验室设备，如有提供，再选择附加值（例如 Itemat 的张力）。",
+                  f"点击 {B('+')}。"]),
+                ("task", "从表格中删除一行",
+                 ["选中该行并按 Delete 键。"]),
+                ("h", "扩展已有实验"),
+                ("task", "向实验添加试验系列",
+                 ["在侧边栏点击 " + M("Add Trial Series") + "（或在 All Experiments 中点击 " + B("Copy TrialSeries") +
+                  "，以已有系列为基础）。",
+                  "选择已有实验，输入系列名称并填写各选项卡。",
+                  f"点击 {B('Save')}。"]),
+                ("task", "向系列添加试验",
+                 ["在 Show Experiment 中点击 <b>+</b> 图标（添加试验）。本界面会针对该系列打开。",
+                  "为新试验添加喷嘴/喷嘴板，并检查材料和机器。",
+                  f"点击 {B('Save')}。新试验会追加在末尾。"]),
+                ("task", "为已有试验添加实验室设备",
+                 ["在侧边栏点击 " + M("Add Lab Machines") + "。",
+                  "选择实验和系列，勾选试验（或 <i>Select all</i>），添加实验室设备。",
+                  f"点击 {B('Save')}。"]),
+            ]},
+            {"key": "screen", "title": "界面说明", "blocks": [
+                ("svg", SVG, {"tab_hint": "（选项卡填写完整后圆点变绿）",
+                              "hint_trials": "试验数量 = 所有喷嘴行的喷嘴板数之和",
+                              "hint_delete": "选中一行并按 Delete 删除"}, SVG_W, SVG_H),
+                ("areas", [
+                    ("(1) 标题和 Save", "正在创建的内容，以及 Save。在添加模式下还有 "
+                                        "<i>← Back to Experiment</i>。"),
+                    ("(2) 选项卡", "General、Material、Jet、Machine、Lab Machines。绿点 = 已完整。"),
+                    ("(3) 纱线目录", "纱线按类型分组；选择一种，设置 Ends/Yarn Use，然后点 <b>+</b>。"
+                                     "<b>+ Trial</b> 将已有试验作为输入。"),
+                    ("(4) 股表格", "该系列的各股：材料、股编号、yarn use 和筒子。"),
+                ]),
+            ]},
+            {"key": "modes", "title": "模式", "blocks": [
+                ("table", ["模式", "打开方式", "作用"], [
+                    ["New Experiment", "侧边栏中的 " + M("New Experiment"),
+                     "新实验及其第一个试验系列和试验。"],
+                    ["Add Trial Series", "侧边栏中的 " + M("Add Trial Series") + "，All Experiments 中的 " +
+                     B("Copy TrialSeries"), "在已有实验中新建系列。"],
+                    ["Add Trials", "Show Experiment 中的 <b>+</b> 图标", "在已有系列中添加更多试验。"],
+                    ["Add Lab Machines", "侧边栏中的 " + M("Add Lab Machines"),
+                     "为已有系列中选定的试验添加实验室设备。"],
+                ]),
+                ("note", "<b>有多少个试验？</b>每个喷嘴行的每个喷嘴板对应一个试验。两个喷嘴"
+                         "各 3 个喷嘴板，共 6 个试验。"),
             ]},
         ],
     },

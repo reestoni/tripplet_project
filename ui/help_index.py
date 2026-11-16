@@ -104,19 +104,42 @@ im in am an auf fur von mit bei nach aus ein es sich man meine meinen meiner kan
 el la los las un una unos unas y o es son como donde que quien puedo se de del en con por para al mi mis
 """.split())
 
+# Chinese question words etc. (two-character pieces, see tokens())
+STOPWORDS |= {"如何", "怎么", "怎样", "什么", "哪里", "在哪", "哪个", "可以", "我想", "我要", "一个", "这个", "那个",
+              "我的", "是否", "能否", "需要"}
+
 _MIN_PREFIX = 4
+_CJK = "\u3400-\u4dbf\u4e00-\u9fff"
+_CJK_RUN = re.compile(f"[{_CJK}]+")
 
 
 def normalize(text: str) -> str:
+    """Lower case, no accents, only letters/digits - and Chinese characters, kept as separate runs."""
     text = html.unescape(re.sub(r"<[^>]+>", " ", text or ""))
     text = text.replace("ß", "ss")
     text = unicodedata.normalize("NFKD", text)
     text = "".join(c for c in text if not unicodedata.combining(c))
-    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    text = re.sub(f"[^a-z0-9{_CJK}]+", " ", text.lower())
+    text = re.sub(f"([{_CJK}]+)", r" \1 ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _cjk_pieces(run: str) -> List[str]:
+    """Chinese has no spaces between words: a run counts as its overlapping two-character
+    pieces ("复制试验" -> 复制, 制试, 试验), a single character as itself."""
+    if len(run) == 1:
+        return [run]
+    return [run[i:i + 2] for i in range(len(run) - 1)]
 
 
 def tokens(text: str) -> List[str]:
-    return [t for t in normalize(text).split() if t and t not in STOPWORDS and len(t) > 1]
+    out: List[str] = []
+    for t in normalize(text).split():
+        if _CJK_RUN.fullmatch(t):
+            out += [p for p in _cjk_pieces(t) if p not in STOPWORDS and (len(t) > 1 or len(p) == 1)]
+        elif t not in STOPWORDS and len(t) > 1:
+            out.append(t)
+    return out
 
 
 def _word_match(token: str, word: str) -> bool:
@@ -317,7 +340,7 @@ def _rank(index: List[HelpEntry], query: str, limit: int, min_coverage: float = 
     return sorted(best.values(), key=lambda h: -h.score)[:limit]
 
 
-# ── texts of the search window (EN/DE/ES) ─────────────────────────────
+# ── texts of the search window (EN/DE/ES/ZH) ──────────────────────────
 UI = {
     "en": {"title": "Help – where do I find…?", "placeholder": "What are you looking for? e.g. all orders of a machine",
            "go": "Take me there", "full": "Open full help", "none": "No matching help found. Try other words – "
@@ -352,6 +375,17 @@ UI = {
            "fb_q": "¿Te ha ayudado?", "fb_up": "Útil", "fb_down": "No útil", "fb_thanks": "¡Gracias por tu opinión!",
            "kb": "Knowledge Base", "kb_open": "Abrir en la Knowledge Base",
            "kb_hint": "Conocimiento de fondo: abre la página en una ventana; al cerrarla vuelves aquí."},
+    "zh": {"title": "帮助 – 在哪里找到…？", "placeholder": "你在找什么？例如：某台机器的所有订单",
+           "go": "带我过去", "full": "打开完整帮助", "none": "没有找到合适的帮助。换个说法试试 – "
+           "例如屏幕名称、按钮名称或你想做的事。",
+           "hint": "用你自己的话描述你想做什么。", "screen": "屏幕",
+           "needs_series": "请先打开一个试验系列（例如从 Backlog 或 All Experiments）。",
+           "areas": "像 (1) 这样的编号指完整帮助中的屏幕示意图。",
+           "ask": "询问 AI", "ask_tip": "让 AI 用自己的话回答（消耗你的 AI 额度）。",
+           "asking": "正在询问 AI…", "ai_label": "AI 回答", "ai_none": "帮助中还没有涵盖这个问题。",
+           "fb_q": "这对你有帮助吗？", "fb_up": "有帮助", "fb_down": "没有帮助", "fb_thanks": "感谢你的反馈！",
+           "kb": "知识库", "kb_open": "在知识库中打开",
+           "kb_hint": "背景知识：在窗口中打开页面 – 关闭后即回到这里。"},
 }
 
 # Screens, die eine geoeffnete Serie brauchen - "Take me there" fuehrt dann zu All Experiments.

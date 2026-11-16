@@ -42,7 +42,8 @@ from ui.pathutil import resource_path
 
 LANGUAGES = [("en", "English", "flag_gb.svg"),
              ("de", "Deutsch", "flag_de.svg"),
-             ("es", "Español", "flag_es.svg")]
+             ("es", "Español", "flag_es.svg"),
+             ("zh", "中文", "flag_cn.svg")]
 DEFAULT_LANGUAGE = "en"
 _CODES = {c for c, _, _ in LANGUAGES}
 

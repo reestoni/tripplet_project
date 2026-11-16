@@ -94,7 +94,7 @@ def release_sections(release: Dict[str, Any], lang: str) -> List[Tuple[str, List
 def _search_index(releases: Optional[list] = None) -> List[Tuple[int, int, set, set]]:
     """(release idx, block idx, words, synonym concepts) per feature card;
     words of title, text and "where" in all languages together."""
-    from ui.help_index import _phrase_concepts, concepts_of, normalize
+    from ui.help_index import _phrase_concepts, concepts_of, normalize, tokens
     idx = []
     for ri, r in enumerate(_rel(releases)):
         for bi, block in enumerate(r["texts"]["en"]):
@@ -102,7 +102,7 @@ def _search_index(releases: Optional[list] = None) -> List[Tuple[int, int, set, 
                 continue
             norm = normalize(" ".join(" ".join(str(x) for x in blocks[bi][1:4])
                                       for blocks in r["texts"].values()))
-            words = set(norm.split())
+            words = set(norm.split()) | set(tokens(norm))   # + two-character pieces of Chinese text
             concepts = set(_phrase_concepts(norm))
             for w in words:
                 concepts |= concepts_of(w)

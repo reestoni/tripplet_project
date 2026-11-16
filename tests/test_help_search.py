@@ -41,7 +41,7 @@ def test_index_covers_all_sources_and_languages():
     idx = get_index()
     screens = {e.screen for e in idx}
     assert screens == {s for s, _n, _m, _f in SOURCES}
-    assert {e.lang for e in idx} == {"en", "de", "es"}
+    assert {e.lang for e in idx} == {"en", "de", "es", "zh"}
 
 
 def test_empty_and_stopword_queries():

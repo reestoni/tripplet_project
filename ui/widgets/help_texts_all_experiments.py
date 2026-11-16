@@ -1,5 +1,5 @@
 # ui/widgets/help_texts_all_experiments.py
-"""Hilfetexte All Experiments (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte All Experiments (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Spiegelt ui/screen_all_experiments.py (Maschinen-Filterknoepfe, Textfilter,
 Sortierung per Spaltenkopf, Symbolspalten AM/ER/NT/RE, Kontextmenue mit
@@ -185,6 +185,62 @@ TEXTS = {
                                   "creación, responsable y estado en el Backlog (se puede cambiar directamente en la columna Status)."),
                     ("(5) Columnas de símbolos", "<b>AM</b> adjuntos (imágenes/PDF), <b>ER</b> solicitud de experimento "
                                                  "vinculada (clic), <b>NT</b> notas, <b>RE</b> informe guardado (clic)."),
+                ]),
+            ]},
+        ],
+    },
+    "zh": {
+        "window_title": "All Experiments 如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "All Experiments 在一张表中列出所有试验系列。编号 (1)–(5) 对应 "
+                      "<i>界面说明</i> 选项卡。"),
+                ("h", "查找"),
+                ("task", "显示某台机器的所有试验系列（订单）",
+                 ["点击机器按钮 (1)，例如 <i>AFK</i>。<i>All</i> 重新显示全部。"]),
+                ("task", "按编号或名称查找系列",
+                 ["在 <i>Filter Experiment ID…</i> 中输入实验 ID 的一部分，或在 "
+                  "<i>Filter Trial Series Name…</i> (2) 中输入名称的一部分。"],
+                 "两个筛选框和机器按钮可以组合使用。"),
+                ("task", "对列表排序",
+                 ["点击列标题 (4)。再次点击则反向排序。"]),
+                ("h", "打开"),
+                ("task", "打开系列",
+                 ["双击该行。"],
+                 "Ctrl + 双击，或右键 → " + M("Open in New Tab") + "，在另一个选项卡中打开。"),
+                ("task", "打开实验申请或已保存的报告",
+                 ["点击 ER 列中的 <b>ER</b> 符号，或 RE 列 (5) 中的报告符号。",
+                  "Ctrl + 点击报告符号可在新选项卡中打开。"]),
+                ("h", "修改"),
+                ("task", "更改系列的状态",
+                 ["在该行的 <i>Status</i> 列中选择新状态。更改立即保存。"],
+                 "规则与 Backlog 相同：只有负责人或超级用户可以更改，"
+                 "<i>To Be Cleaned</i> 和 <i>Archived</i> 仅限超级用户（例外：访问级别 2 及以上可执行 "
+                 "To Be Cleaned → Archived）。"),
+                ("task", "基于已有系列新建系列",
+                 ["选中该行。",
+                  f"点击 {B('Copy TrialSeries')} (3)。"],
+                 "Create Experiment 打开时已填入该系列的设置，作为同一实验的新系列。"
+                 "检查并调整各选项卡，然后保存。"),
+                ("task", "重命名、更改机器或纱线、删除",
+                 ["右键该行，选择 " + M("Rename Trial Series…") + "、" + M("Change Machine…") + "、"
+                  + M("Reassign Yarn…") + " 或 " + M("Delete Trial Series…") + "。"],
+                 "重命名需要访问级别 2；机器和纱线仅限超级用户。删除：在 Backlog 中可移动该系列的人"
+                 "（例如其负责人；在 To Be Cleaned 中仅限超级用户）。已删除的系列可由超级用户在 90 天内恢复："
+                 "侧边栏 → <i>Superuser</i> → <b>Recycle Bin</b>。"),
+            ]},
+            {"key": "screen", "title": "界面说明", "blocks": [
+                ("svg", SVG, {"hint_open": "双击一行即可打开 · Ctrl + 双击在新选项卡中打开",
+                              "hint_sort": "点击列标题排序，再次点击反向排序"}, SVG_W, SVG_H),
+                ("areas", [
+                    ("(1) 机器按钮", "只显示某台机器的系列；<i>All</i> 显示全部。"),
+                    ("(2) 文本筛选", "按实验 ID 和系列名称筛选。"),
+                    ("(3) Copy TrialSeries", "基于所选系列新建系列（打开 Create Experiment）。"),
+                    ("(4) 表格", "每个试验系列一行：实验 ID、名称、机器、创建日期、负责人和 "
+                                 "Backlog 状态（可直接在 Status 列中更改）。"),
+                    ("(5) 符号列", "<b>AM</b> 附件（图片/PDF），<b>ER</b> 关联的实验申请"
+                                   "（可点击），<b>NT</b> 备注，<b>RE</b> 已保存的报告（可点击）。"),
                 ]),
             ]},
         ],

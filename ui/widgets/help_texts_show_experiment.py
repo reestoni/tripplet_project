@@ -1,11 +1,11 @@
 # ui/widgets/help_texts_show_experiment.py
-"""Hilfetexte Show Experiment (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte Show Experiment (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Spiegelt ui/screen_show_experiment.py (Werkzeugleiste in _build_ui, Kontext-
 menues: _MachineContextMenuFilter -> Copy trials / Reference samples /
 Yarns… (Plies der Serie) / Fill row / Custom Group, Retest-Flag ueber den Spaltenkopf der Labor-Tabs, Shortcuts
 Ctrl+S/F5/Ctrl+C/Ctrl+V, Read-only ab Level <= 1) und ui/machine_tab.py.
-Bei Aenderungen dort hier (alle 3 Sprachen) und in
+Bei Aenderungen dort hier (alle 4 Sprachen) und in
 assets/images/help_show_experiment.svg nachziehen.
 """
 
@@ -738,6 +738,231 @@ TEXTS = {
                 ]),
                 ("note", "<b>Consejo:</b> Con Ctrl+clic en una serie del Backlog o de All Experiments se abre en una "
                          "pestaña adicional, p.&nbsp;ej. para comparar dos series."),
+            ]},
+        ],
+    },
+
+    # ═══════════════════════════════ ZH ═══════════════════════════════
+    "zh": {
+        "window_title": "Show Experiment 如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "Show Experiment 显示一个试验系列：所有试验并排显示，包括机器设置和实验室结果。"
+                      "编号 (1)–(7) 对应 <i>界面说明</i> 选项卡。"),
+                ("task", "打开最近使用过的系列",
+                 ["在侧边栏中点击 <b>Recent</b>（底部，Account 上方）。",
+                  "点击该系列。Ctrl+点击会在新选项卡中打开。"],
+                 "显示您最近打开的 8 个系列，最新的在前——在您登录的每台电脑上都一样。"),
+                ("h", "录入数据"),
+                ("task", "录入或修改数值",
+                 ["点击单元格 (7) 并输入数值，或双击进行编辑。按 Enter 后会跳到下方单元格，继续录入下一个值（Shift+Enter 向上）。",
+                  f"点击 {B('Save')} 或按 Ctrl+S。"],
+                 "修改过的单元格在保存前保持<b>黄色</b>；中间出现绿色对勾表示已保存。按钮会显示修改数量，例如 "
+                 f"{B('Save (3)')}，选项卡上也会出现一个圆点 (●)。如果有未保存的修改时离开界面、关闭选项卡或"
+                 "退出程序，TrippleT 会询问是否保存。"
+                 "访问级别为 1 时，此界面为只读。"),
+                ("task", "为多个试验设置相同数值",
+                 ["在 <i>Machine Data</i> 或 <i>R&amp;D Machine Data</i> 中，右键点击第一列 (6) 中的参数名 → "
+                  + M("Fill row") + "。",
+                  "选择数值和试验范围，然后点击 OK。",
+                  f"点击 {B('Save')}。"],
+                 "右键点击合并单元格时也会提供 " + M("Fill row…") + "。"),
+                ("task", "查看某一行的含义（知识库）",
+                 ["在 <i>Machine Data</i> / <i>R&D Machine Data</i>（DTY 机器）或实验室选项卡中，右键点击行标题或数值 → "
+                  + M("Learn more in Knowledge Base…") + "。在 DTY <b>Schema</b> 中：点击一个工位，"
+                  "再点击示意图下方的链接（或右键点击该工位）。",
+                  "相应页面会在窗口中打开并定位到正确位置，例如已选中该工位的机器。",
+                  "点击 " + B("Close") + " 或按 Esc，即可返回您的系列。"],
+                 "用窗口顶部的选项卡查看该页面的其他场景，旗帜图标用于切换语言。"),
+                ("task", "为数值或试验添加备注",
+                 ["右键点击数值 → " + M("Add note…") + "。如需为整个试验添加备注，请在 <i>Machine Data</i> 中"
+                  "右键点击试验编号（V1、V2、…）。",
+                  "输入备注并点击 " + B("Add note") + "（或 Ctrl+Enter），备注会立即保存。"],
+                 "角落里的紫色小三角表示该数值有备注；鼠标指向即可阅读。"
+                 "<i>Notes</i> 选项卡列出该系列的所有备注，双击某一行可跳转到对应数值。"
+                 "所有人都可以写备注；只有作者可以编辑，作者或超级用户可以删除。"
+                 "在 Smart Chart 中，<b>Notes</b> 按钮会显示备注；只有导出时勾选 "
+                 "<i>Include notes on values</i>，PDF 中才会包含备注。"),
+                ("task", "查看谁在何时修改了数值",
+                 ["右键点击数值 → " + M("Change history…") + "。",
+                  "列表显示每次修改的日期、人员、旧值和新值，最新的在前。"
+                  "勾选 <i>Show all changes in this trial series</i> 可查看整个系列。"],
+                 "仅限超级用户。记录的内容包括在 Show Experiment 中保存的修改以及 Statimat/Itemat PDF 导入，"
+                 "自 2026 年 10 月起。"),
+                ("task", "保存时出现 \"Unusual values\" 警告",
+                 ["TrippleT 会将修改后的机器设置与同一机器以往的所有试验进行比较。"
+                  "明显超出常规范围的数值（例如 35 而不是 3.5 bar）会被列出。",
+                  f"{B('Go back and check')} 跳转到第一个此类数值；{B('Save anyway')} 按原样保存。"],
+                 "这只是提示——允许存在异常值。实验室数值不做检查（它们取决于纱线）。"),
+                ("task", "复制和粘贴数值",
+                 ["选中单元格并按 Ctrl+C，然后选中目标单元格并按 Ctrl+V。",
+                  f"点击 {B('Save')}。"],
+                 "可在表格之间以及与 Excel 之间使用。"),
+                ("task", "放大文字，让表格更易读",
+                 [f"在侧边栏 <i>Account</i> 下点击 {B('Settings')}。",
+                  "在 <i>Text size</i> 中选择 Normal、Large、Extra large 或 Huge——适用于整个程序"
+                  "（重启后生效；TrippleT 会提示立即重启）。"
+                  "如有需要，在 <i>Show Experiment tables</i> 中打开 <i>High contrast</i> 和 <i>Crosshair</i>（高亮所选单元格的行和列，"
+                  "便于看清某个数值属于哪个试验和参数）。",
+                  "<i>Reading bar</i> 在表格下方以大字显示所选数值，例如 "
+                  "\"V2 · Ply 1 · Air Pressure (bar) = 3.50\"。<i>Mark warnings with a symbol</i> 会为高亮数值添加圆圈"
+                  "（超出公差）或三角形（需检查）。<i>Colour-blind friendly colours</i> "
+                  "避免使用红/绿色。",
+                  "查看预览，然后点击 " + B("Save") + "。"],
+                 "表格快速缩放：Ctrl + 鼠标滚轮或 Ctrl +/-，Ctrl+0 恢复正常。设置按您的登录账户保存，"
+                 "在每台电脑上都有效。欢迎语和强调色也在 Settings 中设置。"),
+                ("task", "隐藏不需要的行（Machine Data）",
+                 ["右键点击第一列 (6) 中的参数名 → " + M("Hide row") + "。"
+                  "如需一次隐藏多行，先选中它们的名称（Ctrl+点击），再右键点击其中一个。",
+                  "隐藏了行的位置，参数名上会显示一条蓝线。鼠标指向它可查看该处隐藏了哪些行，"
+                  "点击它可重新显示。",
+                  f"如需重新显示所有行，点击表格上方工具栏中的 {B('n rows hidden')} → "
+                  + M("Show all rows") + "。在那里也可以单独显示某一行。"],
+                 "隐藏的行按用户和机器记忆，即对该机器的所有系列有效。只改变视图：数值仍然保存。"
+                 "复制和粘贴会跳过隐藏的行。红线表示隐藏的行中包含高亮数值。"),
+                ("task", "选择 DTY 工艺并查看机器路径",
+                 ["在 <i>Machine Data</i>（仅限 DTY 机器）中，为每个试验设置 <b>DTY Process</b> 行：Standard、"
+                  "Elastane 或类棉变体。点击 " + B("Save") + "（Ctrl+S）。",
+                  "点击表格上方工具栏中的 " + B("Schema") + " 显示或隐藏机器路径。"
+                  "它显示您所点击单元格对应的试验：每一股在各自的位置、它们在哪里汇合、"
+                  "氨纶来自其单独的来源。",
+                  "点击一个工位（例如加热器）：其对应的行会在表格中高亮。再次点击或点击空白处"
+                  "可取消。双击会跳转到该工位的第一个数值。"],
+                 "预网络喷嘴（LW 0 - LW 1）和第 3 喷嘴（LW 3 之前）的行，只有在试验工艺需要或已录入数值时才会显示。"
+                 "示意图只显示数值——请在表格中修改。有 2 股或以上时，<b>Route</b>、<b>Merge into ply</b> 和 <b>Merge "
+                 "point</b> 行决定各股如何汇合（例如 Ply 4 在 LW 1 并入 Ply 3）；留空 = 常规路径。"
+                 "错误的输入（未知的股、形成循环）会在示意图下方列出。在 ATY 机器上，示意图显示空气变形路径：芯丝和效果丝，包括牵伸区和喂入辊（速度 = LW 2 x (1 + OF %)）；只有芯丝被润湿，效果丝在喷嘴前才与之汇合；之后是 LW 2、稳定区、LW 3 和卷绕。"),
+                ("task", "导入 Statimat 或 Itemat 报告",
+                 [f"点击工具栏 (1) 中的 {B('Statimat import')} 或 {B('Itemat import')}。",
+                  "选择 PDF 报告。数值会填入相应的实验室选项卡。",
+                  f"检查数值，然后点击 {B('Save')}。"]),
+                ("h", "试验和股"),
+                ("task", "添加新试验",
+                 ["点击 (2) 右侧的 <b>+</b> 图标（添加试验）。Create Experiment 会以向本系列添加试验的模式打开。"]),
+                ("task", "复制现有试验",
+                 [f"点击 (2) 右侧的 {B('Copy trials')}，或右键点击试验编号 (4) → "
+                  + M("Copy trials…") + "。",
+                  "勾选要复制的试验（Shift+点击可勾选整个范围）。在表格中已选中列的试验会自动勾选。",
+                  "选择复制次数和顺序：<i>Repeat the block</i>（V1 V2 | V1 V2）或 <i>Each trial in "
+                  "a row</i>（V1 V1 | V2 V2）。",
+                  "检查结果表：如有需要，可在其中修改副本的数值（例如其他气压或喷嘴；ATY 上还有 "
+                  "OF Core / OF Effect）。修改过的单元格会高亮显示。"
+                  "<i>Show all fields</i> 显示其他机器设置。",
+                  f"点击 {B('Copy n trials')}。"],
+                 "会复制机器设置和股。副本的实验室数值、注释以及喷嘴前/后的纱线张力保持为空。"
+                 "新试验添加在末尾，并在表格中高亮显示。每股的数值（例如 T1/T2 张力）之后在表格中修改，"
+                 "股和纱线用 " + B("Yarns…") + " 修改。参考样永远不会被复制。"),
+                ("task", "添加参考样（例如客户的原始筒子）",
+                 [f"点击 (2) 右侧的 {B('+ Ref')}，或右键点击试验编号 (4) → "
+                  + M("Add reference sample…") + "。",
+                  "输入名称（例如客户、品号、批号）并确认。",
+                  "在实验室选项卡中手动输入其实验室数值（Statimat/Itemat PDF 导入只按试验编号匹配，"
+                  "因此不会填入参考样）。机器数据为可选项，例如用于记录客户提供的信息。"],
+                 "参考样是基准，而不是试验：它不占用试验编号，以琥珀色背景的 <b>Ref</b> 显示在最前面"
+                 "（名称在提示框中），在报告图表中以水平线绘制，并且不计入统计、Smart Chart、Quick Scan、Athena "
+                 "和喷嘴数据导出。右键点击现有试验的编号，可将其转为参考样（保留其编号）或转回，"
+                 "也可以重命名。"),
+                ("task", "找出达到目标（或优于参考样）的试验",
+                 [f"点击 (2) 右侧的 {B('vs Ref / Target')}，或右键点击 Ref 列 (4) → "
+                  + M("Compare trials with this reference…") + "。",
+                  "在 <i>Compare with</i> 中选择本系列的一个参考样或 <i>Own targets</i>。如需使用"
+                  "自定义目标值，双击某列的第一行并输入（它会代替参考值使用；删除即可恢复）。",
+                  "点击您关心的数值的列标题，选择 " + M("Higher is better") + "、"
+                  + M("Lower is better") + " 或 " + M("Close to Ref is better") + "（" + M("Tolerance…")
+                  + " 可设置允许偏差）。对每个重要数值重复此操作。",
+                  "绿色 = 满足条件，红色 = 不满足。<b>Result</b> 按试验统计满足的数量，最好的试验"
+                  "排在最上面。勾选 <i>Only trials that meet all criteria</i> 只显示优胜者。",
+                  f"如需再次使用条件和目标：用 {B('Save as…')} 命名保存（例如客户和品号）。"
+                  "之后在任何系列中都可在 <i>Criteria</i> 下选择。"],
+                 "所有实验室选项卡同时比较。缺失的数值计为不满足；没有目标（也没有参考值）的条件不计入。"
+                 "条件集供所有用户共享；删除：创建者或超级用户。双击某个试验可在 Machine Data 中查看。"
+                 "系列中的任何内容都不会被修改。"),
+                ("task", "删除试验",
+                 ["单个试验：右键点击其试验编号 (4) → " + M("Delete V23…") + "。",
+                  "多个试验：先在它们的列中选中单元格（拖动、Ctrl+点击或 Shift+点击），然后"
+                  "右键点击其中一个的编号 → " + M("Delete n selected trials…") + "。",
+                  "检查会一并删除的内容（股、实验室数值、备注），然后点击 " + B("Delete") + "。"],
+                 "其他试验保留各自的编号——不会前移。新试验总是添加在剩余的最大编号之后，"
+                 "不会填入空缺。超级用户可在 90 天内从 Recycle Bin 恢复已删除的试验。"
+                 "允许在 Backlog 中移动该系列的人员执行删除。已用于制作纱线的试验"
+                 "（半成品）不能删除。"),
+                ("task", "更改某股的纱线，或添加/删除股",
+                 [f"点击 (2) 右侧的 {B('Yarns…')}（或右键点击股行 (5)）。表格显示本系列的每一股（行）"
+                  "和每个试验（列）。",
+                  "<b>更改纱线：</b>点击该股的纱线，输入名称的一部分（例如 <i>167 dty</i>）"
+                  "并选择——整股都会使用新纱线。",
+                  "<b>为某个试验开/关某股：</b>点击其单元格。根数：选中单元格并输入 1–9"
+                  "（Delete = 关），或右键点击。",
+                  f"<b>新股：</b>{B('+ Add ply')}（目录中的纱线）或 {B('+ Trial output')}（另一个"
+                  "试验的产出）——对所有试验生效。一种纱线在一个系列中始终保留其股号：再次添加时（例如"
+                  "一次作为 <i>DTY</i>，一次作为 <i>Effect</i>）会成为同一股的第二行——在 <i>Use</i> 列中"
+                  "选择用途。",
+                  f"点击 {B('Apply')}——TrippleT 会先显示摘要。"],
+                 "修改过的单元格为黄色；点击 Apply 之前不会保存任何内容（Cancel 放弃全部修改）。更换纱线后"
+                 "保留该股的机器数值；删除某股会删除其在该试验中的数值。每个试验至少保留一股——"
+                 "参考样可以完全没有纱线。需要写入权限。"),
+                ("task", "添加另一个试验系列或实验室设备",
+                 ["使用侧边栏中的 " + M("Add Trial Series") + " 或 " + M("Add Lab Machines") + "。"],
+                 "一旦为系列分配了实验室设备，就会出现相应的实验室选项卡（例如 Statimat M）。"),
+                ("h", "实验室结果和复测"),
+                ("task", "标记实验室数值需要复测（超级用户）",
+                 ["打开实验室选项卡，右键点击该试验的列标题 → " + M("Flag Vn for retest…") + "。",
+                  "可输入备注（可选）并确认。"],
+                 "该系列会以最高优先级回到 Backlog，并在那里显示 <b>RETEST</b>。"),
+                ("h", "文件、报告和标签"),
+                ("task", "附加图片或 PDF",
+                 [f"点击 {B('Upload images')} 或 {B('Upload PDFs')} 并选择文件。",
+                  "一旦有附件，这些按钮旁边就会出现图片和 PDF 图标。点击即可查看文件。"]),
+                ("task", "打开本系列的报告",
+                 ["工具栏 (1) 中的报告图标（图表符号）会为本系列打开一个带图表的新报告。",
+                  f"如有已保存的报告，旁边会出现一个列表和 {B('Go!')}：选择报告并点击 Go!。"],
+                 "详情请参见 Report 界面的帮助。"),
+                ("task", "打印带试验编号的标签",
+                 ["点击 (2) 中的标签图标，选择标签纸上的起始位置，保存 PDF 并打印。"]),
+                ("task", "查看关联的实验申请",
+                 ["点击 (2) 中的 <b>ER</b> 图标。关联了申请时才会显示。"]),
+                ("task", "重新加载界面",
+                 [f"点击 {B('↻')} 或按 F5。当前打开的选项卡保持选中。"]),
+            ]},
+            {"key": "screen", "title": "界面说明", "blocks": [
+                ("svg", SVG, {"lab_hint": "（实验室选项卡仅在使用时显示）",
+                              "keys_hint": "Enter 下一单元格 · Ctrl+C / Ctrl+V 复制和粘贴 · Delete 清空所选单元格 · Ctrl+Z 撤销，Ctrl+Y 重做 · Ctrl+S 保存 · F5 重新加载"},
+                 SVG_W, SVG_H),
+                ("areas", [
+                    ("(1) 工具栏", "实验 ID 和系列、附件（上传和查看图片/PDF）、Statimat 和 "
+                                 "Itemat 导入、报告图标和已保存的报告（列表 + Go!）、重新加载 (↻)、Save 和本帮助。"),
+                    ("(2) 材料行", "系列的材料、关联的实验申请 (ER)、机器信息、"
+                                 "试验标签、<b>+T</b>（添加试验）、<b>+ Ref</b>（添加参考样）和 "
+                                 "<b>Copy trials</b>。每股后面有一个小筒子：绿色 = 纱线有库存"
+                                 "（点击纱线或筒子可查看存放位置和纸管颜色），划掉的纸管"
+                                 " = 无库存。"),
+                    ("(3) 选项卡", "每类数据一个选项卡，见 <i>选项卡</i> 选项卡。实验室选项卡仅在"
+                                 "系列使用该实验室设备时显示。"),
+                    ("(4) 试验行", "试验编号（V1、V2、…）；参考样以 <b>Ref</b> 显示在最前面"
+                                 "（琥珀色）。右键：复制试验、参考样。"),
+                    ("(5) 股行", "每列对应的股（一个试验可以有多股）。右键：系列的纱线。"),
+                    ("(6) 参数名", "每个参数一行。右键：填充行、显示/隐藏自定义组。"),
+                    ("(7) 单元格", "每个试验的数值。可存储数值的地方可编辑；修改过的单元格等待 "
+                                 "Save。"),
+                ]),
+            ]},
+            {"key": "tabs", "title": "选项卡", "blocks": [
+                ("areas", [
+                    ("Machine Data", "每个试验的机器设置（速度、超喂、气压、喷嘴、…）。行是"
+                                     "参数，列是试验和股。在 DTY 机器上，T2 Tension 下方的 <i>D/Y Ratio (T2/T1)</i> 行"
+                                     "由 T1 和 T2 自动计算，不能编辑。"),
+                    ("R&amp;D Machine Data", "附加的开发参数，操作方式与 Machine Data 相同。"),
+                    ("实验室选项卡", f"{LAB_TABS}。每个试验的实验室设备结果；仅在"
+                                 "系列使用该设备时显示。右键点击列标题可标记复测。"),
+                    ("YarnScope / YarnScope ATY", "纱线测量文件的分析，带有各自的子选项卡"
+                                                  "（例如信号、纱线外观、工艺比较）。"),
+                    ("Athena", "AI 助手，分析系列并建议下一步。最近一次分析会被"
+                               "保留；新的分析需要一点时间。"),
+                    ("Notes", "系列的自由文本备注。"),
+                ]),
+                ("note", "<b>提示：</b>在 Backlog 或 All Experiments 中 Ctrl+点击一个系列，可在"
+                         "另一个选项卡中打开，例如用于比较两个系列。"),
             ]},
         ],
     },

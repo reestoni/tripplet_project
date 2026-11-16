@@ -1,11 +1,11 @@
 # ui/widgets/help_texts_manage_yarn.py
-"""Hilfetexte Manage Yarn (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte Manage Yarn (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Spiegelt ui/screen_manage_yarn.py (Namensfilter, Spaltenfilter per Rechtsklick
 auf den Kopf - FilterableHeaderView aus screen_manage_jets, Spalten
 verschiebbar + Columns…-Dialog, UsedInTrial-Aufklappen, Formular New/Edit
 Yarn mit Duplicate-Check, Rechte: Loeschen can_use_admin_box(), MinStock
-app_meta.can_edit_min_stock()). Bei Aenderungen dort hier (alle 3 Sprachen)
+app_meta.can_edit_min_stock()). Bei Aenderungen dort hier (alle 4 Sprachen)
 und in assets/images/help_manage_yarn.svg nachziehen.
 """
 
@@ -173,6 +173,59 @@ TEXTS = {
                     ("(2) Encabezados", "Clic para ordenar, clic derecho para filtrar, arrastrar para reordenar."),
                     ("(3) UsedInTrial", "Número de series de ensayos que usan el hilo; un clic las despliega. "
                                         "<i>StockKg</i> muestra los kilos que hay ahora en el almacén de hilo."),
+                ]),
+            ]},
+        ],
+    },
+    "zh": {
+        "window_title": "Manage Yarn 如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "Manage Yarn 是纱线目录：包含所有可用于试验的纱线。编号 (1)–(3) 对应"
+                      " <i>界面说明</i> 选项卡。"),
+                ("h", "查找"),
+                ("task", "按名称查找纱线",
+                 ["在 <i>Filter by Name…</i> (1) 中输入名称的一部分。匹配项会被高亮显示。"]),
+                ("task", "按列筛选（例如纤度或材料）",
+                 ["右键点击列标题 (2)。",
+                  "输入文本（<i>contains…</i>），数字列则输入起止范围。",
+                  "绿色 ▼ 表示该列已筛选。再次右键 → <i>Clear this filter</i> 或 <i>Clear all filters</i>。"],
+                 "多个列筛选同时生效（必须全部满足）。"),
+                ("task", "进一步了解某种材料或纱线类型",
+                 ["右键点击纱线的 <i>Material</i>（例如 PES）或 <i>Garntyp</i>（例如 DTY）单元格 → "
+                  "<b>Learn more in Knowledge Base…</b>。在 New/Edit Yarn 的下拉框中同样可用。",
+                  "纤维介绍（或工艺页面）会在窗口中打开。" + B("Close") + " 或 Esc 可返回。"]),
+                ("task", "查看纱线用于哪些试验系列",
+                 ["点击该纱线的 <i>UsedInTrial</i> 单元格 (3)。系列会显示在其下方。",
+                  "单击系列可查看试验编号，双击可打开该系列。"]),
+                ("h", "修改"),
+                ("task", "添加新纱线",
+                 [f"点击 {B('New Yarn')}，填写表单并保存。"],
+                 "如果已存在类型、材料、纤度、单丝数和颜色都相同的纱线，TrippleT 会发出警告。"),
+                ("task", "修改纱线",
+                 [f"双击该行（或点击 {B('Edit in Form')}）在表单中编辑，或",
+                  f"直接在表格中编辑单元格，然后点击 {B('Save Changes')}。"]),
+                ("task", "设置最低库存",
+                 ["编辑 <i>MinStock</i> 列（或表单中的对应字段）。"],
+                 "仅限超级用户。也可在 Yarn Stock 中设置。"),
+                ("task", "删除纱线",
+                 [f"选中一行或多行，点击 {B('Delete')} 并确认。"],
+                 "仅限管理员。"),
+                ("task", "重新排列列",
+                 ["将列标题拖到其他位置，或",
+                  f"点击 {B('Columns…')}，将列拖成所需顺序，然后点击 <i>Save layout</i> 保存。"]),
+            ]},
+            {"key": "screen", "title": "界面说明", "blocks": [
+                ("svg", SVG, {"hint_edit": "双击一行：打开表单 · 或直接编辑单元格，然后点 Save Changes",
+                              "hint_filter": "右键点击列标题进行筛选（绿色 ▼ = 筛选已启用）"},
+                 SVG_W, SVG_H),
+                ("areas", [
+                    ("(1) 名称筛选和按钮", "按名称筛选；Reload、New Yarn、Edit in Form、Columns…、Delete、"
+                                         "Save Changes。"),
+                    ("(2) 列标题", "单击排序，右键筛选，拖动重新排列。"),
+                    ("(3) UsedInTrial", "使用该纱线的试验系列数量；点击展开。<i>StockKg</i> "
+                                        "显示纱线库房中当前的公斤数。"),
                 ]),
             ]},
         ],

@@ -51,7 +51,7 @@ def test_whats_new_texts_same_structure():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     for r in RELEASES:
         assert bool(r["date"]) == (r["version"] != "current"), r["version"]
-        assert set(r["texts"]) == {"en", "de", "es"}
+        assert set(r["texts"]) == {"en", "de", "es", "zh"}
         ref = r["texts"]["en"]
         assert ref, "a release without features must not exist"
         for lang, blocks in r["texts"].items():

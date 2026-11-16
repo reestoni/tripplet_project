@@ -1,5 +1,5 @@
 # ui/widgets/whats_new_texts.py
-"""What's new (EN/DE/ES) - Sidebar -> Account -> "What's new" and once
+"""What's new (EN/DE/ES/ZH) - Sidebar -> Account -> "What's new" and once
 after login (ui/whats_new.py): versions listed on the left, the new features
 of the chosen version on the right as cards.
 
@@ -8,7 +8,7 @@ RELEASES, newest first. Each entry has
                "4.6.3"   -> a compiled version (fixed)
     "date":    "" while current, the compile date ("2026-10-15") once fixed
     "texts":   {lang: [blocks]}
-New features go into the "current" entry right away (all three languages).
+New features go into the "current" entry right away (all four languages).
 
 Blocks:
     ("h", "Section")                                      heading (screen/area)
@@ -25,7 +25,7 @@ entry. The user then raises APP_VERSION for the test environment; the next
 new feature starts a new "current" entry at the top (an empty one must not
 exist). No version check - when to compile stays with the user.
 
-Same block structure in all three languages. Button/menu names stay English.
+Same block structure in all four languages. Button/menu names stay English.
 """
 
 RELEASES = [
@@ -714,6 +714,199 @@ RELEASES = [
                  "fibras paralelas, envolventes y desperdicio; para fibras cortadas sintéticas se elige la longitud y se ve el "
                  "valor orientativo S ≈ 0,55 × longitud de fibra.",
                  "Sidebar → <b>Knowledge Base</b> → Nuestra tecnología → Hilatura → <b>Hilatura por chorro de aire</b> → Tobera / Distancia de hilatura",
+                 "wn_onboarding.svg"),
+            ],
+            # ═══════════════════════════════ ZH ═══════════════════════════════
+            "zh": [
+                ("h", "Tools"),
+                ("feature", "Yarn Count Converter：纱线细度换算",
+                 "<b>Tools</b> 下新增：换算纱线细度。输入数值并选择单位——<b>dtex</b> 和 <b>den</b> 以大字显示，"
+                 "另外还有 tex、ktex、mtex、Nm、Ne、NeK、NeL、Run 和 grain/yd。单击某个结果即可将其作为新的起始值。"
+                 "在右侧输入单丝数和股数，即可得到每根单丝的 dtex 和 den、单丝直径、总值以及现成的规格标记（例如 "
+                 "<i>2 × dtex 167 f48</i>）；或者输入 <i>2x150D/48F</i> 这样的写法并按 Enter，所有字段都会自动填好。"
+                 "下方可展开公式 &amp; 定义。每个数值都有 <b>Copy</b> 按钮，上次的输入会被记住，无需网络连接也能使用。",
+                 "侧边栏 → Tools → <b>Yarn Count Converter</b>", "wn_yarn_count.svg"),
+                ("feature", "Process Playground：提高气压会怎样？",
+                 "<b>Tools</b> 下新增，适用于 DTY：选择纱线和喷嘴，输入起始条件（或从某个试验中采用），然后调整"
+                 "<b>气压</b>、<b>超喂</b>或<b>速度</b>。表格会告诉你网络点/m 及其 CV、稳定性 0.3 至 1.3 以及喷嘴前后的张力"
+                 "会如何变化：<i>更多</i>、<i>更少</i>或<i>基本不变</i>——以及把握有多大（明显、很可能、趋势），并注明有多少个"
+                 "系列显示同样的结果。它只使用我们自己针对这一纱线和这一喷嘴的试验，绝不超出已测量的范围，试验太少时也会明确"
+                 "说明。单击某个实验室数值，可在图表中查看该结论背后的试验。反过来也可以：选择一个主要目标（例如稳定性 1.0 "
+                 "提高）和其他目标（例如 CV 保持、张力降低），然后单击 <b>Find settings</b>——你会得到最多 5 组接近我们实际"
+                 "运行过的设定，并显示它们对每个目标的影响。在 Show Experiment 中右键单击某个 DTY 试验编号 → <i>Open in "
+                 "Process Playground…</i>，即可从该试验开始。F5 / <b>Reload</b> 加载最新的试验。",
+                 "侧边栏 → Tools → <b>Process Playground</b>", "wn_process_playground.svg"),
+                ("h", "Show Experiment"),
+                ("feature", "DTY：选择工艺并查看机器路径",
+                 "在 DTY 机器上，Machine Data 新增一行 <b>DTY Process</b>：Standard、Elastane 或某种仿棉（cotton-like）"
+                 "变体。现有试验已自动填好（运行氨纶纱线的为 Elastane，其余为 Standard）。预网络喷嘴（LW 0 - LW 1）和第 3 "
+                 "喷嘴（定型热箱之后、LW 3 之前）的行现在位于 Machine Data 中，只在试验需要时才显示。表格上方的 "
+                 "<b>Schema</b> 会绘制你所单击试验的机器路径：每一股在其位置上、各股在哪里汇合、氨纶来自单独的喂入源。"
+                 "<b>单击某个工位</b>（例如热箱），其对应行会在表格中高亮；<b>双击</b>则跳到第一个数值。单击某个单元格，"
+                 "Schema 会标出对应的工位。数值仍然只在表格中修改。有两股或以上时，由三行决定各股如何汇合：<b>Route</b>"
+                 "（完整路径、不经热箱和假捻的旁路，或像氨纶那样的单独喂入源）、<b>Merge into ply</b> 和 <b>Merge point</b>"
+                 "——例如第 4 股在 LW 1 并入第 3 股，第 3 股在 LW 2 并入第 1 股。Schema 会准确地画出这些；若留空，TrippleT "
+                 "按常规路径处理。每个喂入罗拉和卷绕下方显示其<b>速度（m/min）</b>，由 LW 2 处的主速度计算得出（LW 1 = "
+                 "LW 2 / 牵伸比，LW 0 = LW 1 / (1 - W0-W1 OF)，LW 2.x、LW 3 和卷绕 = LW 2 减去各自的 %）。",
+                 "Show Experiment → Machine Data → <b>Schema</b>", "wn_dty_schema.svg"),
+                ("feature", "ATY：同样显示机器路径",
+                 "在 ATY 机器上，Machine Data 上方的 <b>Schema</b> 现在会绘制所单击试验的空气变形路径——与知识库中的页面"
+                 "一样：<b>芯丝</b>（绿色）和<b>效果丝</b>（琥珀色）各有其牵伸区和喂入罗拉；只有芯丝经过加湿，效果丝在喷嘴前"
+                 "才以干态加入；然后是 LW 2、稳定区、LW 3 和卷绕。每个喂入罗拉下方显示其<b>速度</b>（LW 2 × (1 + OF %)）。"
+                 "无论芯丝是第几股，它总显示在最上方。<b>单击某个工位</b>会高亮其对应行，<b>双击</b>跳到第一个数值，"
+                 "<b>右键单击</b>则在知识库中打开该工位。在 Machine Data 中右键单击行标题或数值现在也适用于 ATY 机器。"
+                 "没有纱线用途（Yarn Use）的股以灰色显示，并在 Schema 下方给出提示。",
+                 "Show Experiment → Machine Data → <b>Schema</b>", "wn_aty_schema.svg"),
+                ("feature", "删除单个试验——编号保持不变",
+                 "试验建多了，或者某些运行不需要了？在 Machine Data 中<b>右键单击试验编号</b> → <b>Delete V23…</b>。要删除"
+                 "多个试验，先在它们的列中选择单元格（拖动，或 <b>Ctrl+单击</b> / <b>Shift+单击</b>），然后右键单击其中一个"
+                 "编号 → <b>Delete 20 selected trials…</b>。执行之前，你会看到哪些内容会一并删除（股、Itemat、Statimat、"
+                 "备注 …）。其余试验保留原编号，不会前移，新试验总是添加在剩余的最大编号之后——绝不会填入空缺。"
+                 "超级用户可在 90 天内从 <b>Recycle Bin</b> 恢复已删除的试验。凡是有权在 Backlog 中移动该系列的人都可以"
+                 "执行此操作。",
+                 "Show Experiment → Machine Data → 右键单击试验编号 → <b>Delete…</b>", "wn_trial_delete.svg"),
+                ("feature", "哪些试验达到了你的目标？",
+                 "单击 Machine Data 上方的 <b>vs Ref / Target</b>。一张表并排显示每个试验及所有实验室选项卡的数值——与"
+                 "<b>参考样</b>（如果该系列有）或<b>你自己的目标值</b>进行比较：双击第一行并输入目标值。单击列标题，指定该列"
+                 "中<b>更好</b>的含义：<b>更高</b>、<b>更低</b>或<b>接近</b>，可选设定公差——例如网络点数高于 110、CV 更低、"
+                 "稳定性低于 80。绿色 = 达标，红色 = 未达标。<b>Result</b> 统计每个试验满足的标准数，最好的试验排在最上面，"
+                 "<b>Only trials that meet all criteria</b> 只保留全部达标的试验。可将标准和目标值以一个名称保存（例如客户"
+                 "和品种）——所有人在每个系列中都能使用。双击某个试验即可跳到 Machine Data 中的该试验。",
+                 "Show Experiment → Machine Data → <b>vs Ref / Target</b>", "wn_ref_compare.svg"),
+                ("feature", "无需离开试验系列即可查阅",
+                 "不确定某一行是什么意思？在 Machine Data 或 R&D Machine Data（DTY 机器）中，或在某个实验室选项卡（Statimat、"
+                 "EKB、收缩、Itemat、DTYoMat、ATYoMat、Rapid 600）中<b>右键单击</b>行标题或数值，然后选择 <b>Learn more in "
+                 "Knowledge Base…</b>——在 DTY 的 <b>Schema</b> 中，单击某个工位并使用其下方的链接（或右键单击该工位）。"
+                 "对应页面会在窗口中打开，并直接定位到正确位置——例如 Overfeed 会显示选中喂入罗拉 2.x 的机器，DTY Process "
+                 "单元格会显示其仿棉变体。<b>Close</b>（或按 <b>Esc</b>）后你就回到了原来的系列，正好在原来的位置。",
+                 "Show Experiment → 右键单击 → <b>Learn more in Knowledge Base…</b>", "wn_onboarding.svg"),
+                ("feature", "帮助搜索中的纤维、纱线类型和背景知识",
+                 "在 <b>Manage Yarn</b>（以及 New/Edit Yarn）中，右键单击 PES、PA 6.6 或 WO 等 <b>Material</b>，或 POY、"
+                 "DTY 等 <b>Garntyp</b> → <b>Learn more in Knowledge Base…</b>：纤维简介或工艺页面会在窗口中打开。知识库现在"
+                 "还新增了聚乙烯、PLA 和 PVC 的简介，醋酯纤维也包含了三醋酯纤维。此外，<b>帮助搜索（F1）</b>现在也能找到"
+                 "知识库页面（知识库为英文）——例如搜索 <i>friction</i>、<i>set heater</i>或<i>crimp</i>：在帮助答案下方会列出匹配的页面，单击即可在"
+                 "窗口中打开，关闭后回到搜索。",
+                 "Manage Yarn → 右键单击 · <b>Help (F1)</b>", "wn_onboarding.svg"),
+                ("h", "Smart Chart"),
+                ("feature", "有多少种不同的喷嘴？——Count (distinct)",
+                 "Card 现在可以统计某个字段有多少个<b>不同</b>的值——例如运行过多少种不同的喷嘴、纱线或机器，始终在你的筛选、"
+                 "切片器和点击范围内。选择聚合方式 <b>Count (distinct)</b>，并将字段（例如 <i>Jet</i>）拖到 <b>Value</b> 中。"
+                 "空值不计入。在 Columns、Matrix 和 Pie 中也适用——例如每年使用的不同喷嘴数。",
+                 "Smart Chart → Card → 聚合方式 <b>Count (distinct)</b>", "wn_distinct_count.svg"),
+                ("feature", "是哪些喷嘴？——每个值一行",
+                 "Table 现在可以把每个喷嘴（或纱线、机器 …）只列一次，而不是列出每个试验：勾选 <b>One row per value</b>。"
+                 "名称旁边显示它在多少个试验和系列中使用过；像 FP/m 这样的数值字段显示其平均值。在相同筛选条件下，列表的行数"
+                 "与使用 <b>Count (distinct)</b> 的 Card 统计的数目完全一致。单击标题即可排序。",
+                 "Smart Chart → Table → Build → <b>One row per value</b>", "wn_value_table.svg"),
+                ("h", "Create Experiment"),
+                ("feature", "输入即可查找纱线和喷嘴",
+                 "<b>Material</b> 和 <b>Jet</b> 选项卡的列表上方现在有一个搜索框。输入名称的一部分（例如 <i>pa6 44</i>）"
+                 "——会同时在所有分组中搜索，只保留匹配的条目。对于喷嘴，也会搜索开发名称。<b>Enter</b> 选择第一个结果，"
+                 "<b>Esc</b> 清除搜索。每种纱线后面还会显示 Show Experiment 中的筒子图标：绿色筒子 = 有库存（单击可查看筒子"
+                 "存放的位置），划掉的纸管 = 无库存。",
+                 "New Experiment → <b>Material</b> / <b>Jet</b> → 搜索框", "wn_create_search.svg"),
+                ("h", "知识库"),
+                ("feature", "知识库——用简短动画介绍我们的工作",
+                 "<b>Help (F1)</b> 下方新增条目 <b>Knowledge Base</b>：以全屏简短动画介绍我们的工作。第一个主题展示 DTY 纱线"
+                 "如何进行网络——穿过机器的路径以及喂入罗拉 2 和 2.x 之间的超喂（单击任意位置即可查看说明）、喷嘴中发生了"
+                 "什么，以及网络点。每个主题都像 TrippleT 的其他部分一样带有选项卡。试试 <b>Overfeed</b> 和<b>气压</b>滑块。"
+                 "用旗帜切换语言——现在也有中文。第二个主题：<b>ATY 空气变形</b>——芯丝和效果丝的超喂、变形喷嘴、圈结以及"
+                 "各项设定的作用。在<b>纺丝</b>下：<b>长丝纺丝</b>——从切片到 POY 和 FDY，以及 Heberlein 喷嘴所在的位置。"
+                 "同样在<b>纺丝</b>下：<b>BCF 地毯纱</b>——纺丝、牵伸、热空气变形和交缠一步完成，包括三色混合；以及"
+                 "<b>喷气涡流纺</b>（短纤维）——从棉包到纱线，空心锭子周围的气流涡旋。在<b>捻接</b>下：<b>长丝空气捻接</b>"
+                 "——无结连接两个纱端；单击某个步骤即可直接跳转。在<b>穿纱</b>下：<b>Lufan 吸枪</b>——在机器运行时穿纱、"
+                 "喷射器原理、耗气量。在 <b>DTY</b> → <b>专业知识</b>下：<b>仿棉 DTY</b>（七种获得短纤纱外观的方法，可单击"
+                 "任意机器位置）和<b>网络点硬，伸长更低？</b>（一个带实时拉伸试验模型的假设）。在 DTY 机器中，现在可以输入 "
+                 "<b>FR 2</b> 的速度和<b>牵伸比</b>：FR 1 和 FR 2.x 随即以 m/min 显示。DTY 主题新增场景<b>均匀性</b>：网络点"
+                 "数量相同还不够，它们必须分布均匀（间距的离散度、最长的开放段）。DTY 主题现在以 <b>Quiz</b> 选项卡结束："
+                 "13 道题，每道都链接回对应的场景——答对 80 % 即通过该主题，并在列表中打勾。新文件夹<b>实验室</b>，包含"
+                 "<b>用 ITEMAT 测量网络点</b>：结构（单击各工位）、机械和光学传感器、阈值设置错误的后果、负载下的稳定性测试"
+                 "和评估；<b>细度、强度和伸长（STATIMAT DS）</b>：称重测细度、比较 POY、FDY 和 DTY 的 CRE 拉伸试验、每个"
+                 "卷装的统计；<b>卷曲和收缩（TEXTURMAT ME）</b>：从绞纱经热处理到五个负载阶段（可单击），以及卷曲收缩率、"
+                 "模量、稳定性和收缩率等关键指标；以及<b>用 RAPID 600 V 测试网络点</b>：针刺法在运行的纱线中计数网络点，并"
+                 "区分好的和弱的网络点，带有触发力滑块。更多主题即将推出。",
+                 "侧边栏 → <b>Knowledge Base</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：Heberlein 公司历史和更清晰的章节",
+                 "知识库列表现在分为若干章节：<b>Heberlein</b>、<b>我们的技术</b>（纺丝、DTY、ATY、捻接、穿纱、"
+                 "<b>我们的实验室</b>），以及后续的<b>纺织知识</b>（机织、针织 …）。Heberlein 下新增：<b>公司历史</b>——从 "
+                 "Wattwil 的纱线染色厂，经 Helanca 和机械制造，到今天的空气喷嘴，190 年的历程：包含五个时代的时间轴、"
+                 "所有者、技术，以及我们的喷嘴如今用在哪里。单击 POY、FDY、DTY 或 ATY 即可打开相应的模块。",
+                 "侧边栏 → <b>Knowledge Base</b> → Heberlein → <b>公司历史</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：纺织知识——机织和针织",
+                 "新章节<b>纺织知识</b>，介绍我们的纱线之后的去向。<b>机织</b>：综框织造（综框装置、穿综、提综图）、织物组织"
+                 "（平纹、斜纹、缎纹——还可以自己画组织，TrippleT 会告诉你是否可行）、提花织造和威尔顿地毯。<b>针织</b>："
+                 "圆机针织（成圈、三角轨道、单面/双面针织）和经编（梳栉、垫纱、意匠纸）。",
+                 "侧边栏 → <b>Knowledge Base</b> → 纺织知识", "wn_onboarding.svg"),
+                ("feature", "知识库：染色",
+                 "<b>纺织知识</b>下新增：<b>染色</b>，共八个场景——染料如何进入纤维（温度滑块）、哪类染料适合哪种纤维、在哪个"
+                 "阶段染色（原液、散纤维、纱线、匹染、成衣）、涤纶、棉和锦纶的染色曲线、染色设备、连续轧染、牛仔布的靛蓝"
+                 "染色，以及为什么变形不匀会在染色后显现为条纹。最后附有测验。",
+                 "侧边栏 → <b>Knowledge Base</b> → 纺织知识 → <b>染色</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：机器和制造商",
+                 "每个工艺旁新增文件夹<b>机器 &amp; 制造商</b>：<b>纺丝</b>下的 POY 和 FDY 纺丝设备、<b>DTY</b> 下的 DTY 机器、"
+                 "<b>ATY</b> 下的 ATY 机器。每个文件夹都展示纱线路径（单击部件、切换变体）、可筛选制造商的变体树、机器结构、"
+                 "带搜索和筛选的制造商和型号、对比以及市场历史。",
+                 "侧边栏 → <b>Knowledge Base</b> → 我们的技术 → 例如 DTY → <b>机器 &amp; 制造商</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：空气包覆",
+                 "我们的技术下新增区域 <b>AC</b>：<b>空气包覆（ACY）</b>——氨纶与 DTY 如何通过空气网络点结合在一起，带有牵伸、"
+                 "超喂、喷嘴压力和速度滑块，实时重新计算纱线细度、氨纶比例和耗气量；还可以看看喷嘴内部、拉伸和松弛状态下的"
+                 "纱线结构、ACY 与单包覆和双包覆纱的对比、用途，以及 AC 机器及其制造商。",
+                 "侧边栏 → <b>Knowledge Base</b> → 我们的技术 → <b>AC</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：后整理",
+                 "<b>纺织知识</b>下新增：<b>后整理</b>，共两页。<b>化学整理</b>：整理流程、效果图谱（拒水、阻燃、抗菌 ...）、"
+                 "施加方法、PFAS 淘汰、法规和供应商。<b>机械整理</b>：目标、从起毛到预缩的工艺图谱、设备详解、关键指标、"
+                 "可持续性和制造商。",
+                 "侧边栏 → <b>Knowledge Base</b> → 纺织知识 → <b>后整理</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：织机和后整理设备",
+                 "又新增两个<b>机器 &amp; 制造商</b>文件夹：机织下的<b>织机</b>（开口、五种带动画的引纬系统、多臂机、提花机和"
+                 "威尔顿织机、差异、制造商矩阵），以及后整理下的<b>后整理设备</b>（后整理生产线、十台设备的动态图详解、"
+                 "制造商之间真正的差异、制造商矩阵）。",
+                 "侧边栏 → <b>Knowledge Base</b> → 纺织知识 → 机织 / 后整理 → <b>机器 &amp; 制造商</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：短纤维纺纱和织前准备",
+                 "<b>纺织知识</b>下新增：<b>短纤维纺纱</b>——从纤维束到纱线，配有从开清棉到粗纱机、环锭纺、紧密纺、转杯纺和"
+                 "喷气涡流纺的动画图示、捻度和速度计算器，以及羊毛的延伸介绍。机织下新增：<b>织前准备</b>——络筒、整经、"
+                 "浆纱、牛仔布绳状染色、穿经和接经，并附有经轴数计算器。",
+                 "侧边栏 → <b>Knowledge Base</b> → 纺织知识 → <b>短纤维纺纱</b> / 机织", "wn_onboarding.svg"),
+                ("feature", "知识库：起始页「纺织链」",
+                 "知识库现在以<b>纺织链</b>开篇：一张从纤维到成品织物的地图——单击某个环节（纺丝、变形、机织、后整理 ...）"
+                 "即可查看其页面，绿点表示 Heberlein 技术。此外还有所有页面一览、覆盖整个链条的制造商矩阵（搜索、国家、"
+                 "环节）以及尚缺的主题。",
+                 "侧边栏 → <b>Knowledge Base</b> → <b>纺织链</b>（列表最上方）", "wn_onboarding.svg"),
+                ("feature", "知识库：纤维和非织造布",
+                 "<b>纺织知识</b>下新增两个类别：<b>纤维</b>，包含<b>化学纤维</b>（市场份额、13 种纤维简介及分子视图、性能"
+                 "对比、各纤维的用途、再生比例）；以及<b>非织造布</b>（纤网成形和固结、从梳理到熔喷和针刺的十种动画工艺、"
+                 "对比、交叉铺网机和针刺密度计算器）。旁边还有<b>天然纤维</b>：市场份额、从棉到羊绒的 10 种纤维简介、性能"
+                 "对比以及各纤维的用途。所有这些也都在纺织链起始页上。",
+                 "侧边栏 → <b>Knowledge Base</b> → 纺织知识 → <b>纤维</b> / <b>非织造布</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：前处理和纺织印花",
+                 "<b>染色</b>下新增：<b>前处理</b>（烧毛、退浆、精练、漂白、丝光、热定型和工艺路线）和<b>纺织印花</b>，各有"
+                 "八个动画场景——印花色浆、涂料或染料、直接印花、拔染印花和防染印花、平网、圆网、数码和转移印花，以及印花"
+                 "如何固色。两者最后都附有测验。",
+                 "侧边栏 → <b>Knowledge Base</b> → 纺织知识 → <b>染色</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：从加捻到成品",
+                 "又新增五个动画页面，每页都有测验：<b>纱线加捻</b>（环锭加捻和倍捻、合股、花式纱）、<b>其他织物成形方法</b>"
+                 "（横机针织、簇绒、编织）、<b>涂层和层压</b>（刮刀涂层、PVC 篷布、薄膜）、<b>成衣制作</b>（裁剪、线迹类型、"
+                 "接缝密封、焊接）以及<b>织物测试</b>（拉伸和撕破强力、Martindale 耐磨、起球、色牢度、收缩）。所有这些都在"
+                 "纺织链起始页上。",
+                 "侧边栏 → <b>Knowledge Base</b> → 纺织知识", "wn_onboarding.svg"),
+                ("feature", "知识库：假捻器详解",
+                 "DTY → 专业知识下新增页面<b>假捻器</b>：以动画展示摩擦盘组——选择纤维、D/Y、纱线速度、摩擦盘组合（例如 "
+                 "1-5-1）、PU 或陶瓷以及 S 或 Z 捻，查看摩擦盘转速以及 T2/T1 如何变化。此外还有摩擦盘类型、哪种纱线用哪种"
+                 "摩擦盘、摩擦盘制造商、关键指标及其他加捻装置。在 <b>DTY 网络</b>（机器，位置 5）中双击假捻器，或在 "
+                 "<b>DTY 机器</b>中双击摩擦盘，即可跳转到此处。",
+                 "侧边栏 → <b>Knowledge Base</b> → 我们的技术 → DTY → 专业知识 → <b>假捻器</b>", "wn_onboarding.svg"),
+                ("feature", "知识库：长丝纺丝中的喷嘴",
+                 "纺丝 → 专业知识下新增页面<b>长丝纺丝中的喷嘴</b>：带有所有喷嘴的纺丝线（单击某个工位）、喷嘴组的头数和间距"
+                 "是什么意思（带滑块）、纱道中发生了什么（网络或迁移、压力滑块、截面和侧视动画）、耗气量如何随纱道、压力和"
+                 "头数变化，以及关键术语。在<b>长丝纺丝</b>（设备，工位 8）中双击喷嘴即可跳转到此处。",
+                 "侧边栏 → <b>Knowledge Base</b> → 我们的技术 → 纺丝 → 专业知识 → <b>长丝纺丝中的喷嘴</b>",
+                 "wn_onboarding.svg"),
+                ("feature", "知识库：喷气涡流纺中的「纺纱太阳」和纺纱距离",
+                 "<b>喷气涡流纺</b>的<i>纺纱喷嘴</i>场景已重新绘制为与真实喷嘴一样的剖面：倾斜的气孔正对空心锭子的尖端，"
+                 "自由纤维端在锥形尖端上散开并绕其旋转，形成<b>纺纱太阳</b>——在剖面图和锭子尖端的俯视图中都能看到。新场景"
+                 "<i>纺纱距离</i>：最后一个输出罗拉到锭子尖端的距离 S，带滑块——对于天然纤维，图表显示 S 如何改变平行纤维、"
+                 "包缠纤维和被吹走的落纤所占的比例；对于合成短纤维，选择纤维长度即可看到参考值 S ≈ 0.55 × 纤维长度。",
+                 "侧边栏 → <b>Knowledge Base</b> → 我们的技术 → 纺丝 → <b>喷气涡流纺</b> → 纺纱喷嘴 / 纺纱距离",
                  "wn_onboarding.svg"),
             ],
         },
@@ -1448,28 +1641,245 @@ RELEASES = [
                  "laboratorio como Kurzhocker o Langwelle se mantienen.",
                  "Todo el programa", None),
             ],
+            # ═══════════════════════════════ ZH ═══════════════════════════════
+            "zh": [
+                ("h", "Show Experiment"),
+                ("feature", "一张表看全系列的纱线",
+                 "<b>Yarns…</b> 显示该系列的每一股及其纱线和每个试验。单击某种纱线即可为整股更换纱线——输入名称的一部分即可"
+                 "找到，例如 <i>167 dty</i>。单击某个单元格可为单个试验开启或关闭某一股，输入 1-9 表示头数。<b>+ Add ply</b> "
+                 "为所有试验添加一股。已更改的单元格显示为黄色，在 <b>Apply</b> 之前不会保存任何内容。",
+                 "Show Experiment → Machine Data → <b>Yarns…</b>（或右键单击 Ply 行）", "wn_series_yarns.svg"),
+                ("feature", "我的筒子在哪里？",
+                 "Material 行中每一股后面的小筒子图标让你一目了然：绿色筒子 = 该纱线有库存，划掉的纸管 = 无库存。单击纱线或"
+                 "绿色筒子，即可按存放位置查看库存中的每个筒子，包括批次、重量和纸管颜色。分配给该系列的筒子以粗体显示。"
+                 "<b>Open in Yarn Stock</b> 直接带你跳到该纱线。",
+                 "Show Experiment → Material 行 → 纱线或筒子图标", "wn_spool_locations.svg"),
+                ("feature", "数值备注",
+                 "直接在数值所在处记下它为什么是这样：右键单击某个数值 → <b>Add note…</b>，例如 <i>筒子有结，已重新测量</i>。"
+                 "单元格上会有一个紫色小三角标记，鼠标指向时显示备注及姓名和日期。右键单击试验编号可为整个试验添加备注。"
+                 "<b>Notes</b> 选项卡列出该系列的所有备注，双击即可跳到对应数值。每个人都可以写备注。在系列的 <b>Report</b> "
+                 "中，<b>Notes</b> 按钮将备注显示为紫色轮廓，并在提示框中显示备注内容；除非导出时勾选 <i>Include notes on "
+                 "values</i>，否则备注不会打印到 PDF 中。在 Smart Chart 仪表板中，可在 Points 视觉对象上勾选 <i>Show notes on "
+                 "values</i>。",
+                 "Show Experiment → 右键单击数值 → <b>Add note…</b>", "wn_cell_notes.svg"),
+                ("feature", "参考样",
+                 "将客户的原始筒子作为基准加入。它显示为一个高亮的 <i>Ref</i> 列，并在报告中显示为一条水平线——且从不计为"
+                 "试验。",
+                 "Show Experiment → Machine Data → <b>+ Ref</b>", "wn_reference.svg"),
+                ("feature", "复制试验——可同时修改",
+                 "选择要复制哪些试验、复制几次以及按什么顺序，并在复制前修改数值（例如气压、喷嘴、OF Core/Effect）。备注和"
+                 "喷嘴前后的张力不会被复制——副本中这些字段为空。",
+                 "Show Experiment → Machine Data → <b>Copy trials</b>", "wn_copy_trials.svg"),
+                ("feature", "D/Y Ratio (T2/T1)",
+                 "由 T1 和 T2 自动计算，在 DTY 机器上显示在 T2 Tension 的正下方。",
+                 "Show Experiment → Machine Data", "wn_dy_ratio.svg"),
+                ("feature", "更快地录入数据——像在 Excel 中一样",
+                 "输入数值后按 <b>Enter</b>：光标移到下方单元格，可以直接输入下一个值（<b>Shift+Enter</b> 向上）。单击一个"
+                 "单元格（或选择多个）并按 <b>Delete</b> 即可清空——无需双击。用 <b>Save</b> 或 <b>Ctrl+S</b> 保存；不再弹出"
+                 "需要点掉的“已保存”提示，而是黄色消失，中间短暂亮起一个绿色勾号——你可以马上继续输入。",
+                 "Show Experiment → 任意表格", None),
+                ("feature", "用 Ctrl+Z 撤销",
+                 "输错了数值、粘贴到了错误位置或删多了？<b>Ctrl+Z</b> 逐步撤销，<b>Ctrl+Y</b> 重做——只要你还没有保存。",
+                 "Show Experiment → 任意表格", None),
+                ("feature", "回到你的选项卡",
+                 "系列会在你上次为它使用的选项卡上打开，例如 <i>Statimat M</i>，而不总是 <i>Machine Data</i>。",
+                 "Show Experiment", None),
+                ("feature", "隐藏不需要的行",
+                 "右键单击参数名称 → <b>Hide row</b>。一条蓝线标出隐藏行的位置；单击它或使用 <b>n rows hidden</b> 可重新显示。"
+                 "按机器分别记住。",
+                 "Show Experiment → Machine Data → 右键单击参数名称", "wn_hide_rows.svg"),
+                ("feature", "查看哪些内容尚未保存",
+                 "已更改的单元格在保存之前（<b>Save</b> 或 <b>Ctrl+S</b>）一直显示为黄色。按钮会显示数量，例如 "
+                 "<b>Save (3)</b>，选项卡上也会出现一个圆点。现在，在有未保存更改时关闭选项卡或程序会先询问——以前这些更改会"
+                 "悄无声息地丢失。",
+                 "Show Experiment", "wn_unsaved.svg"),
+                ("feature", "保存时检查输入错误",
+                 "远超出该机器常规范围的机器设定（例如 35 bar 而不是 3.5 bar）会在保存前列出。你可以返回修改，也可以照样保存。",
+                 "Show Experiment → <b>Save</b>", "wn_unusual.svg"),
+                ("feature", "更改历史（超级用户）",
+                 "查看谁在何时更改了某个数值，以及更改前是什么——可针对单个数值或整个系列。",
+                 "Show Experiment → 右键单击数值 → <b>Change history…</b>", "wn_history.svg"),
+                ("feature", '报告：X 轴上的两个层级',
+                 '在系列的报告中，每个图表现在都可以在 X 轴上显示两个层级——例如 <b>Yarn</b>（简称），其下为 <b>Jets</b>，只显示实际测试过的组合。在 X 右侧的新列表中选择第二个层级。<b>Yarn</b> 和 <b>Jet</b> 也可以单独选作 X。',
+                 'Show Experiment → <b>Report</b> → X … › …', None),
+                ("h", "Smart Chart"),
+                ("feature", "全新的 Smart Chart：按属性查找试验",
+                 "按纱线、喷嘴几何参数、机器设定和实验室结果在<b>所有</b>系列中挑选试验——例如所有终端细度为 70–80 dtex、"
+                 "单丝数为 30–40 的涤纶试验。<b>+ Add filter</b> 显示数值的分布以及每个筛选条件剩下多少个试验；数值筛选可以"
+                 "只保留整数、每 0.5 一档或你勾选的数值。然后在仪表板中显示：任意字段对任意字段——以散点、带 R² 的趋势线、"
+                 "均值线、柱形、箱线图、小提琴图、直方图或密度图显示——按喷嘴、机器或某个数值着色，每台机器一个小图。图表上的 "
+                 "⤢ 可将其放大显示，下方列出其试验：单击某个点可找到对应试验，双击可打开。可保存为视图（也可共享），导出为 "
+                 "PDF 或 Excel。",
+                 "侧边栏 → <b>Smart Chart</b>", "wn_smart_chart.svg"),
+                ("feature", '这个比较公平吗？',
+                 '每个图表上都有一个彩色圆点，当你比较的各组在其他会影响结果的方面也存在差异时发出警告——例如喷嘴 A 大多在 PES、3.5 bar 下测试，喷嘴 B 在 PA、2 bar 下测试。绿色、黄色或红色，并用一句话说明原因。单击圆点可查看每个条件；<b>Make it fairer</b> 只保留所有组共有的部分。它还会对很小的组、仅来自单个系列的组以及 X 范围不同的组发出警告。',
+                 'Smart Chart → 图表标题栏中的彩色圆点', "wn_fairness.svg"),
+                ("feature", '仪表板：像 Power BI 一样搭建自己的页面',
+                 'Smart Chart 现在是一个仪表板：一个页面上并排放置多个视觉对象。从 <b>Fields</b> 中拖动字段——每张表，从 Statimat、Itemat 到 DTYoMat、喷嘴和纱线——到视觉对象的字段槽中。新的视觉对象：<b>Matrix</b>（例如按喷嘴和气压显示 FP/m 并着色——空单元格显示哪里缺少试验）、<b>Card</b>（一个数字）和 <b>Table</b>。单击柱形、箱线或矩阵单元格，其他所有视觉对象都会将其突出显示。<b>Slicers</b> 为整个页面选择数值——可以是列表、下拉框、磁贴或范围滑块。视觉对象可以自由放置和调整大小，可以使用多个页面（底部的选项卡），并可为单个页面或单个视觉对象添加筛选。新增：用你自己的公式创建<b>计算字段</b>、<b>目标</b>（绿/红、目标线）、机器 → 喷嘴的<b>向下钻取</b>，以及<b>选择点</b>来筛选页面。此外还有：<b>模板</b>（Jet comparison、Yarn overview、Machine check、Lab overview）、单页或全部页面的 <b>PDF</b>、按视觉对象或页面导出 <b>Excel</b>、数值备注、用 <b>Ctrl+Z</b> 撤销，以及一次<b>对齐</b>多个视觉对象（Ctrl+单击，然后对齐、统一大小或均匀分布）。',
+                 '侧边栏 → <b>Smart Chart</b>', "wn_dashboard.svg"),
+                ("feature", '仪表板中的实验室统计',
+                 '统计<b>实验、试验系列或试验</b>的数量——按月份、产品组、订单类型、项目、负责人或实验室机器（<i>Tested on</i>）。新的视觉对象 <b>Columns</b> 以堆积、并列或 100 % 的方式显示；月份和年份按顺序排列，空月份显示为 0。从 <b>New</b> → <b>Lab statistics</b> 开始。月份或年份上的筛选现在可以是随日历移动的时间段：<b>This year</b>、<b>Last 12 months</b>、<b>From – to</b> …… 还有切片器 <b>Year › Month</b>：年份可以展开，下面是 1–12 月。',
+                 'Smart Chart → <b>New</b> → <b>Lab statistics</b>', "wn_dashboard_stats.svg"),
+                ("feature", '堆积字段：各部分如何累加',
+                 '新的仪表板视觉对象 <b>Stacked fields</b> 将多个数值字段放在同一根柱中，每个字段有自己的颜色——例如每个试验 DTYoMat 的 A、B、C 网络点，以 <b>100 %</b>（各部分所占比例）或数值显示。将新字段 <b>Trial</b> 放在 X 轴上，每个试验就有一根柱。作为<b>组合图</b>，右侧第二坐标轴上的折线可在其上叠加显示例如 FP/m。',
+                 'Smart Chart → Visualizations → <b>Stacked fields</b>', "wn_stacked_fields.svg"),
+                ("feature", '视觉对象格式：排序、Top N、颜色、坐标轴、表格',
+                 '仪表板中的视觉对象现在在 <b>Build</b> 旁有第二个选项卡 <b>Format</b>。可按数值或名称对柱形和箱线排序，并只显示<b>前 10 名</b>（例如最好的喷嘴）；设置<b>小数位数</b>；把<b>数值显示在柱上</b>；为柱形和均值线选择<b>误差线</b>——标准差、<b>95 % 置信区间</b>（两个喷嘴真的不同吗？如果误差线几乎不重叠，很可能是）、<b>最小 – 最大</b>或关闭；自己编写<b>坐标轴标题</b>或将其隐藏；固定 <b>Y 轴</b>的起点和终点；把<b>图例</b>移到顶部、底部或去掉；选择<b>调色板</b>或为每个值设置<b>自己的颜色</b>；放大或缩小文字和 <b>Card</b>，并关闭网格线。<b>表格</b>单击列标题即可排序，并可设置<b>颜色规则</b>（例如 FP/m 高于 100 显示为绿色）。<b>仪表板主题</b>（不选中任何对象时打开 Format）可一次为所有视觉对象设置调色板、文字大小、小数位数 ……；页面顶部的 <b>Copy format</b> 可将同样的格式应用到另一个视觉对象（双击：可应用于多个，Esc 结束）。每次更改都会立即显示；绿点标出与标准不同的设置，<b>Reset</b> 可恢复。PDF 中的显示效果也相同。',
+                 'Smart Chart → 单击视觉对象 → Visualizations → <b>Format</b>', "wn_dashboard_format.svg"),
+                ("feature", '与页面外观一致的仪表板 PDF',
+                 '仪表板的 PDF 现在带有 Heberlein 标志，使用整个页面，文字也不再超出其框的边缘。<b>Slicers</b> 按你看到的样子打印：复选框、磁贴、范围滑块或带月份的年份。图表在<b>没有互联网连接</b>时也能正常显示。',
+                 'Smart Chart → <b>PDF</b>', None),
+                ("feature", '新的视觉对象：饼图、环形图、控制图、雷达图、文本',
+                 '仪表板中新增五种视觉对象：用于显示占比的 <b>Pie</b> 和 <b>Donut</b>（单击某一块即可筛选页面）；带均值和 ±3σ 控制限的 <b>Control chart</b>——超出的点显示为红色，连续多点位于一侧显示为琥珀色；用于同时在多个数值上比较喷嘴、纱线或机器的 <b>Radar</b>；以及用于标题和说明的 <b>Text</b>。所有视觉对象也都换上了更清晰的新图标。',
+                 'Smart Chart → Visualizations', "wn_dashboard_visuals.svg"),
+                ("feature", '仪表板：分析线和钻取',
+                 'Build 和 Format 旁新增选项卡 <b>Analytics</b>：平均值、中位数、± 1/2/3 倍标准差、百分位数、最小/最大值、常数线或从 – 到的区间带（例如你的规格限）直接显示在图表中——根据其中的试验计算。还有像 Power BI 一样的<b>钻取</b>：将某个页面设为例如 <b>Machine</b> 的详细信息页（Filters → <b>Drill-through to this page</b>），然后在另一个页面上右键单击某台机器的柱形 → <b>Drill through</b>。详细信息页只显示该机器；<b>← Back</b> 带你返回。',
+                 'Smart Chart → Visualizations → <b>Analytics</b> · 右键单击柱形', "wn_dashboard_analytics.svg"),
+                ("feature", '单击即突出显示——其余变灰',
+                 '在仪表板中单击某个柱形、某根柱、某个扇区或某个点：其他视觉对象不再只跳到该部分，而是保留所有试验并将其余部分变灰，这样你就能看到该部分在整体中的位置——例如每根柱中有多少来自机器 AFK。被单击的视觉对象也会将其其他柱形变灰。其他试验的点变灰，平均值柱形会在淡化的柱形上叠加显示突出试验的平均值。Card、矩阵、表格、雷达图、箱线图、小提琴图和直方图仍然执行筛选，切片器也一样。再次单击即可取消。更喜欢原来的方式？不选中任何对象时打开 Format → <b>Clicks</b> → <i>Filters the other visuals</i>。',
+                 'Smart Chart、Dashboards → 单击柱形、扇区或点', "wn_click_highlight.svg"),
+                ("feature", '聚焦：放大一个视觉对象并显示其试验',
+                 '单击视觉对象标题栏中的 ⤢：它会占满页面，下方列出构成它的所有试验。单击某个点可找到对应的行，双击某行可在 Show Experiment 中打开该试验。单击彩色公平性圆点可查看详情，并可使用 <b>Make it fairer</b>。<b>Format</b> 中现在还提供对数坐标轴、按颜色区分的标记形状以及点的大小。',
+                 'Smart Chart → 视觉对象上的 ⤢', None),
+                ("feature", '模型：各表之间如何关联',
+                 '单击仪表板左上角的 <b>Model</b>：试验位于中央，周围是纱线、喷嘴、实验、时间以及所有实验室表，并显示它们的关联方式（1 : n = 每个试验有多行，取平均）。单击某张表可查看其字段以及有多少试验有数值。只读——此处无法更改任何内容。',
+                 'Smart Chart → <b>Model</b>', "wn_model_view.svg"),
+                ("feature", '以 Heberlein 配色为标准',
+                 '图表和仪表板现在默认使用 <b>Heberlein</b> 调色板：先是 Heberlein 绿和标志的深蓝色，然后是易于区分的颜色。原来的八种绿色仍以 <b>Heberlein green</b> 保留。',
+                 'Smart Chart → 单击视觉对象 → <b>Format</b> → Colours（不选中任何对象：适用于所有视觉对象）', None),
+                ("feature", '侧边窗格可调宽窄',
+                 '在仪表板中，拖动 <b>Filters</b>、<b>Visualizations</b> 或 <b>Fields</b> 的左边缘可使其变宽或变窄——TrippleT 会记住。双击边缘可恢复标准宽度。',
+                 '侧边栏 → <b>Smart Chart</b>', None),
+                ("feature", '仪表板：查看和共享',
+                 '新页面 <b>Dashboards</b> 显示你自己的仪表板以及同事与你共享的仪表板。这里只用于查看：切片器、单击柱形筛选、向下钻取、页面选项卡和 <b>PDF</b> 都可使用——不会意外更改任何内容。要共享你的仪表板，请在 Smart Chart 中打开它并单击 <b>Share…</b>：可与所有人、单个人员或用户组（read、write、admin、superuser）共享，每次可选择<b>查看</b>或<b>编辑</b>。只有你可以共享或删除它。',
+                 '侧边栏 → Tools → <b>Dashboards</b> · Smart Chart → <b>Share…</b>', "wn_dashboards.svg"),
+                ("feature", '由超级用户决定谁可以使用哪个工具',
+                 '在 <b>Manage User → Access…</b> 中，超级用户可以开启或关闭每个工具和界面——针对某个用户组（read、write、admin）或单个人员，例如为某位同事开启 Smart Chart，或为某个用户组关闭 Backlog。针对个人的设置优先于用户组设置；没有设置时一切照旧。被禁用的工具从下次登录起不再出现在侧边栏中。',
+                 '侧边栏 → Superuser → Manage User → <b>Access…</b>', "wn_feature_access.svg"),
+                ("h", "Settings"),
+                ("feature", '选择你的起始界面',
+                 '决定登录后打开哪个界面——Backlog（与以前一样）、All Experiments、Dashboards、Yarn Stock 或你使用的其他工具。如果超级用户为你关闭了该工具，则改为打开 Backlog。',
+                 '侧边栏 → Account → <b>Settings</b> → <b>Start screen</b>', "wn_start_screen.svg"),
+                ("feature", "整个程序的文字大小",
+                 "Normal、Large、Extra large 或 Huge——按钮、菜单、表格和对话框都会随之变大。重启后生效。欢迎语和强调色也在这里"
+                 "设置。",
+                 "侧边栏 → Account → <b>Settings</b>", "wn_text_size.svg"),
+                ("feature", "表格更易阅读",
+                 "高对比度、行列十字准线、以大字显示数值的阅读条、警告符号以及色盲友好的配色。用 Ctrl + 鼠标滚轮缩放表格。",
+                 "侧边栏 → Account → <b>Settings</b> → Show Experiment tables", "wn_reading.svg"),
+                ("h", "帮助"),
+                ("feature", "三种语言的帮助",
+                 "Show Experiment、Backlog、Report、Smart Chart、Dashboards、All Experiments、Create Experiment、Manage Yarn 和 "
+                 "Manage Jets 现在都有各自的英语、德语和西班牙语帮助：针对“我该如何……？”的分步解答、界面示意图以及规则。"
+                 "用旗帜切换语言。",
+                 "这些界面上的圆形 <b>?</b> 按钮", "wn_help.svg"),
+                ("feature", "帮助搜索——“我在哪里可以找到……？”",
+                 "用你自己的话输入问题，即可获得匹配的帮助页面——支持英语、德语或西班牙语。<b>Take me there</b> 会打开对应界面。",
+                 "侧边栏 → <b>Help (F1)</b> 或 F1 键", "wn_help_search.svg"),
+                ("feature", "在 Fresh off the Spool 中搜索",
+                 "知道有某个功能，但不记得是哪个版本推出的？在版本列表上方的搜索框中输入一个词——会同时用英语、德语和西班牙语"
+                 "搜索所有版本。有结果的版本会显示数量；单击即可跳转。每个版本现在按领域分为多个选项卡，例如 "
+                 "<i>Show Experiment (8)</i>。",
+                 "侧边栏 → Account → <b>Fresh off the Spool</b> → 搜索框", "wn_whats_new_search.svg"),
+                ("feature", "Fresh off the Spool 导出为 PDF",
+                 "将某个版本的新功能保存为 PDF——用于打印或发给同事。每个主题都保持在同一页上。",
+                 "侧边栏 → Account → <b>Fresh off the Spool</b> → <b>PDF</b>", "wn_whats_new_pdf.svg"),
+                ("h", "Backlog 和 All Experiments"),
+                ("feature", "一次移动多张卡片",
+                 "按住 <b>Ctrl</b> 单击各张卡片（或用 <b>Shift+单击</b> 选择一整段），然后拖动其中一张——所有选中的卡片会一起"
+                 "移动，例如从 <i>To Be Cleaned</i> 移到 <i>Archived</i>。TrippleT 只询问一次，并会告诉你哪张卡片不允许移动。",
+                 "Backlog → <b>Ctrl+单击</b>卡片 → 拖动", "wn_backlog_multi_move.svg"),
+                ("feature", "宽屏上的 Backlog",
+                 "在大显示器上，四列全部并排显示并占满整个高度。",
+                 "Backlog", "wn_wide_backlog.svg"),
+                ("feature", "Recycle Bin",
+                 "已删除的试验系列可在 90 天内恢复。有权在 Backlog 中移动某个系列的人也可以删除它（在 To Be Cleaned 中：仅限"
+                 "超级用户）。",
+                 "侧边栏 → Superuser → <b>Recycle Bin</b>", "wn_recycle_bin.svg"),
+                ("feature", "查看 Recycle Bin 中的内容",
+                 "不确定某个已删除的系列包含什么？双击它：它会在 Show Experiment 中以只读方式打开。一个黄色横条让你选择 "
+                 "<b>Restore for good</b>、<b>Back to Recycle Bin</b> 或 <b>Delete permanently</b>。关闭选项卡会将其放回——并"
+                 "保留原来的删除日期。",
+                 "侧边栏 → Superuser → <b>Recycle Bin</b> → 双击某个系列", "wn_recycle_preview.svg"),
+                ("feature", "All Experiments 占满整个窗口",
+                 "列表占满窗口的整个宽度和高度——最后几列无需横向滚动即可看到——并在大屏幕上显示得更大。",
+                 "All Experiments", "wn_all_experiments.svg"),
+                ("h", "纱线"),
+                ("feature", "查看纱线的颜色",
+                 "纱线名称前的小方块显示其颜色——黑色、白色、米色、灰色、本色。将鼠标悬停在上面可读出颜色名称。也可以按颜色"
+                 "搜索，例如 <i>black</i>。颜色来自纱线的 <i>Colour</i> 字段（<b>Manage Yarn</b>）。",
+                 "Yarns… 对话框、Create Experiment、Yarn Stock、Manage Yarn、Reassign Yarn、Show Experiment "
+                 "（Ply 行）", "wn_yarn_colour.svg"),
+                ("h", "Yarn Stock"),
+                ("feature", "按纱线显示库存状态",
+                 "交通灯现在按纱线整体显示：该纱线所有批次的库存与其最低库存的对比。已用完的批次从概览中消失，通知每种纱线"
+                 "只发一次。只有超级用户可以更改最低库存。",
+                 "Yarn Stock → 概览", "wn_stock_status.svg"),
+                ("feature", "新筒子——直接跳到新筒子并进入标签队列",
+                 "<b>New spool(s)</b> 以空白选择开始，完成后直接跳到新筒子。它们会自动进入标签队列（对话框中的复选框）。",
+                 "Yarn Stock → <b>New spool(s)</b>", "wn_new_spools.svg"),
+                ("feature", "盘点——逐个库位进行",
+                 "超级用户发起一轮盘点（可以排除单个库位）。每个库位是一个磁贴：灰色 = 未盘点，绿色 = 全部正确，橙色 = 有差异。"
+                 "单击一个库位并扫描其中的筒子（没有标签？在列表中双击它）。<b>Results</b> 显示在哪里找到了什么，可导出为 "
+                 "Excel。位于其他位置的筒子会立即移库，缺失的筒子只在你结束盘点时——经询问后——才出库。",
+                 "Yarn Stock → Rack lookup → <b>Stock take…</b>", "wn_stock_take.svg"),
+                ("feature", "筒子历史",
+                 "筒子的每次变更都会被记录：创建、更改、移库、出库、盘点。未选择筒子时，可查看整个批次，包括已用完的筒子。",
+                 "Yarn Stock → <b>History…</b>", "wn_spool_history.svg"),
+                ("feature", "扫描标签，保留更改",
+                 "在 <i>Go to spool #</i> 中，可以扫描筒子标签，而不必输入编号。Yarn Stock 现在还会在未保存的筒子更改丢失前"
+                 "先询问。三种语言的帮助：右上角的圆形按钮。",
+                 "Yarn Stock → <b>Go to spool #</b>", None),
+                ("h", "通用"),
+                ("feature", "Fresh off the Spool：TrippleT 的新功能",
+                 "每个版本的所有新功能集中在一处：每个领域一个选项卡，可搜索，也可导出为 PDF。新版本发布后会自动打开一次——"
+                 "也可随时在侧边栏中打开。",
+                 "侧边栏 → Account → <b>Fresh off the Spool</b>", "fresh_off_the_spool.png"),
+                ("feature", "最近的系列",
+                 "你最近打开的系列只需一次单击：侧边栏中的 <b>Recent</b>（在底部，Account 上方）。单击即可打开，"
+                 "<b>Ctrl+单击</b>在新选项卡中打开。该列表在每台 PC 上都跟随你。",
+                 "侧边栏 → <b>Recent</b>", None),
+                ("feature", "Athena 用你的语言回答",
+                 "Athena 和 Lab Assistant 现在用你提问时使用的语言回答——英语、德语、西班牙语 …… 没有提问时（例如自动分析），"
+                 "回答为英语。",
+                 "Show Experiment → Athena、Lab Assistant", None),
+                ("feature", "有帮助的错误信息",
+                 "出现问题时，TrippleT 现在会用通俗的话说明什么没成功、为什么，以及你可以怎么做——例如“该文件已在另一个程序中"
+                 "打开——请关闭它（例如在 Excel 中）后重试。”技术性文字在 <b>Show Details</b> 下，可发送给管理员。",
+                 "整个程序", None),
+                ("feature", "所有文字均为英语",
+                 "仍为德语的消息、按钮、菜单和状态文字现在全部改为英语——例如 Backlog 中的右键菜单显示 <b>Reassign yarn…</b>。"
+                 "Kurzhocker 或 Langwelle 等实验室术语保持不变。",
+                 "整个程序", None),
+            ],
         },
     },
 ]
 
 # "Fresh off the Spool" = the name of the release notes magazine (2026-10-16,
 # before: "What's new"); English in every language like the button names.
-WINDOW_TITLE = {"en": "Fresh off the Spool", "de": "Fresh off the Spool", "es": "Fresh off the Spool"}
-SUBTITLE = {"en": "What's new in TrippleT", "de": "Neues in TrippleT", "es": "Novedades de TrippleT"}
-VERSIONS_TITLE = {"en": "Versions", "de": "Versionen", "es": "Versiones"}
-NEW_BADGE = {"en": "NEW", "de": "NEU", "es": "NUEVO"}
-WHERE_LABEL = {"en": "Where:", "de": "Wo:", "es": "Dónde:"}
-VERSION_LABEL = {"en": "Version", "de": "Version", "es": "Versión"}
-CURRENT_LABEL = {"en": "in progress", "de": "in Arbeit", "es": "en curso"}
-CLOSE = {"en": "Close", "de": "Schliessen", "es": "Cerrar"}
+WINDOW_TITLE = {"en": "Fresh off the Spool", "de": "Fresh off the Spool", "es": "Fresh off the Spool",
+                "zh": "Fresh off the Spool"}
+SUBTITLE = {"en": "What's new in TrippleT", "de": "Neues in TrippleT", "es": "Novedades de TrippleT",
+            "zh": "TrippleT 新功能"}
+VERSIONS_TITLE = {"en": "Versions", "de": "Versionen", "es": "Versiones", "zh": "版本"}
+NEW_BADGE = {"en": "NEW", "de": "NEU", "es": "NUEVO", "zh": "新"}
+WHERE_LABEL = {"en": "Where:", "de": "Wo:", "es": "Dónde:", "zh": "位置："}
+VERSION_LABEL = {"en": "Version", "de": "Version", "es": "Versión", "zh": "版本"}
+CURRENT_LABEL = {"en": "in progress", "de": "in Arbeit", "es": "en curso", "zh": "进行中"}
+CLOSE = {"en": "Close", "de": "Schliessen", "es": "Cerrar", "zh": "关闭"}
 SEARCH_PLACEHOLDER = {"en": "Search all versions…", "de": "Alle Versionen durchsuchen…",
-                      "es": "Buscar en todas las versiones…"}
+                      "es": "Buscar en todas las versiones…",
+                      "zh": "搜索所有版本…"}
 SEARCH_RESULTS = {"en": "{n} result(s) for \"{q}\"", "de": "{n} Treffer für \"{q}\"",
-                  "es": "{n} resultado(s) para \"{q}\""}
+                  "es": "{n} resultado(s) para \"{q}\"",
+                  "zh": "“{q}”共有 {n} 个结果"}
 SEARCH_NONE = {"en": "Nothing found for \"{q}\". Try another word - English, German and Spanish all work.",
                "de": "Nichts gefunden für \"{q}\". Versuche ein anderes Wort - Englisch, Deutsch und Spanisch gehen.",
-               "es": "No se encontró nada para \"{q}\". Prueba otra palabra - sirven inglés, alemán y español."}
-HITS_LABEL = {"en": "hits", "de": "Treffer", "es": "resultados"}
+               "es": "No se encontró nada para \"{q}\". Prueba otra palabra - sirven inglés, alemán y español.",
+               "zh": "未找到“{q}”的相关内容。请换个词试试——英语、德语、西班牙语和中文都可以。"}
+HITS_LABEL = {"en": "hits", "de": "Treffer", "es": "resultados", "zh": "个结果"}
 PDF_TOOLTIP = {"en": "Save the shown version as PDF (e.g. to print or send it)",
                "de": "Die angezeigte Version als PDF speichern (z. B. zum Drucken oder Verschicken)",
-               "es": "Guardar la versión mostrada como PDF (p. ej. para imprimirla o enviarla)"}
+               "es": "Guardar la versión mostrada como PDF (p. ej. para imprimirla o enviarla)",
+               "zh": "将当前显示的版本保存为 PDF（例如用于打印或发送）"}

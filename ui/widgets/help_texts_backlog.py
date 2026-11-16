@@ -1,5 +1,5 @@
 # ui/widgets/help_texts_backlog.py
-"""Hilfetexte Backlog (EN/DE/ES) fuer ui/widgets/multilang_help.py.
+"""Hilfetexte Backlog (EN/DE/ES/ZH) fuer ui/widgets/multilang_help.py.
 
 Spiegelt ui/screen_backlog.py (Kanban-Board, Drag-&-Drop-Regeln in
 BacklogScreen._handle_dnd_move(), Kontextmenue/Rechte in
@@ -351,6 +351,115 @@ TEXTS = {
                 ("p", "Si un superusuario marca un valor de laboratorio para repetir (en Show Experiment), la serie "
                       "vuelve al <i>Backlog</i> con máxima prioridad y muestra la etiqueta <b>RETEST</b>. La marca se "
                       "cierra cuando la serie se mueve a <i>To Be Cleaned</i>."),
+            ]},
+        ],
+    },
+
+    # ═══════════════════════════════ ZH ═══════════════════════════════
+    "zh": {
+        "window_title": "Backlog 如何使用？",
+        "close": "关闭",
+        "tabs": [
+            {"key": "tasks", "title": "我该如何……？", "blocks": [
+                ("p", "Backlog 是所有试验系列的看板，按状态排列。请在下方找到您的问题。"
+                      "(1)–(5) 和 A–F 对应 <i>界面说明</i> 选项卡。"),
+                ("h", "查找与打开"),
+                ("task", "打开试验系列",
+                 ["双击其卡片。"],
+                 "Ctrl + 双击，或右键 → " + M("Open in New Tab") + "，在新选项卡中打开。"
+                 + M("Open in New Window") + " 在单独的窗口中打开。"),
+                ("task", "查看某个区域的全部卡片",
+                 ["点击区域标题右侧的展开图标。",
+                  f"{B('Close')} 返回看板。"]),
+                ("task", "查找已归档的系列",
+                 ["在 <i>Archived</i> (5) 中，于 <i>Search in Archived…</i> 输入实验 ID 或系列名称的一部分。",
+                  "展开年份和实验编号分组，然后双击该系列。"]),
+                ("task", "打开关联的实验申请或报告",
+                 ["点击卡片上的 <b>ER</b> 图标 (F) 打开申请。",
+                  "点击报告图标 (D) 打开已保存的报告。Ctrl + 点击在新选项卡中打开。"]),
+                ("h", "使用看板"),
+                ("task", "开始处理一个系列",
+                 ["将其卡片从 <i>Backlog</i> (1) 拖到 <i>In Progress</i> (2)。"],
+                 "您将成为该系列的负责人（彩色条 A）。如果该系列仍是占位机器，TrippleT 会先询问实际机器。"),
+                ("task", "将系列标记为完成",
+                 ["将卡片拖到 <i>Done</i> (3)。"],
+                 "只有负责人或超级用户可以更改状态，参见 <i>规则</i> 选项卡。"),
+                ("task", "一次移动多张卡片",
+                 ["按住 <b>Ctrl</b> 并逐个点击卡片（<b>Shift+点击</b> 选择一整段）。",
+                  "将其中一张已选卡片拖到新列，所有卡片一起移动。",
+                  "确认提示。"],
+                 "每张卡片适用相同的规则；TrippleT 会列出不允许移动的卡片。"
+                 "适合把大量系列从 <i>To Be Cleaned</i> 移到 <i>Archived</i>。"),
+                ("task", "不拖动而更改状态",
+                 ["右键卡片 → " + M("Change status…") + "，选择新状态。"]),
+                ("task", "更改优先级",
+                 ["右键卡片 → " + M("Change priority…") + "。",
+                  "输入数字 (0–999) 并点击 OK。"],
+                 "优先级在卡片上显示为 <i>Prio n</i>。"),
+                ("task", "重命名试验系列",
+                 ["右键卡片 → " + M("Rename trial series…") + "。"],
+                 "需要访问级别 2 或以上。"),
+                ("task", "更改机器或纱线，或删除系列",
+                 ["右键卡片 → " + M("Change machine…") + "、" + M("Reassign yarn…")
+                  + " 或 " + M("Delete trial series…") + "。"],
+                 "机器和纱线：仅限超级用户。删除：可移动该卡片的人（参见 <i>规则</i>；"
+                 "在 To Be Cleaned 中仅限超级用户）。"
+                 "已删除的系列可由超级用户在 90 天内恢复：侧边栏 → <i>Superuser</i> → "
+                 "<b>Recycle Bin</b>。"),
+                ("task", "更改我的欢迎语",
+                 ["在侧边栏 <i>Account</i> 下点击 <b>Settings</b>。",
+                  "在 <i>Welcome message</i> 下输入新文字（最多 45 个字符，留空 = 默认），然后"
+                  "点击 <b>Save</b>。"],
+                 "在那里还可以更改强调色和文字大小。"),
+            ]},
+            {"key": "screen", "title": "界面说明", "blocks": [
+                ("svg", SVG, {"flow_title": "状态流程",
+                              "flow_hint": "将卡片拖放到其他区域即可更改状态",
+                              "card_title": "一张卡片",
+                              "archived_hint": "按年份和实验编号分组"}, SVG_W, SVG_H),
+                ("areas", [
+                    ("(1) Backlog", "已计划但尚无人开始的系列。任何人都可以从这里领取卡片。"),
+                    ("(2) In Progress", "正在处理的系列。彩色条表示负责人。"),
+                    ("(3) Done", "已完成的系列。"),
+                    ("(4) To Be Cleaned", "由超级用户审核和整理的系列。将系列移到这里会"
+                                          "关闭其未处理的复测标记。"),
+                    ("(5) Archived", "已结束的系列，按年份和实验编号分组，带搜索框。"
+                                     "按住行左侧的点状手柄拖回 <i>Done</i> 即可重新激活（超级用户）。"),
+                ]),
+                ("p", "在宽屏上（约 2200 像素以上），各区域并排显示为四列，每列占满整个高度。"),
+                ("h", "卡片显示的内容"),
+                ("areas", [
+                    ("A", "负责人的彩色条（在 In Progress 和 Done 中）。"),
+                    ("B", "系列名称；下方为实验 ID、机器、状态、优先级和负责人。"),
+                    ("C", "<b>RETEST</b>：该系列的某个实验室数值被标记为需复测。将鼠标悬停在"
+                          "卡片上可查看是哪个试验。"),
+                    ("D", "报告图标：已有保存的报告（点击打开）。旁边是备注图标：该"
+                          "系列有备注。"),
+                    ("E", "附件图标：附有图片或 PDF。"),
+                    ("F", "<b>ER</b>：关联的实验申请（点击打开）。"),
+                ]),
+            ]},
+            {"key": "rules", "title": "规则", "blocks": [
+                ("p", "谁可以把卡片移到哪里："),
+                ("table", ["移动", "谁"], [
+                    ["Backlog → 任何其他区域", "所有人（您成为负责人）"],
+                    ["其他任何状态更改", "该系列的负责人或超级用户"],
+                    ["→ To Be Cleaned，或从中移出", "仅限超级用户"],
+                    ["To Be Cleaned → Archived", "访问级别 2 或以上"],
+                    ["其他任何移入或移出 Archived 的操作", "仅限超级用户"],
+                ]),
+                ("h", "右键菜单"),
+                ("table", ["菜单项", "谁"], [
+                    [M("Open in New Tab") + " / " + M("Open in New Window") + " / "
+                     + M("Change priority…") + " / " + M("Change status…"), "所有人（适用上述状态规则）"],
+                    [M("Rename trial series…"), "访问级别 2 或以上"],
+                    [M("Reassign yarn…") + " / " + M("Change machine…"), "仅限超级用户"],
+                    [M("Delete trial series…"), "可移动该卡片的人（见上文）；在 To Be Cleaned 中仅限超级用户"],
+                ]),
+                ("h", "复测"),
+                ("p", "如果超级用户（在 Show Experiment 中）将某个实验室数值标记为需复测，该系列会以最高优先级"
+                      "回到 <i>Backlog</i>，并显示 <b>RETEST</b> 标记。当系列被移到 <i>To Be Cleaned</i> 时，"
+                      "该标记关闭。"),
             ]},
         ],
     },
