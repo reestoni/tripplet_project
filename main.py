@@ -155,6 +155,7 @@ from ui.screen_manage_jets import ManageJetsScreen
 from ui.screen_manage_top_plates import ManageTopPlatesScreen
 from ui.screen_manage_user import ManageUserScreen
 from ui.screen_manage_order_types import ManageOrderTypeScreen
+from ui.screen_manage_projects import ManageProjectsScreen
 from ui.screen_manage_product_groups import ManageProductGroupsScreen
 from ui.screen_manage_material import ManageMaterialScreen
 from ui.screen_usage_stats import UsageStatsScreen
@@ -360,6 +361,7 @@ class MainWindow(QMainWindow):
             on_manage_order_type=self._go_manage_order_type,
             on_manage_product_groups=self._go_manage_product_groups,
             on_manage_material=self._go_manage_material,
+            on_manage_projects=self._go_manage_projects,
             on_add_user=self._go_add_user,
             on_usage_stats=self._go_usage_stats,
             on_offline_sync=self._go_offline_sync,
@@ -720,6 +722,7 @@ class MainWindow(QMainWindow):
         self.manage_product_groups = ManageProductGroupsScreen(
             on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
         self.manage_material = ManageMaterialScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
+        self.manage_projects = ManageProjectsScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
         self.usage_stats = UsageStatsScreen(on_back_home=self._go_home, sidebar_callbacks=self._sidebar_nav_kwargs())
         # offline_sync/lab_assistant: lazy (built on first navigation, not here) -
         # nur fuer Superuser erreichbar, nicht jeder Login soll den Aufbau bezahlen.
@@ -772,6 +775,7 @@ class MainWindow(QMainWindow):
             on_manage_order_type=self._go_manage_order_type,
             on_manage_product_groups=self._go_manage_product_groups,
             on_manage_material=self._go_manage_material,
+            on_manage_projects=self._go_manage_projects,
             on_add_user=self._go_add_user,
             on_usage_stats=self._go_usage_stats,
             on_offline_sync=self._go_offline_sync,
@@ -810,7 +814,7 @@ class MainWindow(QMainWindow):
             self.report_screen, self.smartchart_screen, self.new_jet,
             self.manage_jets, self.new_top_plate, self.manage_top_plates,
             self.manage_user, self.manage_order_type, self.manage_product_groups,
-            self.manage_material, self.usage_stats, self.backlog,
+            self.manage_material, self.manage_projects, self.usage_stats, self.backlog,
             self.create_experiment_request, self.my_requests,
             self.experiment_request, self.login,
         ):
@@ -1080,6 +1084,7 @@ class MainWindow(QMainWindow):
             on_manage_order_type=self._go_manage_order_type,
             on_manage_product_groups=self._go_manage_product_groups,
             on_manage_material=self._go_manage_material,
+            on_manage_projects=self._go_manage_projects,
             on_add_lab_machines=lambda: self._go_create_experiment(
                 "addlabmachines"),
             on_logout=self._logout,
@@ -2806,6 +2811,12 @@ class MainWindow(QMainWindow):
         self.manage_top_plates.reload_data()
         self.manage_top_plates.set_read_only(not app_meta.can_use_admin_box())
         self.stack.setCurrentWidget(self.manage_top_plates)
+
+    def _go_manage_projects(self):
+        self.setWindowTitle("TrippleT – Manage Projects")
+        self.manage_projects.reload_data()
+        self.manage_projects.set_read_only(not app_meta.can_use_admin_box())
+        self.stack.setCurrentWidget(self.manage_projects)
 
     def _go_manage_order_type(self):
         self.setWindowTitle("TrippleT – Manage Order Type")

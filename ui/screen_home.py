@@ -66,6 +66,7 @@ class HomeScreen(QWidget):
                  on_manage_order_type=None,
                  on_manage_product_groups=None,
                  on_manage_material=None,
+                 on_manage_projects=None,
                  on_image_compare=None,
                  on_canvas=None,
                  on_smartchart=None,
@@ -121,6 +122,7 @@ class HomeScreen(QWidget):
         self.on_manage_order_type = on_manage_order_type
         self.on_manage_product_groups = on_manage_product_groups
         self.on_manage_material = on_manage_material
+        self.on_manage_projects = on_manage_projects
         self.on_add_lab_machines = on_add_lab_machines
 
         self._on_logout = on_logout
@@ -405,6 +407,7 @@ class HomeScreen(QWidget):
                 on_manage_order_type=self.on_manage_order_type,
                 on_manage_product_groups=self.on_manage_product_groups,
                 on_manage_material=self.on_manage_material,
+                on_manage_projects=self.on_manage_projects,
                 open_in_new_tab=self._open_in_new_tab,
             )
             sidebar.add_separator()

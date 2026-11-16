@@ -109,6 +109,7 @@ class GenericEditableModel(QAbstractTableModel):
 class ManageOrderTypeScreen(QWidget):
     TABLE = 'tblBestellungstyp'
     _SCREEN_KEY = 'manage_order_types'
+    _KIND = 'order_types'            # db/master_tables.KINDS - subclasses (Projects) only change these
 
     def __init__(self, on_back_home=None, sidebar_callbacks: Optional[dict] = None):
         super().__init__()
@@ -240,7 +241,7 @@ class ManageOrderTypeScreen(QWidget):
         TextFilterProxy)."""
         pref = None
         for i, h in enumerate(headers):
-            if _canon(h) in {'bestellungstyp', 'ordertype', 'name', 'bezeichnung'}:
+            if _canon(h) in set(_mt.KINDS[self._KIND].name_cols):
                 pref = i
                 break
         self._search_cols = [pref] if pref is not None else list(range(len(headers)))
@@ -252,7 +253,7 @@ class ManageOrderTypeScreen(QWidget):
 
     # ---- data layer ----
     def _load_rows(self) -> List[Dict]:
-        return _mt.load_rows(_mt.KINDS['order_types'])
+        return _mt.load_rows(_mt.KINDS[self._KIND])
 
     def _infer_id_col(self, headers: List[str]) -> str:
         for h in headers:
@@ -263,7 +264,7 @@ class ManageOrderTypeScreen(QWidget):
 
     def reload_data(self):
         rows = self._load_rows()
-        headers = list(rows[0].keys()) if rows else ['ID', 'Bestellungstyp']
+        headers = list(rows[0].keys()) if rows else list(_mt.KINDS[self._KIND].fallback_headers)
 
         self._id_col = self._infer_id_col(headers)
 
@@ -331,7 +332,7 @@ class ManageOrderTypeScreen(QWidget):
             self._set_status('No changes to save.')
             return
         try:
-            total = _mt.save_changes(_mt.KINDS['order_types'], dirty_rows)   # db/master_tables.py
+            total = _mt.save_changes(_mt.KINDS[self._KIND], dirty_rows)   # db/master_tables.py
             self._set_status(f'Saved {total} update(s).')
             self.model.clear_dirty()
         except Exception as e:
@@ -342,7 +343,7 @@ class ManageOrderTypeScreen(QWidget):
         if self._read_only:
             return
         try:
-            new_id = _mt.create(_mt.KINDS['order_types'])          # db/master_tables.py
+            new_id = _mt.create(_mt.KINDS[self._KIND])          # db/master_tables.py
 
             self.reload_data()
             if new_id is not None:
@@ -375,7 +376,7 @@ class ManageOrderTypeScreen(QWidget):
         if QMessageBox.question(self, 'Confirm Delete', f'Delete {len(ids)} row(s)?') != QMessageBox.Yes:
             return
         try:
-            _mt.delete(_mt.KINDS['order_types'], ids)
+            _mt.delete(_mt.KINDS[self._KIND], ids)
             self.reload_data()
             self._set_status(f'Deleted {len(ids)} row(s).')
         except Exception as e:

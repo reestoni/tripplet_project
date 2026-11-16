@@ -38,7 +38,27 @@ KINDS: Dict[str, Kind] = {
                      synthetic=("UsedInYarn",), fallback_headers=("ID", "Material")),
     "top_plates": Kind("top_plates", "tblTopPlates", "top_plates", "manage_top_plates", ("name",),
                        synthetic=("has_files", "__has_files__"), hidden=("GlobalID",)),
+    # projects (2026-11-16, both apps): number + name shown in Experiment Requests and Create Experiment
+    "projects": Kind("projects", "tblProject", "projects", "manage_projects", ("projectname", "name"),
+                     synthetic=("UsedBy",), fallback_headers=("ID", "ProjectNumber", "ProjectName")),
 }
+
+
+class InUse(ValueError):
+    """Delete refused: rows are still referenced (projects: experiments / experiment requests)."""
+
+    def __init__(self, message: str, experiments: int, requests: int):
+        super().__init__(message)
+        self.experiments = experiments
+        self.requests = requests
+
+
+class NumberTaken(ValueError):
+    """Save refused: the project number exists already in another row."""
+
+    def __init__(self, number: Any):
+        super().__init__(f"Project number {number} exists already.")
+        self.number = number
 ID_COL = "ID"
 
 
@@ -67,7 +87,52 @@ def load_rows(kind: Kind) -> List[Dict[str, Any]]:
                              "LEFT JOIN tblTopPlateFile f ON f.TopPlateID = p.ID GROUP BY p.ID", [])
         except Exception:      # tblTopPlateFile missing
             return fetch_all("SELECT * FROM [tblTopPlates]", [])
+    if kind.key == "projects":
+        # UsedBy: shown only - how many experiments + experiment requests point to the project
+        return fetch_all("SELECT p.*, (" + _project_use_sql("p.ID") + ") AS UsedBy FROM tblProject p", [])
     return fetch_all(f"SELECT * FROM [{kind.table}]", [])
+
+
+def _project_use_sql(id_expr: str) -> str:
+    parts = []
+    for table in ("tblExperimente", "tblExperimentRequests"):
+        if _has_column(table, "Projekt"):
+            parts.append(f"(SELECT COUNT(*) FROM {table} WHERE Projekt = {id_expr})")
+    return " + ".join(parts) or "0"
+
+
+def _has_column(table: str, column: str) -> bool:
+    try:
+        return bool(fetch_all("SELECT 1 AS x FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                              "AND LOWER(TABLE_NAME) = LOWER('" + table + "') AND COLUMN_NAME = '" + column + "'", []))
+    except Exception:
+        return False
+
+
+def project_usage(ids: List[Any]) -> Tuple[int, int]:
+    """(experiments, experiment requests) that point to one of the projects."""
+    if not ids:
+        return 0, 0
+    marks = ",".join(["?"] * len(ids))
+    out = []
+    for table in ("tblExperimente", "tblExperimentRequests"):
+        if not _has_column(table, "Projekt"):
+            out.append(0)
+            continue
+        rows = fetch_all(f"SELECT COUNT(*) AS n FROM {table} WHERE Projekt IN ({marks})", list(ids))
+        out.append(int(list(rows[0].values())[0] or 0) if rows else 0)
+    return out[0], out[1]
+
+
+def check_project_numbers(rows: List[Dict[str, Any]]) -> None:
+    """Raises NumberTaken when a saved ProjectNumber is already used by another project."""
+    for r in rows:
+        num = r.get("ProjectNumber")
+        if num in (None, ""):
+            continue
+        hit = fetch_all("SELECT ID FROM tblProject WHERE ProjectNumber = ? AND ID <> ?", [num, r.get(ID_COL)])
+        if hit:
+            raise NumberTaken(num)
 
 
 def real_columns(kind: Kind) -> List[Tuple[str, str]]:
@@ -102,6 +167,8 @@ def save_changes(kind: Kind, rows: List[Dict[str, Any]]) -> int:
         cols = [c for c in r if c != ID_COL and _canon(c) not in skip]
         if not cols:
             continue
+        if kind.key == "projects":
+            check_project_numbers([r])
         set_sql = ", ".join(f"[{c}] = ?" for c in cols)
         total += execute(f"UPDATE [{kind.table}] SET {set_sql} WHERE [{ID_COL}] = ?", [r[c] for c in cols] + [r[ID_COL]]) or 0
     return total
@@ -136,6 +203,10 @@ def create(kind: Kind, data: Optional[Dict[str, Any]] = None) -> int:
 def delete(kind: Kind, ids: List[Any]) -> int:
     if not ids:
         return 0
+    if kind.key == "projects":
+        exps, reqs = project_usage(ids)
+        if exps or reqs:
+            raise InUse(f"Still used by {exps} experiment(s) and {reqs} experiment request(s).", exps, reqs)
     return execute(f"DELETE FROM [{kind.table}] WHERE [{ID_COL}] IN ({','.join(['?'] * len(ids))})", list(ids)) or 0
 
 

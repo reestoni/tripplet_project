@@ -85,6 +85,7 @@ FEATURES: List[Feature] = [
     Feature("order_type", "Order Type", "Admin", 1),
     Feature("product_groups", "Product Groups", "Admin", 1),
     Feature("material", "Material", "Admin", 1),
+    Feature("projects", "Projects", "Admin", 1),
 ]
 BY_KEY: Dict[str, Feature] = {f.key: f for f in FEATURES}
 # landing screen after login when Backlog is blocked: the first allowed of these
@@ -111,7 +112,7 @@ GUARDED_METHODS = {
     "_go_label_generator": "label_generator", "_go_tdms_inspector": "tdms_inspector",
     "_go_add_jet": "manage_jets", "_go_add_top_plate": "top_plates", "_go_add_yarn": "manage_yarn",
     "_go_manage_order_type": "order_type", "_go_manage_product_groups": "product_groups",
-    "_go_manage_material": "material",
+    "_go_manage_material": "material", "_go_manage_projects": "projects",
 }
 # _go_create_experiment(mode): edit/copy of an existing experiment are not switched
 CREATE_MODE_FEATURE = {"create": "new_experiment", "legacy": "new_experiment", "addseries": "add_series",

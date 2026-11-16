@@ -221,7 +221,7 @@ class AllExperimentsScreen(QWidget):
                  on_requirement_hub=None, on_smartchart=None, on_yarn_stock=None, on_label_generator=None,
                  on_tdms_inspector=None,
                  on_add_jet=None, on_add_top_plate=None, on_add_yarn=None,
-                 on_manage_order_type=None, on_manage_product_groups=None, on_manage_material=None,
+                 on_manage_order_type=None, on_manage_product_groups=None, on_manage_material=None, on_manage_projects=None,
                  on_add_user=None, on_usage_stats=None, on_offline_sync=None,
                  on_lab_assistant=None,
                  # Log-Out-Callback für die Sidebar-Account-Gruppe (Ersatz für
@@ -272,6 +272,7 @@ class AllExperimentsScreen(QWidget):
             on_manage_order_type=on_manage_order_type,
             on_manage_product_groups=on_manage_product_groups,
             on_manage_material=on_manage_material,
+            on_manage_projects=on_manage_projects,
             on_add_user=on_add_user,
             on_usage_stats=on_usage_stats,
             on_offline_sync=on_offline_sync,

@@ -495,6 +495,7 @@ def build_admin_group(
     on_manage_order_type,
     on_manage_product_groups,
     on_manage_material,
+    on_manage_projects=None,
     open_in_new_tab=None,
 ):
     """Fügt die Admin-Sektion (Jets-, Yarn-, Material-Verwaltung usw.) in die Sidebar ein."""
@@ -522,6 +523,10 @@ def build_admin_group(
     for b, key in ((btn_order_type, "order_type"), (btn_product_groups, "product_groups"),
                    (btn_material, "material")):
         _add_if(sidebar, b, key)
+    if on_manage_projects is not None:
+        btn_projects = green_btn("Projects", on_manage_projects, tab_capable=True, open_in_new_tab=open_in_new_tab)
+        offline_gated_buttons.append(btn_projects)
+        _add_if(sidebar, btn_projects, "projects")
 
 
 def build_superuser_group(
@@ -966,6 +971,7 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
             on_manage_order_type=cb.get("on_manage_order_type"),
             on_manage_product_groups=cb.get("on_manage_product_groups"),
             on_manage_material=cb.get("on_manage_material"),
+            on_manage_projects=cb.get("on_manage_projects"),
             open_in_new_tab=open_in_new_tab,
         )
         sidebar.add_separator()
