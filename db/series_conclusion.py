@@ -337,3 +337,78 @@ def for_request(request_id: int) -> List[Dict[str, Any]]:
              "recommendation_text": str(r.get("RecommendationText") or "")}
             for r in rows if has_content({"outcome": r.get("Outcome"), "summary": r.get("Summary"),
                                           "findings": r.get("Findings"), "recommendation": r.get("Recommendation")})]
+
+
+REPORT_MAX_SERIES = 20
+
+
+def for_report(series_ids: Iterable[int]) -> List[Dict[str, Any]]:
+    """Conclusion block of the series Report (both apps, page + PDF): one entry per series in the given
+    order - name, outcome (label + colour), goal (own goal or request title), summary, best trials as
+    labels (V3 …), findings, recommendation, last change. Series without a conclusion come with
+    exists=False (the page says "no conclusion yet")."""
+    from db.connection import fetch_all
+    ids: List[int] = []
+    for x in series_ids or []:
+        try:
+            i = int(x)
+        except (TypeError, ValueError):
+            continue
+        if i > 0 and i not in ids:
+            ids.append(i)
+    ids = ids[:REPORT_MAX_SERIES]
+    if not ids:
+        return []
+    ph = ",".join("?" for _ in ids)
+    names = {int(r["ID"]): (f"{r['eid']}.{r['SeriesName']}" if r.get("eid") else str(r.get("SeriesName") or ""))
+             for r in fetch_all("SELECT ts.ID, ts.SeriesName, e.[Experiment ID] AS eid FROM tblTrialSeries ts "
+                                f"LEFT JOIN tblExperimente e ON e.ID = ts.ExperimentID WHERE ts.ID IN ({ph})", ids)}
+    out: List[Dict[str, Any]] = []
+    for sid in ids:
+        if sid not in names:
+            continue
+        c = get(sid)
+        labels: List[str] = []
+        if c["best_trials"]:
+            tp = ",".join("?" for _ in c["best_trials"])
+            by_id = {int(r["ID"]): r for r in fetch_all(
+                f"SELECT ID, Versuchsnummer FROM tblTrial WHERE ID IN ({tp})", c["best_trials"])}
+            labels = [f"V{by_id[t]['Versuchsnummer']}" for t in c["best_trials"] if t in by_id]
+        req = c.get("request") or {}
+        when = c.get("updated_at") or c.get("created_at")
+        out.append({
+            "series_id": sid, "name": names[sid], "exists": bool(c["exists"] and has_content(c)),
+            "outcome": c["outcome"], "outcome_label": OUTCOME_LABELS.get(c["outcome"] or "", ""),
+            "colour": OUTCOME_COLOURS.get(c["outcome"] or "", "#8a94a0"),
+            "goal": (req.get("title") or "") if req else c["goal"], "goal_from_request": bool(req),
+            "summary": c["summary"], "best": labels, "findings": c["findings"],
+            "recommendation": c["recommendation"],
+            "recommendation_label": RECOMMENDATION_LABELS.get(c["recommendation"] or "", ""),
+            "recommendation_text": c["recommendation_text"],
+            "by": c.get("updated_by") or c.get("created_by") or "",
+            "when": str(when)[:16] if when else "",
+        })
+    return out
+
+
+def report_text(entry: Dict[str, Any]) -> str:
+    """Plain text of one conclusion for the report PDF (the PDF escapes it)."""
+    if not entry.get("exists"):
+        return "No conclusion yet."
+    lines = []
+    if entry.get("goal"):
+        lines.append(("Goal (request): " if entry.get("goal_from_request") else "Goal: ") + entry["goal"])
+    if entry.get("outcome_label"):
+        lines.append("Outcome: " + entry["outcome_label"])
+    if entry.get("summary"):
+        lines.append("Summary: " + entry["summary"])
+    if entry.get("best"):
+        lines.append("Best trials: " + ", ".join(entry["best"]))
+    if entry.get("findings"):
+        lines.append("Findings: " + entry["findings"])
+    if entry.get("recommendation_label") or entry.get("recommendation_text"):
+        lines.append("Recommendation: " + " – ".join(x for x in (entry.get("recommendation_label"),
+                                                                 entry.get("recommendation_text")) if x))
+    if entry.get("by"):
+        lines.append(f"({entry['by']}, {entry.get('when') or ''})".replace(", )", ")"))
+    return "\n".join(lines)

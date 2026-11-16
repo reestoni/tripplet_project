@@ -356,6 +356,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <button id="btn-add-image" class="btn-toolbar">🖼 + Image</button>
   <div class="tb-sep"></div>
   <button id="btn-global-note" class="btn-toolbar" title="Toggle global report note">📝 Note</button>
+  <button id="btn-conclusion" class="btn-toolbar" title="Show the conclusion of the series (tab Conclusion in Show Experiment) - also in the PDF">✅ Conclusion</button>
   <button id="btn-templates" class="btn-toolbar" title="Layout Templates">📋 Templates</button>
   <button id="btn-save-report" class="btn-toolbar" title="Save Report">💾 Save</button>
   <button id="btn-open-report" class="btn-toolbar" title="Open Report">📂 Open</button>
@@ -373,6 +374,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
   <!-- Charts wrapper (right side of main-layout) -->
   <div id="charts-wrapper" style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative;">
+    <div id="conclusion-bar" style="display:none;margin-bottom:10px;background:#f6fbf7;border:1px solid #b9dcc2;border-radius:6px;padding:10px 14px;flex-direction:column;gap:8px;"></div>
     <div id="global-note-bar" style="display:none;margin-bottom:10px;background:#fffef5;border:1px solid #e0d88a;border-radius:6px;padding:10px 14px;flex-direction:column;gap:6px;">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:11px;font-weight:700;color:#7a6000;">📝 Report Note</span>
@@ -1993,7 +1995,49 @@ function refreshAllCharts(){
 }
 
 // ── Series pills ──────────────────────────────────────────────────────────────
+// ── Conclusion block (db/series_conclusion.for_report, both apps) ─────────────
+var _showConclusion=false, _conclusions=[], _conclusionsReady=true;
+function _cEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _conclusionPks(){return SERIES_REGISTRY.map(function(s){return s.pk;}).filter(function(pk){return pk>0;});}
+function refreshConclusions(){
+  if(!_showConclusion)return;
+  if(typeof _bridge!=='undefined'&&_bridge&&_bridge.loadConclusions)_bridge.loadConclusions(JSON.stringify(_conclusionPks()));
+}
+function receiveConclusions(list,ready){_conclusions=list||[];_conclusionsReady=ready!==false;renderConclusions();}
+function setShowConclusion(on){
+  _showConclusion=!!on;
+  var bar=document.getElementById('conclusion-bar'),btn=document.getElementById('btn-conclusion');
+  if(bar)bar.style.display=_showConclusion?'flex':'none';
+  if(btn)btn.classList.toggle('active',_showConclusion);
+  if(_showConclusion){if(bar)bar.innerHTML='<span style="font-size:12px;color:#888">Loading conclusion…</span>';refreshConclusions();}
+}
+function renderConclusions(){
+  var bar=document.getElementById('conclusion-bar');if(!bar)return;
+  var h='<div style="display:flex;align-items:center;gap:8px"><b style="font-size:13px;color:#1F7A3A">✅ Conclusion</b>'
+    +'<span style="font-size:11px;color:#888">from the tab Conclusion in Show Experiment</span>'
+    +'<button id="btn-hide-conclusion" style="margin-left:auto;font-size:11px;padding:1px 8px;border:1px solid #b9dcc2;border-radius:3px;background:none;cursor:pointer;color:#aaa;">✕</button></div>';
+  if(!_conclusionsReady){h+='<div style="font-size:12px;color:#888">Conclusions are not available on this database yet.</div>';}
+  else if(!_conclusions.length){h+='<div style="font-size:12px;color:#888">No series.</div>';}
+  _conclusions.forEach(function(c){
+    var multi=_conclusions.length>1;
+    h+='<div style="border-left:4px solid '+_cEsc(c.colour)+';padding:2px 0 2px 10px;font-size:12px;line-height:1.5;color:#333">';
+    if(multi)h+='<div style="font-weight:600;color:#1C2321">'+_cEsc(c.name)+'</div>';
+    if(!c.exists){h+='<div style="color:#888;font-style:italic">No conclusion yet.</div></div>';return;}
+    if(c.outcome_label)h+='<div><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+_cEsc(c.colour)+';margin-right:5px"></span><b>'+_cEsc(c.outcome_label)+'</b>'+(c.summary?' – '+_cEsc(c.summary):'')+'</div>';
+    else if(c.summary)h+='<div>'+_cEsc(c.summary)+'</div>';
+    if(c.goal)h+='<div><span style="color:#5A6460">'+(c.goal_from_request?'Goal (request):':'Goal:')+'</span> '+_cEsc(c.goal)+'</div>';
+    if(c.best&&c.best.length)h+='<div><span style="color:#5A6460">Best trials:</span> '+_cEsc(c.best.join(', '))+'</div>';
+    if(c.findings)h+='<div style="white-space:pre-wrap"><span style="color:#5A6460">Findings:</span> '+_cEsc(c.findings)+'</div>';
+    if(c.recommendation_label||c.recommendation_text)h+='<div><span style="color:#5A6460">Recommendation:</span> <b>'+_cEsc(c.recommendation_label)+'</b>'+(c.recommendation_text?' – '+_cEsc(c.recommendation_text):'')+'</div>';
+    if(c.by)h+='<div style="font-size:11px;color:#999">'+_cEsc(c.by)+(c.when?', '+_cEsc(c.when):'')+'</div>';
+    h+='</div>';
+  });
+  bar.innerHTML=h;
+  var x=document.getElementById('btn-hide-conclusion');if(x)x.addEventListener('click',function(){setShowConclusion(false);});
+}
+
 function renderSeriesPills(){
+  refreshConclusions();
   var container=document.getElementById('series-list');container.innerHTML='';
   SERIES_REGISTRY.forEach(function(s,idx){
     var pill=document.createElement('div');pill.className='series-pill';
@@ -3215,6 +3259,7 @@ function exportPdf(){
       reportId:        _currentReportId,
       sourceType:      'Trial Series',
       globalNote:      (document.getElementById('global-note-text').value||'').trim(),
+      conclusionSeries: _showConclusion ? _conclusionPks() : [],
       showInfobox:     infoboxSetting !== 'none',
       infoboxPosition: infoboxSetting,
       infobox: (function(){
@@ -3557,6 +3602,7 @@ function init(){
     if(_bridge) _bridge.addImage(String(total-1), 'full');
   });
 
+  document.getElementById('btn-conclusion').addEventListener('click',function(){setShowConclusion(!_showConclusion);});
   document.getElementById('btn-global-note').addEventListener('click',function(){
     var bar=document.getElementById('global-note-bar');
     var visible=bar.style.display==='flex';
@@ -3634,6 +3680,7 @@ function getCurrentReportData() {
     showMinMax: showMinMax,
     series:     seriesState,
     chartCount: total,
+    showConclusion: _showConclusion,
   };
 
   return {id:              _currentReportId,
@@ -3843,6 +3890,7 @@ function receiveReport(report){
   // Restore from blocks
   var blocks = report.blocks || [];
   var qc = report.queryConfig || {};
+  setShowConclusion(!!qc.showConclusion);
 
   // Chart count = total blocks
   var total = blocks.length || (qc.chartCount || 9);

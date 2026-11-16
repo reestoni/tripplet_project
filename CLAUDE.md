@@ -39,6 +39,7 @@ auf den Fits von `ui/dty_whatif.py`, nie extrapoliert. Screen `ui/screen_jet_adv
 `tools/series_conclusion_migration.py`, auf dev_local, dev und prod angelegt 2026-11-16). Reiter "Conclusion"
 (`ui/widgets/conclusion_tab.py`), Backlog-Karte (Punkt / gestrichelter Ring bei Done ohne Fazit), All Experiments Spalten +
 Filter, Quick Search Feld "Conclusion", Request-Popup, Hinweis beim Archivieren, Glocke `series_conclusion` an den Request-Ersteller.
+Report: Knopf "✅ Conclusion" (Slot `loadConclusions` -> `series_conclusion.for_report`, im PDF nach "Observations", seit 2026-11-16).
 Details in der Web-`CLAUDE.md`.
 
 **Live-Backlog** (2026-11-14, beide Apps): Backlog lädt sich selbst neu, wenn `series_overview.backlog_fingerprint()` sich ändert

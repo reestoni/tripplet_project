@@ -1280,6 +1280,19 @@ def build_report_pdf(payload: dict, now: Optional[datetime.datetime] = None) -> 
         ))
         story.append(Spacer(1, 4*mm))
 
+    # Conclusion of the series (button "✅ Conclusion" on the page) - read fresh from the database,
+    # the page only says which series
+    if payload.get("conclusionSeries"):
+        try:
+            from db import series_conclusion as _sc
+            if _sc.table_ready():
+                for _c in _sc.for_report(payload.get("conclusionSeries") or []):
+                    _title = f"Conclusion – {_c['name']}" + (f" ({_c['outcome_label']})" if _c.get("outcome_label") else "")
+                    story.append(_note_block(_title, _sc.report_text(_c), s_h2, s_note, HEB_NAVY))
+                    story.append(Spacer(1, 3*mm))
+        except Exception as _e:
+            logger.error("PDF conclusion: %s", _e)
+
     # ── CHART pages ───────────────────────────────────────────────
     chart_w   = PW - ml - mr
     content_h = PH - mt - mb - 1.2*cm
@@ -1413,6 +1426,19 @@ def _slot_runVisualQuery(series_pks_json, group_by, filters_json, adv_filters_js
     return "receiveQueryResult", [rows, len(rows)]
 
 
+def _slot_loadConclusions(series_pks_json, *, user, series_pk):
+    """Conclusion block (button "✅ Conclusion"): the conclusions of the shown series (db/series_conclusion)."""
+    try:
+        from db import series_conclusion as sc
+        if not sc.table_ready():
+            return "receiveConclusions", [[], False]
+        pks = json.loads(series_pks_json or "[]") or []
+        return "receiveConclusions", [sc.for_report(pks), True]
+    except Exception as e:
+        logger.error("loadConclusions: %s", e)
+        return "receiveConclusions", [[], False]
+
+
 def _slot_saveReport(report_json, *, user, series_pk):
     try:
         r = save_report(json.loads(report_json), user)
@@ -1513,6 +1539,7 @@ SLOTS = {
     "loadFreeField":           (_slot_loadFreeField,           "receiveFreeFieldData",       "read"),
     "getLayoutTemplates":      (_slot_getLayoutTemplates,      "receiveLayoutTemplates",     "read"),
     "getPdfTemplates":         (_slot_getPdfTemplates,         "receivePdfTemplates",        "read"),
+    "loadConclusions":         (_slot_loadConclusions,         "receiveConclusions",         "read"),
     "saveReport":              (_slot_saveReport,              "receiveSaveResult",          "write"),
     "deleteReport":            (_slot_deleteReport,            "receiveDeleteResult",        "write"),
     "saveLayoutTemplate":      (_slot_saveLayoutTemplate,      "receiveLayoutTemplateSaved", "write"),

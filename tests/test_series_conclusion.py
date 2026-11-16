@@ -100,3 +100,37 @@ def test_desktop_tab(series, monkeypatch):
     assert tab.is_dirty() and tab.current()["outcome"] == sc.OUTCOMES[1]
     assert tab.save() and not tab.is_dirty() and tab.has_conclusion()
     assert sc.get(sid)["best_trials"] == [trials[0]]
+
+
+def test_report_block_slot_and_pdf(series):
+    """Conclusion block of the series Report: for_report/report_text, the page slot, the PDF section."""
+    import json
+    from db import report_service as rs
+    sid, _requester, actor = series
+    trial = fetch_all("SELECT ID, Versuchsnummer FROM tblTrial WHERE TrialSeriesID = ? ORDER BY ID LIMIT 1", [sid])[0]
+    other = fetch_all("SELECT ts.ID FROM tblTrialSeries ts LEFT JOIN tblSeriesConclusion c ON c.TrialSeriesID = ts.ID "
+                      "WHERE c.ID IS NULL AND ts.ID <> ? ORDER BY ts.ID DESC LIMIT 1", [sid])[0]["ID"]
+    sc.save(sid, {"outcome": "achieved", "summary": "Qqrep <b>fine</b>", "best_trials": [trial["ID"]],
+                  "findings": "Line1\nLine2", "recommendation": "release", "recommendation_text": "go"},
+            {"id": actor, "access_level": 2})
+    rep = sc.for_report([sid, other, sid, "x", -1, 999999999])
+    assert [r["series_id"] for r in rep] == [sid, int(other)]           # order kept, junk/duplicates dropped
+    a, b = rep
+    assert a["exists"] and a["outcome_label"] == "Achieved" and a["best"] == [f"V{trial['Versuchsnummer']}"]
+    assert a["goal_from_request"] and a["recommendation_label"] == "Release" and a["name"]
+    assert not b["exists"] and sc.report_text(b) == "No conclusion yet."
+    txt = sc.report_text(a)
+    assert "Outcome: Achieved" in txt and "Best trials: V" in txt and "Recommendation: Release – go" in txt
+
+    recv, args = rs.handle("loadConclusions", [json.dumps([sid])], user={"id": actor}, series_pk=sid)
+    assert recv == "receiveConclusions" and args[1] is True and args[0][0]["summary"] == "Qqrep <b>fine</b>"
+
+    pdf = rs.build_report_pdf({"reportTitle": "t", "author": "a", "sourceType": "Trial Series", "globalNote": "",
+                               "conclusionSeries": [sid], "showInfobox": False, "infobox": {}, "charts": []})
+    assert pdf[:4] == b"%PDF"
+
+
+def test_report_page_has_conclusion_button():
+    from ui.report_html_template import _HTML_TEMPLATE
+    assert 'id="btn-conclusion"' in _HTML_TEMPLATE and "function receiveConclusions" in _HTML_TEMPLATE
+    assert "showConclusion: _showConclusion" in _HTML_TEMPLATE and "conclusionSeries:" in _HTML_TEMPLATE

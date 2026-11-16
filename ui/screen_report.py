@@ -101,6 +101,11 @@ class _ReportBridge(QObject):
         self._slot("loadReportList")
 
     @Slot(str)
+    def loadConclusions(self, series_pks_json: str) -> None:
+        """Conclusion block (db/series_conclusion.for_report)."""
+        self._slot("loadConclusions", series_pks_json)
+
+    @Slot(str)
     def loadReport(self, report_id_str: str) -> None:
         self._slot("loadReport", report_id_str)
 

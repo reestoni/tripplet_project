@@ -36,6 +36,9 @@ RELEASES = [
             # ═══════════════════════════════ EN ═══════════════════════════════
             "en": [
                 ("h", "Tools"),
+                ("feature", 'Jet Advisor: which jet for my targets?',
+                 'New under <b>Tools</b>, for DTY: give your targets (points/m, CV, stability 0.3 to 1.3, each min and/or max) and the yarn - an existing one or material, final titer and filaments. You get a ranking of the jets with the recommended <b>air pressure</b>, <b>overfeed</b> and <b>speed</b>, the window around it, the expected lab values and the chance that a new run reaches all targets. Filter by jet type (e.g. only <b>Standard</b>), maker, group or the titer range of the jet, limit the machine settings (e.g. a fixed speed) and prefer a safety margin or less air. It only uses our own trials of this yarn or similar ones and never goes beyond what we measured. Click a jet to see the trial series behind it or open it in the Process Playground.',
+                 'Sidebar → Tools → <b>Jet Advisor</b>', None),
                 ("feature", "Yarn Count Converter",
                  "New under <b>Tools</b>: convert yarn counts. Type a value and pick its unit - <b>dtex</b> and "
                  "<b>den</b> are shown large, plus tex, ktex, mtex, Nm, Ne, NeK, NeL, Run and grain/yd. Click a "
@@ -59,6 +62,9 @@ RELEASES = [
                  "start from that trial. F5 / <b>Reload</b> loads the latest trials.",
                  "Sidebar → Tools → <b>Process Playground</b>", "wn_process_playground.svg"),
                 ("h", "Show Experiment"),
+                ("feature", 'Conclusion per trial series',
+                 'New tab <b>Conclusion</b> in Show Experiment: what came out of the series - the goal (from the experiment request, or your own goal if there is none), the outcome (achieved, partly, not achieved, open), a short summary, the best trials, findings and a recommendation (follow-up trial, release, discard). Not tied to "Done" - write it whenever the analysis is finished. The requester gets a bell notification. Backlog cards show the outcome as a dot (dashed ring = Done without conclusion), All Experiments has the columns Outcome and Conclusion with a filter, Quick Search a field Conclusion, the request popup the results of its series, and archiving without a conclusion asks first. In the <b>Report</b> the button <b>✅ Conclusion</b> shows it above the charts (for compared series too) and puts it into the PDF.',
+                 'Show Experiment → tab <b>Conclusion</b> · Report → <b>✅ Conclusion</b>', None),
                 ("feature", "DTY: choose the process and see the machine path",
                  "On DTY machines, Machine Data has a new row <b>DTY Process</b>: Standard, Elastane or one of the "
                  "cotton-like variants. Existing trials are already filled in (Elastane where an elastane yarn runs, "
@@ -255,6 +261,9 @@ RELEASES = [
             # ═══════════════════════════════ DE ═══════════════════════════════
             "de": [
                 ("h", "Tools"),
+                ("feature", 'Jet Advisor: welche Düse für meine Ziele?',
+                 'Neu unter <b>Tools</b>, für DTY: Ziele eingeben (Punkte/m, CV, Stabilität 0.3 bis 1.3, je min und/oder max) und das Garn - ein vorhandenes oder Material, Endtiter und Filamente. Du bekommst eine Rangliste der Düsen mit empfohlenem <b>Luftdruck</b>, <b>Overfeed</b> und <b>Geschwindigkeit</b>, dem Fenster darum, den erwarteten Laborwerten und der Chance, dass ein neuer Lauf alle Ziele erreicht. Filtern nach Düsentyp (z. B. nur <b>Standard</b>), Hersteller, Gruppe oder Titerbereich der Düse, Maschineneinstellungen begrenzen (z. B. feste Geschwindigkeit) und Sicherheitsabstand oder wenig Luft bevorzugen. Nur aus unseren eigenen Versuchen mit diesem oder ähnlichen Garnen, nie über das Gemessene hinaus. Eine Düse anklicken zeigt die Versuchsserien dahinter oder öffnet sie in der Process Playground.',
+                 'Seitenleiste → Tools → <b>Jet Advisor</b>', None),
                 ("feature", "Yarn Count Converter: Garnfeinheiten umrechnen",
                  "Neu unter <b>Tools</b>: Garnfeinheiten umrechnen. Wert eingeben und Einheit wählen - <b>dtex</b> und "
                  "<b>den</b> stehen gross, dazu tex, ktex, mtex, Nm, Ne, NeK, NeL, Run und grain/yd. Ein Klick auf ein "
@@ -279,6 +288,9 @@ RELEASES = [
                  "Process Playground…</i> startet bei diesem Versuch. F5 / <b>Reload</b> lädt die neuesten Versuche.",
                  "Sidebar → Tools → <b>Process Playground</b>", "wn_process_playground.svg"),
                 ("h", "Show Experiment"),
+                ("feature", 'Fazit pro Versuchsserie',
+                 'Neuer Reiter <b>Conclusion</b> in Show Experiment: was bei der Serie herauskam - das Ziel (aus der Experiment-Anfrage oder ein eigenes Ziel, wenn es keine gibt), das Ergebnis (erreicht, teilweise, nicht erreicht, offen), ein Kurzfazit, die besten Versuche, Erkenntnisse und eine Empfehlung (Folgeversuch, freigeben, verwerfen). Nicht an "Done" gebunden - schreib es, sobald die Auswertung fertig ist. Wer die Anfrage gestellt hat, bekommt eine Glocken-Meldung. Backlog-Karten zeigen das Ergebnis als Punkt (gestrichelter Ring = Done ohne Fazit), All Experiments hat die Spalten Outcome und Conclusion mit Filter, die Schnellsuche ein Feld Conclusion, das Request-Popup die Ergebnisse seiner Serien, und Archivieren ohne Fazit fragt zuerst nach. Im <b>Report</b> zeigt der Knopf <b>✅ Conclusion</b> es über den Diagrammen (auch für verglichene Serien) und nimmt es ins PDF.',
+                 'Show Experiment → Reiter <b>Conclusion</b> · Report → <b>✅ Conclusion</b>', None),
                 ("feature", "DTY: Verfahren wählen und den Maschinenweg sehen",
                  "Bei DTY-Maschinen hat Machine Data eine neue Zeile <b>DTY Process</b>: Standard, Elastane oder eine "
                  "der Cotton-like-Varianten. Bestehende Versuche sind schon eingetragen (Elastane, wo ein Elastan-Garn "
@@ -486,6 +498,9 @@ RELEASES = [
             # ═══════════════════════════════ ES ═══════════════════════════════
             "es": [
                 ("h", "Tools"),
+                ("feature", 'Jet Advisor: ¿qué tobera para mis objetivos?',
+                 'Nuevo en <b>Tools</b>, para DTY: indica tus objetivos (puntos/m, CV, estabilidad 0.3 a 1.3, cada uno mín. y/o máx.) y el hilo - uno existente o material, título final y filamentos. Obtienes una clasificación de las toberas con la <b>presión de aire</b>, la <b>sobrealimentación</b> y la <b>velocidad</b> recomendadas, la ventana alrededor, los valores de laboratorio esperados y la probabilidad de que una nueva prueba cumpla todos los objetivos. Filtra por tipo de tobera (p. ej. solo <b>Standard</b>), fabricante, grupo o rango de título de la tobera, limita los ajustes de máquina (p. ej. velocidad fija) y prefiere margen de seguridad o menos aire. Solo usa nuestros propios ensayos con este hilo o hilos similares y nunca va más allá de lo medido. Haz clic en una tobera para ver las series de ensayos o abrirla en el Process Playground.',
+                 'Barra lateral → Tools → <b>Jet Advisor</b>', None),
                 ("feature", "Yarn Count Converter: convertir títulos de hilo",
                  "Nuevo en <b>Tools</b>: convertir títulos de hilo. Escriba un valor y elija la unidad - <b>dtex</b> y "
                  "<b>den</b> aparecen en grande, además tex, ktex, mtex, Nm, Ne, NeK, NeL, Run y grain/yd. Un clic en "
@@ -510,6 +525,9 @@ RELEASES = [
                  "F5 / <b>Reload</b> carga los ensayos más recientes.",
                  "Sidebar → Tools → <b>Process Playground</b>", "wn_process_playground.svg"),
                 ("h", "Show Experiment"),
+                ("feature", 'Conclusión por serie de ensayos',
+                 'Nueva pestaña <b>Conclusion</b> en Show Experiment: qué resultó de la serie - el objetivo (de la solicitud de experimento, o uno propio si no hay), el resultado (logrado, parcialmente, no logrado, abierto), un resumen, los mejores ensayos, hallazgos y una recomendación (ensayo de seguimiento, liberar, descartar). No ligado a "Done" - escríbela cuando termine el análisis. Quien hizo la solicitud recibe un aviso en la campana. Las tarjetas del Backlog muestran el resultado como punto (anillo discontinuo = Done sin conclusión), All Experiments tiene las columnas Outcome y Conclusion con filtro, la búsqueda rápida un campo Conclusion, el popup de la solicitud los resultados de sus series, y archivar sin conclusión pregunta antes. En el <b>Report</b> el botón <b>✅ Conclusion</b> la muestra sobre los gráficos (también para series comparadas) y la incluye en el PDF.',
+                 'Show Experiment → pestaña <b>Conclusion</b> · Report → <b>✅ Conclusion</b>', None),
                 ("feature", "DTY: elegir el proceso y ver el recorrido en la máquina",
                  "En las máquinas DTY, Machine Data tiene una fila nueva <b>DTY Process</b>: Standard, Elastane o una "
                  "de las variantes cotton-like. Los ensayos existentes ya están rellenados (Elastane donde corre un "
@@ -719,6 +737,9 @@ RELEASES = [
             # ═══════════════════════════════ ZH ═══════════════════════════════
             "zh": [
                 ("h", "Tools"),
+                ("feature", 'Jet Advisor：哪个喷嘴能达到我的目标？',
+                 '<b>Tools</b> 下新增，适用于 DTY：输入目标（网络点/m、CV、稳定性 0.3 至 1.3，每项可设最小和/或最大值）和纱线——已有纱线，或材料、终纤度和单丝数。你会得到喷嘴排名，包括推荐的<b>气压</b>、<b>超喂</b>和<b>速度</b>、其周围的窗口范围、预期实验室数值，以及新一次运行达到全部目标的概率。可按喷嘴类型（例如仅 <b>Standard</b>）、制造商、组或喷嘴纤度范围筛选，限制机器设置（例如固定速度），并优先考虑安全余量或耗气更少。仅使用我们自己针对该纱线或相似纱线的试验，绝不超出测量范围。单击某个喷嘴可查看其背后的试验系列，或在 Process Playground 中打开。',
+                 '侧边栏 → Tools → <b>Jet Advisor</b>', None),
                 ("feature", "Yarn Count Converter：纱线细度换算",
                  "<b>Tools</b> 下新增：换算纱线细度。输入数值并选择单位——<b>dtex</b> 和 <b>den</b> 以大字显示，"
                  "另外还有 tex、ktex、mtex、Nm、Ne、NeK、NeL、Run 和 grain/yd。单击某个结果即可将其作为新的起始值。"
@@ -737,6 +758,9 @@ RELEASES = [
                  "Process Playground…</i>，即可从该试验开始。F5 / <b>Reload</b> 加载最新的试验。",
                  "侧边栏 → Tools → <b>Process Playground</b>", "wn_process_playground.svg"),
                 ("h", "Show Experiment"),
+                ("feature", '每个试验系列的结论',
+                 'Show Experiment 中新增 <b>Conclusion</b> 选项卡：记录该系列的结果——目标（来自实验申请；没有申请时填写自己的目标）、结果（已达成、部分达成、未达成、待定）、简短摘要、最佳试验、发现以及建议（后续试验、发布、放弃）。不与 "Done" 绑定——分析完成后随时填写。申请人会收到铃铛通知。Backlog 卡片用圆点显示结果（虚线圆环 = Done 但尚无结论），All Experiments 有 Outcome 和 Conclusion 列及筛选，快速搜索有 Conclusion 字段，申请弹窗显示其系列的结果，没有结论就归档时会先询问。在 <b>Report</b> 中，按钮 <b>✅ Conclusion</b> 会在图表上方显示结论（对比系列也会显示），并将其写入 PDF。',
+                 'Show Experiment → 选项卡 <b>Conclusion</b> · Report → <b>✅ Conclusion</b>', None),
                 ("feature", "DTY：选择工艺并查看机器路径",
                  "在 DTY 机器上，Machine Data 新增一行 <b>DTY Process</b>：Standard、Elastane 或某种仿棉（cotton-like）"
                  "变体。现有试验已自动填好（运行氨纶纱线的为 Elastane，其余为 Standard）。预网络喷嘴（LW 0 - LW 1）和第 3 "
