@@ -1817,6 +1817,11 @@ def popup_data(request_id: Any, prefix: str = "") -> Optional[Dict[str, Any]]:
         "images": images.list_images(request_id),
         "history_target_id": history_target,
         "has_versions": has_versions,
+        # header of the web popup (status label, created, denial reason) - 2026-11-16
+        "status_id": data.get("RequestStatus"),
+        "created_at": (data.get("Timestamp").strftime("%Y-%m-%d %H:%M")
+                       if isinstance(data.get("Timestamp"), datetime.datetime) else str(data.get("Timestamp") or "")[:16]),
+        "denial_reason": str(data.get("DenialReason") or ""),
     }
 
 
