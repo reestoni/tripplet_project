@@ -3092,16 +3092,19 @@ class ShowExperimentScreen(QWidget):
         tl.addWidget(self.btn_show_series_pdfs)
 
         # Statimat PDF import (reads attached STATIMAT PDF(s) and writes to DB)
-        self.btn_statimat_import = QPushButton("Statimat import")
+        # one button for Statimat and Itemat PDFs - the kind is recognised per PDF (Nutzerwunsch 2026-11-16)
+        self.btn_statimat_import = QPushButton("PDF import")
         self.btn_statimat_import.setMinimumHeight(30)
-        self.btn_statimat_import.clicked.connect(self._statimat_import)
+        self.btn_statimat_import.setToolTip("Import Statimat and Itemat PDFs attached to this series - "
+                                            "the kind of each PDF is recognised automatically")
+        self.btn_statimat_import.clicked.connect(self._pdf_import)
         tl.addWidget(self.btn_statimat_import)
 
         # Itemat Lab PDF import
+        # kept for the code that enables/disables it, but no longer shown (one "PDF import" button)
         self.btn_itemat_import = QPushButton("Itemat import")
-        self.btn_itemat_import.setMinimumHeight(30)
         self.btn_itemat_import.clicked.connect(self._itemat_import)
-        tl.addWidget(self.btn_itemat_import)
+        self.btn_itemat_import.hide()
 
         # Report-Button (3D-Visualisierung)
         self.btn_report = QPushButton()
@@ -3614,7 +3617,8 @@ class ShowExperimentScreen(QWidget):
                 if not can_write:
                     self.btn_statimat_import.setToolTip("Write access required (AccessLevel > 1)")
                 else:
-                    self.btn_statimat_import.setToolTip("")
+                    self.btn_statimat_import.setToolTip("Import Statimat and Itemat PDFs attached to this series - "
+                                                        "the kind of each PDF is recognised automatically")
 
             if hasattr(self, "btn_itemat_import") and self.btn_itemat_import:
                 self.btn_itemat_import.setEnabled(bool(can_write))
@@ -4371,6 +4375,11 @@ class ShowExperimentScreen(QWidget):
             QMessageBox.critical(self, "Upload Error", str(e))
 
     # ---------- TrialSeries PDFs ----------
+
+    def _pdf_import(self) -> None:
+        """One import for Statimat and Itemat PDFs (ui/screen_show_experiment_pdf_import.pdf_import_impl)."""
+        from ui.screen_show_experiment_pdf_import import pdf_import_impl
+        pdf_import_impl(self)
 
     def _statimat_import(self) -> None:
         """Import STATIMAT PDF(s) attached to this TrialSeries into lab tables.

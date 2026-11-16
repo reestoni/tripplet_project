@@ -228,3 +228,90 @@ def itemat_import_impl(self) -> None:
 
     QMessageBox.information(self, "Itemat import", lab_pdf_import.import_message(
         "Itemat import finished.", "Imported trials", res["imported"], res["skipped"], res["errors"]))
+
+
+def pdf_import_impl(self) -> None:
+    """One "PDF import" for Statimat and Itemat PDFs (Nutzerwunsch 2026-11-16): the list shows the recognised kind
+    of every attached PDF (db/lab_pdf_import.detect_kind), the chosen ones are imported by their kind
+    (lab_pdf_import.import_auto, shared with the web app)."""
+    sid = getattr(self, "_series_pk", None)
+    if sid in (None, ""):
+        QMessageBox.information(self, "PDF import", "No trial series loaded.")
+        return
+    try:
+        attached = self._fetch_series_pdfs(sid)
+    except Exception as e:
+        show_error(self, "PDF import", "The list of PDFs could not be loaded.", e, warning=True)
+        return
+    attached = [r for r in attached if r.get("FullPath")]
+    if not attached:
+        QMessageBox.information(self, "PDF import", "This trial series has no attached PDFs.")
+        return
+    from PySide6.QtWidgets import QApplication
+    QApplication.setOverrideCursor(Qt.WaitCursor)
+    try:
+        kinds = {r["FullPath"]: (lab_pdf_import.detect_kind(r["FullPath"], name=r.get("OriginalFilename") or "")
+                                 if os.path.isfile(r["FullPath"]) else None)
+                 for r in attached}
+    finally:
+        QApplication.restoreOverrideCursor()
+    label = {"statimat": "Statimat", "itemat": "Itemat"}
+    shown = [dict(r, OriginalFilename=f"[{label.get(kinds[r['FullPath']], 'unknown')}]  "
+                                      f"{(r.get('OriginalFilename') or r.get('StoredFilename') or os.path.basename(r['FullPath'])).strip()}")
+             for r in attached]
+    chosen = _pick_attached_pdfs(
+        self, shown, "PDF import",
+        "Select the Statimat and/or Itemat PDFs to import (only PDFs attached to this trial series).\n"
+        "The kind of each PDF is recognised automatically:")
+    if not chosen:
+        return
+
+    progs = {}
+
+    def _start(pdf_idx: int, pdf_path: str) -> bool:
+        prog = QProgressDialog(f"Lese {os.path.basename(pdf_path)}…", "Cancel", 0, len(chosen), self)
+        prog.setWindowTitle("PDF import")
+        prog.setWindowModality(Qt.WindowModal)
+        prog.setMinimumDuration(0)
+        prog.setValue(pdf_idx)
+        QApplication.processEvents()
+        progs[pdf_idx] = prog
+        return not prog.wasCanceled()
+
+    def _end(pdf_idx: int) -> None:
+        prog = progs.pop(pdf_idx, None)
+        if prog is not None:
+            prog.setValue(pdf_idx + 1)
+            prog.close()
+
+    def _progress_for(pdf_path):
+        prog = QProgressDialog(f"Lese {os.path.basename(pdf_path)}…", "Cancel", 0, 100, self)
+        prog.setWindowTitle("PDF import")
+        prog.setWindowModality(Qt.WindowModal)
+        prog.setMinimumDuration(0)
+        prog.setValue(0)
+
+        def _progress(cur, total, _prog=prog):
+            if _prog.wasCanceled():
+                raise InterruptedError("Abgebrochen")
+            _prog.setValue(int(cur / total * 100))
+            QApplication.processEvents()
+
+        def _done(_prog=prog):
+            _prog.setValue(100)
+            _prog.close()
+        return _progress, _done
+
+    res = lab_pdf_import.import_auto(sid, chosen, app_meta.current_user, kinds=kinds,
+                                     on_pdf_start=_start, on_pdf_end=_end, progress_for=_progress_for)
+    try:
+        if res["statimat"] is not None:
+            self._build_titer_tab()
+            self._build_statimat_tab()
+            self._build_statimat_ds_tab()
+        if res["itemat"] is not None:
+            self._build_itemat_tab()
+            self._build_itemat_plus_tab()
+    except Exception:
+        pass
+    QMessageBox.information(self, "PDF import", res["message"])

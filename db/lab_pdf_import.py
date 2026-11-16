@@ -585,3 +585,87 @@ def import_itemat(series_id: Any, pdf_paths: Sequence[str], user: Any = None,
     if stats["imported"] >= 1:
         _track(FEATURE_ITEMAT_IMPORT, user, series_id)
     return {"imported": stats["imported"], "skipped": skipped, "errors": errors}
+
+
+# ====================================================================== one import for both (2026-11-16)
+# Nutzerwunsch: one "PDF import" button in Show Experiment - the kind of every PDF is recognised by itself,
+# Statimat and Itemat PDFs can be imported in one go.
+
+KIND_STATIMAT, KIND_ITEMAT = "statimat", "itemat"
+
+
+def detect_kind(pdf_path: str, pages: int = 1, name: str = "") -> Optional[str]:
+    """"statimat" / "itemat" / None (unknown) from the first page: Statimat reports always carry "STATIMAT" in
+    their text layer (the parser checks the same), Itemat Lab reports are scans without a text layer (or, with an
+    OCR layer, say Itemat / Enka). Any other text = not a lab report we import.
+    PyMuPDF first (~0.1 s per file; pdfplumber needs 4-12 s on the graphics-heavy Statimat reports).
+    name = original file name (the stored one is a hash): a scan WITHOUT text whose name says "Statimat" stays
+    Statimat (the Statimat import then skips it with "unknown device") instead of going to the Itemat OCR."""
+    text: Optional[str] = None
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        try:
+            text = "".join((doc[i].get_text("text") or "") + "\n" for i in range(min(doc.page_count, pages)))
+        finally:
+            doc.close()
+    except Exception:
+        text = None
+    if text is None:                        # PyMuPDF missing or failed -> pdfplumber
+        try:
+            import pdfplumber
+            with pdfplumber.open(pdf_path) as pdf:
+                text = "".join((p.extract_text() or "") + "\n" for p in pdf.pages[:pages])
+        except Exception:
+            return None                      # not readable at all
+    up = text.upper()
+    if "STATIMAT" in up:
+        return KIND_STATIMAT
+    if "ITEMAT" in up or "ENKA" in up:
+        return KIND_ITEMAT
+    if not text.strip():                    # scan without text layer
+        hint = (name or os.path.basename(pdf_path)).upper()
+        return KIND_STATIMAT if "STATIMAT" in hint else KIND_ITEMAT
+    return None
+
+
+def detect_kinds(pdf_paths: Sequence[str], names: Optional[Dict[str, str]] = None) -> Dict[str, Optional[str]]:
+    return {p: detect_kind(p, name=(names or {}).get(p, "")) for p in pdf_paths}
+
+
+def import_auto(series_id: Any, pdf_paths: Sequence[str], user: Any = None,
+                kinds: Optional[Dict[str, Optional[str]]] = None,
+                on_pdf_start: Optional[Callable[[int, str], bool]] = None,
+                on_pdf_end: Optional[Callable[[int], None]] = None,
+                progress_for: Optional[Callable[[str], Any]] = None) -> Dict[str, Any]:
+    """Imports the chosen (attached!) PDFs by their kind: Statimat ones with import_statimat, Itemat ones with
+    import_itemat, unknown ones are listed. Returns {"statimat": result | None, "itemat": result | None,
+    "unknown": [file name], "message": text for the user}. kinds = already detected kinds (else detected here)."""
+    kinds = dict(kinds or {})
+    for p in pdf_paths:
+        if p not in kinds:
+            kinds[p] = detect_kind(p)
+    stat = [p for p in pdf_paths if kinds.get(p) == KIND_STATIMAT]
+    item = [p for p in pdf_paths if kinds.get(p) == KIND_ITEMAT]
+    unknown = [os.path.basename(p) for p in pdf_paths if kinds.get(p) not in (KIND_STATIMAT, KIND_ITEMAT)]
+    out: Dict[str, Any] = {"statimat": None, "itemat": None, "unknown": unknown}
+    parts: List[str] = []
+    if stat:
+        out["statimat"] = r = import_statimat(series_id, stat, user, on_pdf_start=on_pdf_start, on_pdf_end=on_pdf_end)
+        parts.append(import_message(f"Statimat ({len(stat)} PDF)", "Imported spools", r["imported"], r["skipped"],
+                                    r["errors"]))
+    if item:
+        cols = itemat_columns()
+        if cols is None:
+            parts.append("Itemat: the required columns of tblLaborItematLab could not be resolved - not imported.")
+        else:
+            try:
+                out["itemat"] = r = import_itemat(series_id, item, user, cols=cols, progress_for=progress_for)
+                parts.append(import_message(f"Itemat ({len(item)} PDF)", "Imported trials", r["imported"],
+                                            r["skipped"], r["errors"]))
+            except Exception as e:     # DB errors propagate from import_itemat
+                parts.append(f"Itemat: the import failed: {e}")
+    if unknown:
+        parts.append("Not a Statimat or Itemat report (not imported):\n" + "\n".join(unknown[:50]))
+    out["message"] = "\n\n".join(parts) if parts else "Nothing to import."
+    return out
