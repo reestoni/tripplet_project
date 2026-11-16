@@ -36,7 +36,7 @@ auf den Fits von `ui/dty_whatif.py`, nie extrapoliert. Screen `ui/screen_jet_adv
 `dty_whatif.clean_rows`: Punkte/m = 0 = nicht gemessen (betrifft auch die Process Playground). Details in der Web-`CLAUDE.md`.
 
 **Fazit pro Serie** (2026-11-14, beide Apps): `db/series_conclusion.py` + `tblSeriesConclusion` (nur über
-`tools/series_conclusion_migration.py`, dev_local erledigt, dev/prod am Montag 2026-11-16). Reiter "Conclusion"
+`tools/series_conclusion_migration.py`, auf dev_local, dev und prod angelegt 2026-11-16). Reiter "Conclusion"
 (`ui/widgets/conclusion_tab.py`), Backlog-Karte (Punkt / gestrichelter Ring bei Done ohne Fazit), All Experiments Spalten +
 Filter, Quick Search Feld "Conclusion", Request-Popup, Hinweis beim Archivieren, Glocke `series_conclusion` an den Request-Ersteller.
 Details in der Web-`CLAUDE.md`.
@@ -46,7 +46,7 @@ Details in der Web-`CLAUDE.md`.
 (Nutzerentscheid 2026-11-14), nicht im Desktop.
 
 **Canvas-Bretter** (2026-11-14, beide Apps): `db/canvas_boards.py` (Tabelle `tblCanvasBoard` nur über
-`tools/canvas_board_migration.py`; dev_local angelegt, dev/prod am Montag 2026-11-16 zusammen mit den anderen DB-Änderungen, siehe
+`tools/canvas_board_migration.py`; auf dev_local, dev und prod angelegt 2026-11-16, siehe
 tripplet_web/CLAUDE.md "Offene Punkte"). Desktop: Brett-Leiste in `ui/screen_canvas.py` (`board_document`/`load_board` rechnen
 Drehung um die linke obere Ecke in Mittelpunkt/Grösse/Winkel um), Knopf "🖼 Board" in Show Experiment.
 
