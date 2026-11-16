@@ -319,3 +319,13 @@ def retest_flags_map() -> Dict[int, list]:
         return get_open_retest_flags_by_series()
     except Exception:
         return {}
+
+
+def card_matches(query: str, *values) -> bool:
+    """Search field of a Backlog column (both apps, 2026-11-16): every word of the query must appear in one of
+    the values (experiment ID, series name, machine, owner), case-insensitive. Empty query = everything."""
+    words = [w for w in str(query or "").lower().split() if w]
+    if not words:
+        return True
+    hay = " ".join(str(v or "") for v in values).lower()
+    return all(w in hay for w in words)

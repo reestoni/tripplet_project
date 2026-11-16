@@ -2526,10 +2526,25 @@ class BacklogScreen(QWidget):
         status_id = self.status_name_to_id.get(title, 1)
         table = self._create_table(status_id)
 
-        b_l.addWidget(table)
+        # search field per column (Nutzerwunsch 2026-11-16, like Archived) - kept together with the table so it
+        # moves along when the card is expanded
+        box = QWidget()
+        box_l = QVBoxLayout(box)
+        box_l.setContentsMargins(0, 0, 0, 0)
+        box_l.setSpacing(6)
+        search = QLineEdit()
+        search.setPlaceholderText(f"Search {title}…")
+        search.setClearButtonEnabled(True)
+        search.setStyleSheet("font-size:12px;padding:4px 8px;border-radius:6px;")
+        search.textChanged.connect(lambda _t, tb=table: self._apply_card_search(tb))
+        table._search_edit = search
+        box_l.addWidget(search)
+        box_l.addWidget(table, 1)
+
+        b_l.addWidget(box)
         layout.addWidget(body)
 
-        btn_expand.clicked.connect(lambda: self._expand_card(title, table, b_l))
+        btn_expand.clicked.connect(lambda: self._expand_card(title, box, b_l))
 
         return {"card": card, "table": table}
 
@@ -2565,6 +2580,19 @@ class BacklogScreen(QWidget):
         self._expand_source_widget = None
         self._expand_source_layout = None
         self._card_stack.setCurrentIndex(0)
+
+    def _apply_card_search(self, tbl) -> None:
+        """Hide the cards of a column that do not match its search field (series_overview.card_matches)."""
+        edit = getattr(tbl, "_search_edit", None)
+        q = edit.text() if edit is not None else ""
+        from db.series_overview import card_matches
+        for r in range(tbl.rowCount()):
+            it = tbl.item(r, 0)
+            if it is None:
+                continue
+            ok = card_matches(q, it.data(ROLE_EXP_ID), it.data(ROLE_SERIES_NAME), it.data(ROLE_MACHINE),
+                              it.data(ROLE_OWNER))
+            tbl.setRowHidden(r, not ok)
 
     def _create_table(self, status_id: int):
         tbl = BacklogDnDTable(self, status_id)
@@ -2719,6 +2747,7 @@ class BacklogScreen(QWidget):
             tbl.setRowHeight(r_i, 50)
 
         tbl.blockSignals(False)
+        self._apply_card_search(tbl)
 
     # -------------------------------------------------
     # DOPPELKLICK: Experiment öffnen
