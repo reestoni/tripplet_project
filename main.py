@@ -1588,20 +1588,10 @@ class MainWindow(QMainWindow):
                                         QSizePolicy, QWidget, QMessageBox)
         from PySide6.QtCore import Qt
         from db.connection import fetch_all
-        from db import experiment_request_changes as request_changes
+        from db import experiment_requests as _er
 
-        # Archived prior versions (PriorVersionOfID set, see
-        # db/experiment_request_changes.py) are not standalone requests -
-        # without this filter, this list would grow an extra stale card for
-        # the same request with every accepted change to a matching status.
-        version_filter = " AND [PriorVersionOfID] IS NULL" if request_changes.supports_versioning() else ""
-        try:
-            rows = fetch_all(
-                f"SELECT * FROM [tblExperimentRequests] WHERE [RequestStatus] = ?{version_filter} ORDER BY [ID] DESC",
-                [status]
-            )
-        except Exception:
-            rows = []
+        # without archived prior versions (db/experiment_requests.requests_by_status, shared with the web preview)
+        rows = _er.requests_by_status(status)
 
         if not rows:
             if status == 3:

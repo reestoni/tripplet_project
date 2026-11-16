@@ -535,6 +535,20 @@ def with_auto_fields(user: dict, cols: List[ColumnInfo], values: Dict[str, Any],
 # Load
 # ======================================================================
 
+def requests_by_status(status: int) -> List[Dict[str, Any]]:
+    """All live requests of one status, newest first - the preview behind the badge on "New Experiment"
+    (status 3 = approved) in both apps. Archived prior versions (PriorVersionOfID set) are not standalone
+    requests and are left out."""
+    from db.connection import fetch_all
+    from db import experiment_request_changes as request_changes
+    version_filter = " AND [PriorVersionOfID] IS NULL" if request_changes.supports_versioning() else ""
+    try:
+        return fetch_all(f"SELECT * FROM [{TABLE}] WHERE [RequestStatus] = ?{version_filter} ORDER BY [ID] DESC",
+                         [int(status)])
+    except Exception:
+        return []
+
+
 def fetch_request(request_id: Any) -> Optional[Dict[str, Any]]:
     """SELECT * of one request row as {column: value}, None if not found."""
     if request_id in (None, ""):
