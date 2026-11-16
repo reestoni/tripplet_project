@@ -93,3 +93,34 @@ def test_can_move_series(lvl, status, owner, user, ok):
 def test_can_delete_series(lvl, status, owner, user, ok):
     from db.series_permissions import can_delete_series
     assert can_delete_series(lvl, status, owner, user) is ok
+
+
+def test_save_conflict_check_desktop_model(qapp, monkeypatch):
+    """Save conflicts (db/series_save.find_conflicts, same rule as the web): a cell changed in the DB since
+    loading is reported with the current value; same value or unchanged = no conflict. Real tblTrial row,
+    the value is restored."""
+    from db import series_save as ss
+    from db.connection import execute, fetch_all
+    from ui.screen_show_experiment import PivotEditModel, CellBinding
+    rows = fetch_all("SELECT ID, AirPressure FROM tblTrial WHERE AirPressure IS NOT NULL ORDER BY ID DESC LIMIT 1")
+    if not rows:
+        pytest.skip("no trial with air pressure")
+    tid, old = int(rows[0]["ID"]), rows[0]["AirPressure"]
+    base = float(old)
+    m = PivotEditModel(["Air Pressure (bar)"], ["V1"], header_rows=[{"values": ["", "V1"], "bg": None, "fg": None}])
+    monkeypatch.setattr(m, "_ctx_is_readonly", lambda: False)
+    m.set_cell(0, 0, old, CellBinding("tblTrial", "ID", tid, "AirPressure"))
+    m.setData(m.index(1, 1), f"{base + 0.5:g}")
+    items = m.conflict_items()
+    assert len(items) == 1 and items[0]["where"].endswith("Air Pressure (bar)") and items[0]["loaded"] == str(old)
+    try:
+        assert ss.find_conflicts(items) == []                                   # nobody else changed it
+        execute("UPDATE tblTrial SET AirPressure = ? WHERE ID = ?", [base + 1, tid])
+        found = ss.find_conflicts(items)
+        assert len(found) == 1 and float(found[0]["current"]) == base + 1
+        execute("UPDATE tblTrial SET AirPressure = ? WHERE ID = ?", [base + 0.5, tid])
+        assert ss.find_conflicts(items) == []                                   # the other one typed the same
+    finally:
+        execute("UPDATE tblTrial SET AirPressure = ? WHERE ID = ?", [old, tid])
+    assert ss._conflict_same("3.50", 3.5) and ss._conflict_same(None, "") and not ss._conflict_same("a", "b")
+    assert ss.find_conflicts([{"binding": None, "loaded": "1", "new": "2"}]) == []

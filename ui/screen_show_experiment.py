@@ -1479,6 +1479,10 @@ class PivotEditModel(QAbstractTableModel):
         """Setzt Wert und Binding einer Zelle (beim Laden der Daten)."""
         self._matrix[row][col] = "" if value is None else str(value)
         self._binding[row][col] = binding
+        # value as loaded - save conflict check (db/series_save.find_conflicts) against changes by others
+        if not hasattr(self, "_loaded"):
+            self._loaded = {}
+        self._loaded[(row, col)] = self._matrix[row][col]
 
     def get_cell_value(self, row: int, col: int) -> Optional[str]:
         if 0 <= row < len(self._matrix) and 0 <= col < len(self._matrix[row]):
@@ -1536,9 +1540,30 @@ class PivotEditModel(QAbstractTableModel):
             audit_cache=cache,
         )
 
+        # what was just written is the new "as loaded" (next conflict check compares with it)
+        loaded = getattr(self, "_loaded", None)
+        if loaded is not None:
+            for r, c, new_text in self._dirty:
+                loaded[(r, c)] = "" if new_text is None else str(new_text)
         self._dirty.clear()
         self.dataChangedExternally.emit()
         return n
+
+    def conflict_items(self) -> list:
+        """Dirty cells for db/series_save.find_conflicts: binding, value as loaded, new text, where."""
+        out = []
+        loaded = getattr(self, "_loaded", {}) or {}
+        seen = set()
+        for r, c, new_text in reversed(self._dirty):        # last edit of a cell wins
+            if (r, c) in seen or (r, c) not in loaded:
+                continue
+            seen.add((r, c))
+            title = str(self.data(self.index(self._n_hdr + r, 0), Qt.DisplayRole) or "")
+            col = " · ".join(x for x in (str(self.data(self.index(h, c + 1), Qt.DisplayRole) or "").strip()
+                                         for h in range(self._n_hdr)) if x)
+            out.append({"binding": self._binding[r][c], "loaded": loaded[(r, c)], "new": new_text,
+                        "where": f"{col} · {title}" if col else title})
+        return out
 
 
 # ---------------------------- Screen ----------------------------
@@ -3977,6 +4002,63 @@ class ShowExperimentScreen(QWidget):
             pass
         return False
 
+    def _confirm_no_conflicts(self) -> bool:
+        """Save conflicts (db/series_save.find_conflicts, same rule as the web app): False = do not save now."""
+        found = []
+        for name, model in self._iter_save_models():
+            if not getattr(model, "_dirty", None) or not hasattr(model, "conflict_items"):
+                continue
+            try:
+                found += [dict(x, model=model) for x in _series_save.find_conflicts(
+                    model.conflict_items(), unit_scale=getattr(model, "_unit_scale", 1.0) or 1.0,
+                    unit_field=getattr(model, "_unit_scale_field", None))]
+            except Exception:
+                continue
+        if not found:
+            return True
+        lines = "\n".join(f"• {x['where']}: now {x['current'] or '–'}"
+                           + (f" ({x['by']}, {x['at']})" if x.get('by') or x.get('at') else "")
+                           + f" - yours {x['new'] or '–'}" for x in found[:12])
+        more = f"\n… and {len(found) - 12} more" if len(found) > 12 else ""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Changed in the meantime")
+        box.setText("Someone else changed these values after you opened the series:\n\n" + lines + more
+                    + "\n\nWhich values should stay?")
+        btn_mine = box.addButton("Save mine anyway", QMessageBox.AcceptRole)
+        btn_theirs = box.addButton("Keep theirs (drop mine)", QMessageBox.DestructiveRole)
+        box.addButton("Cancel", QMessageBox.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        try:
+            from db.usage_log import log_usage_event
+            log_usage_event("feature", "save_conflict",
+                            "mine" if clicked is btn_mine else "theirs" if clicked is btn_theirs else "cancel")
+        except Exception:
+            pass
+        if clicked is btn_mine:
+            return True
+        if clicked is btn_theirs:
+            # drop my edits of the conflicting cells, then reload so the other values show
+            for x in found:
+                m = x["model"]
+                b = x["binding"]
+                m._dirty = [d for d in m._dirty if m._binding[d[0]][d[1]] is not b]
+            self._on_refresh_after_conflict()
+        return False
+
+    def _on_refresh_after_conflict(self) -> None:
+        """Reload the series after "keep theirs" - remaining edits of other cells are kept only if none are left."""
+        if self._has_unsaved():
+            QMessageBox.information(self, "Changed in the meantime",
+                                    "Your other changes are still unsaved. Save them, then refresh (F5) to see the "
+                                    "other values.")
+            return
+        try:
+            self._on_refresh()
+        except Exception:
+            pass
+
     def _save_all(self):
         # Access level 1 (or recycle bin preview): read-only
         if self._get_access_level() <= 1:
@@ -4013,6 +4095,10 @@ class ShowExperimentScreen(QWidget):
                         pass
             except Exception:
                 pass
+
+        # Someone else (web or another desktop) changed a cell since it was loaded -> ask first
+        if not self._confirm_no_conflicts():
+            return
 
         # Plausibility check of machine settings (db/plausibility.py): one
         # warning for all unusual values, the user can save anyway

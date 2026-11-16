@@ -862,3 +862,84 @@ def save_series_edits(user: Any, series_id: Any, edits_by_model: Dict[str, List[
     result["saved"] = total
     result["stamped"] = stamped
     return result
+
+
+# ---------------------------- save conflicts (2026-11-16) ----------------------------
+# Two people (desktop and web, or two browsers) edit the same series: before writing, every edited cell is
+# compared with the database. If its value changed since the editor loaded it - and the other person did not
+# enter the same value - the save stops and the user decides (overwrite / keep the other value).
+
+def _conflict_same(a: Any, b: Any) -> bool:
+    """Equal for the conflict check: both empty, same text, or the same number (tolerant to unit rounding)."""
+    a = None if a is None or str(a).strip() == "" else str(a).strip()
+    b = None if b is None or str(b).strip() == "" else str(b).strip()
+    if a == b:
+        return True
+    if a is None or b is None:
+        return False
+    try:
+        fa, fb = float(a.replace(",", ".")), float(b.replace(",", "."))
+    except ValueError:
+        return False
+    return abs(fa - fb) <= 1e-6 * max(1.0, abs(fa), abs(fb))
+
+
+def find_conflicts(items: Sequence[Dict[str, Any]], *, unit_scale: float = 1.0,
+                   unit_field: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Cells changed by someone else since loading.
+
+    items: [{"binding": CellBinding | GroupCellBinding, "loaded": value as the editor loaded it (display units),
+             "new": the new text, ...any extra keys (kept)}] - items with loaded None are skipped (unknown).
+    unit_scale / unit_field: as save_cells (Jet Air in l/min: display = stored x unit_scale).
+    Returns copies of the conflicting items with "current" (display units, "" = empty), "by" and "at"
+    (last tblChangeLog entry of the cell, "" if unknown). A deleted row is no conflict here (the save
+    then simply changes nothing)."""
+    from db import change_log as _cl
+    items = [it for it in items if it.get("binding") is not None and "loaded" in it and it["loaded"] is not None]
+    if not items:
+        return []
+    want: Dict[Tuple[str, str], set] = {}
+    for it in items:
+        b = it["binding"]
+        ids = b.id_values if isinstance(b, GroupCellBinding) else [b.id_value]
+        want.setdefault((str(b.table), str(b.field)), set()).update(i for i in ids if i is not None)
+    current: Dict[Tuple[str, str], Dict[int, Dict[str, Any]]] = {}
+    for (tb, fd), ids in want.items():
+        try:
+            current[(tb, fd)] = _cl.read_current(tb, fd, list(ids))
+        except Exception:
+            current[(tb, fd)] = {}
+
+    def shown(v: Any, field: str) -> Any:
+        if v is None or unit_field is None or str(field).lower() != str(unit_field).lower() or unit_scale == 1.0:
+            return v
+        try:
+            return float(v) * unit_scale
+        except (TypeError, ValueError):
+            return v
+
+    out: List[Dict[str, Any]] = []
+    for it in items:
+        b = it["binding"]
+        ids = b.id_values if isinstance(b, GroupCellBinding) else [b.id_value]
+        cur_map = current.get((str(b.table), str(b.field)), {})
+        vals = [shown(cur_map[int(i)]["value"], b.field) for i in ids if i is not None and int(i) in cur_map]
+        if not vals:
+            continue
+        differing = [v for v in vals if not _conflict_same(v, it["loaded"])]
+        if not differing:
+            continue
+        cur = differing[0]
+        if _conflict_same(cur, it.get("new")):
+            continue          # the other person entered the same value
+        by = at = ""
+        try:
+            hist = _cl.history_for_cell(str(b.table), [i for i in ids if i is not None], str(b.field))
+            if hist:
+                by = str(hist[0].get("UserName") or "").strip()
+                at = str(hist[0].get("ChangedAt") or "")[:16]
+        except Exception:
+            pass
+        out.append({**it, "current": "" if cur is None else (f"{cur:g}" if isinstance(cur, float) else str(cur)),
+                    "by": by, "at": at})
+    return out

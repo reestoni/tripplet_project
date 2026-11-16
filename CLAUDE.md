@@ -35,6 +35,10 @@ Ausnahmen nur auf ausdrückliche Ansage des Nutzers.
 auf den Fits von `ui/dty_whatif.py`, nie extrapoliert. Screen `ui/screen_jet_advisor.py`, Feature `jet_advisor`, Sidebar Tools.
 `dty_whatif.clean_rows`: Punkte/m = 0 = nicht gemessen (betrifft auch die Process Playground). Details in der Web-`CLAUDE.md`.
 
+**Speicher-Konflikte in Show Experiment** (2026-11-16, beide Apps): `db/series_save.find_conflicts` vergleicht vor dem Speichern
+jede geänderte Zelle mit der DB (Wert wie geladen = `PivotEditModel._loaded`); hat sie jemand anderes inzwischen geändert, fragt
+`_confirm_no_conflicts` (meine trotzdem / ihre behalten / abbrechen). Web gleiche Regel (`orig` pro Änderung).
+
 **Fazit pro Serie** (2026-11-14, beide Apps): `db/series_conclusion.py` + `tblSeriesConclusion` (nur über
 `tools/series_conclusion_migration.py`, auf dev_local, dev und prod angelegt 2026-11-16). Reiter "Conclusion"
 (`ui/widgets/conclusion_tab.py`), Backlog-Karte (Punkt / gestrichelter Ring bei Done ohne Fazit), All Experiments Spalten +
