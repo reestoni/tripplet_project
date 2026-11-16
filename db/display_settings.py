@@ -14,7 +14,8 @@ COLUMN = "DisplaySettings"
 
 DEFAULTS: Dict[str, Any] = {"scale": 100, "contrast": False, "crosshair": False, "readbar": False,
                             "alert_marks": False, "cb_colours": False, "app_scale": 100,
-                            "whats_new_seen": "", "recent_series": [], "start": "backlog", "smart_favs": []}
+                            "whats_new_seen": "", "recent_series": [], "start": "backlog", "smart_favs": [],
+                            "theme": "classic"}   # web look: "classic" | "modern" (2026-11-16, desktop ignores it)
 SMART_FAVS_MAX = 40  # Smart Chart / Dashboards: favourite saved views (view IDs)
 RECENT_MAX = 8  # Sidebar -> "Recent" (ui/recent_series.py)
 
@@ -49,6 +50,7 @@ def _clean(d: Dict[str, Any]) -> Dict[str, Any]:
     out["whats_new_seen"] = str(d.get("whats_new_seen") or "")[:40]
     out["recent_series"] = _clean_recent(d.get("recent_series"))
     out["start"] = str(d.get("start") or "backlog")[:30]
+    out["theme"] = "modern" if d.get("theme") == "modern" else "classic"
     favs = []
     for v in d.get("smart_favs") or []:
         try:
