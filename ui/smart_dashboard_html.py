@@ -39,7 +39,7 @@ html,body{margin:0;height:100%;font-family:'Segoe UI',Inter,sans-serif;color:#1C
 .xinfo{font-size:12px;border:1px solid #BFD3EE;background:#EAF1FA;color:#1F4E8C;border-radius:6px;padding:3px 4px 3px 8px;display:flex;justify-content:space-between;align-items:center;gap:4px}
 .xinfo b{cursor:pointer;font-weight:400;padding:0 5px;border-radius:6px}
 .xinfo b:hover{background:#D7E5F7;color:#C62828}
-.ro #viz,.ro #fields,.ro #addv,.ro #alignbar,.ro .card .ib,.ro .card .rs,.ro .ix,.ro #addpage,.ro #duppage,
+.ro #views,.ro #viz,.ro #fields,.ro #addv,.ro #alignbar,.ro .card .ib,.ro .card .rs,.ro .ix,.ro #addpage,.ro #duppage,
 .ro .tab b[data-x],.ro .fadd,.ro .fchip b{display:none!important}
 .ro .card .head{cursor:default}
 .ro .card.target,.ro .card.msel{outline:none}
@@ -393,6 +393,7 @@ function init(data){
   FIELDS={};CATALOG.forEach(function(f){FIELDS[f.key]=f;});
   SPEC=data.spec;SEL=null;MSEL=[];GRID=data.grid||GRID;LAST=JSON.stringify(SPEC);HIST=[];FUT=[];
   RO=!!data.readonly;document.body.classList.toggle('ro',RO);
+  if(RO&&document.body.classList.contains('modelmode'))setView('report');   // Dashboards: no Model view (only Smart Chart)
   MODEL=data.model||{nodes:[]};NTRIALS=data.trials||0;MFILL={};
   if(document.body.classList.contains('modelmode'))renderModel();
   var pw=data.pane_widths||{};['fpane','viz','fields'].forEach(function(id){var w=pw[paneKey(id)];
@@ -807,6 +808,7 @@ function copyFormat(){
 // ── model view (read only): the tables around the trial ─────────
 var MODEL={nodes:[]}, MSELN='General', MFILL={}, NTRIALS=0;
 function setView(view){
+  if(RO&&view==='model')view='report';      // Dashboards (read only) never show the Model - it is for building in Smart Chart
   document.body.classList.toggle('modelmode',view==='model');
   document.querySelectorAll('#views button').forEach(function(b){b.classList.toggle('on',b.dataset.view===view);});
   if(view==='model')renderModel();else setTimeout(relayout,30);
