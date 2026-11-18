@@ -201,8 +201,73 @@ def reset_password(username: str, pw: str) -> bool:
     return bool(update_user_password(username, pw.strip()))
 
 
+# Rows that only belong to the person and go with the account (fixed 2026-11-18, both apps: deleting a user who
+# had bell messages failed with a foreign-key error). Everything else that points at a user - trials, series, yarns,
+# jets, lab values, images, spools ... - is real data: such a user is NOT deleted (UserHasData, deactivate instead).
+PERSONAL_TABLES: List[Tuple[str, str]] = [
+    ("tblNotification", "RecipientUserID"),     # bell messages
+    ("tblUserColumnOrder", "UserID"),           # own column layouts
+    ("tblStatsDashboardBlock", "UserID"),       # own Usage-Stats dashboard
+    ("tblStatsDashboardFilter", "UserID"),
+    ("tblFeatureUsage", "UserID"),              # tool usage counters
+    ("tblFeatureAccess", "UserID"),             # person rules of Access…
+    ("tblProcessOwner", "UserID"),              # process-owner role
+]
+
+
+class UserHasData(Exception):
+    """The user still owns real data; ``tables`` = where (table names)."""
+
+    def __init__(self, tables: List[str]):
+        self.tables = tables
+        super().__init__("The user still has data in: " + ", ".join(tables)
+                         + " - deactivate the account instead of deleting it.")
+
+
+def data_references(ids: List[Any]) -> List[str]:
+    """Tables (besides the personal ones) with rows pointing at one of the users - from the database's own
+    foreign keys (MySQL information_schema). Empty when that is not available (then the delete itself decides)."""
+    if not ids or is_offline_mode():
+        return []
+    personal = {t.lower() for t, _c in PERSONAL_TABLES}
+    try:
+        fks = fetch_all(
+            "SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE "
+            "WHERE REFERENCED_TABLE_SCHEMA = DATABASE() AND LOWER(REFERENCED_TABLE_NAME) = 'tbluser'")
+    except Exception:
+        return []
+    hits: List[str] = []
+    marks = ",".join(["?"] * len(ids))
+    for row in fks or []:
+        table, col = (row[0], row[1]) if not isinstance(row, dict) else (row.get("TABLE_NAME"), row.get("COLUMN_NAME"))
+        if not table or str(table).lower() in personal:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_]+", str(table)) or not re.fullmatch(r"[A-Za-z0-9_]+", str(col)):
+            continue
+        try:
+            n = fetch_all(f"SELECT COUNT(*) FROM {table} WHERE {col} IN ({marks})", list(ids))
+            cnt = n[0][0] if n and not isinstance(n[0], dict) else (list(n[0].values())[0] if n else 0)
+        except Exception:
+            continue
+        if cnt and str(table) not in hits:
+            hits.append(str(table))
+    return hits
+
+
 def delete_users(ids: List[Any], id_col: str = "ID") -> int:
+    """Deletes the accounts with their personal rows (PERSONAL_TABLES). Raises UserHasData when one of them
+    still owns real data - nothing is deleted then."""
     if not ids:
         return 0
-    execute(f"DELETE FROM [tblUser] WHERE [{id_col}] IN ({','.join(['?'] * len(ids))})", list(ids))
+    ids = list(ids)
+    used = data_references(ids)
+    if used:
+        raise UserHasData(used)
+    marks = ",".join(["?"] * len(ids))
+    for table, col in PERSONAL_TABLES:
+        try:
+            execute(f"DELETE FROM [{table}] WHERE [{col}] IN ({marks})", ids)
+        except Exception:
+            pass                                 # table not in this database
+    execute(f"DELETE FROM [tblUser] WHERE [{id_col}] IN ({marks})", ids)
     return len(ids)

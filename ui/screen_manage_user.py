@@ -985,11 +985,16 @@ class ManageUserScreen(QWidget):
 
         if QMessageBox.question(self, 'Confirm Delete', f'Delete {len(ids)} user(s)?') != QMessageBox.Yes:
             return
+        from db import user_admin
         try:
-            from db import user_admin
             user_admin.delete_users(ids, id_col)
             self.reload_data()
             self._set_status(f'Deleted {len(ids)} user(s).')
+        except user_admin.UserHasData as e:
+            QMessageBox.warning(self, 'Cannot delete',
+                                'This user still has data in TrippleT (' + ', '.join(e.tables) + ').\n\n'
+                                'Set the account to inactive instead of deleting it.')
+            self._set_status('Not deleted: the user still has data.', error=True)
         except Exception as e:
             QMessageBox.critical(self, 'Delete failed', str(e))
             self._set_status(f'Delete failed: {e}', error=True)
