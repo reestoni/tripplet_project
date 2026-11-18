@@ -36,6 +36,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QComboBox,
     QLineEdit,
+    QButtonGroup,
+    QCheckBox,
     QMenu,
     QDialog,
     QDialogButtonBox,
@@ -114,6 +116,12 @@ class MyRequestsScreen(QWidget):
         self._filter_status: Optional[QComboBox] = None
         self._filter_project: Optional[QComboBox] = None
         self._filter_owner: Optional[QComboBox] = None
+        # Status tabs with counts + "To review" + "Urgent first" (2026-11-18, same as the web):
+        # the tabs drive the (hidden) status combo; "review" filters on the flag in column 0.
+        self._status_tabs: dict = {}
+        self._tab_group: Optional[QButtonGroup] = None
+        self._review_only: bool = False
+        self._chk_by_due: Optional[QCheckBox] = None
 
         # Detail-Spalten-Toggle (siehe _DETAIL_COLUMN_NAMES oben).
         self._show_detail_columns: bool = False
@@ -267,6 +275,29 @@ class MyRequestsScreen(QWidget):
             except Exception:
                 self._pending_copy_map = {}
 
+        # "To review" first (superusers), then - with "Urgent first" - by due date (er.due_sort_key);
+        # otherwise the database order stays (stable sort).
+        _wish_idx = col_names.index("Wunschtermin") if "Wunschtermin" in col_names else None
+        _by_due = bool(self._chk_by_due is not None and self._chk_by_due.isChecked())
+
+        def _row_flags(row):
+            rid = row[id_idx] if id_idx is not None else None
+            sid = row[rs_idx] if rs_idx is not None else None
+            pend = rid in self._pending_copy_map
+            review = er.needs_review(self._is_superuser, pend, er.is_new_unreviewed(sid, pend))
+            due = er.due_info(row[_wish_idx] if _wish_idx is not None else None, sid)
+            return review, due, sid
+
+        flags = [_row_flags(row) for row in rows]
+        order = sorted(range(len(rows)), key=lambda i: ((0 if flags[i][0] else 1),
+                                                        (er.due_sort_key(flags[i][1]) if _by_due else (0, 0))))
+        rows = [rows[i] for i in order]
+        flags = [flags[i] for i in order]
+        self._update_tab_counts(flags)
+        if _by_due or any(f[0] for f in flags):
+            # keep this order: no header sort indicator (the user can still click a header)
+            self._tbl.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)
+
         pending_bg = QColor("#fff3cd")
         # Brandneue, noch nie geprueften Requests (Status "Request", keine
         # Aenderungs-Kopie) bekommen ihre eigene Hervorhebung (Nutzerwunsch
@@ -285,6 +316,7 @@ class MyRequestsScreen(QWidget):
             owner_id = row[cb_idx] if cb_idx is not None else None
             titel_val = str(row[titel_idx] or "") if titel_idx is not None else ""
             denial_reason_val = row[dr_idx] if dr_idx is not None else None
+            row_review, row_due, _sid = flags[r]
 
             for c_vis, (c_src, _col_name) in enumerate(visible_cols):
                 # RequestStatus als Dropdown
@@ -297,6 +329,7 @@ class MyRequestsScreen(QWidget):
                         item.setData(Qt.BackgroundRole, new_bg)
                     if c_vis == 0:
                         item.setData(Qt.UserRole, req_id)
+                        item.setData(Qt.UserRole + 1, row_review)
                     self._tbl.setItem(r, c_vis, item)
 
                     combo = NoScrollComboBox()
@@ -413,7 +446,17 @@ class MyRequestsScreen(QWidget):
                 display_val = "" if val is None else str(val)
                 if str(_col_name).strip().lower() == "titel":
                     display_val = er.title_marker(has_pending_change, is_new_unreviewed) + display_val
+                due_txt = er.due_text(row_due) if _col_name == "Wunschtermin" else ""
+                if due_txt:
+                    display_val = f"{display_val}  ·  {due_txt}"
                 item = QTableWidgetItem(display_val)
+                if due_txt:
+                    item.setData(Qt.ForegroundRole, QColor({"overdue": "#c62828", "today": "#d97706",
+                                                            "week": "#8a6100"}.get(row_due["group"], "#555555")))
+                    if row_due["group"] == "overdue":
+                        fnt = item.font()
+                        fnt.setBold(True)
+                        item.setFont(fnt)
 
                 # Titel-Spalte gruen + fett darstellen
                 if str(_col_name).strip().lower() == "titel":
@@ -433,6 +476,7 @@ class MyRequestsScreen(QWidget):
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 if c_vis == 0:
                     item.setData(Qt.UserRole, req_id)
+                    item.setData(Qt.UserRole + 1, row_review)
                 self._tbl.setItem(r, c_vis, item)
 
             # Zusätzliche Spalte: Experiment ID
@@ -504,6 +548,67 @@ class MyRequestsScreen(QWidget):
 
         return row
 
+    def _build_status_tabs(self) -> QHBoxLayout:
+        """Status as tabs with counts (All · To review · Request · Approved · Experiment · Denied) and
+        "Urgent first". Replaces the status combo (it stays as the hidden filter value)."""
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        self._tab_group = QButtonGroup(self)
+        self._tab_group.setExclusive(True)
+        style = ("QPushButton{border:1px solid #c8d0c9;border-radius:13px;padding:4px 12px;background:#fff;color:#333;}"
+                 "QPushButton:checked{background:#39a650;border-color:#39a650;color:#fff;font-weight:600;}"
+                 "QPushButton:hover:!checked{background:#eef5ef;}")
+        for key in ("all", "review", 1, 3, 4, 2):
+            b = QPushButton("")
+            b.setCheckable(True)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setStyleSheet(style)
+            b.clicked.connect(lambda _c=False, k=key: self._on_status_tab(k))
+            self._tab_group.addButton(b)
+            self._status_tabs[key] = b
+            row.addWidget(b, 0)
+        self._status_tabs["all"].setChecked(True)
+        self._status_tabs["review"].setVisible(False)          # superusers only (refresh)
+        row.addStretch(1)
+        self._chk_by_due = QCheckBox("Urgent first")
+        self._chk_by_due.setToolTip("Sort open requests by wish date: overdue, today, this week, later, no date")
+        self._chk_by_due.toggled.connect(lambda _on: self.refresh())
+        row.addWidget(self._chk_by_due, 0)
+        if self._filter_status is not None:
+            self._filter_status.setVisible(False)
+        return row
+
+    def _status_label(self, sid: Any) -> str:
+        for _id, label in self._status_choices:
+            if _id == sid:
+                return "" if label is None else str(label)
+        return {1: "Request", 2: "Denied", 3: "Approved", 4: "Experiment"}.get(sid, str(sid))
+
+    def _update_tab_counts(self, flags: List[Any]) -> None:
+        """flags = [(needs_review, due_info, status_id)] of the loaded rows."""
+        if not self._status_tabs:
+            return
+        self._status_tabs["all"].setText(f"All ({len(flags)})")
+        n_rev = sum(1 for f in flags if f[0])
+        rev = self._status_tabs["review"]
+        rev.setText(f"To review ({n_rev})")
+        rev.setVisible(self._is_superuser)
+        if not self._is_superuser and rev.isChecked():
+            self._status_tabs["all"].setChecked(True)
+            self._review_only = False
+        for sid in (1, 3, 4, 2):
+            n = sum(1 for f in flags if f[2] == sid)
+            self._status_tabs[sid].setText(f"{self._status_label(sid)} ({n})")
+
+    def _on_status_tab(self, key: Any) -> None:
+        self._review_only = key == "review"
+        if self._filter_status is not None:
+            self._filter_status.blockSignals(True)
+            idx = 0 if key in ("all", "review") else self._filter_status.findData(key)
+            self._filter_status.setCurrentIndex(idx if idx >= 0 else 0)
+            self._filter_status.blockSignals(False)
+        self._apply_filters()
+
     def _reset_filters(self) -> None:
         if self._filter_search is not None:
             self._filter_search.blockSignals(True)
@@ -514,6 +619,9 @@ class MyRequestsScreen(QWidget):
                 combo.blockSignals(True)
                 combo.setCurrentIndex(0)
                 combo.blockSignals(False)
+        self._review_only = False
+        if self._status_tabs:
+            self._status_tabs["all"].setChecked(True)
         self._apply_filters()
 
     def _rebuild_filter_options(self, rows: List[Any], col_names: List[str]) -> None:
@@ -624,6 +732,11 @@ class MyRequestsScreen(QWidget):
         for r in range(self._tbl.rowCount()):
             visible = True
 
+            if self._review_only:
+                first = self._tbl.item(r, 0)
+                if first is None or not first.data(Qt.UserRole + 1):
+                    visible = False
+
             if search_text:
                 parts = []
                 for c in range(col_count):
@@ -713,6 +826,7 @@ class MyRequestsScreen(QWidget):
         card_layout.addLayout(top_row)
 
         card_layout.addLayout(self._build_filter_row())
+        card_layout.addLayout(self._build_status_tabs())
 
         self._lbl_info = QLabel("")
         self._lbl_info.setStyleSheet("color: #666;")

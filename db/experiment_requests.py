@@ -1256,6 +1256,70 @@ def is_new_unreviewed(status_id: Any, has_pending_change: bool) -> bool:
     return status_id == STATUS_REQUEST and not has_pending_change
 
 
+# ---- My Requests: due date and "to review" (both apps, user 2026-11-18) ----
+# Status tabs with counts, the due date as "3 days overdue" / "in 5 days", "urgent first" and a
+# "to review" block for superusers. Only open requests (Request, Approved) have a due state -
+# a denied request or one that became an experiment is not "overdue".
+DUE_GROUPS = ("overdue", "today", "week", "later", "none")
+
+
+def _as_date(val: Any) -> Optional[datetime.date]:
+    if val in (None, ""):
+        return None
+    if hasattr(val, "toPython"):                       # QDate / QDateTime
+        try:
+            val = val.toPython()
+        except Exception:
+            return None
+    if isinstance(val, datetime.datetime):
+        return val.date()
+    if isinstance(val, datetime.date):
+        return val
+    s = str(val).strip()
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%d.%m.%Y", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def due_info(val: Any, status_id: Any = STATUS_REQUEST,
+             today: Optional[datetime.date] = None) -> Dict[str, Any]:
+    """{"group": one of DUE_GROUPS, "days": days until the wish date (negative = overdue) or None}."""
+    d = _as_date(val)
+    if d is None or status_id not in (STATUS_REQUEST, STATUS_APPROVED):
+        return {"group": "none", "days": None}
+    n = (d - (today or datetime.date.today())).days
+    group = "overdue" if n < 0 else "today" if n == 0 else "week" if n <= 7 else "later"
+    return {"group": group, "days": n}
+
+
+def due_text(info: Dict[str, Any]) -> str:
+    """Short English text of due_info (desktop; the web translates group/days itself)."""
+    n = info.get("days")
+    if n is None:
+        return ""
+    if n < 0:
+        return "1 day overdue" if n == -1 else f"{-n} days overdue"
+    if n == 0:
+        return "today"
+    if n == 1:
+        return "tomorrow"
+    return f"in {n} days"
+
+
+def due_sort_key(info: Dict[str, Any]) -> Tuple[int, int]:
+    """Urgent first: overdue (most overdue first), today, this week, later, no date."""
+    n = info.get("days")
+    return DUE_GROUPS.index(info.get("group", "none")), (n if n is not None else 10 ** 6)
+
+
+def needs_review(superuser: bool, has_pending_change: bool, new_unreviewed: bool) -> bool:
+    """Superuser has to act: a new request never reviewed or an open change proposal."""
+    return bool(superuser and (has_pending_change or new_unreviewed))
+
+
 def title_marker(has_pending_change: bool, new_unreviewed: bool) -> str:
     """Prefix of the title cell: "⏳ " open change proposal, "🆕 " new request."""
     if has_pending_change:
@@ -1349,6 +1413,7 @@ def list_requests(user: dict, *, search: str = "", status_id: Any = None,
     visible = list_columns(col_names, superuser)
     proj_idx = col_names.index("ProjektText") if "ProjektText" in col_names else None
     owner_idx = col_names.index("CreatedByUser") if "CreatedByUser" in col_names else None
+    wish_idx = col_names.index("Wunschtermin") if "Wunschtermin" in col_names else None
 
     out_rows: List[Dict[str, Any]] = []
     for row in rows:
@@ -1381,6 +1446,8 @@ def list_requests(user: dict, *, search: str = "", status_id: Any = None,
             "open_id": pending.get(req_id) if (has_pending and not superuser) else req_id,
             "review": bool(has_pending and superuser),
             "cells": cells, "values": {str(col_names[i]): row[i] for i in range(len(col_names))},
+            "due": due_info(row[wish_idx] if wish_idx is not None else None, sid),
+            "needs_review": needs_review(superuser, has_pending, new_unrev),
         })
 
     projects = sorted({str(r["project"]) for r in out_rows if r["project"] not in (None, "")})
