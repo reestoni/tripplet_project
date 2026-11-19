@@ -14,7 +14,8 @@ apply:    ALTER TABLE ... ADD INDEX idx_<table>_trialid (TrialID), online (ALGOR
 rollback: drops exactly the indexes named idx_<table>_trialid again (never anything else).
 
 Without --target only dev_local (TRIPPLET_MODE=dev_local, database tripplet_dev_local). dev / prod only on
-explicit request of the user.
+explicit request of the user. Applied: dev_local and prod (2026-11-19, prod on the user's approval); dev not -
+it gets a copy of prod when it is needed again.
 """
 from __future__ import annotations
 
