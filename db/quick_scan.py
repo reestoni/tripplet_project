@@ -461,8 +461,9 @@ class QuickScanEvaluator:
             elif source_table == "tblexperimente":
                 sql = f"ts.ExperimentID IN ({placeholders})"
             else:
-                sql = (f"EXISTS (SELECT 1 FROM `{fld['source_table_primary']}` {alias} "
-                       f"WHERE {alias}.TrialID = t.ID AND {alias}.`{col}` IN ({placeholders}))")
+                # IN (subquery) instead of a correlated EXISTS - see the note at the numeric case below
+                sql = (f"t.ID IN (SELECT {alias}.TrialID FROM `{fld['source_table_primary']}` {alias} "
+                       f"WHERE {alias}.`{col}` IN ({placeholders}))")
             return sql, list(selected_ids)
 
         # Numerischer Filter
@@ -500,9 +501,13 @@ class QuickScanEvaluator:
             return cond, p
 
         # Alle anderen: direkt via TrialID (tbllabor*, tbltrialsettings, ...)
+        # "t.ID IN (SELECT TrialID ... WHERE cond)" = the same trials as "EXISTS (... WHERE TrialID = t.ID AND cond)",
+        # but MySQL computes the list once. The correlated EXISTS scanned the whole lab table for every trial:
+        # tbllaboritematlab has no index on TrialID (57'000 rows x 14'000 trials, 320 s on dev_local for
+        # "Knoten/m >= 80", 2026-11-19).
         cond, p = self._cond(f"{alias}.`{col}`", f)
-        sql = (f"EXISTS (SELECT 1 FROM `{fld['source_table_primary']}` {alias} "
-               f"WHERE {alias}.TrialID = t.ID{t_cond} AND {cond})")
+        sql = (f"t.ID IN (SELECT {alias}.TrialID FROM `{fld['source_table_primary']}` {alias} "
+               f"WHERE {cond}{t_cond})")
 
         # Fallback-Tabelle: tension guard evaluated independently for the fallback table
         fallback = fld.get("source_table_fallback")
@@ -510,8 +515,8 @@ class QuickScanEvaluator:
             alias2 = f"{alias}b"
             t_cond2 = _t_cond_for(fallback, alias2)
             cond2, p2 = self._cond(f"{alias2}.`{col}`", f)
-            sql2 = (f"EXISTS (SELECT 1 FROM `{fallback}` {alias2} "
-                    f"WHERE {alias2}.TrialID = t.ID{t_cond2} AND {cond2})")
+            sql2 = (f"t.ID IN (SELECT {alias2}.TrialID FROM `{fallback}` {alias2} "
+                    f"WHERE {cond2}{t_cond2})")
             return f"({sql} OR {sql2})", p + p2
 
         return sql, p

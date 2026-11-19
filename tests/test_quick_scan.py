@@ -37,6 +37,19 @@ def test_make_rule():
     assert qs.make_rule(lk, value1=[]) is None and qs.make_rule(lk, value1=[1, 2])["operator"] == "in"
 
 
+def test_lab_rules_are_not_correlated():
+    """Lab-table rules must be "t.ID IN (SELECT TrialID ...)", not a correlated EXISTS: the Itemat tables have no
+    index on TrialID, the EXISTS form took 320 s on dev_local for one rule "Knoten/m >= 80" (2026-11-19)."""
+    fld = {"field_key": "knoten_per_m", "data_type": "float", "source_column": "FPm", "tension_filter": 0.3,
+           "source_table_primary": "tbllaboritematlab", "source_table_fallback": "tbllaboritematplus"}
+    sql, params = qs.QuickScanEvaluator()._build_filter_clause(qs.make_rule(fld, ">=", 80), [0])
+    assert "EXISTS" not in sql and "= t.ID" not in sql
+    assert sql.count("t.ID IN (SELECT") == 2 and "`Tension` = 0.3" in sql and params == [80.0, 80.0]
+    lk = {"field_key": "m", "data_type": "lookup", "source_column": "MachineID", "source_table_primary": "tblx"}
+    sql, params = qs.QuickScanEvaluator()._build_filter_clause(qs.make_rule(lk, value1=[3, 4]), [0])
+    assert sql.startswith("t.ID IN (SELECT") and "EXISTS" not in sql and params == [3, 4]
+
+
 @pytest.fixture(scope="module")
 def fields():
     try:
