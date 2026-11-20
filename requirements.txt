@@ -13,6 +13,7 @@ lightgbm==4.6.0
 joblib==1.5.3
 pandas==2.3.3
 nptdms==1.10.0
+nidaqmx==1.7.0
 PyInstaller==6.19.0
 matplotlib==3.10.8
 Pillow==12.1.0

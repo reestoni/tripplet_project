@@ -3101,6 +3101,14 @@ class ShowExperimentScreen(QWidget):
         self.btn_statimat_import.clicked.connect(self._pdf_import)
         tl.addWidget(self.btn_statimat_import)
 
+        # YarnScope measurement straight from the NI box (instead of Sensoft; Nutzerwunsch 2026-11-20)
+        self.btn_sensor_measure = QPushButton("📏 Measure")
+        self.btn_sensor_measure.setMinimumHeight(30)
+        self.btn_sensor_measure.setToolTip("Measure trials with the YarnScope sensor (NI box) - the TDMS file is "
+                                           "saved and analysed automatically")
+        self.btn_sensor_measure.clicked.connect(self._open_sensor_measure)
+        tl.addWidget(self.btn_sensor_measure)
+
         # Itemat Lab PDF import
         # kept for the code that enables/disables it, but no longer shown (one "PDF import" button)
         self.btn_itemat_import = QPushButton("Itemat import")
@@ -3620,6 +3628,9 @@ class ShowExperimentScreen(QWidget):
                 else:
                     self.btn_statimat_import.setToolTip("Import Statimat and Itemat PDFs attached to this series - "
                                                         "the kind of each PDF is recognised automatically")
+
+            if hasattr(self, "btn_sensor_measure") and self.btn_sensor_measure:
+                self.btn_sensor_measure.setEnabled(bool(can_write))
 
             if hasattr(self, "btn_itemat_import") and self.btn_itemat_import:
                 self.btn_itemat_import.setEnabled(bool(can_write))
@@ -4376,6 +4387,17 @@ class ShowExperimentScreen(QWidget):
             QMessageBox.critical(self, "Upload Error", str(e))
 
     # ---------- TrialSeries PDFs ----------
+
+    def _open_sensor_measure(self) -> None:
+        """Measure trials with the YarnScope sensor (ui/widgets/sensor_measure_dialog.py); afterwards F5 so the
+        YarnScope tab shows the new files."""
+        if self._series_pk is None:
+            return
+        from ui.widgets.sensor_measure_dialog import SensorMeasureDialog
+        dlg = SensorMeasureDialog(int(self._series_pk), getattr(app_meta, "current_user", {}) or {}, self)
+        dlg.exec()
+        if dlg.measured and not self._has_unsaved():
+            self._on_refresh()
 
     def _pdf_import(self) -> None:
         """One import for Statimat and Itemat PDFs (ui/screen_show_experiment_pdf_import.pdf_import_impl)."""

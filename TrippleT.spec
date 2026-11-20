@@ -72,6 +72,12 @@ anthropic_datas, anthropic_binaries, anthropic_hidden = collect_all("anthropic")
 # collect_all() wie bei den anderen ML-Paketen vermeidet "No module named ..."-Crashes.
 scipy_datas, scipy_binaries, scipy_hidden = collect_all("scipy")
 
+# --- nidaqmx (YarnScope measuring with the NI box, ui/yarnscope/sensor_measure.py; imported lazily -> collect_all)
+try:
+    nidaqmx_datas, nidaqmx_binaries, nidaqmx_hidden = collect_all("nidaqmx")
+except Exception:
+    nidaqmx_datas, nidaqmx_binaries, nidaqmx_hidden = [], [], []
+
 # Project assets (copied next to the EXE in onedir)
 project_assets = [
     ("assets", "assets"),
@@ -94,6 +100,7 @@ a = Analysis(
         + sklearn_binaries + lgbm_binaries
         + scipy_binaries
         + anthropic_binaries
+        + nidaqmx_binaries
     ),
     datas=(
         pyside6_datas + pyodbc_datas + mysql_datas + project_assets
@@ -105,6 +112,7 @@ a = Analysis(
         + sklearn_datas + lgbm_datas
         + scipy_datas
         + anthropic_datas
+        + nidaqmx_datas
     ),
     hiddenimports=(
         pyside6_hidden + pyodbc_hidden + mysql_hidden
@@ -114,6 +122,7 @@ a = Analysis(
         + cryptography_hidden
         + scipy_hidden
         + anthropic_hidden
+        + nidaqmx_hidden
         + [
             # onnxruntime loads its C-extension dynamically — must be explicit
             "onnxruntime.capi._pybind_state",
@@ -132,6 +141,9 @@ a = Analysis(
             # ── TrippleT project modules ──────────────────────────────────
             # ATY + DTY Batch-Screens (lazy import via _aty_open_batch / _ys_open_batch)
             "ui.screen_aty_batch",
+            # "📏 Measure" in Show Experiment (lazy import)
+            "ui.widgets.sensor_measure_dialog",
+            "ui.yarnscope.sensor_measure",
             "ui.screen_tdms_batch",
             # YarnScope Analyse-Module (lazy import in screen_show_experiment + batch)
             "ui.yarnscope.dty_analysis",
