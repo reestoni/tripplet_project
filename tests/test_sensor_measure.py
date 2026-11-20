@@ -220,3 +220,11 @@ def test_dialog_measures_and_moves_on(env, qapp, monkeypatch):
     assert [p.name.split("_")[1] for p in env.dty.glob("*.tdms")] == ["2"]
     assert dlg.cb_trial.currentData()["vno"] == 3             # moved on to the next trial
     dlg.close()
+
+
+def test_speed_is_the_winder_speed():
+    # Winder = Speed Shaft 2 x (1 - Winder % / 100) like the process schema; prod 466 V70: 800, 4.5 % -> 764
+    assert sm.default_speed({"SpeedShaft2": 800, "Winder": 4.5}) == 764.0
+    assert sm.default_speed({"SpeedShaft2": "600", "Winder": None}) == 600.0     # no winder % -> LW 2
+    assert sm.default_speed({"SpeedShaft2": None, "Shaft2Speed": 460}) is None   # ATY: no proposal
+    assert sm.default_speed({"SpeedShaft2": 0, "Winder": 3}) is None

@@ -17,8 +17,7 @@ Extra file properties "TrippleT.*" (actual rate, head, box serial, trial, user, 
 
 Which sensor heads exist: the heads named in the user's own Sensoft configurations ("Default config*.ini" in
 ...\\LabVIEW Data\\Sensoft\\Config Data\\Configurations ATY, env TRIPPLET_SENSOFT_DIR = the "Sensoft" folder),
-each with the connector it was used on. Measuring speed: for now the trial's SpeedShaft2 (editable) - the user's
-rule follows (default_speed()).
+each with the connector it was used on. Measuring speed: the trial's winder speed (default_speed(), editable).
 
 nidaqmx is imported only when measuring (pip nidaqmx, needs the NI-DAQmx driver). Without it list_boxes() raises
 MeasureError("no_nidaqmx"); the rest of TrippleT does not care. Tests use a fake Daq (tests/test_sensor_measure.py).
@@ -333,13 +332,25 @@ def _check_box(box: str) -> Dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------ planning
 def default_speed(trial: Dict[str, Any]) -> Optional[float]:
-    """Measuring speed [m/min] proposed for a trial. For now its winder speed (SpeedShaft2, the "W2" Sensoft
-    writes into the file); the user's own rule follows (Nutzer 2026-11-20)."""
-    v = trial.get("SpeedShaft2")
-    try:
-        return round(float(v), 1) if v not in (None, "") and float(v) > 0 else None
-    except (TypeError, ValueError):
+    """Measuring speed [m/min] proposed for a trial = its WINDER speed (Nutzerangabe 2026-11-20), the same rule as
+    the process schema (ui/dty_stations.speeds): Winder = Speed Shaft 2 x (1 - Winder % / 100); no Winder % ->
+    Speed Shaft 2. Checked on prod: 466 V68-V70 800 m/min, 4.5 % -> 764 = the speed of the Sensoft files.
+    ATY machines (Shaft2Speed, no winder %) get no proposal - the measured speed there was different (441 V7:
+    460 vs 512 m/min); the user types it."""
+    from ui import dty_stations as ds
+
+    def _f(key):
+        try:
+            v = trial.get(key)
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+    lw2 = _f("SpeedShaft2")
+    if not lw2 or lw2 <= 0:
         return None
+    w = ds.speeds(lw2, winder=_f("Winder")).get("winder")
+    v = w if w is not None else lw2
+    return round(v, 1) if v > 0 else None
 
 
 def nominal_rate(speed_m_min: float) -> float:
@@ -508,7 +519,7 @@ def trials_for(series_id: int) -> List[Dict[str, Any]]:
     from db.connection import fetch_all
     from db.trial_reference import IS_REFERENCE_COL, has_reference_columns
     ref = f", {IS_REFERENCE_COL} AS isref" if has_reference_columns() else ""
-    rows = fetch_all(f"SELECT ID, Versuchsnummer, SpeedShaft2{ref} FROM tblTrial WHERE TrialSeriesID = ? "
+    rows = fetch_all(f"SELECT ID, Versuchsnummer, SpeedShaft2, Winder{ref} FROM tblTrial WHERE TrialSeriesID = ? "
                      f"ORDER BY Versuchsnummer", [int(series_id)])
     names: Dict[str, List[str]] = {}
     for k in KINDS:                                # each folder listed once (5'000 files on the share)
