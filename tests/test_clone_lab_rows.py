@@ -45,3 +45,15 @@ def test_copy_has_no_timestamp_and_no_measurements(monkeypatch):
     assert row["YarnTension"] == 15.0
     assert row["UserID"] == 7
     assert row["GlobalID"] != "g-old"
+
+
+def test_only_chosen_lab_tables_are_cloned(monkeypatch):
+    monkeypatch.setattr(dbc, "table_exists", lambda name: name in ("tbllabortiter", "tbllabordtyomat"))
+    cols = ["ID", "TrialID", "Timestamp", "FPm"]
+    cur = _FakeCursor({"tbllabortiter": (cols, [(1, 100, None, 1.0)]),
+                       "tblLaborDTYoMat": (cols, [(2, 100, None, 2.0)])})
+    trial_actions.clone_lab_rows_for_trial(cur, 100, 200, tables=["TblLaborTiter"])
+    assert len(cur.inserts) == 1 and "[tbllabortiter]" in cur.inserts[0][0]
+    cur = _FakeCursor({"tbllabortiter": (cols, [(1, 100, None, 1.0)])})
+    trial_actions.clone_lab_rows_for_trial(cur, 100, 200, tables=[])
+    assert cur.inserts == []

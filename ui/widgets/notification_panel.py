@@ -60,10 +60,12 @@ class _NotifItem(QFrame):
     read_toggled = Signal()
 
     _TYPE_ICON = {"yarn_stock": "🧵", "experiment_request": "📝", "experiment_request_changed": "🔄",
-                  "series_conclusion": "✅"}
+                  "series_conclusion": "✅", "yarnscope_auto_dty": "🔬", "yarnscope_auto_aty": "🔬"}
     _TYPE_TAG = {
         "yarn_stock": "YARN STOCK", "experiment_request": "EXPERIMENT REQUEST",
         "experiment_request_changed": "REQUEST CHANGED", "series_conclusion": "CONCLUSION",
+        # written by the web server's automatic YarnScope analysis (tripplet_web backend/app/yarnscope_auto.py)
+        "yarnscope_auto_dty": "AUTO ANALYSIS DTY", "yarnscope_auto_aty": "AUTO ANALYSIS ATY",
     }
 
     def __init__(self, n: dict, parent: QWidget | None = None):

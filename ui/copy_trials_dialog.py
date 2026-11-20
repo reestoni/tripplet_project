@@ -7,7 +7,10 @@ Replaces the old From/To spin-box dialog. One page, three steps:
    checks/unchecks a whole range).
 2. How often? - number of copies + order (repeat the block / each trial in
    a row), with a one-line preview.
-3. Result - one row per new trial, pre-filled from its source trial; the
+3. Which lab machines? - one checkbox per lab machine the chosen trials
+   have rows in (all ticked = as before); unticked ones get no empty lab
+   row in the copies (Nutzerwunsch 2026-11-20).
+4. Result - one row per new trial, pre-filled from its source trial; the
    values can be changed before copying (changed cells are highlighted).
    Only trial-wide fields are offered (plus OF Core / OF Effect on ATY,
    which live on the Core/Effect plies); per-ply values stay in the table
@@ -27,7 +30,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog,
-    QHBoxLayout, QHeaderView, QLabel, QListWidget, QListWidgetItem, QMessageBox,
+    QGridLayout, QHBoxLayout, QHeaderView, QLabel, QListWidget, QListWidgetItem, QMessageBox,
     QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem,
     QVBoxLayout,
 )
@@ -49,13 +52,14 @@ _CHANGED_BORDER_TIP = "Changed - differs from the source trial"
 # ── dialog ───────────────────────────────────────────────────────────────
 
 class CopyTrialsDialog(QDialog):
-    """trials: [{"id": int, "vno": int}] in display order (real trials only)."""
+    """trials: [{"id": int, "vno": int}] in display order (real trials only).
+    labs: db/trial_actions.lab_tables_of_trials(trial ids) - the lab machines a copy can get."""
 
     ORDER_BLOCK, ORDER_ROW = "block", "row"
 
     def __init__(self, parent, trials: Sequence[Dict], fields: Sequence[CopyField],
                  source_values: Dict[int, Dict[str, Any]], next_number: int,
-                 preselected: Sequence[int] = ()):
+                 preselected: Sequence[int] = (), labs: Sequence[Dict] = ()):
         super().__init__(parent)
         self.setWindowTitle("Copy trials")
         self.setMinimumSize(760, 620)
@@ -64,6 +68,8 @@ class CopyTrialsDialog(QDialog):
         self._fields = list(fields)
         self._src = source_values
         self._next_number = int(next_number)
+        self._labs = list(labs)
+        self._lab_checks: Dict[str, QCheckBox] = {}
         # edits survive rebuilds: (src_trial_id, n-th copy of that trial) -> {field.key: value}
         self._edits: Dict[Tuple[int, int], Dict[str, Any]] = {}
         self._plan_keys: List[Tuple[int, int]] = []
@@ -136,9 +142,24 @@ class CopyTrialsDialog(QDialog):
         row.addStretch(1)
         lay.addLayout(row)
 
-        # 3 Result
+        # 3 Which lab machines?
+        self._section(lay, "3", "Which lab machines do the copies get?")
+        lab_grid = QGridLayout()
+        lab_grid.setHorizontalSpacing(18)
+        for i, lab in enumerate(self._labs):
+            cb = QCheckBox(lab["title"])
+            cb.setChecked(True)
+            self._lab_checks[lab["table"]] = cb
+            lab_grid.addWidget(cb, i // 5, i % 5)
+        lay.addLayout(lab_grid)
+        self.lbl_labs = QLabel()
+        self.lbl_labs.setStyleSheet("color: #666;")
+        self.lbl_labs.setWordWrap(True)
+        lay.addWidget(self.lbl_labs)
+
+        # 4 Result
         head3 = QHBoxLayout()
-        self._section(head3, "3", "Result - you can change values before copying")
+        self._section(head3, "4", "Result - you can change values before copying")
         head3.addStretch(1)
         self.chk_all_fields = QCheckBox("Show all fields")
         self.chk_all_fields.toggled.connect(self._apply_column_visibility)
@@ -211,8 +232,30 @@ class CopyTrialsDialog(QDialog):
             return [t for _ in range(n) for t in sel]
         return [t for t in sel for _ in range(n)]
 
+    def _update_labs(self, sel: List[Dict]) -> None:
+        """Only the lab machines of the chosen trials are offered; "n of m" when not all have it."""
+        ids = {int(t["id"]) for t in sel}
+        shown = 0
+        for lab in self._labs:
+            cb = self._lab_checks[lab["table"]]
+            n = sum(1 for t in lab["trials"] if int(t) in ids)
+            cb.setVisible(n > 0)
+            shown += n > 0
+            cb.setText(lab["title"] if n == len(ids) else f"{lab['title']}  ({n} of {len(ids)})")
+        self.lbl_labs.setText(
+            "Ticked = the copy gets an empty row of this lab machine (like the source trial). "
+            "Untick what you will not measure." if shown else ("The chosen trials have no lab machines." if ids else ""))
+
+    def get_lab_tables(self) -> Optional[List[str]]:
+        """Lab tables the copies get; None = all ticked (= as before)."""
+        if all(cb.isChecked() for cb in self._lab_checks.values()):
+            return None
+        return [t for t, cb in self._lab_checks.items() if cb.isChecked()]
+
     def _rebuild_result(self, *_):
         sel = self._selected_trials()
+        if hasattr(self, "lbl_labs"):
+            self._update_labs(sel)
         n = self.spn_copies.value()
         if len(sel) >= 2:
             a, b = (format_trial_number(sel[0]["vno"]), format_trial_number(sel[1]["vno"]))

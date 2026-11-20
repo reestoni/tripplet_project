@@ -4916,13 +4916,14 @@ class ShowExperimentScreen(QWidget):
         source = load_source_values([t["id"] for t in trials], fields)
         next_no = _trial_actions.next_trial_number_of_series(self._series_pk)
         real_ids = {t["id"] for t in trials}
+        labs = _trial_actions.lab_tables_of_trials([t["id"] for t in trials])
         dlg = CopyTrialsDialog(self, trials, fields, source, next_no,
-                               [int(t) for t in (preselected_trial_ids or []) if int(t) in real_ids])
+                               [int(t) for t in (preselected_trial_ids or []) if int(t) in real_ids], labs=labs)
         if dlg.exec() != QDialog.Accepted:
             return
         plan = dlg.get_plan()
         if plan:
-            self._copy_trials_with_plan(plan, fields)
+            self._copy_trials_with_plan(plan, fields, dlg.get_lab_tables())
 
     def _insert_trial_copy(self, cur, src_trial_id: int, series_id: Any, new_versuchsnummer: int) -> int:
         """One new tblTrial row as a copy of src_trial_id (machine params 1:1,
@@ -5276,7 +5277,7 @@ class ShowExperimentScreen(QWidget):
         self._build_dtyomat_tab()
         self._build_atyomat_tab()
 
-    def _copy_trials_with_plan(self, plan, fields) -> None:
+    def _copy_trials_with_plan(self, plan, fields, lab_tables=None) -> None:
         """Creates one copy per plan entry [(source_trial_id, {field.key:
         value})], appended after the series' highest trial number, then
         applies the values changed in the copy dialog to the new trial
@@ -5290,7 +5291,8 @@ class ShowExperimentScreen(QWidget):
         if not self._confirm_proceed_despite_unsaved():
             return
         # the copies themselves: db/trial_actions.copy_trials (Qt-free, shared with the web app)
-        new_ids, err = _trial_actions.copy_trials(self._series_pk, plan, fields, app_meta.current_user)
+        new_ids, err = _trial_actions.copy_trials(self._series_pk, plan, fields, app_meta.current_user,
+                                                  lab_tables=lab_tables)
         if err is not None:
             show_error(self, "Error copying trials", "The trials could not be copied.", err, warning=True)
             if not new_ids:

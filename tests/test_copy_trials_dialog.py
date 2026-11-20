@@ -133,3 +133,20 @@ def test_invalid_value_is_rejected(qapp, monkeypatch):
     item.setText("abc")
     assert item.text() == "6"
     assert dlg.get_plan()[0] == (11, {})
+
+
+def test_lab_machine_choice(qapp):
+    """Step 3 (Nutzerwunsch 2026-11-20): only lab machines of the chosen trials are offered, all ticked =
+    None (= as before); unticked ones are left out of get_lab_tables()."""
+    fields = _fields([{"OriginalName": "SpeedShaft2", "FieldName": "Speed", "StorageTable": "tbltrial"}])
+    trials = [{"id": 11, "vno": 1}, {"id": 12, "vno": 2}]
+    labs = [{"table": "tbllabortiter", "tab": "titer", "title": "Titer", "trials": [11, 12]},
+            {"table": "tbllabordtyomat", "tab": "dtyomat", "title": "DTYoMat", "trials": [12]}]
+    dlg = ctd.CopyTrialsDialog(None, trials, fields, {11: {}, 12: {}}, next_number=3, preselected=[11], labs=labs)
+    titer, dtyomat = dlg._lab_checks["tbllabortiter"], dlg._lab_checks["tbllabordtyomat"]
+    assert not titer.isHidden() and dtyomat.isHidden()          # V1 has no DTYoMat row
+    assert dlg.get_lab_tables() is None
+    dlg.lst_trials.item(1).setCheckState(Qt.Checked)
+    assert not dtyomat.isHidden() and dtyomat.text() == "DTYoMat  (1 of 2)"
+    dtyomat.setChecked(False)
+    assert dlg.get_lab_tables() == ["tbllabortiter"]

@@ -307,6 +307,44 @@ LAB_TABLES = [
     ("tblLaborATYShrinkage", "TrialID"),
 ]
 
+# lab table -> Show Experiment tab (db/series_tables.LAB_TABS key + desktop title), for the
+# "which lab machines?" choice of the copy dialog (Nutzerwunsch 2026-11-20)
+LAB_TABLE_TABS = {
+    "tbllabortiter": ("titer", "Titer"),
+    "tbllaborstatimatm": ("stat", "Statimat M"),
+    "tbllaborstatimatds": ("stat_ds", "Statimat DS"),
+    "tbllaborwaterbath": ("water", "Waterbath"),
+    "tbllaboritematlab": ("itemat", "Itemat Lab"),
+    "tbllaboritematplus": ("itemat_plus", "Itemat Plus"),
+    "tbllaborrapid600": ("rapid600", "Rapid 600"),
+    "tbllabordtyomat": ("dtyomat", "DTYoMat"),
+    "tbllaboratyomat": ("atyomat", "ATYoMat"),
+    "tbllaborekb": ("ekb", "EKB"),
+    "tbllaborheissluftschrumpf": ("hot_air_shrinkage", "Hot Air Shrinkage"),
+    "tbllaborkochschrumpf": ("hot_water_shrinkage", "Hot Water Shrinkage"),
+    "tbllaboratyshrinkage": ("aty_shrinkage", "ATY Shrinkage"),
+}
+
+
+def lab_tables_of_trials(trial_ids: Iterable[Any]) -> List[Dict[str, Any]]:
+    """Lab machines the given trials have rows in (what a copy would get), in LAB_TABLES order:
+    [{"table" (lower case), "tab" (LAB_TABS key), "title", "trials": [trial ids with rows]}]."""
+    from db.connection import table_exists as _db_table_exists
+    ids = [int(t) for t in trial_ids if t is not None]
+    out: List[Dict[str, Any]] = []
+    if not ids:
+        return out
+    marks = ",".join("?" * len(ids))
+    for table_name, trial_col in LAB_TABLES:
+        tl = table_name.lower()
+        if not _db_table_exists(tl):
+            continue
+        rows = fetch_all(f"SELECT DISTINCT {trial_col} AS t FROM {table_name} WHERE {trial_col} IN ({marks})", ids)
+        if rows:
+            tab, title = LAB_TABLE_TABS.get(tl, (tl, table_name))
+            out.append({"table": tl, "tab": tab, "title": title, "trials": sorted(int(r["t"]) for r in rows)})
+    return out
+
 
 def _is_zero_datetime(v: Any) -> bool:
     """Detect common 'zero' datetime placeholders (e.g. 0 or '0')."""
@@ -319,15 +357,21 @@ def _is_zero_datetime(v: Any) -> bool:
     return False
 
 
-def clone_lab_rows_for_trial(cur, src_trial_id: int, new_trial_id: int, current_uid: Any = None) -> None:
+def clone_lab_rows_for_trial(cur, src_trial_id: int, new_trial_id: int, current_uid: Any = None,
+                             tables: Optional[Iterable[str]] = None) -> None:
     """Klont alle Labor-Datensätze von src_trial_id auf new_trial_id.
 
     - Struktur / Parameter (z.B. Tension) werden übernommen
     - eigentliche Messwerte werden auf NULL gesetzt
     current_uid = the user's ID (replaces 0/empty user placeholders).
+    tables = only these lab tables (names, any case; None = all) - the copy
+    dialog's "which lab machines?" choice.
     """
     from db.connection import table_exists as _db_table_exists
+    only = None if tables is None else {str(t).lower() for t in tables}
     for table_name, trial_col in LAB_TABLES:
+        if only is not None and table_name.lower() not in only:
+            continue
         # prüfen, ob Tabelle existiert (MySQL)
         if not _db_table_exists(table_name.lower()):
             continue
@@ -463,7 +507,7 @@ def clone_trial_settings_rows(cur, src_trial_id: int, new_trial_id: int) -> None
 
 
 def insert_trial_copy(cur, src_trial_id: int, series_id: Any, new_versuchsnummer: int,
-                      current_uid: Any = None) -> int:
+                      current_uid: Any = None, lab_tables: Optional[Iterable[str]] = None) -> int:
     """Inserts one new tblTrial row as a copy of src_trial_id (machine
     params 1:1, lab rows structurally cloned but nulled, ply settings
     cloned) at new_versuchsnummer within series_id. Returns the new
@@ -528,7 +572,7 @@ def insert_trial_copy(cur, src_trial_id: int, series_id: Any, new_versuchsnummer
         raise RuntimeError("Could not determine the new trial ID.")
 
     # copy the lab records for this trial
-    clone_lab_rows_for_trial(cur, src_trial_id, new_trial_id, current_uid)
+    clone_lab_rows_for_trial(cur, src_trial_id, new_trial_id, current_uid, tables=lab_tables)
     # copy the tblTrialSettings rows (ply data)
     clone_trial_settings_rows(cur, src_trial_id, new_trial_id)
     return new_trial_id
@@ -541,12 +585,15 @@ def next_trial_number_of_series(series_id: Any) -> int:
     return next_trial_number(rows[0]["mx"] if rows else None)
 
 
-def copy_trials(series_id: Any, plan, fields, user: Any = None) -> Tuple[List[int], Optional[Exception]]:
+def copy_trials(series_id: Any, plan, fields, user: Any = None,
+                lab_tables: Optional[Iterable[str]] = None) -> Tuple[List[int], Optional[Exception]]:
     """Creates one copy per plan entry [(source_trial_id, {field.key:
     value})], appended after the series' highest trial number, then applies
     the changed values to the new trial (tblTrial columns, or on ATY the OF
-    of all Core/Effect plies). Returns (new trial ids, error): on an error
-    the copies made so far stay (autocommit, as before)."""
+    of all Core/Effect plies). lab_tables = the lab machines the copies get
+    (None = all of the source trial, as before). Returns (new trial ids,
+    error): on an error the copies made so far stay (autocommit, as before)."""
+    lab_tables = None if lab_tables is None else [str(t).lower() for t in lab_tables]
     by_key = {f.key: f for f in fields}
     current_uid = user_id_of(user)
     new_ids: List[int] = []
@@ -562,7 +609,7 @@ def copy_trials(series_id: Any, plan, fields, user: Any = None) -> Tuple[List[in
             max_v = next_trial_number(row[0] if row else None) - 1
             for src_trial_id, overrides in plan:
                 max_v += 1
-                new_id = insert_trial_copy(cur, src_trial_id, series_id, max_v, current_uid)
+                new_id = insert_trial_copy(cur, src_trial_id, series_id, max_v, current_uid, lab_tables)
                 new_ids.append(new_id)
                 for fkey, value in (overrides or {}).items():
                     f = by_key.get(fkey)
@@ -584,7 +631,8 @@ def copy_trials(series_id: Any, plan, fields, user: Any = None) -> Tuple[List[in
 def copy_trials_setup(series_id: Any) -> Dict[str, Any]:
     """What the copy dialog shows, for callers without the Show Experiment
     state (web): {"trials": [{"id", "vno"}] (no reference samples), "fields":
-    [CopyField], "source": {trial_id: {field.key: value}}, "next_no"}."""
+    [CopyField], "source": {trial_id: {field.key: value}}, "next_no",
+    "labs": lab_tables_of_trials() of those trials}."""
     from db import machine_data, series_tables
     from db.trial_copy import build_copy_fields, load_source_values
     st = series_tables.load_trials(series_id)
@@ -601,7 +649,8 @@ def copy_trials_setup(series_id: Any) -> Dict[str, Any]:
     )
     source = load_source_values([t["id"] for t in trials], fields)
     return {"trials": trials, "fields": fields, "source": source,
-            "next_no": next_trial_number_of_series(series_id)}
+            "next_no": next_trial_number_of_series(series_id),
+            "labs": lab_tables_of_trials([t["id"] for t in trials])}
 
 
 # ====================================================================== reference samples
