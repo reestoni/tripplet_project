@@ -347,6 +347,11 @@ def build_catalog() -> List[Field]:
         if key == "air_cons_real":
             f = Field(key, a.get("title") or "Air consumption", a.get("unit") or "", "Machine", "num",
                       source={"computed": "air_cons_real"})
+        elif a.get("field") == "FPmEffective":     # report_queries.EFFECTIVE_FPM_FIELD (no column, computed)
+            f = Field(key, str(a.get("title") or key), str(a.get("unit") or ""),
+                      TABLE_GROUPS.get(main) or "Lab", "num",
+                      source={"computed": "fpm_effective", "main_table": a.get("main_table"),
+                              "alt_table": a.get("alt_table"), "condition": a.get("condition")})
         else:
             if not _column_exists(main, a.get("field")) and not (
                     a.get("alt_table") and _column_exists(str(a["alt_table"]).lower(), a.get("field"))):
@@ -546,6 +551,13 @@ class TrialDataset:
                 jf, ap = t.extra.get("jet_factor"), t.extra.get("air_pressure")
                 if jf is not None and ap is not None:
                     out[t.id] = round(jf * (ap + 1), 2)
+            return out
+        if f.source.get("computed") == "fpm_effective":
+            from ui.report_queries import effective_fpm_values
+            out = effective_fpm_values(f.source["main_table"], f.source.get("condition"))
+            if f.source.get("alt_table"):
+                for tid, v in effective_fpm_values(f.source["alt_table"], f.source.get("condition")).items():
+                    out.setdefault(tid, v)
             return out
         out = _avg_per_trial(f.source.get("main_table"), f.source.get("field"), f.source.get("condition"))
         alt = f.source.get("alt_table")

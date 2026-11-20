@@ -39,6 +39,11 @@ Y_AXES = [
     {"key": "stab_06",      "title": "FPm Stability@0.6cN/dtex",    "unit": "%",        "main_table": "tbllaboritematlab",   "alt_table": "tbllaboritematplus",   "field": "Stability",            "condition": "Tension = 0.6"},
     {"key": "stab_10",      "title": "FPm Stability@1.0cN/dtex",    "unit": "%",        "main_table": "tbllaboritematlab",   "alt_table": "tbllaboritematplus",   "field": "Stability",            "condition": "Tension = 1"},
     {"key": "stab_13",      "title": "FPm Stability@1.3cN/dtex",    "unit": "%",        "main_table": "tbllaboritematlab",   "alt_table": "tbllaboritematplus",   "field": "Stability",            "condition": "Tension = 1.3"},
+    # effective intermingling points per tension (computed, see EFFECTIVE_FPM_AXES)
+    {"key": "fpm_eff_03",   "title": "FPm effective@0.3cN/dtex",    "unit": "FP/m",     "main_table": "tbllaboritematlab",   "alt_table": "tbllaboritematplus",   "field": "FPmEffective",         "condition": "Tension = 0.3"},
+    {"key": "fpm_eff_06",   "title": "FPm effective@0.6cN/dtex",    "unit": "FP/m",     "main_table": "tbllaboritematlab",   "alt_table": "tbllaboritematplus",   "field": "FPmEffective",         "condition": "Tension = 0.6"},
+    {"key": "fpm_eff_10",   "title": "FPm effective@1.0cN/dtex",    "unit": "FP/m",     "main_table": "tbllaboritematlab",   "alt_table": "tbllaboritematplus",   "field": "FPmEffective",         "condition": "Tension = 1"},
+    {"key": "fpm_eff_13",   "title": "FPm effective@1.3cN/dtex",    "unit": "FP/m",     "main_table": "tbllaboritematlab",   "alt_table": "tbllaboritematplus",   "field": "FPmEffective",         "condition": "Tension = 1.3"},
     {"key": "fpm_dtyomat",  "title": "FP/m DTYoMat",                "unit": "FP/m",     "main_table": "tbllabordtyomat",     "alt_table": None,                  "field": "FPm",                  "condition": None},
     {"key": "cv_fp_dtyomat","title": "FP/m CV DTYoMat",             "unit": "%",        "main_table": "tbllabordtyomat",     "alt_table": None,                  "field": "CV_FP",                "condition": None},
     {"key": "yarn_ten_bef", "title": "Yarn Tension before Jet",     "unit": "cN",       "main_table": "tbltrial",            "alt_table": None,                  "field": "YarnTensionBeforeJet", "condition": None},
@@ -82,6 +87,55 @@ CATEGORY_X_AXES = [
     {"id": None, "key": "jet_name", "title": "Jet", "unit": "", "field": "jet_name", "sub_axis_id": None,
      "is_group_by": False, "cat": True},
 ]
+
+
+# Effective intermingling points per tension (Nutzerwunsch 2026-11-20: in the report like the stability %).
+# Virtual field: FP/m(t) = FP/m at tension 0 * Stability(t) / 100 - the same rule as the save step
+# (series_tables.itemat_ip_at_tension), but computed on reading: the stored FPm of the tension rows is missing
+# for ~870 Itemat Lab measurements of 2026 although IP(0) and Stability are there.
+# Not rows in tblSmartChartAxis (no DB change): with_effective_fpm_axes() adds them to the axes from the DB.
+EFFECTIVE_FPM_FIELD = "FPmEffective"
+EFFECTIVE_FPM_AXES = [dict(a) for a in Y_AXES if a["field"] == EFFECTIVE_FPM_FIELD]
+
+
+def with_effective_fpm_axes(y_axes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The Y axes plus the effective FP/m axes (after the last stability axis; unless the keys exist)."""
+    known = {y.get("key") for y in y_axes}
+    extra = [dict(a, id=None, sub_axis_id=None, is_group_by=False, join_sql=None)
+             for a in EFFECTIVE_FPM_AXES if a["key"] not in known]
+    if not extra:
+        return list(y_axes)
+    out = list(y_axes)
+    pos = max((i for i, y in enumerate(out) if str(y.get("key") or "").startswith("stab_")), default=len(out) - 1) + 1
+    return out[:pos] + extra + out[pos:]
+
+
+def effective_fpm_values(table: str, condition: Optional[str],
+                         trial_ids: Optional[List[int]] = None) -> Dict[int, float]:
+    """{trial id: FP/m at tension 0 * Stability / 100} of the rows matching condition (e.g. 'Tension = 0.3').
+    AVG per trial like the other report values; 0 / NULL = no value. trial_ids None = all trials."""
+    from db.connection import fetch_all, table_exists
+    if not table_exists(table) or trial_ids == []:
+        return {}
+    ids_sql, params = "", []
+    if trial_ids is not None:
+        ids_sql = f" AND TrialID IN ({','.join('?' for _ in trial_ids)})"
+        params = list(trial_ids) * 2
+    cond = f" AND {condition}" if condition else ""
+    sql = (
+        "SELECT s.TrialID AS tid, AVG(z.ip0 * s.Stability / 100) AS val "
+        f"FROM (SELECT TrialID, Stability FROM {table} "
+        f"      WHERE Stability IS NOT NULL AND Stability <> 0{cond}{ids_sql}) AS s "
+        f"JOIN (SELECT TrialID, AVG(FPm) AS ip0 FROM {table} "
+        f"      WHERE Tension = 0 AND FPm IS NOT NULL AND FPm <> 0{ids_sql} GROUP BY TrialID) AS z "
+        "ON z.TrialID = s.TrialID GROUP BY s.TrialID"
+    )
+    try:
+        rows = fetch_all(sql, params)
+    except Exception as e:
+        logger.warning("effective_fpm_values %s: %s", table, e)
+        return {}
+    return {int(r["tid"]): float(r["val"]) for r in rows if r.get("tid") is not None and r.get("val") is not None}
 
 
 def _column_in(table: str, column: str) -> bool:
@@ -178,7 +232,7 @@ def _load_axes_from_db():
                 g_axes.append(entry)
         logger.info("SmartChart: %d Y-Achsen, %d X-Achsen, %d G-Achsen aus DB geladen",
                     len(y_axes), len(x_axes), len(g_axes))
-        return y_axes or None, x_axes or None, g_axes or None
+        return (with_effective_fpm_axes(y_axes) if y_axes else None), x_axes or None, g_axes or None
     except Exception as e:
         logger.error("_load_axes_from_db: %s", e)
         return None, None, None
@@ -203,6 +257,8 @@ def _fetch_y_values(
     def _query(table: str) -> Dict[int, Optional[float]]:
         if not table_exists(table):
             return {}
+        if field == EFFECTIVE_FPM_FIELD:
+            return dict(effective_fpm_values(table, condition, list(trial_ids)))
         # tblTrial hat keinen TrialID FK — es IS die Trial-Table
         id_col  = "ID" if table.lower() == "tbltrial" else "TrialID"
         cond    = f" AND {condition}" if condition else ""
