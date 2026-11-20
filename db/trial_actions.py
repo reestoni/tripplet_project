@@ -375,7 +375,14 @@ def clone_lab_rows_for_trial(cur, src_trial_id: int, new_trial_id: int, current_
                     values.append(current_uid if current_uid not in (None, "") else v)
                     continue
 
-                if any(k in cl for k in ("createdat", "updatedat", "timestamp")):
+                if "timestamp" in cl:
+                    # Timestamp = when the measurement was saved; the copy has no
+                    # measurement yet (values are nulled below), so leave it empty.
+                    # A copied Timestamp made YarnScope show copies as "analysed".
+                    values.append(None)
+                    continue
+
+                if any(k in cl for k in ("createdat", "updatedat")):
                     # give cloned rows a fresh timestamp if the source contains an invalid placeholder
                     values.append(datetime.datetime.now() if _is_zero_datetime(v) else v)
                     continue
