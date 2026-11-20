@@ -322,7 +322,7 @@ class TDMSFolderScanner:
                 saved = fetch_all(
                     f"SELECT TrialID FROM tbllabordtyomat "
                     f"WHERE TrialID IN ({id_placeholders}) "
-                    f"AND Timestamp IS NOT NULL",
+                    f"AND {_dty_service.ANALYSED_SQL}",
                     trial_ids
                 )
                 for r in saved:
@@ -339,7 +339,7 @@ class TDMSFolderScanner:
                     f"SELECT TrialID, {db_fields_sql} "
                     f"FROM tbllabordtyomat "
                     f"WHERE TrialID IN ({id_placeholders}) "
-                    f"AND Timestamp IS NOT NULL",
+                    f"AND {_dty_service.ANALYSED_SQL}",
                     trial_ids
                 )
                 for r in saved:

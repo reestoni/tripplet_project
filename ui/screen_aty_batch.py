@@ -39,6 +39,7 @@ from db.connection import fetch_all, execute, new_global_id
 from ui.widgets.footer import FooterBar
 from ui.widgets import sidebar_nav
 import app_meta
+from ui.yarnscope import aty_service as _aty_service
 
 # ---------------------------------------------------------------------------
 # Konstanten
@@ -157,7 +158,7 @@ class ATYFolderScanner:
             cols_sql = ", ".join(_ALL_DB_COLS)
             rows = fetch_all(
                 f"SELECT TrialID, {cols_sql} FROM tblLaborATYoMat "
-                f"WHERE TrialID IN ({ph}) AND Timestamp IS NOT NULL",
+                f"WHERE TrialID IN ({ph}) AND {_aty_service.ANALYSED_SQL}",
                 trial_ids,
             )
             for r in rows:

@@ -151,7 +151,7 @@ def trial_files(series_id, trials, reference_ids=(), with_analysed: bool = False
     skipped - they never have a TDMS file.
 
     Returns ``[{"trial_id", "vno" (int), "tdms" (Path or None)[, "analysed" (bool)]}]``
-    in trial order. ``analysed`` = a tbllabordtyomat row with Timestamp exists
+    in trial order. ``analysed`` = a tbllabordtyomat row with analysis values (ANALYSED_SQL)
     (desktop: ✅ analysed, ⏳ file but not analysed, nothing = no file).
     """
     out = []
@@ -172,11 +172,18 @@ def trial_files(series_id, trials, reference_ids=(), with_analysed: bool = False
 # Database
 # ===========================================================================
 
+# "Analysed" = the row holds analysis values, not just a Timestamp: new trials get an
+# empty DTYoMat row, and editing a cell of the DTYoMat tab stamps Timestamp too
+# (so a Timestamp alone marked trials without any TDMS as analysed). save_analysis()
+# always writes the bins; FPm keeps older analyses (without bins) counted.
+ANALYSED_SQL = "Timestamp IS NOT NULL AND (kl_bin_1 IS NOT NULL OR ol_bin_1 IS NOT NULL OR FPm IS NOT NULL)"
+
+
 def is_trial_analysed(trial_id) -> bool:
-    """True if tbllabordtyomat already holds a saved analysis (Timestamp set)."""
+    """True if tbllabordtyomat already holds a saved analysis (ANALYSED_SQL)."""
     from db.connection import fetch_all
     try:
-        rows = fetch_all("SELECT 1 FROM tbllabordtyomat WHERE TrialID = ? AND Timestamp IS NOT NULL", (trial_id,))
+        rows = fetch_all(f"SELECT 1 FROM tbllabordtyomat WHERE TrialID = ? AND {ANALYSED_SQL}", (trial_id,))
         return bool(rows)
     except Exception:
         return False
@@ -190,7 +197,7 @@ def analysed_trial_ids(trial_ids) -> set:
         return set()
     marks = ",".join("?" * len(ids))
     rows = fetch_all(
-        f"SELECT DISTINCT TrialID FROM tbllabordtyomat WHERE Timestamp IS NOT NULL AND TrialID IN ({marks})",
+        f"SELECT DISTINCT TrialID FROM tbllabordtyomat WHERE {ANALYSED_SQL} AND TrialID IN ({marks})",
         ids)
     return {int(r["TrialID"]) for r in rows}
 

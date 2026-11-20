@@ -87,11 +87,17 @@ def find_tdms(series_id: int, versuch_no: int, base=None):
     return None
 
 
+# "Analysed" = the row holds analysis values, not just a Timestamp (new trials get an
+# empty ATYoMat row; a Timestamp alone marked trials without TDMS as analysed).
+# save_db_row() always writes ParamsVersion; CoreMeanUm keeps older rows counted.
+ANALYSED_SQL = "Timestamp IS NOT NULL AND (ParamsVersion IS NOT NULL OR CoreMeanUm IS NOT NULL)"
+
+
 def is_trial_analysed(trial_id) -> bool:
-    """True if tblLaborATYoMat holds a saved analysis (Timestamp set) - desktop ✅."""
+    """True if tblLaborATYoMat holds a saved analysis (ANALYSED_SQL) - desktop ✅."""
     from db.connection import fetch_all
     try:
-        return bool(fetch_all("SELECT 1 FROM tblLaborATYoMat WHERE TrialID=? AND Timestamp IS NOT NULL",
+        return bool(fetch_all(f"SELECT 1 FROM tblLaborATYoMat WHERE TrialID=? AND {ANALYSED_SQL}",
                               (trial_id,)))
     except Exception:
         return False
@@ -106,7 +112,7 @@ def analysed_trial_ids(trial_ids) -> set:
     marks = ",".join("?" * len(ids))
     try:
         rows = fetch_all(f"SELECT DISTINCT TrialID FROM tblLaborATYoMat "
-                         f"WHERE Timestamp IS NOT NULL AND TrialID IN ({marks})", ids)
+                         f"WHERE {ANALYSED_SQL} AND TrialID IN ({marks})", ids)
     except Exception:
         return set()
     return {int(r["TrialID"]) for r in rows}
