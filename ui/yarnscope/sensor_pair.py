@@ -87,9 +87,11 @@ def find_delay(a: np.ndarray, b: np.ndarray, spacing_mm: float = 0.25, max_lag: 
 
 
 def speed_m_min(distance_mm: float, delay_s: float) -> Optional[float]:
-    if not distance_mm or not delay_s or delay_s <= 0:
+    """Speed from the distance and the delay - the sign of the delay (which sensor sees the yarn first) does not
+    matter, the yarn may run either way through the two heads."""
+    if not distance_mm or not delay_s:
         return None
-    return distance_mm / 1000.0 / delay_s * 60.0
+    return distance_mm / 1000.0 / abs(delay_s) * 60.0
 
 
 def speed_profile(a: np.ndarray, b: np.ndarray, rate: float, lag: float, spacing_mm: float, window_m: float,
@@ -176,7 +178,8 @@ def pair_report(axes_a: Sequence[np.ndarray], axes_b: Sequence[np.ndarray], rate
             if nominal_speed:
                 out["speed_dev_pct"] = round((out["speed"] / nominal_speed - 1) * 100.0, 2)
         if nominal_speed:
-            out["distance_from_speed_mm"] = round(nominal_speed / 60.0 * delay * 1000.0, 1)
+            out["distance_from_speed_mm"] = round(nominal_speed / 60.0 * abs(delay) * 1000.0, 1)
+        out["first"] = "main" if delay > 0 else "second"      # which sensor the yarn passes first
         out["profile"] = speed_profile(a, b, rate, lag, spacing_mm, window_m, distance_mm)
     ra, _ = knot_runs(a)
     rb, _ = knot_runs(b)

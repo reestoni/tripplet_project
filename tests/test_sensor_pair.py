@@ -72,3 +72,11 @@ def test_unrelated_signals_are_not_reliable():
     c, _ = _pair(seed=7)
     r = sp.pair_report([a], [c], RATE, 0.25, distance_mm=100, nominal_speed=SPEED)
     assert r["reliable"] is False and "speed" not in r and "knots" not in r
+
+
+def test_speed_does_not_care_about_the_direction():
+    a, b = _pair(lag=400)
+    distance = SPEED / 60.0 * (400 / RATE) * 1000.0
+    r = sp.pair_report([b], [a], RATE, 0.25, distance_mm=distance, nominal_speed=SPEED)   # main sensor downstream
+    assert r["lag_samples"] < 0 and r["first"] == "second"
+    assert r["speed"] == pytest.approx(SPEED, rel=0.002) and r["distance_from_speed_mm"] == pytest.approx(distance, abs=0.2)

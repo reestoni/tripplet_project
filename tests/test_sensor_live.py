@@ -240,3 +240,15 @@ def test_desktop_window_auto_speed(env):  # noqa: F811
     assert sl.current().auto_speed and sl.current().rows[0]["speed"] == pytest.approx(700, rel=0.01)
     assert "700" in w._tile_labels[2].text()
     w.close()
+
+
+def test_live_auto_speed_either_direction(env):  # noqa: F811
+    """The yarn may pass the SECOND sensor first (main sensor downstream): the speed is found all the same."""
+    class Reverse(MovingYarnDaq):
+        DIST_MM = -160.0                                       # sensor 1 sees the yarn 160 mm AFTER sensor 2
+    sm.set_daq(Reverse())
+    s = sl.start(box="Dev2", head_name="PXL_3_121_W", connector="C1", second={"head_name": "OBD_5_192_M", "connector": "C2"},
+                 speed_m_min=None, distance_mm=160, auto_speed=True, window_m=10, save=False)
+    _wait(lambda: len(s.rows) >= 2, timeout=120)
+    sl.stop()
+    assert s.rows[0]["speed"] == pytest.approx(700, rel=0.01)

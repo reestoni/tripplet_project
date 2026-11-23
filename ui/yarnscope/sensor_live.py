@@ -301,7 +301,7 @@ class LiveSession:
                 d = r["lag"] / rate if ok and r["lag"] else None
                 row.update(corr=_num(r["corr"], 3), delay_ms=_num(d * 1000.0 if d else None, 3),
                            speed=_num(sensor_pair.speed_m_min(self.distance_mm, d) if d and self.distance_mm else None, 1),
-                           distance_from_speed_mm=_num(self.speed / 60.0 * d * 1000.0 if d else None, 1))
+                           distance_from_speed_mm=_num(self.speed / 60.0 * abs(d) * 1000.0 if d else None, 1))
             self.rows.append(row)
             if len(self.rows) > MAX_ROWS:
                 del self.rows[: len(self.rows) - MAX_ROWS]
@@ -342,7 +342,7 @@ class LiveSession:
                 have -= n
                 r = sensor_pair.find_delay(sensor_pair.combined(blk[0]), sensor_pair.combined(blk[1]), sm.SPACING_MM,
                                            max_lag=int(sensor_pair.DEFAULT_MAX_DELAY_S * rate))
-                ok = r["corr"] is not None and r["corr"] >= sensor_pair.MIN_CORR and r["lag"] and r["lag"] > 0
+                ok = r["corr"] is not None and r["corr"] >= sensor_pair.MIN_CORR and bool(r["lag"])   # either direction
                 v = sensor_pair.speed_m_min(self.distance_mm, r["lag"] / rate) if ok else None
                 if v is not None and not (sm.SPEED_RANGE[0] <= v <= sm.SPEED_RANGE[1]):
                     v = None
