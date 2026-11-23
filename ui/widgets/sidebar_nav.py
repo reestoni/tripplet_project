@@ -487,7 +487,7 @@ def build_tools_group(
 
     # YarnScope Live (2026-11-23, ui/widgets/sensor_live_window.py): same right as the TDMS Inspector, own window
     if callable(on_yarnscope_live):
-        btn_live = icon_btn("YarnScope Live", "tdms_inspector.png", "SidebarItem", on_yarnscope_live)
+        btn_live = icon_btn("YarnScope Live", "yarnscope_live.png", "SidebarItem", on_yarnscope_live)
         _add_if(sidebar, btn_live, "tdms_inspector")
 
 
