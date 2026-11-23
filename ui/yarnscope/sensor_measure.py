@@ -199,6 +199,13 @@ def sensor_presets(folder: Optional[Path] = None, cal_folder: Optional[Path] = N
                 seen[k] = {"key": f"{h.name}@{r['connector']}", "head": h.name, "connector": r["connector"],
                            "axes": h.n_axes, "label": f"{h.label} – {r['connector']}", "title": h.title,
                            "date": h.date}
+    # every known head also on the OTHER connector (user 2026-11-23: OBD 5-192 hangs on C2, Sensoft only ever had it
+    # on C1) - the configurations name the heads, the connector is free
+    for (head, conn), p in list(seen.items()):
+        for c in CONNECTORS:
+            if (head, c) not in seen:
+                seen[(head, c)] = dict(p, key=f"{head}@{c}", connector=c,
+                                       label=p["label"].rsplit(" – ", 1)[0] + f" – {c}")
     rank = {k: i for i, k in enumerate(first)}
     return sorted(seen.values(), key=lambda p: (rank.get((p["head"], p["connector"]), len(rank)), -p["axes"],
                                                 p["head"], p["connector"]))
@@ -505,6 +512,8 @@ def _sensors(head_name: str, connector: str, second: Any) -> List[Tuple[Head, st
             else (second[0], second[1])
         if c2 == connector:
             raise MeasureError("same_connector", f"both sensors on {c2}", connector=c2)
+        if h2 == head_name:
+            raise MeasureError("same_head", f"{h2} cannot hang on both connectors", head=h2)
         out.append((load_head(h2), c2))
     for h, c in out:
         channels_for(h, c)                       # unknown connector -> bad_connector

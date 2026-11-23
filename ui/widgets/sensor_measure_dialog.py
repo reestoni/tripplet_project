@@ -36,6 +36,7 @@ ERRORS = {
     "bad_name": "Name not allowed: letters, digits, _ . - and spaces, at most 60 characters.",
     "same_connector": "Both sensors are on connector {connector} - choose a sensor on the other connector.",
     "auto_needs_two": "Measuring the speed needs a second sensor and the distance between the sensors.",
+    "same_head": "{head} cannot be the main and the second sensor at the same time.",
 }
 
 
@@ -289,7 +290,7 @@ class SensorMeasureDialog(QDialog):
         self.cb_second.addItem("– none –", None)
         for i in range(self.cb_sensor.count()):
             d = self.cb_sensor.itemData(i)
-            if d and main and d.get("connector") != main.get("connector"):
+            if d and main and d.get("connector") != main.get("connector") and d.get("head") != main.get("head"):
                 self.cb_second.addItem(d["label"], d)
                 if d.get("key") == want:
                     self.cb_second.setCurrentIndex(self.cb_second.count() - 1)

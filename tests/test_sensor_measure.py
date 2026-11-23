@@ -88,8 +88,9 @@ def test_calibration_and_presets(env):
     assert abs(h.to_um(np.array([7.078]), 0)[0] - (10267.73 - 1458.12 * 7.078)) < 1e-9
     assert sm.load_head("OBD_5_192_M").n_axes == 1
     presets = sm.sensor_presets()
-    assert [(p["head"], p["connector"], p["axes"]) for p in presets] == [
-        ("PXL_3_121_W", "C1", 2), ("OBD_5_192_M", "C2", 1)]       # head without calibration file left out
+    assert [(p["head"], p["connector"], p["axes"]) for p in presets] == [      # every head on both connectors
+        ("PXL_3_121_W", "C1", 2), ("PXL_3_121_W", "C2", 2), ("OBD_5_192_M", "C1", 1), ("OBD_5_192_M", "C2", 1)]
+    # (a head without calibration file is left out)
     assert sm.channels_for(h, "C1") == ["ai1", "ai9"]
     assert sm.channels_for(sm.load_head("OBD_5_192_M"), "C2") == ["ai4"]
     with pytest.raises(sm.MeasureError) as e:

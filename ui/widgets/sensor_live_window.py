@@ -210,7 +210,7 @@ class SensorLiveWindow(QWidget):
         self.cb_second.addItem("– none –", None)
         for i in range(self.cb_sensor.count()):
             d = self.cb_sensor.itemData(i)
-            if d and main and d.get("connector") != main.get("connector"):
+            if d and main and d.get("connector") != main.get("connector") and d.get("head") != main.get("head"):
                 self.cb_second.addItem(d["label"], d)
                 if d.get("key") == want:
                     self.cb_second.setCurrentIndex(self.cb_second.count() - 1)
