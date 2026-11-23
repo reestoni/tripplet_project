@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QSettings, Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QButtonGroup, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QMessageBox,
+    QButtonGroup, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
     QProgressBar, QPushButton, QRadioButton, QVBoxLayout, QWidget,
 )
 
@@ -32,6 +32,7 @@ ERRORS = {
     "cancelled": "Measurement cancelled - nothing saved.",
     "daq_error": "The box reported an error: {detail}",
     "bad_kind": "Unknown folder.",
+    "bad_name": "Name not allowed: letters, digits, _ . - and spaces, at most 60 characters.",
 }
 
 
@@ -68,11 +69,19 @@ class _Job(QThread):
 
 
 class SensorMeasureDialog(QDialog):
-    def __init__(self, series_id: int, user: Optional[Dict[str, Any]] = None, parent: Optional[QWidget] = None):
+    def __init__(self, series_id: Optional[int], user: Optional[Dict[str, Any]] = None, parent: Optional[QWidget] = None,
+                 free: bool = False, on_measured=None):
+        """free = TDMS Inspector (Nutzerwunsch 2026-11-23): own name + speed instead of a trial, file to _manual,
+        on_measured(path) after each measurement (the inspector opens it)."""
         super().__init__(parent)
-        self.setWindowTitle("Measure (YarnScope)")
+        self.free, self.on_measured = bool(free), on_measured
+        self.setWindowTitle("Measure (free name)" if self.free else "Measure (YarnScope)")
         self.setMinimumWidth(560)
-        self.series_id, self.user = int(series_id), user or {}
+        self.series_id, self.user = (int(series_id) if series_id is not None else None), user or {}
+        try:                               # measuring writes a file to the share: AccessLevel 2+ (like other writes)
+            self.read_only = int((user or {}).get("access_level") or 0) < 2
+        except (TypeError, ValueError):
+            self.read_only = True
         self.measured = 0
         self._job: Optional[_Job] = None
         self._zero: Optional[Dict[str, Any]] = None
@@ -80,8 +89,12 @@ class SensorMeasureDialog(QDialog):
         self._settings = QSettings("TrippleT", "SensorMeasure")
 
         root = QVBoxLayout(self)
-        hint = QLabel("Records the yarn signal directly from the NI box (instead of Sensoft). No master "
-                      "measurement needed. The file goes to the YarnScope folder and is analysed automatically.")
+        hint = QLabel(
+            f"Records the yarn signal under your own name and speed - no series, nothing in the database. The file "
+            f"goes to the sub-folder '{sm.MANUAL_DIR}' of the YarnScope folder (the automatic analysis ignores it) "
+            f"and opens in the inspector." if self.free else
+            "Records the yarn signal directly from the NI box (instead of Sensoft). No master "
+            "measurement needed. The file goes to the YarnScope folder and is analysed automatically.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#555;")
         root.addWidget(hint)
@@ -105,7 +118,7 @@ class SensorMeasureDialog(QDialog):
         grp.addButton(self.rb_dty)
         grp.addButton(self.rb_aty)
         (self.rb_aty if self._settings.value("kind") == "aty" else self.rb_dty).setChecked(True)
-        self.rb_dty.toggled.connect(lambda _c: self._fill_trials())
+        self.rb_dty.toggled.connect(lambda _c: None if self.free else self._fill_trials())
         kind_row.addWidget(self.rb_dty)
         kind_row.addWidget(self.rb_aty)
         kind_row.addStretch(1)
@@ -123,12 +136,19 @@ class SensorMeasureDialog(QDialog):
         form2 = QFormLayout()
         self.cb_trial = QComboBox()
         self.cb_trial.currentIndexChanged.connect(self._on_trial)
-        form2.addRow("Trial:", self.cb_trial)
+        self.ed_name = QLineEdit(str(self._settings.value("free_name", "99999_1")))
+        self.ed_name.setMaxLength(60)
+        self.ed_name.setPlaceholderText("e.g. 99999_34 - counts up after each measurement")
+        self.ed_name.textChanged.connect(lambda _t: self._sync())
+        if self.free:
+            form2.addRow("Name:", self.ed_name)
+        else:
+            form2.addRow("Trial:", self.cb_trial)
         self.sp_speed = QDoubleSpinBox()
         self.sp_speed.setRange(*sm.SPEED_RANGE)
         self.sp_speed.setDecimals(1)
         self.sp_speed.setSuffix(" m/min")
-        self.sp_speed.setValue(600)
+        self.sp_speed.setValue(float(self._settings.value("free_speed", 600)) if self.free else 600)
         form2.addRow("Speed:", self.sp_speed)
         self.sp_length = QDoubleSpinBox()
         self.sp_length.setRange(*sm.LENGTH_RANGE)
@@ -166,7 +186,9 @@ class SensorMeasureDialog(QDialog):
 
         self._load_sensors()
         self._load_boxes()
-        self._load_trials()
+        if not self.free:
+            self._load_trials()
+        self._sync()
 
     # ---------------------------------------------------------------------------------------------- lists
     def _kind(self) -> str:
@@ -237,6 +259,7 @@ class SensorMeasureDialog(QDialog):
         t = self.cb_trial.currentData()
         if t and t.get("speed"):
             self.sp_speed.setValue(float(t["speed"]))
+        self._sync()
 
     def _reset_zero(self) -> None:
         self._zero = None
@@ -244,9 +267,15 @@ class SensorMeasureDialog(QDialog):
 
     def _sync(self) -> None:
         busy = self._job is not None
-        ok = bool(self.cb_box.currentData()) and bool(self.cb_sensor.currentData()) and self.cb_trial.count() > 0
-        self.btn_measure.setEnabled(ok and not busy)
-        self.btn_zero.setEnabled(bool(self.cb_box.currentData()) and bool(self.cb_sensor.currentData()) and not busy)
+        target = self.ed_name.text().strip() if self.free else (
+            f"V{self.cb_trial.currentData()['vno']:03d}" if self.cb_trial.currentData() else "")
+        ok = bool(self.cb_box.currentData()) and bool(self.cb_sensor.currentData()) and bool(target)
+        self.btn_measure.setEnabled(ok and not busy and not self.read_only)
+        self.btn_measure.setText(f"2. Measure {target}".rstrip())   # like the web: "2. Measure V002" / "99999_35"
+        self.btn_zero.setEnabled(bool(self.cb_box.currentData()) and bool(self.cb_sensor.currentData()) and not busy
+                                 and not self.read_only)
+        if self.read_only and not self.lbl_result.text():
+            self.lbl_result.setText("Write access required (AccessLevel > 1).")
         self.btn_cancel.setVisible(busy)
 
     # ------------------------------------------------------------------------------------------- actions
@@ -301,6 +330,9 @@ class SensorMeasureDialog(QDialog):
                                         for a in z["axes"]))
 
     def _on_measure(self, replace: bool) -> None:
+        if self.free:
+            self._on_measure_free()
+            return
         t = self.cb_trial.currentData()
         if not t:
             return
@@ -318,6 +350,30 @@ class SensorMeasureDialog(QDialog):
                                  speed_m_min=self.sp_speed.value(), length_m=self.sp_length.value(),
                                  kind=self._kind(), replace=replace, user=self.user, zero=self._zero)
         self._start(sm.measure, self._last_kwargs, self._measure_done)
+
+    def _on_measure_free(self) -> None:
+        if self._zero is None and QMessageBox.question(
+                self, "Measure", "The empty value (no yarn) was not checked. Measure anyway?") != QMessageBox.Yes:
+            return
+        s = self._sel()
+        for k, v in (("box", s["box"]), ("sensor", (self.cb_sensor.currentData() or {}).get("key")),
+                     ("kind", self._kind()), ("length", self.sp_length.value()), ("free_speed", self.sp_speed.value())):
+            self._settings.setValue(k, v)
+        name = self.ed_name.text().strip()
+        self.lbl_result.setText(f"Measuring {name} …")
+        self._last_kwargs = dict(name=name, **s, speed_m_min=self.sp_speed.value(), length_m=self.sp_length.value(),
+                                 kind=self._kind(), user=self.user, zero=self._zero)
+        self._start(sm.measure_free, self._last_kwargs, self._measure_free_done)
+
+    def _measure_free_done(self, res: Dict[str, Any]) -> None:
+        self.measured += 1
+        axes = "   ".join(f"{a['axis'].upper()} Ø {a['mean_um']:.0f} µm" for a in res["axes"])
+        self.lbl_result.setText(f"<b>Saved:</b> {res['file']} – {res['points']:,} points at {res['rate']:.1f} Hz"
+                                f"<br>{axes} – opened in the inspector".replace(",", "'"))
+        self.ed_name.setText(res["next_name"])
+        self._settings.setValue("free_name", res["next_name"])
+        if callable(self.on_measured):
+            self.on_measured(res["path"])
 
     def _measure_done(self, res: Dict[str, Any]) -> None:
         self.measured += 1

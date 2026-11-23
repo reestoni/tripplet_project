@@ -205,11 +205,13 @@ def test_dialog_measures_and_moves_on(env, qapp, monkeypatch):
         return [{**t, "dty": t["dty"] or next((n for n in names if n.startswith(f"466_{t['vno']}_")), None)}
                 for t in trials]
     monkeypatch.setattr(smd.sm, "trials_for", fake_trials)
-    dlg = smd.SensorMeasureDialog(466, {"username": "test"})
+    assert not smd.SensorMeasureDialog(466, {"username": "test", "access_level": 1}).btn_measure.isEnabled()
+    dlg = smd.SensorMeasureDialog(466, {"username": "test", "access_level": 2})
     assert dlg.cb_box.currentData() == "Dev2"
     assert dlg.cb_sensor.currentData()["head"] == "PXL_3_121_W"
     assert dlg.cb_trial.currentData()["vno"] == 2           # first trial without a file
     assert dlg.sp_speed.value() == 762.0                     # speed from the trial
+    assert dlg.btn_measure.text() == "2. Measure V002"
     dlg.sp_length.setValue(5)
     dlg._on_zero()
     _run_job(dlg, qapp)
@@ -219,6 +221,28 @@ def test_dialog_measures_and_moves_on(env, qapp, monkeypatch):
     assert "Saved" in dlg.lbl_result.text() and dlg.measured == 1
     assert [p.name.split("_")[1] for p in env.dty.glob("*.tdms")] == ["2"]
     assert dlg.cb_trial.currentData()["vno"] == 3             # moved on to the next trial
+    assert dlg.btn_measure.text() == "2. Measure V003"
+    dlg.close()
+
+
+def test_dialog_free_mode_for_the_inspector(env, qapp):
+    """TDMS Inspector: own name + speed, file to _manual, name counts up, on_measured gets the path."""
+    from PySide6.QtCore import QSettings
+    from ui.widgets import sensor_measure_dialog as smd
+    QSettings("TrippleT", "SensorMeasure").clear()
+    opened = []
+    dlg = smd.SensorMeasureDialog(None, {"username": "test", "access_level": 2}, free=True, on_measured=opened.append)
+    dlg.ed_name.setText("99999_34")
+    dlg.sp_speed.setValue(764)
+    dlg.sp_length.setValue(3)
+    assert dlg.btn_measure.text() == "2. Measure 99999_34" and dlg.btn_measure.isEnabled()
+    dlg._on_zero()
+    _run_job(dlg, qapp)
+    dlg._on_measure(False)
+    _run_job(dlg, qapp)
+    files = list((env.dty / sm.MANUAL_DIR).glob("99999_34_*.tdms"))
+    assert len(files) == 1 and opened == [str(files[0])]
+    assert dlg.ed_name.text() == "99999_35" and dlg.btn_measure.text() == "2. Measure 99999_35"
     dlg.close()
 
 
@@ -228,3 +252,23 @@ def test_speed_is_the_winder_speed():
     assert sm.default_speed({"SpeedShaft2": "600", "Winder": None}) == 600.0     # no winder % -> LW 2
     assert sm.default_speed({"SpeedShaft2": None, "Shaft2Speed": 460}) is None   # ATY: no proposal
     assert sm.default_speed({"SpeedShaft2": 0, "Winder": 3}) is None
+
+
+def test_free_measurement_goes_to_manual_folder(env):
+    when = dt.datetime(2026, 11, 23, 9, 5)
+    kw = dict(box="Dev2", head_name="PXL_3_121_W", connector="C1", speed_m_min=764, length_m=4, now=when)
+    res = sm.measure_free(name="466_5", **kw)
+    path = env.dty / sm.MANUAL_DIR / "466_5_231126_0905.tdms"
+    assert res["path"] == str(path) and path.is_file() and res["next_name"] == "466_6"
+    assert dty_service.find_tdms(466, 5) is None              # never seen by the tab / the automatic analysis
+    assert not list(env.dty.glob("*.tdms"))
+    from nptdms import TdmsFile
+    t = TdmsFile.read(path)
+    assert list(t["Rohdaten"]["Wert"][:])[:2] == ["466_5", "764"] and t.properties["TrippleT.Manual"] == 1
+    again = sm.measure_free(name="466_5", **kw)                # same name + minute -> seconds added, not overwritten
+    assert again["file"] != res["file"] and len(list((env.dty / sm.MANUAL_DIR).glob("*.tdms"))) == 2
+    for bad in ("", "a/b", r"..\x"):
+        with pytest.raises(sm.MeasureError) as e:
+            sm.measure_free(name=bad, **kw)
+        assert e.value.code == "bad_name"
+    assert sm.next_name("99999_009") == "99999_010" and sm.next_name("Fabel") == "Fabel_2"

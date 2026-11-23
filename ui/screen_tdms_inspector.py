@@ -105,6 +105,13 @@ class TdmsInspectorScreen(QWidget):
         self.btn_open.setObjectName("GreenBtn")
         self.btn_open.clicked.connect(self._on_open_file)
         top_row.addWidget(self.btn_open, 0)
+        # Measure with the YarnScope sensor under an own name + speed (Nutzerwunsch 2026-11-23,
+        # ui/widgets/sensor_measure_dialog.py free mode); the new file is opened here.
+        self.btn_measure = QPushButton("📏 Measure…")
+        self.btn_measure.setToolTip("Measure with the YarnScope sensor (NI box) under your own name and speed - "
+                                    "the file opens here")
+        self.btn_measure.clicked.connect(self._on_measure)
+        top_row.addWidget(self.btn_measure, 0)
         self.lbl_current_file = QLabel("No file selected.")
         self.lbl_current_file.setStyleSheet("color:#666;")
         top_row.addWidget(self.lbl_current_file, 1)
@@ -173,7 +180,17 @@ class TdmsInspectorScreen(QWidget):
             self, "Open TDMS file", "", "TDMS files (*.tdms);;All files (*)")
         if not path_str:
             return
-        path = Path(path_str)
+        self._open_path(Path(path_str))
+
+    def _on_measure(self):
+        import app_meta
+        from ui.widgets.sensor_measure_dialog import SensorMeasureDialog
+        dlg = SensorMeasureDialog(None, getattr(app_meta, "current_user", {}) or {}, self, free=True,
+                                  on_measured=lambda path: self._open_path(Path(path)))
+        dlg.exec()
+
+    def _open_path(self, path: Path):
+        """Shows a TDMS file in both tabs (file dialog or a fresh measurement)."""
         self._current_path = path
         self.lbl_current_file.setText(f"\U0001F4C4 {path}")
 

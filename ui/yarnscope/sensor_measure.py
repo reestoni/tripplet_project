@@ -465,13 +465,44 @@ class _measuring:
         return False
 
 
+def _record(box: str, head: Head, connector: str, v: float, length: float, rate: float,
+            progress: Optional[Callable[[int, int], None]], cancel: Optional[Callable[[], bool]]):
+    """(box info, actual rate, points, [µm per axis]) - the recording itself, shared by both ways."""
+    chans = channels_for(head, connector)
+    b = _check_box(box)
+    with _measuring():
+        actual = _daq.actual_rate(box, chans, rate)
+        n = samples_for(length, v, actual)
+        actual, volts = _daq.read(box, chans, rate, n, progress=progress, cancel=cancel)
+    return b, actual, n, [head.to_um(volts[i], i) for i in range(len(chans))]
+
+
+def _extra(b: Dict[str, Any], actual: float, head: Head, connector: str, box: str, kind: str,
+           user: Optional[Dict[str, Any]], zero: Optional[Dict[str, Any]], **more: Any) -> Dict[str, Any]:
+    extra = {"ActualRateHz": round(actual, 3), "Head": head.name, "HeadTitle": head.title, "HeadCalDate": head.date,
+             "Connector": connector, "Box": box, "BoxSerial": b.get("serial"), "BoxProduct": b.get("product"),
+             "Kind": kind, "User": (user or {}).get("username") or (user or {}).get("id"),
+             "MeasuredAt": _dt.datetime.now().isoformat(timespec="seconds"), **more}
+    if zero:
+        for ax in zero.get("axes") or []:
+            extra[f"Empty{ax.get('axis', '').upper()}_um"] = ax.get("mean_um")
+    return extra
+
+
+def _result(path: Path, n: int, actual: float, v: float, length: float, axes_um, kind: str, **more: Any):
+    stats = [{"axis": "xy"[i], "mean_um": round(float(a.mean()), 1), "std_um": round(float(a.std()), 1)}
+             for i, a in enumerate(axes_um)]
+    return {"file": path.name, "path": str(path), "points": int(n), "rate": round(actual, 1), "speed": v,
+            "length": length, "axes": stats, "kind": kind, **more}
+
+
 def measure(*, series_id: int, trial_id: int, vno: int, box: str, head_name: str, connector: str,
             speed_m_min: Any, length_m: Any, kind: str = "dty", replace: bool = False,
             user: Optional[Dict[str, Any]] = None, zero: Optional[Dict[str, Any]] = None,
             progress: Optional[Callable[[int, int], None]] = None,
             cancel: Optional[Callable[[], bool]] = None, now: Optional[_dt.datetime] = None) -> Dict[str, Any]:
     """Measure one trial and save the TDMS into the DTY / ATY folder. Returns {file, path, points, rate, ...}.
-    An existing file of the trial: MeasureError("exists") unless replace - then it is moved to _replaced\\
+    An existing file of the trial: MeasureError("exists") unless replace - then it is moved to _replaced/
     (never deleted)."""
     head = load_head(head_name)
     chans = channels_for(head, connector)
@@ -482,13 +513,7 @@ def measure(*, series_id: int, trial_id: int, vno: int, box: str, head_name: str
     old = existing_file(series_id, vno, kind)
     if old is not None and not replace:
         raise MeasureError("exists", f"{old.name} exists", file=old.name)
-    b = _check_box(box)
-    label = f"{int(series_id)}_{int(vno)}"
-    with _measuring():
-        actual = _daq.actual_rate(box, chans, rate)
-        n = samples_for(length, v, actual)
-        actual, volts = _daq.read(box, chans, rate, n, progress=progress, cancel=cancel)
-    axes_um = [head.to_um(volts[i], i) for i in range(len(chans))]
+    b, actual, n, axes_um = _record(box, head, connector, v, length, rate, progress, cancel)
     moved = None
     if old is not None:
         dest = old.parent / REPLACED_DIR
@@ -498,18 +523,61 @@ def measure(*, series_id: int, trial_id: int, vno: int, box: str, head_name: str
             moved = dest / f"{old.stem}_{_dt.datetime.now():%H%M%S}{old.suffix}"
         shutil.move(str(old), str(moved))
     path = folder / file_name(series_id, vno, now)
-    extra = {"ActualRateHz": round(actual, 3), "Head": head.name, "HeadTitle": head.title, "HeadCalDate": head.date,
-             "Connector": connector, "Box": box, "BoxSerial": b.get("serial"), "BoxProduct": b.get("product"),
-             "TrialID": int(trial_id), "SeriesID": int(series_id), "Kind": kind,
-             "User": (user or {}).get("username") or (user or {}).get("id"), "MeasuredAt": _dt.datetime.now().isoformat(timespec="seconds")}
-    if zero:
-        for ax in zero.get("axes") or []:
-            extra[f"Empty{ax.get('axis', '').upper()}_um"] = ax.get("mean_um")
-    write_tdms(path, label, axes_um, v, length, rate, extra)
-    stats = [{"axis": "xy"[i], "mean_um": round(float(a.mean()), 1), "std_um": round(float(a.std()), 1)}
-             for i, a in enumerate(axes_um)]
-    return {"file": path.name, "path": str(path), "points": int(n), "rate": round(actual, 1), "speed": v,
-            "length": length, "axes": stats, "replaced": moved.name if moved else None, "kind": kind}
+    write_tdms(path, f"{int(series_id)}_{int(vno)}", axes_um, v, length, rate,
+               _extra(b, actual, head, connector, box, kind, user, zero, TrialID=int(trial_id), SeriesID=int(series_id)))
+    return _result(path, n, actual, v, length, axes_um, kind, replaced=moved.name if moved else None)
+
+
+# Free measurement (TDMS Inspector, Nutzerwunsch 2026-11-23): own name + speed, no series / trial / DB. The file goes
+# to the sub-folder _manual of the DTY / ATY folder - the automatic analysis and the YarnScope tabs only look at the
+# folder itself, so "466_5" typed here never lands on a real trial.
+MANUAL_DIR = "_manual"
+NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\- ]{0,59}")
+
+
+def check_name(name: Any) -> str:
+    n = str(name or "").strip()
+    if not NAME_RE.fullmatch(n):
+        raise MeasureError("bad_name", f"name {n!r}", name=n)
+    return n
+
+
+def manual_folder(kind: str) -> Path:
+    return tdms_folder(kind) / MANUAL_DIR
+
+
+def next_name(name: str) -> str:
+    """"99999_34" -> "99999_35" (last number counted up, digits kept); no number at the end -> name + "_2"."""
+    m = re.search(r"(\d+)$", name or "")
+    if not m:
+        return f"{name}_2" if name else ""
+    num = m.group(1)
+    return name[:m.start()] + str(int(num) + 1).zfill(len(num))
+
+
+def measure_free(*, name: Any, box: str, head_name: str, connector: str, speed_m_min: Any, length_m: Any,
+                 kind: str = "dty", user: Optional[Dict[str, Any]] = None, zero: Optional[Dict[str, Any]] = None,
+                 progress: Optional[Callable[[int, int], None]] = None,
+                 cancel: Optional[Callable[[], bool]] = None, now: Optional[_dt.datetime] = None) -> Dict[str, Any]:
+    """Measure with a free name and speed -> <DTY|ATY folder>/_manual/<name>_<DDMMYY>_<HHMM>.tdms. Same recording
+    and TDMS as measure(); a file of the same name and minute gets the seconds added (never overwritten)."""
+    label = check_name(name)
+    head = load_head(head_name)
+    chans = channels_for(head, connector)
+    v, length, rate = check_plan(speed_m_min, length_m, len(chans))
+    base = tdms_folder(kind)
+    if not base.is_dir():
+        raise MeasureError("folder_missing", f"{base} not reachable", folder=str(base))
+    folder = base / MANUAL_DIR
+    folder.mkdir(exist_ok=True)
+    b, actual, n, axes_um = _record(box, head, connector, v, length, rate, progress, cancel)
+    when = now or _dt.datetime.now()
+    path = folder / f"{label}_{when:%d%m%y_%H%M}.tdms"
+    if path.exists():
+        path = folder / f"{label}_{when:%d%m%y_%H%M%S}.tdms"
+    write_tdms(path, label, axes_um, v, length, rate,
+               _extra(b, actual, head, connector, box, kind, user, zero, Manual=1))
+    return _result(path, n, actual, v, length, axes_um, kind, name=label, next_name=next_name(label))
 
 
 # --------------------------------------------------------------------------------------------------- trial list
