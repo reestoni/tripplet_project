@@ -36,6 +36,20 @@ def open_window(user: Optional[Dict[str, Any]] = None, parent: Optional[QWidget]
     return _window
 
 
+def y_range(vals, rel: float, floor=None):
+    """Y axis with a MINIMUM span (like the web page): knots/m >= +-10 % of the mean, CV >= 0..40 %, speed >= +-3 %,
+    so 0.5 knots more does not look like a jump (user 2026-11-23). None = nothing to show."""
+    v = [x for x in vals if x is not None]
+    if not v:
+        return floor
+    lo, hi = min(v), max(v)
+    if floor:
+        lo, hi = min(lo, floor[0]), max(hi, floor[1])
+    mid = (lo + hi) / 2
+    half = max((hi - lo) / 2 * 1.15, abs(sum(v) / len(v)) * rel, 1e-9)
+    return (max(floor[0], mid - half) if floor else mid - half, mid + half)
+
+
 def _head_label(h: str) -> str:
     p = h.split("_")
     return f"{p[0]} {p[1]}-{p[2]}" if len(p) >= 3 else h
@@ -352,18 +366,27 @@ class SensorLiveWindow(QWidget):
         self._fig.clear()
         x = [r["to_m"] for r in rows]
         n = 3 if two else 2
-        for k, (key, title) in enumerate((("fpm", "Knots/m"), ("cv", "CV knot spacing %"))):
+        for k, (key, title, rel, floor) in enumerate((("fpm", "Knots/m", 0.10, None), ("cv", "CV knot spacing %", 0.0, (0, 40)))):
             ax = self._fig.add_subplot(1, n, k + 1)
+            allv = []
             for i, s in enumerate(sens):
-                ax.plot(x, [r["sensors"][i].get(key) if i < len(r["sensors"]) else None for r in rows], marker="o",
-                        ms=3, color=COLORS[i % 2], label=f"{_head_label(s['head'])} {s['connector']}")
+                ys = [r["sensors"][i].get(key) if i < len(r["sensors"]) else None for r in rows]
+                allv += ys
+                ax.plot(x, ys, marker="o", ms=3, color=COLORS[i % 2], label=f"{_head_label(s['head'])} {s['connector']}")
+            yr = y_range(allv, rel, floor)
+            if yr:
+                ax.set_ylim(*yr)
             ax.set_title(title, fontsize=9)
             ax.tick_params(labelsize=8)
             if two and k == 0:
                 ax.legend(fontsize=7)
         if two:
             ax = self._fig.add_subplot(1, n, 3)
-            ax.plot(x, [r.get("speed") for r in rows], marker="o", ms=3, color=COLORS[0])
+            sp = [r.get("speed") for r in rows]
+            ax.plot(x, sp, marker="o", ms=3, color=COLORS[0])
+            yr = y_range(sp, 0.03)
+            if yr:
+                ax.set_ylim(*yr)
             ax.set_title("Speed m/min", fontsize=9)
             ax.tick_params(labelsize=8)
         self._canvas.draw_idle()
