@@ -406,6 +406,7 @@ def build_tools_group(
     on_label_generator,
     on_tdms_inspector,
     open_in_new_tab=None,
+    on_yarnscope_live=None,
 ):
     """Fügt die Tools-Sektion (Canvas, Image Compare usw.) in die Sidebar ein."""
     from db.feature_access import FEATURES
@@ -483,6 +484,11 @@ def build_tools_group(
     btn_tdms_inspector = icon_btn("TDMS Inspector", "tdms_inspector.png", "SidebarItem", on_tdms_inspector,
                                    tab_capable=True, open_in_new_tab=open_in_new_tab)
     _add_if(sidebar, btn_tdms_inspector, "tdms_inspector")
+
+    # YarnScope Live (2026-11-23, ui/widgets/sensor_live_window.py): same right as the TDMS Inspector, own window
+    if callable(on_yarnscope_live):
+        btn_live = icon_btn("YarnScope Live", "tdms_inspector.png", "SidebarItem", on_yarnscope_live)
+        _add_if(sidebar, btn_live, "tdms_inspector")
 
 
 def build_admin_group(
@@ -959,6 +965,7 @@ def install_full_sidebar(sidebar: SidebarPanel, callbacks: Optional[dict], *,
         on_label_generator=cb.get("on_label_generator"),
         on_tdms_inspector=cb.get("on_tdms_inspector"),
         open_in_new_tab=open_in_new_tab,
+        on_yarnscope_live=cb.get("on_yarnscope_live"),
     )
     sidebar.add_separator()
 

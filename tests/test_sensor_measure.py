@@ -272,3 +272,83 @@ def test_free_measurement_goes_to_manual_folder(env):
             sm.measure_free(name=bad, **kw)
         assert e.value.code == "bad_name"
     assert sm.next_name("99999_009") == "99999_010" and sm.next_name("Fabel") == "Fabel_2"
+
+
+class YarnDaq(FakeDaq):
+    """Two sensors on the same yarn: ai1/ai9 = sensor 1, ai4 = sensor 2 sees it LAG samples later."""
+    LAG = 400
+
+    def read(self, box, channels, rate, n, progress=None, cancel=None):
+        from test_sensor_pair import _yarn
+        s = _yarn(n + self.LAG, seed=3)
+        rng = np.random.default_rng(4)
+        um = {"ai1": s[self.LAG:self.LAG + n], "ai9": s[self.LAG:self.LAG + n] + 150, "ai4": s[:n]}
+        cal = {"ai1": (10267.73, -1458.12), "ai9": (10424.72, -1480.20), "ai4": (2493.35, -353.89)}
+        volts = np.array([(um[c] + rng.normal(0, 8, n) - cal[c][0]) / cal[c][1] for c in channels])
+        self.calls.append((box, list(channels), rate, n))
+        return self.actual_rate(box, channels, rate), volts
+
+
+def test_two_sensors_at_once(env):
+    daq = YarnDaq()
+    sm.set_daq(daq)
+    rate = 20e6 / (20e6 // (764 / 60 / 0.00025))
+    distance = 764 / 60 * (YarnDaq.LAG / rate) * 1000           # mm that belong to the delay at 764 m/min
+    res = sm.measure(series_id=466, trial_id=1, vno=8, box="Dev2", head_name="PXL_3_121_W", connector="C1",
+                     second={"head_name": "OBD_5_192_M", "connector": "C2"}, distance_mm=distance,
+                     speed_m_min=764, length_m=30, now=dt.datetime(2026, 11, 23, 10, 0))
+    assert daq.calls[-1][1] == ["ai1", "ai9", "ai4"]                 # one task for all channels
+    assert res["file"] == "466_8_231126_1000.tdms" and (env.dty / res["file"]).is_file()
+    second = env.dty / "_C2" / res["second"]["file"]
+    assert second.is_file() and dty_service.find_tdms(466, 8) == env.dty / res["file"]   # the trial's file stays the main one
+    x2, y2 = read_axis_channels(second)
+    assert y2 is None                                              # 1-axis head
+    p = res["pair"]
+    assert p["reliable"] and abs(p["lag_samples"] - YarnDaq.LAG) < 0.5
+    assert p["speed"] == pytest.approx(764, rel=0.003) and p["knots"]["pct_a"] > 90
+    from nptdms import TdmsFile
+    props = TdmsFile.read(second).properties
+    assert props["TrippleT.PairFile"] == res["file"] and props["TrippleT.PairRole"] == "second"
+    assert props["TrippleT.PairSpeed"] == p["speed"]
+    # free measurement: both into _manual with the connector in the name
+    free = sm.measure_free(name="99999_40", box="Dev2", head_name="PXL_3_121_W", connector="C1",
+                           second={"head_name": "OBD_5_192_M", "connector": "C2"}, speed_m_min=764, length_m=10,
+                           now=dt.datetime(2026, 11, 23, 10, 5))
+    assert free["file"] == "99999_40_C1_231126_1005.tdms" and free["second"]["file"] == "99999_40_C2_231126_1005.tdms"
+    assert free["next_name"] == "99999_41" and "speed" not in free["pair"]          # no distance -> no speed
+    assert free["pair"]["distance_from_speed_mm"] == pytest.approx(distance, abs=0.5)
+    with pytest.raises(sm.MeasureError) as e:
+        sm.measure_free(name="x", box="Dev2", head_name="PXL_3_121_W", connector="C1",
+                        second={"head_name": "OBD_5_192_M", "connector": "C1"}, speed_m_min=764, length_m=2)
+    assert e.value.code == "same_connector"
+    with pytest.raises(sm.MeasureError) as e:                      # 3 channels: at most 1'250 m/min
+        sm.measure_free(name="x", box="Dev2", head_name="PXL_3_121_W", connector="C1",
+                        second={"head_name": "OBD_5_192_M", "connector": "C2"}, speed_m_min=1400, length_m=2)
+    assert e.value.code == "rate_too_high"
+
+
+def test_dialog_two_sensors(env, qapp):
+    """Desktop: choose the 2nd sensor + distance, both empty values, measured speed in the result."""
+    from PySide6.QtCore import QSettings
+    from ui.widgets import sensor_measure_dialog as smd
+    QSettings("TrippleT", "SensorMeasure").clear()
+    sm.set_daq(YarnDaq())
+    rate = 20e6 / (20e6 // (764 / 60 / 0.00025))
+    dlg = smd.SensorMeasureDialog(None, {"username": "test", "access_level": 2}, free=True)
+    assert [dlg.cb_second.itemText(i) for i in range(dlg.cb_second.count())][0] == "– none –"
+    assert not dlg.sp_distance.isEnabled()
+    dlg.cb_second.setCurrentIndex(1)                                # OBD 5-192 on C2
+    assert dlg.sp_distance.isEnabled()
+    dlg.sp_distance.setValue(round(764 / 60 * (YarnDaq.LAG / rate) * 1000, 1))
+    dlg.ed_name.setText("99999_60")
+    dlg.sp_speed.setValue(764)
+    dlg.sp_length.setValue(20)
+    dlg._on_zero()
+    _run_job(dlg, qapp)
+    assert "C1 X:" in dlg.lbl_zero.text() and "C2 X:" in dlg.lbl_zero.text()
+    dlg._on_measure(False)
+    _run_job(dlg, qapp)
+    txt = dlg.lbl_result.text()
+    assert "Measured speed 76" in txt and "Same knots" in txt and "99999_60_C2_" in txt
+    assert QSettings("TrippleT", "SensorMeasure").value("second") == "OBD_5_192_M@C2"
+    dlg.close()

@@ -500,6 +500,18 @@ def _trim_percentiles(values: List[float], lo_pct: float = 5.0, hi_pct: float = 
     return a[(a >= lo) & (a <= hi)].tolist()
 
 
+def knot_runs(y: np.ndarray, min_seg_pts: int = 3) -> Tuple[List[Tuple[int, int]], float]:
+    """([(start, end) of every knot in samples], threshold) - exactly the robust pipeline of analyze_series()
+    (same smoothing, Otsu threshold, hysteresis, short-run merge), so len(result) / length = its knots_per_m.
+    Used to find the same knot in two sensors (ui/yarnscope/sensor_pair.py, 2026-11-23)."""
+    x = np.asarray(_moving_average(np.asarray(y, dtype=float), max(1, int(min_seg_pts))), dtype=float)
+    T = _otsu_threshold(x)
+    knot_side = x[x < T]
+    h = 0.25 * (np.std(knot_side) if knot_side.size > 1 else (0.1 * np.std(x) + 1e-9))
+    labels = _merge_short_runs(_label_with_hysteresis(x, T, h), min_seg_pts)
+    return [(int(s), int(e)) for cls, s, e in _runs_from_labels(labels) if cls == 0], float(T)
+
+
 def analyze_series(
     # Hauptfunktion: vollständige DTY-Knoten-Analyse eines Mess-Signals.
     # Gibt ein umfangreiches Result-Dict zurück (Knoten/m, Rapport-CV, Stabilitäts-Score usw.).

@@ -355,6 +355,7 @@ class MainWindow(QMainWindow):
             on_yarn_stock=self._go_yarn_stock,
             on_label_generator=self._go_label_generator,
             on_tdms_inspector=self._go_tdms_inspector,
+            on_yarnscope_live=self._go_yarnscope_live,
             on_add_jet=self._go_add_jet,
             on_add_top_plate=self._go_add_top_plate,
             on_add_yarn=self._go_add_yarn,
@@ -769,6 +770,7 @@ class MainWindow(QMainWindow):
             on_yarn_stock=self._go_yarn_stock,
             on_label_generator=self._go_label_generator,
             on_tdms_inspector=self._go_tdms_inspector,
+            on_yarnscope_live=self._go_yarnscope_live,
             on_add_jet=self._go_add_jet,
             on_add_top_plate=self._go_add_top_plate,
             on_add_yarn=self._go_add_yarn,
@@ -1097,6 +1099,7 @@ class MainWindow(QMainWindow):
             on_offline_sync=self._go_offline_sync,
             on_lab_assistant=self._go_lab_assistant,
             on_tdms_inspector=self._go_tdms_inspector,
+            on_yarnscope_live=self._go_yarnscope_live,
             open_in_new_tab=self._open_in_new_tab_dispatch,
         )
         self.stack.addWidget(self.home)
@@ -2838,6 +2841,11 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(self.offline_sync)
         self.setWindowTitle("TrippleT – Offline Sync")
         self.stack.setCurrentWidget(self.offline_sync)
+
+    def _go_yarnscope_live(self):
+        """YarnScope Live (2026-11-23): its own window next to the main window (ui/widgets/sensor_live_window.py)."""
+        from ui.widgets.sensor_live_window import open_window
+        open_window(getattr(app_meta, "current_user", {}) or {}, self)
 
     def _go_tdms_inspector(self):
         # No is_superuser_level()/offline gate on purpose: this screen never

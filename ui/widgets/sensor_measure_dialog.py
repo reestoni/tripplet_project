@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.yarnscope import sensor_measure as sm
+from ui.yarnscope.sensor_pair import DEFAULT_DISTANCE_MM as _DEFAULT_DISTANCE
 
 ERRORS = {
     "no_nidaqmx": "The Python package nidaqmx is missing - install it (pip install nidaqmx).",
@@ -33,13 +34,51 @@ ERRORS = {
     "daq_error": "The box reported an error: {detail}",
     "bad_kind": "Unknown folder.",
     "bad_name": "Name not allowed: letters, digits, _ . - and spaces, at most 60 characters.",
+    "same_connector": "Both sensors are on connector {connector} - choose a sensor on the other connector.",
 }
+
+
+def pair_text(res: Dict[str, Any]) -> str:
+    """HTML lines for a simultaneous measurement (sensor_pair.pair_report), '' with one sensor."""
+    sec, pair = res.get("second"), res.get("pair")
+    if not sec:
+        return ""
+    out = [f"2nd sensor: {sec['file']}"]
+    if not pair or not pair.get("reliable"):
+        out.append(f"<span style='color:#c0392b'>The two signals do not match (match {(pair or {}).get('corr')}) - "
+                   f"no speed, no knot comparison. Is the same yarn running through both sensors?</span>")
+        return "<br>" + "<br>".join(out)
+    out.append(f"<b>Both sensors</b> · delay {pair.get('delay_ms', 0):.3f} ms · match {pair.get('corr')}")
+    if pair.get("speed") is not None:
+        dev = pair.get("speed_dev_pct")
+        out.append(f"<b>Measured speed {pair['speed']:.1f} m/min</b>" + (f" ({dev:+.2f} %)" if dev is not None else ""))
+    elif pair.get("distance_from_speed_mm") is not None:
+        out.append(f"At the set speed the sensors are {pair['distance_from_speed_mm']:.1f} mm apart")
+    prof = [x.get("speed") for x in pair.get("profile") or []]
+    if any(v is not None for v in prof):
+        out.append("Speed per 10 m: " + " · ".join("–" if v is None else f"{v:.0f}" for v in prof))
+    k = pair.get("knots") or {}
+    if k.get("pct_a") is not None:
+        out.append(f"Same knots: {k['pct_a']} % of sensor 1, {k.get('pct_b')} % of sensor 2 "
+                   f"({k.get('only_a', 0)} / {k.get('only_b', 0)} seen by only one)")
+        if k.get("len_diff_mm") is not None:
+            out.append(f"Knot length sensor 2 − sensor 1: {k['len_diff_mm']:.2f} mm (± {k.get('len_diff_sd_mm') or 0:.2f})")
+    return "<br>" + "<br>".join(out)
+
+
+def _zero_all(box: str, head_name: str, connector: str, second: Optional[Dict[str, Any]] = None,
+              distance_mm: Any = None) -> Dict[str, Any]:
+    """Empty value of the main sensor and, if chosen, of the second one (axes carry the connector)."""
+    z = sm.zero_check(box, head_name, connector)
+    if second:
+        z["axes"] += sm.zero_check(box, second["head_name"], second["connector"])["axes"]
+    return z
 
 
 def error_text(e: Exception) -> str:
     if isinstance(e, sm.MeasureError):
         try:
-            return ERRORS.get(e.code, "{detail}").format(detail=e.detail, **e.vars)
+            return ERRORS.get(e.code, "{detail}").format(**{"detail": e.detail, **(e.vars or {})})
         except (KeyError, ValueError):
             return e.detail
     return str(e)
@@ -110,8 +149,20 @@ class SensorMeasureDialog(QDialog):
         row.addWidget(btn_rescan)
         form.addRow("Box:", row)
         self.cb_sensor = QComboBox()
-        self.cb_sensor.currentIndexChanged.connect(lambda _i: self._reset_zero())
+        self.cb_sensor.currentIndexChanged.connect(lambda _i: (self._fill_second(), self._reset_zero()))
         form.addRow("Sensor:", self.cb_sensor)
+        # 2nd sensor on the other connector, read in the same measurement (Nutzerwunsch 2026-11-23)
+        self.cb_second = QComboBox()
+        self.cb_second.currentIndexChanged.connect(lambda _i: (self._reset_zero(), self._sync()))
+        form.addRow("2nd sensor at once:", self.cb_second)
+        self.sp_distance = QDoubleSpinBox()
+        self.sp_distance.setRange(0, 100000)
+        self.sp_distance.setDecimals(1)
+        self.sp_distance.setSuffix(" mm")
+        self.sp_distance.setSpecialValueText("– (only the delay)")
+        self.sp_distance.setToolTip("Distance between the two sensors - gives the measured speed")
+        self.sp_distance.setValue(float(self._settings.value("distance", _DEFAULT_DISTANCE) or 0))
+        form.addRow("Distance:", self.sp_distance)
         kind_row = QHBoxLayout()
         self.rb_dty, self.rb_aty = QRadioButton("DTY (YarnScopeTDMS)"), QRadioButton("ATY (ATYtdms)")
         grp = QButtonGroup(self)
@@ -226,6 +277,24 @@ class SensorMeasureDialog(QDialog):
             d = self.cb_sensor.itemData(i)
             if d and d.get("key") == last:
                 self.cb_sensor.setCurrentIndex(i)
+        self._fill_second()
+
+    def _fill_second(self) -> None:
+        """2nd sensor list: '– none –' + the sensors on the OTHER connector than the main one."""
+        main = self.cb_sensor.currentData() or {}
+        want = (self.cb_second.currentData() or {}).get("key") or self._settings.value("second")
+        self.cb_second.blockSignals(True)
+        self.cb_second.clear()
+        self.cb_second.addItem("– none –", None)
+        for i in range(self.cb_sensor.count()):
+            d = self.cb_sensor.itemData(i)
+            if d and main and d.get("connector") != main.get("connector"):
+                self.cb_second.addItem(d["label"], d)
+                if d.get("key") == want:
+                    self.cb_second.setCurrentIndex(self.cb_second.count() - 1)
+        self.cb_second.blockSignals(False)
+        has = bool(self.cb_second.currentData())
+        self.sp_distance.setEnabled(has)
 
     def _load_trials(self, select_vno: Optional[int] = None) -> None:
         try:
@@ -277,11 +346,21 @@ class SensorMeasureDialog(QDialog):
         if self.read_only and not self.lbl_result.text():
             self.lbl_result.setText("Write access required (AccessLevel > 1).")
         self.btn_cancel.setVisible(busy)
+        self.sp_distance.setEnabled(bool(self.cb_second.currentData()) and not busy)
 
     # ------------------------------------------------------------------------------------------- actions
     def _sel(self) -> Dict[str, Any]:
         p = self.cb_sensor.currentData() or {}
-        return {"box": self.cb_box.currentData(), "head_name": p.get("head"), "connector": p.get("connector")}
+        p2 = self.cb_second.currentData() or {}
+        return {"box": self.cb_box.currentData(), "head_name": p.get("head"), "connector": p.get("connector"),
+                "second": {"head_name": p2["head"], "connector": p2["connector"]} if p2 else None,
+                "distance_mm": self.sp_distance.value() or None}
+
+    def _remember(self) -> None:
+        for k, v in (("box", self.cb_box.currentData()), ("sensor", (self.cb_sensor.currentData() or {}).get("key")),
+                     ("second", (self.cb_second.currentData() or {}).get("key") or ""),
+                     ("distance", self.sp_distance.value()), ("kind", self._kind()), ("length", self.sp_length.value())):
+            self._settings.setValue(k, v)
 
     def _start(self, fn, kwargs, ok, with_progress=True) -> None:
         self._job = _Job(fn, kwargs, with_progress)
@@ -321,13 +400,13 @@ class SensorMeasureDialog(QDialog):
     def _on_zero(self) -> None:
         s = self._sel()
         self.lbl_zero.setText("measuring …")
-        self._start(sm.zero_check, {"box": s["box"], "head_name": s["head_name"], "connector": s["connector"]},
-                    self._zero_done, with_progress=False)
+        self._start(_zero_all, s, self._zero_done, with_progress=False)
 
     def _zero_done(self, z: Dict[str, Any]) -> None:
         self._zero = z
-        self.lbl_zero.setText("   ".join(f"{a['axis'].upper()}: {a['mean_um']:.1f} µm (± {a['std_um']:.1f})"
-                                        for a in z["axes"]))
+        two = len({a.get("connector") for a in z["axes"]}) > 1
+        self.lbl_zero.setText("   ".join(f"{a['connector'] + ' ' if two else ''}{a['axis'].upper()}: "
+                                        f"{a['mean_um']:.1f} µm (± {a['std_um']:.1f})" for a in z["axes"]))
 
     def _on_measure(self, replace: bool) -> None:
         if self.free:
@@ -341,10 +420,7 @@ class SensorMeasureDialog(QDialog):
                     != QMessageBox.Yes:
                 return
         s = self._sel()
-        self._settings.setValue("box", s["box"])
-        self._settings.setValue("sensor", (self.cb_sensor.currentData() or {}).get("key"))
-        self._settings.setValue("kind", self._kind())
-        self._settings.setValue("length", self.sp_length.value())
+        self._remember()
         self.lbl_result.setText(f"Measuring V{t['vno']:03d} …")
         self._last_kwargs = dict(series_id=self.series_id, trial_id=t["trial_id"], vno=t["vno"], **s,
                                  speed_m_min=self.sp_speed.value(), length_m=self.sp_length.value(),
@@ -356,9 +432,8 @@ class SensorMeasureDialog(QDialog):
                 self, "Measure", "The empty value (no yarn) was not checked. Measure anyway?") != QMessageBox.Yes:
             return
         s = self._sel()
-        for k, v in (("box", s["box"]), ("sensor", (self.cb_sensor.currentData() or {}).get("key")),
-                     ("kind", self._kind()), ("length", self.sp_length.value()), ("free_speed", self.sp_speed.value())):
-            self._settings.setValue(k, v)
+        self._remember()
+        self._settings.setValue("free_speed", self.sp_speed.value())
         name = self.ed_name.text().strip()
         self.lbl_result.setText(f"Measuring {name} …")
         self._last_kwargs = dict(name=name, **s, speed_m_min=self.sp_speed.value(), length_m=self.sp_length.value(),
@@ -368,8 +443,9 @@ class SensorMeasureDialog(QDialog):
     def _measure_free_done(self, res: Dict[str, Any]) -> None:
         self.measured += 1
         axes = "   ".join(f"{a['axis'].upper()} Ø {a['mean_um']:.0f} µm" for a in res["axes"])
-        self.lbl_result.setText(f"<b>Saved:</b> {res['file']} – {res['points']:,} points at {res['rate']:.1f} Hz"
-                                f"<br>{axes} – opened in the inspector".replace(",", "'"))
+        pts = f"{res['points']:,}".replace(",", "'")
+        self.lbl_result.setText(f"<b>Saved:</b> {res['file']} – {pts} points at {res['rate']:.1f} Hz"
+                                f"<br>{axes} – opened in the inspector" + pair_text(res))
         self.ed_name.setText(res["next_name"])
         self._settings.setValue("free_name", res["next_name"])
         if callable(self.on_measured):
@@ -379,8 +455,9 @@ class SensorMeasureDialog(QDialog):
         self.measured += 1
         axes = "   ".join(f"{a['axis'].upper()} Ø {a['mean_um']:.0f} µm" for a in res["axes"])
         extra = f"<br>Old file moved to {sm.REPLACED_DIR}\\{res['replaced']}." if res.get("replaced") else ""
-        self.lbl_result.setText(f"<b>Saved:</b> {res['file']} – {res['points']:,} points at {res['rate']:.1f} Hz"
-                                f"<br>{axes}{extra}".replace(",", "'"))
+        pts = f"{res['points']:,}".replace(",", "'")
+        self.lbl_result.setText(f"<b>Saved:</b> {res['file']} – {pts} points at {res['rate']:.1f} Hz"
+                                f"<br>{axes}{extra}" + pair_text(res))
         done_vno = next((t["vno"] for t in self._trials if t["trial_id"] == self._last_kwargs["trial_id"]), None)
         nxt = None
         if done_vno is not None:

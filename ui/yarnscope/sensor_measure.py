@@ -226,6 +226,13 @@ class Daq:
     def actual_rate(self, box: str, channels: Sequence[str], rate: float) -> float:
         return rate
 
+    def stream(self, box: str, channels: Sequence[str], rate: float,
+               on_chunk: Callable[[np.ndarray, float], None], should_stop: Callable[[], bool],
+               chunk_s: float = 0.25) -> float:
+        """Continuous reading until should_stop(): on_chunk(volts [len(channels), k], actual rate) about every
+        chunk_s seconds (YarnScope Live, ui/yarnscope/sensor_live.py). Returns the actual rate."""
+        raise NotImplementedError
+
 
 def _nidaqmx():
     try:
@@ -252,7 +259,7 @@ class NidaqmxDaq(Daq):
                 continue
         return out
 
-    def _task(self, box, channels, rate, n):
+    def _task(self, box, channels, rate, n, continuous: bool = False):
         nidaqmx = _nidaqmx()
         from nidaqmx.constants import AcquisitionType, TerminalConfiguration
         task = nidaqmx.Task()
@@ -260,11 +267,36 @@ class NidaqmxDaq(Daq):
             for ch in channels:
                 task.ai_channels.add_ai_voltage_chan(f"{box}/{ch}", terminal_config=TerminalConfiguration.RSE,
                                                      min_val=V_MIN, max_val=V_MAX)
-            task.timing.cfg_samp_clk_timing(rate, sample_mode=AcquisitionType.FINITE, samps_per_chan=max(2, n))
+            mode = AcquisitionType.CONTINUOUS if continuous else AcquisitionType.FINITE
+            task.timing.cfg_samp_clk_timing(rate, sample_mode=mode, samps_per_chan=max(2, n))
+            if continuous:                           # 20 s of room: the analysis may pause the reading a little
+                task.in_stream.input_buf_size = int(max(n, rate * 20))
         except Exception:
             task.close()
             raise
         return task
+
+    def stream(self, box, channels, rate, on_chunk, should_stop, chunk_s=0.25):
+        try:
+            task = self._task(box, channels, rate, int(rate * 20), continuous=True)
+        except MeasureError:
+            raise
+        except Exception as e:
+            raise MeasureError("daq_error", str(e))
+        try:
+            actual = float(task.timing.samp_clk_rate)
+            k = max(500, int(actual * chunk_s))
+            task.start()
+            while not should_stop():
+                data = task.read(number_of_samples_per_channel=k, timeout=chunk_s + 10)
+                on_chunk(np.asarray(data, dtype=float).reshape(len(channels), -1), actual)
+            return actual
+        except MeasureError:
+            raise
+        except Exception as e:
+            raise MeasureError("daq_error", str(e))
+        finally:
+            task.close()
 
     def actual_rate(self, box, channels, rate):
         try:
@@ -447,7 +479,7 @@ def zero_check(box: str, head_name: str, connector: str, seconds: float = 1.0) -
     for i, v in enumerate(volts):
         um = head.to_um(v, i)
         axes.append({"axis": "xy"[i], "mean_um": round(float(um.mean()), 2), "std_um": round(float(um.std()), 2),
-                     "mean_v": round(float(np.mean(v)), 4)})
+                     "mean_v": round(float(np.mean(v)), 4), "connector": connector})
     return {"axes": axes, "rate": actual, "head": head.name, "connector": connector, "box": box,
             "at": _dt.datetime.now().isoformat(timespec="seconds")}
 
@@ -465,16 +497,36 @@ class _measuring:
         return False
 
 
-def _record(box: str, head: Head, connector: str, v: float, length: float, rate: float,
+def _sensors(head_name: str, connector: str, second: Any) -> List[Tuple[Head, str]]:
+    """[(head, connector)] - the main sensor and, if given, a second one on the OTHER connector of the same box."""
+    out = [(load_head(head_name), connector)]
+    if second:
+        h2, c2 = (second.get("head_name") or second.get("head"), second.get("connector")) if isinstance(second, dict) \
+            else (second[0], second[1])
+        if c2 == connector:
+            raise MeasureError("same_connector", f"both sensors on {c2}", connector=c2)
+        out.append((load_head(h2), c2))
+    for h, c in out:
+        channels_for(h, c)                       # unknown connector -> bad_connector
+    return out
+
+
+def _record(box: str, sensors: List[Tuple[Head, str]], v: float, length: float, rate: float,
             progress: Optional[Callable[[int, int], None]], cancel: Optional[Callable[[], bool]]):
-    """(box info, actual rate, points, [µm per axis]) - the recording itself, shared by both ways."""
-    chans = channels_for(head, connector)
+    """(box info, actual rate, points, [[µm per axis] per sensor]) - ONE task for all channels of all sensors, so the
+    samples of the two sensors are taken at the same instants (needed for the delay / speed, sensor_pair.py)."""
+    chans, split = [], []
+    for h, c in sensors:
+        cs = channels_for(h, c)
+        split.append((len(chans), len(cs)))
+        chans += cs
     b = _check_box(box)
     with _measuring():
         actual = _daq.actual_rate(box, chans, rate)
         n = samples_for(length, v, actual)
         actual, volts = _daq.read(box, chans, rate, n, progress=progress, cancel=cancel)
-    return b, actual, n, [head.to_um(volts[i], i) for i in range(len(chans))]
+    axes = [[h.to_um(volts[s + i], i) for i in range(k)] for (h, _c), (s, k) in zip(sensors, split)]
+    return b, actual, n, axes
 
 
 def _extra(b: Dict[str, Any], actual: float, head: Head, connector: str, box: str, kind: str,
@@ -485,35 +537,60 @@ def _extra(b: Dict[str, Any], actual: float, head: Head, connector: str, box: st
              "MeasuredAt": _dt.datetime.now().isoformat(timespec="seconds"), **more}
     if zero:
         for ax in zero.get("axes") or []:
-            extra[f"Empty{ax.get('axis', '').upper()}_um"] = ax.get("mean_um")
+            if ax.get("connector") in (None, connector):
+                extra[f"Empty{ax.get('axis', '').upper()}_um"] = ax.get("mean_um")
     return extra
 
 
+def _stats(axes_um) -> List[Dict[str, Any]]:
+    return [{"axis": "xy"[i], "mean_um": round(float(a.mean()), 1), "std_um": round(float(a.std()), 1)}
+            for i, a in enumerate(axes_um)]
+
+
 def _result(path: Path, n: int, actual: float, v: float, length: float, axes_um, kind: str, **more: Any):
-    stats = [{"axis": "xy"[i], "mean_um": round(float(a.mean()), 1), "std_um": round(float(a.std()), 1)}
-             for i, a in enumerate(axes_um)]
     return {"file": path.name, "path": str(path), "points": int(n), "rate": round(actual, 1), "speed": v,
-            "length": length, "axes": stats, "kind": kind, **more}
+            "length": length, "axes": _stats(axes_um), "kind": kind, **more}
+
+
+def _pair(axes, actual: float, v: float, distance_mm: Any) -> Optional[Dict[str, Any]]:
+    """Delay / speed / same knots of the two sensors (None with one sensor). Never breaks a measurement."""
+    if len(axes) < 2:
+        return None
+    try:
+        from ui.yarnscope import sensor_pair
+        d = float(distance_mm) if distance_mm not in (None, "") and float(distance_mm) > 0 else None
+        return sensor_pair.pair_report(axes[0], axes[1], actual, SPACING_MM, distance_mm=d, nominal_speed=v)
+    except Exception as e:  # noqa: BLE001 - the files are saved anyway
+        return {"error": str(e)[:300], "reliable": False}
+
+
+def _free_path(folder: Path, label: str, when: _dt.datetime) -> Path:
+    path = folder / f"{label}_{when:%d%m%y_%H%M}.tdms"
+    return path if not path.exists() else folder / f"{label}_{when:%d%m%y_%H%M%S}.tdms"
 
 
 def measure(*, series_id: int, trial_id: int, vno: int, box: str, head_name: str, connector: str,
             speed_m_min: Any, length_m: Any, kind: str = "dty", replace: bool = False,
             user: Optional[Dict[str, Any]] = None, zero: Optional[Dict[str, Any]] = None,
+            second: Any = None, distance_mm: Any = None,
             progress: Optional[Callable[[int, int], None]] = None,
             cancel: Optional[Callable[[], bool]] = None, now: Optional[_dt.datetime] = None) -> Dict[str, Any]:
     """Measure one trial and save the TDMS into the DTY / ATY folder. Returns {file, path, points, rate, ...}.
     An existing file of the trial: MeasureError("exists") unless replace - then it is moved to _replaced/
-    (never deleted)."""
-    head = load_head(head_name)
-    chans = channels_for(head, connector)
-    v, length, rate = check_plan(speed_m_min, length_m, len(chans))
+    (never deleted).
+    second = {"head_name", "connector"} of a second sensor on the other connector (Nutzerwunsch 2026-11-23): both are
+    read in one task; the main sensor's file is the trial's file as always, the second one goes with the same name
+    into the sub-folder _<connector> (e.g. _C2 - never seen by the automatic analysis / the tabs). distance_mm =
+    distance between the sensors -> result["pair"] with the measured speed (sensor_pair.pair_report)."""
+    sensors = _sensors(head_name, connector, second)
+    v, length, rate = check_plan(speed_m_min, length_m, sum(h.n_axes for h, _c in sensors))
     folder = tdms_folder(kind)
     if not folder.is_dir():
         raise MeasureError("folder_missing", f"{folder} not reachable", folder=str(folder))
     old = existing_file(series_id, vno, kind)
     if old is not None and not replace:
         raise MeasureError("exists", f"{old.name} exists", file=old.name)
-    b, actual, n, axes_um = _record(box, head, connector, v, length, rate, progress, cancel)
+    b, actual, n, axes = _record(box, sensors, v, length, rate, progress, cancel)
     moved = None
     if old is not None:
         dest = old.parent / REPLACED_DIR
@@ -522,10 +599,41 @@ def measure(*, series_id: int, trial_id: int, vno: int, box: str, head_name: str
         if moved.exists():
             moved = dest / f"{old.stem}_{_dt.datetime.now():%H%M%S}{old.suffix}"
         shutil.move(str(old), str(moved))
-    path = folder / file_name(series_id, vno, now)
-    write_tdms(path, f"{int(series_id)}_{int(vno)}", axes_um, v, length, rate,
-               _extra(b, actual, head, connector, box, kind, user, zero, TrialID=int(trial_id), SeriesID=int(series_id)))
-    return _result(path, n, actual, v, length, axes_um, kind, replaced=moved.name if moved else None)
+    when = now or _dt.datetime.now()
+    label = f"{int(series_id)}_{int(vno)}"
+    path = folder / file_name(series_id, vno, when)
+    trial = dict(TrialID=int(trial_id), SeriesID=int(series_id))
+    pair = _pair(axes, actual, v, distance_mm)
+    paths = [path]
+    if len(sensors) > 1:
+        sub = folder / f"_{sensors[1][1]}"
+        sub.mkdir(exist_ok=True)
+        paths.append(_free_path(sub, label, when))
+    pair_props = _pair_props(sensors, paths, distance_mm, pair)
+    for i, ((h, c), p) in enumerate(zip(sensors, paths)):
+        write_tdms(p, label, axes[i], v, length, rate,
+                   _extra(b, actual, h, c, box, kind, user, zero, **trial, **pair_props[i]))
+    res = _result(path, n, actual, v, length, axes[0], kind, replaced=moved.name if moved else None)
+    return _with_second(res, sensors, paths, axes, pair)
+
+
+def _pair_props(sensors, paths, distance_mm, pair) -> List[Dict[str, Any]]:
+    """TDMS properties that tie the two files of a simultaneous measurement together."""
+    if len(sensors) < 2:
+        return [{}]
+    common = {"PairDistanceMm": float(distance_mm) if distance_mm not in (None, "") else None,
+              "PairDelayMs": (pair or {}).get("delay_ms"), "PairSpeed": (pair or {}).get("speed"),
+              "PairCorr": (pair or {}).get("corr")}
+    return [dict(common, PairFile=paths[1 - i].name, PairConnector=sensors[1 - i][1],
+                 PairRole="main" if i == 0 else "second") for i in range(2)]
+
+
+def _with_second(res: Dict[str, Any], sensors, paths, axes, pair) -> Dict[str, Any]:
+    if len(sensors) > 1:
+        res["second"] = {"file": paths[1].name, "path": str(paths[1]), "connector": sensors[1][1],
+                         "head": sensors[1][0].name, "axes": _stats(axes[1])}
+        res["pair"] = pair
+    return res
 
 
 # Free measurement (TDMS Inspector, Nutzerwunsch 2026-11-23): own name + speed, no series / trial / DB. The file goes
@@ -557,27 +665,31 @@ def next_name(name: str) -> str:
 
 def measure_free(*, name: Any, box: str, head_name: str, connector: str, speed_m_min: Any, length_m: Any,
                  kind: str = "dty", user: Optional[Dict[str, Any]] = None, zero: Optional[Dict[str, Any]] = None,
+                 second: Any = None, distance_mm: Any = None,
                  progress: Optional[Callable[[int, int], None]] = None,
                  cancel: Optional[Callable[[], bool]] = None, now: Optional[_dt.datetime] = None) -> Dict[str, Any]:
     """Measure with a free name and speed -> <DTY|ATY folder>/_manual/<name>_<DDMMYY>_<HHMM>.tdms. Same recording
-    and TDMS as measure(); a file of the same name and minute gets the seconds added (never overwritten)."""
+    and TDMS as measure(); a file of the same name and minute gets the seconds added (never overwritten).
+    With a second sensor both files go to _manual with the connector in the name: <name>_C1_… and <name>_C2_…"""
     label = check_name(name)
-    head = load_head(head_name)
-    chans = channels_for(head, connector)
-    v, length, rate = check_plan(speed_m_min, length_m, len(chans))
+    sensors = _sensors(head_name, connector, second)
+    v, length, rate = check_plan(speed_m_min, length_m, sum(h.n_axes for h, _c in sensors))
     base = tdms_folder(kind)
     if not base.is_dir():
         raise MeasureError("folder_missing", f"{base} not reachable", folder=str(base))
     folder = base / MANUAL_DIR
     folder.mkdir(exist_ok=True)
-    b, actual, n, axes_um = _record(box, head, connector, v, length, rate, progress, cancel)
+    b, actual, n, axes = _record(box, sensors, v, length, rate, progress, cancel)
     when = now or _dt.datetime.now()
-    path = folder / f"{label}_{when:%d%m%y_%H%M}.tdms"
-    if path.exists():
-        path = folder / f"{label}_{when:%d%m%y_%H%M%S}.tdms"
-    write_tdms(path, label, axes_um, v, length, rate,
-               _extra(b, actual, head, connector, box, kind, user, zero, Manual=1))
-    return _result(path, n, actual, v, length, axes_um, kind, name=label, next_name=next_name(label))
+    labels = [label] if len(sensors) == 1 else [f"{label}_{c}" for _h, c in sensors]
+    paths = [_free_path(folder, lb, when) for lb in labels]
+    pair = _pair(axes, actual, v, distance_mm)
+    pair_props = _pair_props(sensors, paths, distance_mm, pair)
+    for i, ((h, c), p) in enumerate(zip(sensors, paths)):
+        write_tdms(p, labels[i], axes[i], v, length, rate, _extra(b, actual, h, c, box, kind, user, zero, Manual=1,
+                                                                  **pair_props[i]))
+    res = _result(paths[0], n, actual, v, length, axes[0], kind, name=label, next_name=next_name(label))
+    return _with_second(res, sensors, paths, axes, pair)
 
 
 # --------------------------------------------------------------------------------------------------- trial list

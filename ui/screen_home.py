@@ -78,6 +78,7 @@ class HomeScreen(QWidget):
                  on_offline_sync=None,
                  on_lab_assistant=None,
                  on_tdms_inspector=None,
+                 on_yarnscope_live=None,
                  # Logout-Callback (Button "Log Out" in der Sidebar-Account-Gruppe)
                  on_logout=None,
                  # Ctrl+Klick "in neuem Tab öffnen" (siehe ui/widgets/tab_container.py)
@@ -106,6 +107,7 @@ class HomeScreen(QWidget):
         self.on_offline_sync = on_offline_sync
         self.on_lab_assistant = on_lab_assistant
         self.on_tdms_inspector = on_tdms_inspector
+        self.on_yarnscope_live = on_yarnscope_live
 
         try:
             self.access_level = int(access_level or 0)
@@ -390,6 +392,7 @@ class HomeScreen(QWidget):
             on_yarn_stock=self.on_yarn_stock if callable(getattr(self, "on_yarn_stock", None)) else None,
             on_label_generator=self.on_label_generator if callable(getattr(self, "on_label_generator", None)) else None,
             on_tdms_inspector=self.on_tdms_inspector if callable(getattr(self, "on_tdms_inspector", None)) else None,
+            on_yarnscope_live=self.on_yarnscope_live if callable(getattr(self, "on_yarnscope_live", None)) else None,
             open_in_new_tab=self._open_in_new_tab,
         )
         sidebar.add_separator()
