@@ -120,7 +120,7 @@ class SensorMeasureDialog(QDialog):
     def __init__(self, series_id: Optional[int], user: Optional[Dict[str, Any]] = None, parent: Optional[QWidget] = None,
                  free: bool = False, on_measured=None):
         """free = TDMS Inspector (Nutzerwunsch 2026-11-23): own name + speed instead of a trial, file to _manual,
-        on_measured(path) after each measurement (the inspector opens it)."""
+        on_measured(path) after each measurement (the inspector opens it; Show Experiment updates its YarnScope tabs)."""
         super().__init__(parent)
         self.free, self.on_measured = bool(free), on_measured
         self.setWindowTitle("Measure (free name)" if self.free else "Measure (YarnScope)")
@@ -490,6 +490,8 @@ class SensorMeasureDialog(QDialog):
             later = [t["vno"] for t in self._trials if t["vno"] > done_vno]
             nxt = later[0] if later else done_vno
         self._load_trials(select_vno=nxt)
+        if callable(self.on_measured):             # Show Experiment: update its YarnScope tabs (no full refresh)
+            self.on_measured(res["path"])
 
     def closeEvent(self, ev) -> None:  # noqa: N802 - Qt
         if self._job is not None:

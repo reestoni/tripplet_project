@@ -4405,19 +4405,19 @@ class ShowExperimentScreen(QWidget):
         except RuntimeError:                       # already deleted
             pass
         # not modal (Nutzerwunsch 2026-11-23): the table stays editable between the measurements, the dialog stays
-        # open; the empty value is remembered in sensor_measure anyway. F5 after closing shows the new files.
-        dlg = SensorMeasureDialog(int(self._series_pk), getattr(app_meta, "current_user", {}) or {}, self)
-        dlg.setModal(False)
-        dlg.setAttribute(Qt.WA_DeleteOnClose, True)
-
-        def _closed(_r=0):
+        # open; the empty value is remembered in sensor_measure anyway. After each measurement only the YarnScope
+        # tabs are updated (they appear / list the new file) - no F5: that threw the user back to the top of the table.
+        def _measured(_path):
             try:
-                if dlg.measured and not self._has_unsaved():
-                    self._on_refresh()
+                self._build_yarnscope_tab()
+                self._build_aty_yarnscope_tab()
             except RuntimeError:                   # the screen is gone already
                 pass
 
-        dlg.finished.connect(_closed)
+        dlg = SensorMeasureDialog(int(self._series_pk), getattr(app_meta, "current_user", {}) or {}, self,
+                                  on_measured=_measured)
+        dlg.setModal(False)
+        dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         self._sensor_dlg = dlg
         dlg.show()
 
