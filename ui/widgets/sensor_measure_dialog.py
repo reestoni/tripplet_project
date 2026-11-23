@@ -86,6 +86,9 @@ def error_text(e: Exception) -> str:
     return str(e)
 
 
+_RUNNING: set = set()
+
+
 class _Job(QThread):
     progress = Signal(int, int)
     finished_ok = Signal(dict)
@@ -94,6 +97,10 @@ class _Job(QThread):
     def __init__(self, fn, kwargs: Dict[str, Any], with_progress: bool = True):
         super().__init__()
         self._fn, self._kwargs, self._cancel, self._with_progress = fn, kwargs, False, with_progress
+        # The dialog is not modal any more: the screen behind it (and the dialog with it) can be closed while a
+        # measurement runs. Keep the thread alive until it ends - a QThread destroyed while running kills the app.
+        _RUNNING.add(self)
+        self.finished.connect(lambda: _RUNNING.discard(self))
 
     def cancel(self) -> None:
         self._cancel = True
@@ -237,10 +244,12 @@ class SensorMeasureDialog(QDialog):
         btns.addWidget(btn_close)
         root.addLayout(btns)
 
+        self.cb_box.currentIndexChanged.connect(lambda _i: self._reset_zero())
         self._load_sensors()
         self._load_boxes()
         if not self.free:
             self._load_trials()
+        self._reset_zero()
         self._sync()
 
     # ---------------------------------------------------------------------------------------------- lists
@@ -333,8 +342,26 @@ class SensorMeasureDialog(QDialog):
         self._sync()
 
     def _reset_zero(self) -> None:
-        self._zero = None
-        self.lbl_zero.setText("–")
+        """Other box / sensor: take the empty value remembered for it (sm.remembered_zero, valid until checked
+        again) - the dialog can be closed in between without zeroing again (Nutzerwunsch 2026-11-23)."""
+        if not hasattr(self, "lbl_zero"):
+            return
+        s = self._sel()
+        z = sm.remembered_zero(s["box"], s["head_name"], s["connector"], s["second"]) if s["box"] and s["head_name"]             else None
+        self._show_zero(z)
+
+    def _show_zero(self, z: Optional[Dict[str, Any]]) -> None:
+        self._zero = z
+        if not z:
+            self.lbl_zero.setText("–")
+            self.btn_zero.setText("1. Check empty value (no yarn)")
+            return
+        two = len({a.get("connector") for a in z["axes"]}) > 1
+        vals = "   ".join(f"{a['connector'] + ' ' if two else ''}{a['axis'].upper()}: "
+                          f"{a['mean_um']:.1f} µm (± {a['std_um']:.1f})" for a in z["axes"])
+        self.lbl_zero.setText(f"{vals}<br><span style='color:#666'>checked {str(z.get('at', ''))[11:16]} - kept until "
+                              f"you check again</span>")
+        self.btn_zero.setText("1. Check empty value again")
 
     def _sync(self) -> None:
         busy = self._job is not None
@@ -405,10 +432,7 @@ class SensorMeasureDialog(QDialog):
         self._start(_zero_all, s, self._zero_done, with_progress=False)
 
     def _zero_done(self, z: Dict[str, Any]) -> None:
-        self._zero = z
-        two = len({a.get("connector") for a in z["axes"]}) > 1
-        self.lbl_zero.setText("   ".join(f"{a['connector'] + ' ' if two else ''}{a['axis'].upper()}: "
-                                        f"{a['mean_um']:.1f} µm (± {a['std_um']:.1f})" for a in z["axes"]))
+        self._show_zero(z)
 
     def _on_measure(self, replace: bool) -> None:
         if self.free:

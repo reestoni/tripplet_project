@@ -78,8 +78,10 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv(aty_service.ENV_TDMS_DIR, str(aty))
     fake = FakeDaq()
     sm.set_daq(fake)
+    sm.forget_zeros()
     yield type("E", (), {"dty": dty, "aty": aty, "daq": fake})
     sm.set_daq(None)
+    sm.forget_zeros()
 
 
 def test_calibration_and_presets(env):
@@ -245,6 +247,40 @@ def test_dialog_free_mode_for_the_inspector(env, qapp):
     assert len(files) == 1 and opened == [str(files[0])]
     assert dlg.ed_name.text() == "99999_35" and dlg.btn_measure.text() == "2. Measure 99999_35"
     dlg.close()
+
+
+def test_empty_value_is_remembered_until_checked_again(env, qapp):
+    """Nutzerwunsch 2026-11-23: the dialog is closed between trials (typing into the table) - the empty value must
+    survive that, per box + sensor + connector, until it is checked again or ZERO_MAX_AGE_H has passed."""
+    import datetime as dt
+    from PySide6.QtCore import QSettings
+    from ui.widgets import sensor_measure_dialog as smd
+    QSettings("TrippleT", "SensorMeasure").clear()
+    assert sm.remembered_zero("Dev2", "PXL_3_121_W", "C1") is None
+    dlg = smd.SensorMeasureDialog(None, {"username": "test", "access_level": 2}, free=True)
+    assert dlg._zero is None and dlg.btn_zero.text().startswith("1. Check empty value (")
+    dlg._on_zero()
+    _run_job(dlg, qapp)
+    first = dlg._zero
+    dlg.close()
+    dlg2 = smd.SensorMeasureDialog(None, {"username": "test", "access_level": 2}, free=True)   # reopened
+    assert dlg2._zero == first and "kept until" in dlg2.lbl_zero.text() and "again" in dlg2.btn_zero.text()
+    # other sensor -> not checked; back -> remembered again
+    i_obd = next(i for i in range(dlg2.cb_sensor.count()) if dlg2.cb_sensor.itemData(i)["head"] == "OBD_5_192_M")
+    i_pxl = dlg2.cb_sensor.currentIndex()
+    dlg2.cb_sensor.setCurrentIndex(i_obd)
+    assert dlg2._zero is None
+    dlg2.cb_sensor.setCurrentIndex(i_pxl)
+    assert dlg2._zero == first
+    dlg2.close()
+    # two sensors: only when both were checked; expired after ZERO_MAX_AGE_H
+    obd = {"head_name": "OBD_5_192_M", "connector": "C2"}
+    assert sm.remembered_zero("Dev2", "PXL_3_121_W", "C1", obd) is None
+    sm.zero_check("Dev2", "OBD_5_192_M", "C2")
+    both = sm.remembered_zero("Dev2", "PXL_3_121_W", "C1", obd)
+    assert {a["connector"] for a in both["axes"]} == {"C1", "C2"}
+    later = dt.datetime.now() + dt.timedelta(hours=sm.ZERO_MAX_AGE_H + 0.1)
+    assert sm.remembered_zero("Dev2", "PXL_3_121_W", "C1", now=later) is None
 
 
 def test_speed_is_the_winder_speed():

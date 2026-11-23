@@ -4396,10 +4396,30 @@ class ShowExperimentScreen(QWidget):
         if self._series_pk is None:
             return
         from ui.widgets.sensor_measure_dialog import SensorMeasureDialog
+        old = getattr(self, "_sensor_dlg", None)
+        try:
+            if old is not None and old.isVisible() and old.series_id == int(self._series_pk):
+                old.raise_()
+                old.activateWindow()
+                return
+        except RuntimeError:                       # already deleted
+            pass
+        # not modal (Nutzerwunsch 2026-11-23): the table stays editable between the measurements, the dialog stays
+        # open; the empty value is remembered in sensor_measure anyway. F5 after closing shows the new files.
         dlg = SensorMeasureDialog(int(self._series_pk), getattr(app_meta, "current_user", {}) or {}, self)
-        dlg.exec()
-        if dlg.measured and not self._has_unsaved():
-            self._on_refresh()
+        dlg.setModal(False)
+        dlg.setAttribute(Qt.WA_DeleteOnClose, True)
+
+        def _closed(_r=0):
+            try:
+                if dlg.measured and not self._has_unsaved():
+                    self._on_refresh()
+            except RuntimeError:                   # the screen is gone already
+                pass
+
+        dlg.finished.connect(_closed)
+        self._sensor_dlg = dlg
+        dlg.show()
 
     def _pdf_import(self) -> None:
         """One import for Statimat and Itemat PDFs (ui/screen_show_experiment_pdf_import.pdf_import_impl)."""

@@ -487,8 +487,55 @@ def zero_check(box: str, head_name: str, connector: str, seconds: float = 1.0) -
         um = head.to_um(v, i)
         axes.append({"axis": "xy"[i], "mean_um": round(float(um.mean()), 2), "std_um": round(float(um.std()), 2),
                      "mean_v": round(float(np.mean(v)), 4), "connector": connector})
-    return {"axes": axes, "rate": actual, "head": head.name, "connector": connector, "box": box,
-            "at": _dt.datetime.now().isoformat(timespec="seconds")}
+    z = {"axes": axes, "rate": actual, "head": head.name, "connector": connector, "box": box,
+         "at": _dt.datetime.now().isoformat(timespec="seconds")}
+    with _zeros_lock:
+        _zeros[(box, head.name, connector)] = z
+    return z
+
+
+# The last empty value per (box, head, connector) stays valid until it is checked again (Nutzerwunsch 2026-11-23: the
+# dialog is closed in between to type into the table - zeroing again before every trial is not workable). Kept in the
+# process (desktop app / web server) for ZERO_MAX_AGE_H, then it counts as missing again.
+ZERO_MAX_AGE_H = 12.0
+_zeros: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+_zeros_lock = threading.Lock()
+
+
+def remembered_zero(box: Any, head_name: Any, connector: Any, second: Any = None,
+                    now: Optional[_dt.datetime] = None) -> Optional[Dict[str, Any]]:
+    """The remembered empty value for this sensor (and the second one, if given) in the form of zero_check(), or None if
+    one of them was not checked (or is older than ZERO_MAX_AGE_H). With two sensors "at" = the older check."""
+    keys = [(box, head_name, connector)]
+    if second:
+        h2, c2 = (second.get("head_name") or second.get("head"), second.get("connector")) if isinstance(second, dict)             else (second[0], second[1])
+        keys.append((box, h2, c2))
+    now = now or _dt.datetime.now()
+    with _zeros_lock:
+        found = [_zeros.get(k) for k in keys]
+    if any(z is None for z in found):
+        return None
+    try:
+        if any((now - _dt.datetime.fromisoformat(z["at"])).total_seconds() > ZERO_MAX_AGE_H * 3600 for z in found):
+            return None
+    except (KeyError, TypeError, ValueError):
+        return None
+    out = dict(found[0])
+    out["axes"] = [a for z in found for a in z["axes"]]
+    out["at"] = min(z["at"] for z in found)
+    return out
+
+
+def remembered_zeros() -> List[Dict[str, Any]]:
+    """All remembered empty values (not expired) - for the web setup."""
+    with _zeros_lock:
+        items = list(_zeros.values())
+    return [z for z in items if remembered_zero(z["box"], z["head"], z["connector"]) is not None]
+
+
+def forget_zeros() -> None:
+    with _zeros_lock:
+        _zeros.clear()
 
 
 class _measuring:

@@ -32,6 +32,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTabWidget,
     QFileDialog,
@@ -185,9 +186,19 @@ class TdmsInspectorScreen(QWidget):
     def _on_measure(self):
         import app_meta
         from ui.widgets.sensor_measure_dialog import SensorMeasureDialog
+        old = getattr(self, "_sensor_dlg", None)
+        try:
+            if old is not None and old.isVisible():
+                old.raise_()
+                return
+        except RuntimeError:
+            pass
         dlg = SensorMeasureDialog(None, getattr(app_meta, "current_user", {}) or {}, self, free=True,
                                   on_measured=lambda path: self._open_path(Path(path)))
-        dlg.exec()
+        dlg.setModal(False)                        # stays open beside the inspector (like Show Experiment)
+        dlg.setAttribute(Qt.WA_DeleteOnClose, True)
+        self._sensor_dlg = dlg
+        dlg.show()
 
     def _open_path(self, path: Path):
         """Shows a TDMS file in both tabs (file dialog or a fresh measurement)."""
