@@ -10,7 +10,8 @@ were taken at the same instant. The yarn reaches the second sensor later; findin
 
 Delay = maximum of the normalised cross-correlation (FFT) within +-max_delay_s, refined between samples with a
 parabola. Signals are detrended first (minus a running mean of ~20 cm), so a different empty value / thickness
-level of the two heads does not matter. corr < MIN_CORR -> "no reliable match" (no speed, no knot pairing).
+level of the two heads does not matter. Trusted (reliable()) when corr >= MIN_CORR or the peak stands MIN_Z x out of the
+correlation noise far away from it; otherwise "no reliable match" (no speed, no knot pairing).
 Files of two separately started measurements (Sensoft) have no common clock: the delay then also contains the
 start difference - only the knot pairing means something there (pair_report(..., synced=False)).
 
@@ -24,7 +25,14 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-MIN_CORR = 0.3              # below: the two signals do not show the same yarn (or a sensor sees nothing)
+MIN_CORR = 0.3              # at least this -> surely the same yarn
+# A weaker peak still counts when it stands out from the noise of the correlation far away from it (2026-11-23: the OBD
+# on C2 sees the yarn only weakly, the match fell from 0.38 to just under 0.3 while the delay stayed at exactly 160.0 mm
+# - the speed got lost). Score z = (peak - median) / std of the correlation more than PEAK_FAR_MM away from the peak
+# (nearer, the yarn's own rhythm gives side peaks). Measured on the live run of 2026-11-23 (30 m windows): same yarn
+# z 16-17 down to corr 0.08 (extra noise added), 6.6 only with absurd noise; unrelated pieces of yarn z 3.1-3.3.
+MIN_Z = 8.0
+PEAK_FAR_MM = 50.0
 DETREND_MM = 200.0          # running mean removed before correlating (thickness level / empty value)
 DEFAULT_MAX_DELAY_S = 0.5   # 0.5 s = ~100 mm at 12 m/min ... 6 m at 764 m/min - far beyond any real distance
 WINDOW_M = 10.0             # speed profile: one value per 10 m
@@ -51,13 +59,22 @@ def _detrend(y: np.ndarray, k: int) -> np.ndarray:
     return (y - np.mean(y)) / s if s > 0 else y * 0.0
 
 
+def reliable(r: Dict[str, Any]) -> bool:
+    """Is the delay of find_delay() to be trusted? corr >= MIN_CORR, or a weaker peak that clearly stands out."""
+    c, z = r.get("corr"), r.get("z")
+    if c is None:
+        return False
+    return c >= MIN_CORR or (z is not None and z >= MIN_Z)
+
+
 def find_delay(a: np.ndarray, b: np.ndarray, spacing_mm: float = 0.25, max_lag: Optional[int] = None,
                center: Optional[float] = None) -> Dict[str, Any]:
-    """Delay of b behind a in samples (float, + = b sees the yarn later) and the correlation at that point.
-    max_lag limits the search to +-max_lag samples (around `center` if given)."""
+    """Delay of b behind a in samples (float, + = b sees the yarn later), the correlation at that point, how far the peak
+    stands out of the correlation noise ("z") and "ok" = reliable(). max_lag limits the search to +-max_lag samples
+    (around `center` if given)."""
     n = min(len(a), len(b))
     if n < 64:
-        return {"lag": None, "corr": None}
+        return {"lag": None, "corr": None, "z": None, "ok": False}
     k = max(3, int(round(DETREND_MM / max(spacing_mm, 1e-6))))
     x, y = _detrend(a[:n], k), _detrend(b[:n], k)
     size = 1 << int(math.ceil(math.log2(2 * n)))
@@ -71,10 +88,15 @@ def find_delay(a: np.ndarray, b: np.ndarray, spacing_mm: float = 0.25, max_lag: 
         c = 0.0 if center is None else float(center)
         ok &= np.abs(lags - c) <= max_lag
     if not ok.any():
-        return {"lag": None, "corr": None}
+        return {"lag": None, "corr": None, "z": None, "ok": False}
     idx = np.flatnonzero(ok)
     best = idx[int(np.argmax(vals[idx]))]
     lag, corr = float(lags[best]), float(vals[best])
+    far = idx[np.abs(lags[idx] - lags[best]) > max(16, int(round(PEAK_FAR_MM / max(spacing_mm, 1e-6))))]
+    z = None
+    if far.size >= 32:
+        sd = float(np.std(vals[far]))
+        z = (corr - float(np.median(vals[far]))) / sd if sd > 0 else None
     # parabola through the neighbours -> between samples
     order = {int(l): i for i, l in zip(idx, lags[idx])}
     lo, hi = order.get(int(lags[best]) - 1), order.get(int(lags[best]) + 1)
@@ -83,7 +105,9 @@ def find_delay(a: np.ndarray, b: np.ndarray, spacing_mm: float = 0.25, max_lag: 
         den = y0 - 2 * y1 + y2
         if den < 0:
             lag += float(np.clip(0.5 * (y0 - y2) / den, -0.5, 0.5))
-    return {"lag": lag, "corr": corr}
+    r = {"lag": lag, "corr": corr, "z": round(z, 2) if z is not None else None}
+    r["ok"] = reliable(r)
+    return r
 
 
 def speed_m_min(distance_mm: float, delay_s: float) -> Optional[float]:
@@ -109,8 +133,7 @@ def speed_profile(a: np.ndarray, b: np.ndarray, rate: float, lag: float, spacing
         out.append({"from_m": round(i * window_m, 1), "to_m": round((i + 1) * window_m, 1),
                     "delay_ms": round(d * 1000.0, 3) if d is not None else None,
                     "corr": round(r["corr"], 3) if r["corr"] is not None else None,
-                    "speed": (round(speed_m_min(distance_mm, d), 1) if d and distance_mm and r["corr"] and
-                              r["corr"] >= MIN_CORR else None)})
+                    "speed": (round(speed_m_min(distance_mm, d), 1) if d and distance_mm and r["ok"] else None)})
     return out
 
 
@@ -167,7 +190,8 @@ def pair_report(axes_a: Sequence[np.ndarray], axes_b: Sequence[np.ndarray], rate
     lag, corr = r["lag"], r["corr"]
     out: Dict[str, Any] = {"synced": synced, "corr": round(corr, 3) if corr is not None else None,
                            "lag_samples": round(lag, 2) if lag is not None else None,
-                           "distance_mm": distance_mm, "reliable": bool(corr is not None and corr >= MIN_CORR)}
+                           "distance_mm": distance_mm, "reliable": bool(r["ok"]),
+                           "z": r.get("z")}
     if lag is None or not out["reliable"]:
         return out
     delay = lag / rate if rate else None

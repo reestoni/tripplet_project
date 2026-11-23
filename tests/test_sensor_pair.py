@@ -80,3 +80,16 @@ def test_speed_does_not_care_about_the_direction():
     r = sp.pair_report([b], [a], RATE, 0.25, distance_mm=distance, nominal_speed=SPEED)   # main sensor downstream
     assert r["lag_samples"] < 0 and r["first"] == "second"
     assert r["speed"] == pytest.approx(SPEED, rel=0.002) and r["distance_from_speed_mm"] == pytest.approx(distance, abs=0.2)
+
+
+def test_weak_but_clear_match_is_trusted():
+    """Live run 2026-11-23: the OBD sees the yarn weakly, the match fell under 0.3 with the delay still exact. A peak
+    that stands far out of the correlation noise (z) is trusted; unrelated yarn (z ~3) is not."""
+    a, b = _pair(n=120_000, lag=640, noise=500.0)          # lots of noise on both sensors -> low correlation
+    r = sp.find_delay(a, b, 0.25, max_lag=4000)
+    assert r["corr"] < sp.MIN_CORR and r["z"] >= sp.MIN_Z and r["ok"] and abs(r["lag"] - 640) < 1
+    rep = sp.pair_report([a], [b], RATE, 0.25, distance_mm=160, nominal_speed=SPEED)
+    assert rep["reliable"] and rep["speed"] is not None
+    c, _ = _pair(n=120_000, seed=9)
+    u = sp.find_delay(a, c, 0.25, max_lag=4000)
+    assert not u["ok"] and u["z"] < sp.MIN_Z
