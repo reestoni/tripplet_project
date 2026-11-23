@@ -35,6 +35,7 @@ ERRORS = {
     "bad_kind": "Unknown folder.",
     "bad_name": "Name not allowed: letters, digits, _ . - and spaces, at most 60 characters.",
     "same_connector": "Both sensors are on connector {connector} - choose a sensor on the other connector.",
+    "auto_needs_two": "Measuring the speed needs a second sensor and the distance between the sensors.",
 }
 
 

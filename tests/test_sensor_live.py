@@ -22,7 +22,7 @@ class StreamDaq(sm.Daq):
 
     def __init__(self, max_chunks=10_000):
         self.max_chunks = max_chunks
-        self.base = _yarn(3_000_000 + LAG, seed=11)
+        self.base = _yarn(1_200_000 + LAG, seed=11)
         self.calls = []
 
     def boxes(self):
@@ -153,3 +153,90 @@ def test_screens_accept_the_live_callback():
     from ui.screen_show_experiment import ShowExperimentScreen
     for cls in (ShowExperimentScreen, AllExperimentsScreen, BacklogScreen, HomeScreen):
         assert "on_yarnscope_live" in inspect.signature(cls.__init__).parameters, cls.__name__
+
+
+class MovingYarnDaq(StreamDaq):
+    """Auto speed: the box samples at a fixed rate; the yarn moves at a speed the software does NOT get (it changes
+    from SPEED1 to SPEED2 half way). Sensor 1 (ai1/ai9) sees the yarn DIST_MM before sensor 2 (ai4)."""
+    SPEED1, SPEED2, DIST_MM = 700.0, 760.0, 160.0
+
+    def __init__(self):
+        super().__init__()
+        self.base = _yarn(1_400_000, seed=21)              # 350 m of yarn at 0.25 mm per point (ground truth)
+
+    def stream(self, box, channels, rate, on_chunk, should_stop, chunk_s=0.25):
+        k = int(rate * chunk_s)
+        cal = {"ai1": (10267.73, -1458.12), "ai9": (10424.72, -1480.20), "ai4": (2493.35, -353.89)}
+        rng = np.random.default_rng(3)
+        pos_mm = 0.0
+        sent = 0
+        while not should_stop():
+            v = self.SPEED1 if sent < 12 * rate else self.SPEED2            # 12 s, then faster
+            p = pos_mm + np.arange(k) * (v / 60.0 / rate * 1000.0)
+            pos_mm = p[-1] + v / 60.0 / rate * 1000.0
+            idx_b = p / 0.25
+            idx_a = (p + self.DIST_MM) / 0.25
+            if idx_a[-1] >= len(self.base) - 2:
+                break
+            ya = np.interp(idx_a, np.arange(len(self.base)), self.base)
+            yb = np.interp(idx_b, np.arange(len(self.base)), self.base)
+            um = {"ai1": ya, "ai9": ya + 150, "ai4": yb}
+            on_chunk(np.array([(um[c] + rng.normal(0, 8, k) - cal[c][0]) / cal[c][1] for c in channels]), rate)
+            sent += k
+            time.sleep(0.001)
+        return rate
+
+
+def test_live_auto_speed_measures_the_speed_itself(env):  # noqa: F811
+    from ui.yarnscope.dty_analysis import analyze_series
+    daq = MovingYarnDaq()
+    sm.set_daq(daq)
+    with pytest.raises(sm.MeasureError) as e:                  # auto speed needs two sensors + the distance
+        sl.start(box="Dev2", head_name="PXL_3_121_W", connector="C1", speed_m_min=None, auto_speed=True, save=False)
+    assert e.value.code == "auto_needs_two"
+    s = sl.start(box="Dev2", head_name="PXL_3_121_W", connector="C1", second={"head_name": "OBD_5_192_M", "connector": "C2"},
+                 speed_m_min=None, distance_mm=MovingYarnDaq.DIST_MM, auto_speed=True, window_m=30, save=True, name="99999_auto")
+    _wait(lambda: s.meters() > 250, timeout=120)
+    sl.stop()
+    v = s.view()
+    assert v["state"] == "done" and v["auto_speed"] and v["error"] is None
+    speeds = [r["speed"] for r in v["rows"]]
+    assert speeds[0] == pytest.approx(700, rel=0.01)                     # found by itself, nothing typed
+    assert speeds[-1] == pytest.approx(760, rel=0.01)                    # follows the change
+    truth = analyze_series(daq.base[:int(30_000 / 0.25)], 0.25, 3)["knots_per_m"]
+    fpm = v["rows"][0]["sensors"][0]["fpm"]
+    assert fpm == pytest.approx(truth, rel=0.03)                         # resampled to 0.25 mm: same knots/m
+    f1 = next((env.dty / sm.MANUAL_DIR).glob("99999_auto_C1_*.tdms"))
+    from nptdms import TdmsFile
+    t = TdmsFile.read(f1)
+    assert t.properties["TrippleT.AutoSpeed"] == 1 and 690 < t.properties["TrippleT.MeasuredSpeedMean"] < 770
+    assert read_step_mm_from_tdms(f1) == pytest.approx(0.25, abs=0.003)
+    x, _y = read_axis_channels(f1)
+    assert len(x) * 0.25 / 1000 == pytest.approx(s.meters(), rel=0.02)  # metres in the file = metres measured
+
+
+def test_desktop_window_auto_speed(env):  # noqa: F811
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+    from ui.widgets import sensor_live_window as slw
+    app = QApplication.instance() or QApplication([])
+    QSettings("TrippleT", "SensorLive").clear()
+    sm.set_daq(MovingYarnDaq())
+    w = slw.open_window({"username": "test", "access_level": 2})
+    assert not w.ck_auto.isVisible() or not w.cb_second.currentData()
+    w.cb_second.setCurrentIndex(1)
+    w.sp_distance.setValue(160)
+    w._sync()
+    assert w._auto_on() and not w.sp_speed.isEnabled()          # no speed to type
+    w.sp_window.setValue(10)
+    w.ck_save.setChecked(False)
+    w._on_start()
+    t0 = time.time()
+    while time.time() - t0 < 60 and len(sl.current().rows) < 2:
+        app.processEvents()
+        time.sleep(0.05)
+    sl.stop()
+    w._poll()
+    assert sl.current().auto_speed and sl.current().rows[0]["speed"] == pytest.approx(700, rel=0.01)
+    assert "700" in w._tile_labels[2].text()
+    w.close()

@@ -10,6 +10,13 @@ Optionally saved while measuring ("save" ticked): the TDMS is written piece by p
 same layout as Sensoft/measure_free; the parameter table comes as the last segment at stop. Saving ends by itself
 after SAVE_LIMIT_M (the display goes on).
 
+AUTO SPEED (Nutzerwunsch 2026-11-23: "TrippleT soll den Speed selbst berechnen"): with two sensors and their distance no
+speed is typed. The box then reads at a FIXED rate (AUTO_RATE_MAX per channel, less with 4 channels); every BLOCK_S
+second the delay between the sensors gives the real speed, and with it each sensor's samples are resampled to exactly
+0.25 mm (np.interp, position carried over from block to block) - so the analysis and the saved TDMS look like any
+YarnScope file, even if the machine speed drifts. A block without a reliable match takes the last speed (none yet:
+skipped). The saved file states the mean measured speed; "TrippleT.AutoSpeed" = 1, "SampleRateHz" = the fixed rate.
+
 One live session per process (the box can do one thing at a time; sensor_measure._measuring is held while it
 runs). Qt-free: the desktop window (ui/widgets/sensor_live_window.py) and tripplet_web app/sensor_live_api.py poll
 state(). Tests: tests/test_sensor_live.py with a fake streaming box.
@@ -30,6 +37,8 @@ from ui.yarnscope import sensor_measure as sm
 
 WINDOW_M = 30.0
 WINDOW_RANGE = (5.0, 500.0)
+AUTO_RATE_MAX = 80_000.0             # per channel in auto-speed mode: >= 1 point / 0.25 mm up to ~1'200 m/min
+BLOCK_S = 1.0                         # auto speed: one speed value (and resampling step) per second
 SAVE_LIMIT_M = 5000.0                 # = the longest normal measurement (sensor_measure.LENGTH_RANGE)
 CHUNK_S = 0.25                        # read from the box in quarter seconds
 MAX_ROWS = 2000                       # dashboard history kept in memory
@@ -85,7 +94,7 @@ class _Writer:
 class LiveSession:
     def __init__(self, *, box: str, head_name: str, connector: str, speed_m_min: Any, second: Any = None,
                  distance_mm: Any = None, window_m: Any = WINDOW_M, save: bool = True, name: Any = "live",
-                 kind: str = "dty", user: Optional[Dict[str, Any]] = None):
+                 kind: str = "dty", user: Optional[Dict[str, Any]] = None, auto_speed: bool = False):
         self.sensors = sm._sensors(head_name, connector, second)
         n_ch = sum(h.n_axes for h, _c in self.sensors)
         try:
@@ -93,9 +102,18 @@ class LiveSession:
         except (TypeError, ValueError):
             w = WINDOW_M
         self.window_m = min(max(w, WINDOW_RANGE[0]), WINDOW_RANGE[1])
-        self.speed, _len, self.rate = sm.check_plan(speed_m_min, self.window_m, n_ch)
-        self.box, self.kind, self.user = box, kind, user or {}
         self.distance_mm = float(distance_mm) if distance_mm not in (None, "") and float(distance_mm) > 0 else None
+        self.auto_speed = bool(auto_speed)
+        self._speeds: List[float] = []
+        self._meters_auto = 0.0
+        if self.auto_speed:
+            if len(self.sensors) < 2 or not self.distance_mm:
+                raise sm.MeasureError("auto_needs_two", "auto speed needs a second sensor and the distance")
+            self.rate = min(AUTO_RATE_MAX, 0.95 * sm.MAX_AGGREGATE_RATE / n_ch)
+            self.speed = 0.0                  # = the last measured speed while running
+        else:
+            self.speed, _len, self.rate = sm.check_plan(speed_m_min, self.window_m, n_ch)
+        self.box, self.kind, self.user = box, kind, user or {}
         self.save = bool(save)
         self.name = sm.check_name(name) if self.save else str(name or "live")
         self.started_at: Optional[float] = None
@@ -133,6 +151,8 @@ class LiveSession:
             t.join(wait)
 
     def meters(self) -> float:
+        if self.auto_speed:
+            return self._meters_auto
         r = self.actual_rate or self.rate
         return self.samples / r * self.speed / 60.0 if r else 0.0
 
@@ -140,7 +160,8 @@ class LiveSession:
         rows = [r for r in self.rows if r["i"] >= since]
         return {"state": self.state, "error": self.error, "rows": rows, "n_rows": len(self.rows),
                 "meters": round(self.meters(), 1), "seconds": round(time.time() - self.started_at, 1) if self.started_at else 0,
-                "speed": self.speed, "window_m": self.window_m, "rate": round(self.actual_rate or 0, 1),
+                "speed": self.speed, "auto_speed": self.auto_speed, "window_m": self.window_m,
+                "rate": round(self.actual_rate or 0, 1),
                 "sensors": [{"head": h.name, "connector": c, "axes": h.n_axes} for h, c in self.sensors],
                 "distance_mm": self.distance_mm, "save": self.save, "save_stopped": self.save_stopped,
                 "files": list(self.files), "name": self.name, "kind": self.kind,
@@ -161,18 +182,28 @@ class LiveSession:
             return
         last = next((r for r in reversed(self.rows) if r.get("speed")), None)
         names = [w.path.name for w in self._writers]
+        auto = {}
+        if self.auto_speed:
+            mean_v = float(np.mean(self._speeds)) if self._speeds else 0.0
+            auto = dict(AutoSpeed=1, SampleRateHz=round(self.actual_rate or self.rate, 3),
+                        MeasuredSpeedMean=round(mean_v, 2))
         for i, (w, (h, c)) in enumerate(zip(self._writers, self.sensors)):
-            length = w.points * sm.SPACING_MM / 1000.0 if not self.actual_rate else \
-                w.points / self.actual_rate * self.speed / 60.0
+            if self.auto_speed:              # resampled to 0.25 mm: length from the points, rate from the mean speed
+                length = w.points * sm.SPACING_MM / 1000.0
+                file_speed = round(auto["MeasuredSpeedMean"], 1)
+                file_rate = file_speed / 60.0 / (sm.SPACING_MM / 1000.0) if file_speed else (self.actual_rate or self.rate)
+            else:
+                length = w.points * sm.SPACING_MM / 1000.0 if not self.actual_rate else \
+                    w.points / self.actual_rate * self.speed / 60.0
+                file_speed, file_rate = self.speed, self.actual_rate or self.rate
             extra = sm._extra(self.box_info, self.actual_rate or self.rate, h, c, self.box, self.kind, self.user,
-                              None, Manual=1, Live=1, LiveWindowM=self.window_m)
+                              None, Manual=1, Live=1, LiveWindowM=self.window_m, **auto)
             if len(self._writers) > 1:
                 extra.update(PairFile=names[1 - i], PairConnector=self.sensors[1 - i][1],
                              PairRole="main" if i == 0 else "second", PairDistanceMm=self.distance_mm,
                              PairSpeed=(last or {}).get("speed"))
             try:
-                self.files.append(w.close(self.speed, length, self.actual_rate or self.rate,
-                                          {k: v for k, v in extra.items()}).name)
+                self.files.append(w.close(file_speed, length, file_rate, {k: v for k, v in extra.items()}).name)
             except Exception as e:  # noqa: BLE001
                 self.error = {"code": "save_failed", "detail": str(e)[:300], "vars": {"detail": str(e)[:300]}}
         self._writers = []
@@ -190,6 +221,13 @@ class LiveSession:
             with sm._measuring():
                 def on_chunk(volts: np.ndarray, actual: float) -> None:
                     nonlocal have, win
+                    if self.auto_speed:              # resampling + windows + files: in the analysis thread
+                        if self.actual_rate is None:
+                            self.actual_rate = actual
+                        self.samples += volts.shape[1]
+                        self._q.put([[h.to_um(volts[s + i], i) for i in range(k)]
+                                     for (h, _c), (s, k) in zip(self.sensors, split)])
+                        return
                     if self.actual_rate is None:
                         self.actual_rate = actual
                         win = int(round(self.window_m / (self.speed / 60.0) * actual))
@@ -232,6 +270,9 @@ class LiveSession:
             self.state = "error" if self.error and self.state != "stopping" else "done"
 
     def _analyse(self) -> None:
+        if self.auto_speed:
+            self._analyse_auto()
+            return
         from ui.yarnscope import sensor_pair
         from ui.yarnscope.dty_analysis import analyze_series
         i = 0
@@ -265,6 +306,115 @@ class LiveSession:
             if len(self.rows) > MAX_ROWS:
                 del self.rows[: len(self.rows) - MAX_ROWS]
             i += 1
+
+
+    # ------------------------------------------------------------------------------------- auto speed
+    def _analyse_auto(self) -> None:
+        """Raw chunks at the fixed rate -> per BLOCK_S: delay -> speed -> resample to 0.25 mm -> windows + files."""
+        from ui.yarnscope import sensor_pair
+        ns = len(self.sensors)
+        raw: List[List[List[np.ndarray]]] = [[] for _ in range(ns)]          # per sensor: chunks (list of axes)
+        have = 0
+        pos = [0.0] * ns                    # position (mm) of the next raw sample, per sensor
+        nxt = [0.0] * ns                    # next 0.25 mm grid point not yet produced
+        win_pts = int(round(self.window_m * 1000.0 / sm.SPACING_MM))
+        out: List[List[List[np.ndarray]]] = [[] for _ in range(ns)]          # resampled, not yet in a window
+        out_n = 0
+        block_v: List[tuple] = []                                            # (speed, corr) of the window's blocks
+        i_row = 0
+        last_v: Optional[float] = None
+        while True:
+            item = self._q.get()
+            done = item is None
+            if not done:
+                for j in range(ns):
+                    raw[j].append(item[j])
+                have += len(item[0][0])
+            rate = self.actual_rate or self.rate
+            block = int(BLOCK_S * rate)
+            while have >= block or (done and have >= max(256, block // 4)):
+                n = min(block, have)
+                blk = []
+                for j in range(ns):
+                    cat = [np.concatenate([c[a] for c in raw[j]]) for a in range(len(raw[j][0]))]
+                    blk.append([x[:n] for x in cat])
+                    raw[j] = [[x[n:] for x in cat]]
+                have -= n
+                r = sensor_pair.find_delay(sensor_pair.combined(blk[0]), sensor_pair.combined(blk[1]), sm.SPACING_MM,
+                                           max_lag=int(sensor_pair.DEFAULT_MAX_DELAY_S * rate))
+                ok = r["corr"] is not None and r["corr"] >= sensor_pair.MIN_CORR and r["lag"] and r["lag"] > 0
+                v = sensor_pair.speed_m_min(self.distance_mm, r["lag"] / rate) if ok else None
+                if v is not None and not (sm.SPEED_RANGE[0] <= v <= sm.SPEED_RANGE[1]):
+                    v = None
+                if v is not None:
+                    last_v = v
+                    self._speeds.append(v)
+                    self.speed = round(v, 1)
+                use_v = v if v is not None else last_v
+                if use_v is None:                       # no speed yet: these samples cannot be placed in metres
+                    continue
+                step = use_v / 60.0 / rate * 1000.0     # mm per raw sample
+                self._meters_auto += n * step / 1000.0
+                block_v.append((v if v is not None else float("nan"),
+                                r["corr"] if r["corr"] is not None else float("nan")))
+                res = []
+                for j in range(ns):
+                    p = pos[j] + np.arange(n) * step
+                    g = np.arange(nxt[j], p[-1] + 1e-9, sm.SPACING_MM)
+                    res.append([np.interp(g, p, x) for x in blk[j]])
+                    pos[j] = p[-1] + step
+                    if len(g):
+                        nxt[j] = g[-1] + sm.SPACING_MM
+                k = min(len(res[j][0]) for j in range(ns))
+                res = [[x[:k] for x in res[j]] for j in range(ns)]
+                if self.save and not self._writers and not self.save_stopped:
+                    self._open_writers(rate)
+                if self._writers:
+                    if self.meters() > SAVE_LIMIT_M:
+                        self.save_stopped = True
+                        self._close_writers()
+                    else:
+                        for w, ax in zip(self._writers, res):
+                            w.write(ax)
+                for j in range(ns):
+                    out[j].append(res[j])
+                out_n += k
+                while out_n >= win_pts:
+                    wins = []
+                    for j in range(ns):
+                        cat = [np.concatenate([c[a] for c in out[j]]) for a in range(len(out[j][0]))]
+                        wins.append([x[:win_pts] for x in cat])
+                        out[j] = [[x[win_pts:] for x in cat]]
+                    out_n -= win_pts
+                    self._row_auto(i_row, wins, block_v)
+                    block_v = []
+                    i_row += 1
+            if done:
+                return
+
+    def _row_auto(self, i: int, wins, block_v) -> None:
+        from ui.yarnscope import sensor_pair
+        from ui.yarnscope.dty_analysis import analyze_series
+        row: Dict[str, Any] = {"i": i, "from_m": round(i * self.window_m, 1), "to_m": round((i + 1) * self.window_m, 1),
+                               "t": round(time.time() - (self.started_at or time.time()), 1), "sensors": []}
+        for axes in wins:
+            y = sensor_pair.combined(axes)
+            try:
+                r = analyze_series(np.asarray(y, dtype=float), sm.SPACING_MM, 3)
+                row["sensors"].append({"fpm": _num(r.get("knots_per_m"), 1),
+                                       "cv": _num((r.get("ol_period_mm_stats") or {}).get("cv"), 1),
+                                       "mean_um": _num(float(np.mean(y)), 1)})
+            except Exception:  # noqa: BLE001
+                row["sensors"].append({"fpm": None, "cv": None, "mean_um": _num(float(np.mean(y)), 1)})
+        vs = [v for v, _c in block_v if np.isfinite(v)]
+        cs = [c for _v, c in block_v if np.isfinite(c)]
+        mv = float(np.mean(vs)) if vs else None
+        row.update(speed=_num(mv, 1), corr=_num(float(np.mean(cs)) if cs else None, 3),
+                   speed_min=_num(min(vs) if vs else None, 1), speed_max=_num(max(vs) if vs else None, 1),
+                   delay_ms=_num(self.distance_mm / 1000.0 / (mv / 60.0) * 1000.0 if mv else None, 3))
+        self.rows.append(row)
+        if len(self.rows) > MAX_ROWS:
+            del self.rows[: len(self.rows) - MAX_ROWS]
 
 
 def _num(v: Any, digits: int) -> Optional[float]:

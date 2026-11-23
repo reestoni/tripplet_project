@@ -84,6 +84,12 @@ class SensorLiveWindow(QWidget):
         self.sp_distance.setSpecialValueText("– (only the delay)")
         self.sp_distance.setValue(float(self._settings.value("distance", _DEFAULT_DISTANCE) or 0))
         form.addRow("Distance:", self.sp_distance)
+        # two sensors + distance: TrippleT measures the speed itself (no speed typed, Nutzerwunsch 2026-11-23)
+        self.ck_auto = QCheckBox("Measure the speed (from the two sensors and their distance)")
+        self.ck_auto.setChecked(str(self._settings.value("auto", "true")).lower() != "false")
+        self.ck_auto.toggled.connect(lambda _c: self._sync())
+        self.sp_distance.valueChanged.connect(lambda _v: self._sync())
+        form.addRow("", self.ck_auto)
         self.sp_speed = QDoubleSpinBox()
         self.sp_speed.setRange(*sm.SPEED_RANGE)
         self.sp_speed.setDecimals(1)
@@ -224,10 +230,16 @@ class SensorLiveWindow(QWidget):
                   self.rb_dty, self.rb_aty):
             w.setEnabled(not run)
         self.sp_distance.setEnabled(not run and bool(self.cb_second.currentData()))
+        self.ck_auto.setVisible(bool(self.cb_second.currentData()))
+        self.ck_auto.setEnabled(not run and self.sp_distance.value() > 0)
+        self.sp_speed.setEnabled(not run and not self._auto_on())
         if self.read_only:
             self.lbl_msg.setText("Write access required (AccessLevel > 1).")
 
     # ------------------------------------------------------------------------------------------- actions
+    def _auto_on(self) -> bool:
+        return self.ck_auto.isChecked() and bool(self.cb_second.currentData()) and self.sp_distance.value() > 0
+
     def _on_start(self) -> None:
         p = self.cb_sensor.currentData() or {}
         p2 = self.cb_second.currentData() or {}
@@ -235,12 +247,13 @@ class SensorLiveWindow(QWidget):
         for k, v in (("box", self.cb_box.currentData()), ("sensor", p.get("key")), ("second", p2.get("key") or ""),
                      ("distance", self.sp_distance.value()), ("speed", self.sp_speed.value()),
                      ("window", self.sp_window.value()), ("save", self.ck_save.isChecked()),
-                     ("name", self.ed_name.text().strip()), ("kind", kind)):
+                     ("name", self.ed_name.text().strip()), ("kind", kind), ("auto", self.ck_auto.isChecked())):
             self._settings.setValue(k, v)
         try:
             sl.start(box=self.cb_box.currentData(), head_name=p.get("head"), connector=p.get("connector"),
                      second={"head_name": p2["head"], "connector": p2["connector"]} if p2 else None,
-                     speed_m_min=self.sp_speed.value(), distance_mm=self.sp_distance.value() or None,
+                     speed_m_min=None if self._auto_on() else self.sp_speed.value(), auto_speed=self._auto_on(),
+                     distance_mm=self.sp_distance.value() or None,
                      window_m=self.sp_window.value(), save=self.ck_save.isChecked(), name=self.ed_name.text().strip(),
                      kind=kind, user=self.user)
         except Exception as e:  # noqa: BLE001
