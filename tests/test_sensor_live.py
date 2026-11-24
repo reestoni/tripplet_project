@@ -116,13 +116,15 @@ def test_live_errors(env):  # noqa: F811
     assert s.view()["state"] == "error" and s.view()["error"]["code"] == "daq_error"
 
 
-def test_desktop_live_window(env):  # noqa: F811
+def test_desktop_live_window(env, monkeypatch):  # noqa: F811
     from PySide6.QtCore import QSettings
     from PySide6.QtWidgets import QApplication
     from ui.widgets import sensor_live_window as slw
     app = QApplication.instance() or QApplication([])
     QSettings("TrippleT", "SensorLive").clear()
     sm.set_daq(StreamDaq())
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)   # no empty value checked: start anyway
     w = slw.open_window({"username": "test", "access_level": 2})
     assert slw.open_window() is w                                # one window
     w.cb_second.setCurrentIndex(1)                               # OBD 5-192 on C2
@@ -136,7 +138,7 @@ def test_desktop_live_window(env):  # noqa: F811
         app.processEvents()
         time.sleep(0.05)
     w._poll()
-    assert w.table.rowCount() >= 2 and "knots/m" in w._tile_labels[0].text() and "m/min" in w._tile_labels[2].text()
+    assert w.table.rowCount() >= 2 and "knots/m" in w._tile_labels[0].text() and "CV" in w._tile_labels[1].text() and "m/min" in w._tile_labels[4].text()
     sl.stop()
     w._poll()
     assert "Finished" in w.lbl_status.text() and w.btn_start.isEnabled()
@@ -215,13 +217,15 @@ def test_live_auto_speed_measures_the_speed_itself(env):  # noqa: F811
     assert len(x) * 0.25 / 1000 == pytest.approx(s.meters(), rel=0.02)  # metres in the file = metres measured
 
 
-def test_desktop_window_auto_speed(env):  # noqa: F811
+def test_desktop_window_auto_speed(env, monkeypatch):  # noqa: F811
     from PySide6.QtCore import QSettings
     from PySide6.QtWidgets import QApplication
     from ui.widgets import sensor_live_window as slw
     app = QApplication.instance() or QApplication([])
     QSettings("TrippleT", "SensorLive").clear()
     sm.set_daq(MovingYarnDaq())
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)   # no empty value checked: start anyway
     w = slw.open_window({"username": "test", "access_level": 2})
     assert not w.ck_auto.isVisible() or not w.cb_second.currentData()
     w.cb_second.setCurrentIndex(1)
@@ -238,7 +242,7 @@ def test_desktop_window_auto_speed(env):  # noqa: F811
     sl.stop()
     w._poll()
     assert sl.current().auto_speed and sl.current().rows[0]["speed"] == pytest.approx(700, rel=0.01)
-    assert "700" in w._tile_labels[2].text()
+    assert "700" in w._tile_labels[4].text()
     w.close()
 
 
@@ -252,3 +256,60 @@ def test_live_auto_speed_either_direction(env):  # noqa: F811
     _wait(lambda: len(s.rows) >= 2, timeout=120)
     sl.stop()
     assert s.rows[0]["speed"] == pytest.approx(700, rel=0.01)
+
+
+def test_desktop_live_full_size_chart_and_cv_tile(env, monkeypatch):  # noqa: F811
+    """One chart at full size (button or double click, Esc / Back returns) and CV as its own tile (2026-11-24)."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+    from ui.widgets import sensor_live_window as slw
+    app = QApplication.instance() or QApplication([])
+    QSettings("TrippleT", "SensorLive").clear()
+    sm.set_daq(StreamDaq())
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)   # no empty value checked: start anyway
+    w = slw.open_window({"username": "test", "access_level": 2})
+    w.sp_speed.setValue(764)
+    w.sp_window.setValue(10)
+    w.ck_save.setChecked(False)
+    w._on_start()
+    t0 = time.time()
+    while time.time() - t0 < 60 and len(sl.current().rows) < 2:
+        app.processEvents()
+        time.sleep(0.05)
+    w._poll()
+    texts = [lab.text() for lab in w._tile_labels if not lab.isHidden()]
+    assert any("Knots/m" in t for t in texts) and any("CV" in t and "%" in t for t in texts) and len(texts) == 2
+    assert w._zoom_btns["speed"].isHidden()                      # one sensor: no speed chart
+    w._set_focus("cv")
+    assert [k for _a, k in w._ax_keys] == ["cv"] and not w.btn_unzoom.isHidden() and w.table.isHidden()
+    w._set_focus(None)
+    assert [k for _a, k in w._ax_keys] == ["fpm", "cv"] and not w.table.isHidden()
+    sl.stop()
+    w.close()
+
+
+def test_live_empty_value(env):  # noqa: F811
+    """YarnScope Live can check the empty value (2026-11-24): same remembered value as the measure window, written
+    into the live files."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+    from ui.widgets import sensor_live_window as slw
+    QApplication.instance() or QApplication([])
+    QSettings("TrippleT", "SensorLive").clear()
+    sm.forget_zeros()
+    w = slw.open_window({"username": "test", "access_level": 2})     # env's fake box can read (zero_check)
+    assert "Without yarn" in w.lbl_zero.text() and w.btn_zero.isEnabled()
+    w._on_zero()
+    assert "µm" in w.lbl_zero.text() and "kept until" in w.lbl_zero.text() and "again" in w.btn_zero.text()
+    z = sm.remembered_zero("Dev2", "PXL_3_121_W", "C1")
+    sm.set_daq(StreamDaq())
+    s = sl.start(box="Dev2", head_name="PXL_3_121_W", connector="C1", speed_m_min=764, window_m=10, save=True,
+                 name="99999_zero")
+    assert s.zero == z
+    _wait(lambda: len(s.rows) >= 1)
+    sl.stop()
+    from nptdms import TdmsFile
+    f = next((env.dty / sm.MANUAL_DIR).glob("99999_zero_*.tdms"))
+    assert TdmsFile.read(f).properties["TrippleT.EmptyX_um"] == z["axes"][0]["mean_um"]
+    w.close()

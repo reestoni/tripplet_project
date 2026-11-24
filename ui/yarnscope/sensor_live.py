@@ -124,6 +124,8 @@ class LiveSession:
         else:
             self.speed, _len, self.rate = sm.check_plan(speed_m_min, self.window_m, n_ch)
         self.box, self.kind, self.user = box, kind, user or {}
+        # empty value checked before the start (sensor_measure.remembered_zero, same as the measure window) -> TDMS props
+        self.zero = sm.remembered_zero(box, head_name, connector, second)
         self.save = bool(save)
         self.name = sm.check_name(name) if self.save else str(name or "live")
         self.started_at: Optional[float] = None
@@ -290,7 +292,7 @@ class LiveSession:
             if len(paths) > 1:
                 pair = dict(PairFile=paths[1 - i].name, PairConnector=self.sensors[1 - i][1],
                             PairRole="main" if i == 0 else "second", PairDistanceMm=self.distance_mm)
-            extra = sm._extra(self.box_info, self.actual_rate or self.rate, h, c, self.box, self.kind, self.user, None,
+            extra = sm._extra(self.box_info, self.actual_rate or self.rate, h, c, self.box, self.kind, self.user, self.zero,
                               Live=1, Bookmark=b["id"], BookmarkAt=b["at"], AutoSpeed=1 if self.auto_speed else None,
                               **pair, **more)
             sm.write_tdms(p, labels[i], [np.asarray(a, dtype=np.float64) for a in axes[i]], round(speed, 1),
@@ -326,7 +328,7 @@ class LiveSession:
                     w.points / self.actual_rate * self.speed / 60.0
                 file_speed, file_rate = self.speed, self.actual_rate or self.rate
             extra = sm._extra(self.box_info, self.actual_rate or self.rate, h, c, self.box, self.kind, self.user,
-                              None, Manual=1, Live=1, LiveWindowM=self.window_m, **auto)
+                              self.zero, Manual=1, Live=1, LiveWindowM=self.window_m, **auto)
             if len(self._writers) > 1:
                 extra.update(PairFile=names[1 - i], PairConnector=self.sensors[1 - i][1],
                              PairRole="main" if i == 0 else "second", PairDistanceMm=self.distance_mm,

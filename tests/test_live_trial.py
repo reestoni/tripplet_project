@@ -146,6 +146,8 @@ def test_desktop_bookmark_and_trial_dialog(env, fake_db, monkeypatch):  # noqa: 
     import db.trial_actions
     monkeypatch.setattr(db.trial_actions, "can_edit_trials", lambda user: True)
     sm.set_daq(StreamDaq())
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)   # no empty value checked: start anyway
     w = slw.open_window({"username": "test", "access_level": 2})
     w.sp_speed.setValue(764)
     w.sp_window.setValue(10)

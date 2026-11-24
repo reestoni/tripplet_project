@@ -132,6 +132,18 @@ class SensorLiveWindow(QWidget):
             srow.addWidget(w)
         form.addRow("", srow)
         left.addLayout(form)
+        # empty value (no yarn) before the start - the same remembered value as the measure window (2026-11-24)
+        zrow = QHBoxLayout()
+        self.btn_zero = QPushButton("Check empty value (no yarn)")
+        self.btn_zero.clicked.connect(self._on_zero)
+        zrow.addWidget(self.btn_zero)
+        left.addLayout(zrow)
+        self.lbl_zero = QLabel("–")
+        self.lbl_zero.setWordWrap(True)
+        left.addWidget(self.lbl_zero)
+        self.cb_box.currentIndexChanged.connect(lambda _i: self._show_zero())
+        self.cb_sensor.currentIndexChanged.connect(lambda _i: self._show_zero())
+        self.cb_second.currentIndexChanged.connect(lambda _i: self._show_zero())
         hint = QLabel(f"Saved piece by piece to the sub-folder '{sm.MANUAL_DIR}' (the automatic analysis ignores it), "
                       f"at most {sl.SAVE_LIMIT_M:.0f} m.")
         hint.setWordWrap(True)
@@ -167,13 +179,31 @@ class SensorLiveWindow(QWidget):
         self.tiles = QGridLayout()
         right.addLayout(self.tiles)
         self._tile_labels: List[QLabel] = []
+        # one chart at full size (2026-11-24): buttons above the charts or a double click on a chart; Back / Esc returns
+        self._focus: Optional[str] = None
+        self._ax_keys: List[tuple] = []
+        zrow = QHBoxLayout()
+        self._zoom_btns: Dict[str, QPushButton] = {}
+        for key, title in (("fpm", "Knots/m"), ("cv", "CV"), ("speed", "Speed")):
+            b = QPushButton(f"⤢ {title}")
+            b.setToolTip("Show this chart at full size (or double-click the chart)")
+            b.clicked.connect(lambda _c=False, k=key: self._set_focus(k))
+            zrow.addWidget(b)
+            self._zoom_btns[key] = b
+        self.btn_unzoom = QPushButton("✕ Back (Esc)")
+        self.btn_unzoom.clicked.connect(lambda: self._set_focus(None))
+        self.btn_unzoom.setVisible(False)
+        zrow.addWidget(self.btn_unzoom)
+        zrow.addStretch(1)
+        right.addLayout(zrow)
         self._fig = None
         try:
             from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
             from matplotlib.figure import Figure
             self._fig = Figure(figsize=(7, 2.4), tight_layout=True)
             self._canvas = FigureCanvasQTAgg(self._fig)
-            right.addWidget(self._canvas)
+            self._canvas.mpl_connect("button_press_event", self._on_chart_click)
+            right.addWidget(self._canvas, 1)
         except Exception:  # noqa: BLE001 - the table is enough then
             self._canvas = None
         self.table = QTableWidget(0, 0)
@@ -211,6 +241,7 @@ class SensorLiveWindow(QWidget):
         self.bm_table.setMaximumHeight(170)
         self.bm_table.itemSelectionChanged.connect(self._sync)
         right.addWidget(self.bm_table)
+        self._marks_row = bm
         self._bm_sig = None
         rw = QWidget()
         rw.setLayout(right)
@@ -221,6 +252,7 @@ class SensorLiveWindow(QWidget):
         self._timer.start(1000)
         self._load_sensors()
         self._load_boxes()
+        self._show_zero()
         self._poll()
 
     # --------------------------------------------------------------------------------------------- lists
@@ -281,6 +313,8 @@ class SensorLiveWindow(QWidget):
         for w in (self.cb_box, self.cb_sensor, self.cb_second, self.sp_speed, self.sp_window, self.ck_save, self.ed_name,
                   self.rb_dty, self.rb_aty):
             w.setEnabled(not run)
+        if hasattr(self, "btn_zero"):
+            self.btn_zero.setEnabled(ok and not run and not self.read_only)
         self.sp_distance.setEnabled(not run and bool(self.cb_second.currentData()))
         self.ck_auto.setVisible(bool(self.cb_second.currentData()))
         self.ck_auto.setEnabled(not run and self.sp_distance.value() > 0)
@@ -297,10 +331,55 @@ class SensorLiveWindow(QWidget):
             self.lbl_msg.setText("Write access required (AccessLevel > 1).")
 
     # ------------------------------------------------------------------------------------------- actions
+    def _sel_zero(self):
+        p = self.cb_sensor.currentData() or {}
+        p2 = self.cb_second.currentData() or {}
+        return (self.cb_box.currentData(), p.get("head"), p.get("connector"),
+                {"head_name": p2["head"], "connector": p2["connector"]} if p2 else None)
+
+    def _show_zero(self) -> None:
+        if not hasattr(self, "lbl_zero"):
+            return
+        box, head, con, second = self._sel_zero()
+        z = sm.remembered_zero(box, head, con, second) if box and head else None
+        if not z:
+            self.lbl_zero.setText("<span style='color:#777'>Without yarn in the sensor - shows what the sensor sees "
+                                  "when empty.</span>")
+            self.btn_zero.setText("Check empty value (no yarn)")
+            return
+        two = len({a.get("connector") for a in z["axes"]}) > 1
+        vals = "   ".join(f"{a['connector'] + ' ' if two else ''}{a['axis'].upper()}: {a['mean_um']:.1f} µm "
+                          f"(± {a['std_um']:.1f})" for a in z["axes"])
+        self.lbl_zero.setText(f"{vals}<br><span style='color:#666'>checked {str(z.get('at', ''))[11:16]} - kept until "
+                              f"you check again</span>")
+        self.btn_zero.setText("Check empty value again")
+
+    def _on_zero(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        box, head, con, second = self._sel_zero()
+        if not box or not head:
+            return
+        self.lbl_zero.setText("measuring …")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            sm.zero_check(box, head, con)
+            if second:
+                sm.zero_check(box, second["head_name"], second["connector"])
+        except Exception as e:  # noqa: BLE001
+            self.lbl_zero.setText(f"<span style='color:#c0392b'>{error_text(e)}</span>")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        self._show_zero()
+
     def _auto_on(self) -> bool:
         return self.ck_auto.isChecked() and bool(self.cb_second.currentData()) and self.sp_distance.value() > 0
 
     def _on_start(self) -> None:
+        box, head, con, second = self._sel_zero()
+        if box and head and sm.remembered_zero(box, head, con, second) is None and QMessageBox.question(
+                self, "YarnScope Live", "The empty value (no yarn) was not checked. Start anyway?") != QMessageBox.Yes:
+            return
         p = self.cb_sensor.currentData() or {}
         p2 = self.cb_second.currentData() or {}
         kind = "aty" if self.rb_aty.isChecked() else "dty"
@@ -444,7 +523,7 @@ class SensorLiveWindow(QWidget):
 
     def _tiles(self, v: Dict[str, Any], last: Optional[Dict[str, Any]]) -> None:
         sens = v.get("sensors") or []
-        n = len(sens) + (1 if len(sens) > 1 else 0)
+        n = 2 * len(sens) + (1 if len(sens) > 1 else 0)
         while len(self._tile_labels) < n:
             lab = QLabel()
             lab.setFrameShape(QFrame.StyledPanel)
@@ -454,12 +533,14 @@ class SensorLiveWindow(QWidget):
         f = lambda x, d=1: "–" if x is None else f"{x:.{d}f}"  # noqa: E731
         for i, s in enumerate(sens):
             r = (last or {}).get("sensors", [{}] * len(sens))[i] if last else {}
-            self._tile_labels[i].setStyleSheet(f"QLabel{{border-left:5px solid {COLORS[i % 2]};padding:6px;}}")
-            self._tile_labels[i].setText(f"<span style='color:#666'>{_head_label(s['head'])} · {s['connector']}</span><br>"
-                                         f"<span style='font-size:24px;font-weight:bold'>{f(r.get('fpm'))}</span> knots/m"
-                                         f"<br>CV {f(r.get('cv'))} %")
+            head = f"<span style='color:#666'>{_head_label(s['head'])} · {s['connector']}"
+            # CV is important (Nutzerwunsch 2026-11-24): its own tile, as large as knots/m
+            for k, (val, unit, what) in enumerate(((r.get("fpm"), "knots/m", "Knots/m"), (r.get("cv"), "%", "CV"))):
+                lab = self._tile_labels[2 * i + k]
+                lab.setStyleSheet(f"QLabel{{border-left:5px solid {COLORS[i % 2]};padding:6px;}}")
+                lab.setText(f"{head} · {what}</span><br><span style='font-size:24px;font-weight:bold'>{f(val)}</span> {unit}")
         if len(sens) > 1:
-            lab = self._tile_labels[len(sens)]
+            lab = self._tile_labels[2 * len(sens)]
             sp = (last or {}).get("speed")
             extra = (f"delay {f((last or {}).get('delay_ms'), 3)} ms · match {f((last or {}).get('corr'), 2)}"
                      if last and last.get("delay_ms") is not None else "the two signals do not match yet")
@@ -468,7 +549,8 @@ class SensorLiveWindow(QWidget):
             lab.setText(f"<span style='color:#666'>Speed</span><br><span style='font-size:24px;font-weight:bold'>"
                         f"{f(sp)}</span> m/min<br><span style='color:#666'>{extra}</span>")
         for j, lab in enumerate(self._tile_labels):
-            lab.setVisible(j < n)
+            lab.setVisible(j < n and self._focus is None)
+        self._zoom_btns["speed"].setVisible(len(sens) > 1 and self._focus is None)
 
     def _fill_table(self, v: Dict[str, Any], rows: List[Dict[str, Any]]) -> None:
         sens = v.get("sensors") or []
@@ -499,10 +581,20 @@ class SensorLiveWindow(QWidget):
         sens = v.get("sensors") or []
         two = len(sens) > 1
         self._fig.clear()
+        self._ax_keys = []
         x = [r["to_m"] for r in rows]
-        n = 3 if two else 2
-        for k, (key, title, rel, floor) in enumerate((("fpm", "Knots/m", 0.10, None), ("cv", "CV knot spacing %", 0.0, (0, 40)))):
-            ax = self._fig.add_subplot(1, n, k + 1)
+        keys = ["fpm", "cv"] + (["speed"] if two else [])
+        if self._focus not in keys:
+            self._focus = None
+        show = [self._focus] if self._focus else keys
+        n = len(show)
+        big = self._focus is not None
+        pos = {k: show.index(k) + 1 for k in show}
+        for key, title, rel, floor in (("fpm", "Knots/m", 0.10, None), ("cv", "CV knot spacing %", 0.0, (0, 40))):
+            if key not in pos:
+                continue
+            ax = self._fig.add_subplot(1, n, pos[key])
+            self._ax_keys.append((ax, key))
             allv = []
             for i, s in enumerate(sens):
                 ys = [r["sensors"][i].get(key) if i < len(r["sensors"]) else None for r in rows]
@@ -511,20 +603,65 @@ class SensorLiveWindow(QWidget):
             yr = y_range(allv, rel, floor)
             if yr:
                 ax.set_ylim(*yr)
-            ax.set_title(title, fontsize=9)
-            ax.tick_params(labelsize=8)
-            if two and k == 0:
-                ax.legend(fontsize=7)
-        if two:
-            ax = self._fig.add_subplot(1, n, 3)
+            ax.set_title(title, fontsize=12 if big else 9)
+            ax.tick_params(labelsize=10 if big else 8)
+            if two and (key == "fpm" or big):
+                ax.legend(fontsize=9 if big else 7)
+            if big:
+                ax.grid(True, alpha=0.3)
+        if two and "speed" in pos:
+            ax = self._fig.add_subplot(1, n, pos["speed"])
+            self._ax_keys.append((ax, "speed"))
             sp = [r.get("speed") for r in rows]
             ax.plot(x, sp, marker="o", ms=3, color=COLORS[0])
             yr = y_range(sp, 0.03)
             if yr:
                 ax.set_ylim(*yr)
-            ax.set_title("Speed m/min", fontsize=9)
-            ax.tick_params(labelsize=8)
+            ax.set_title("Speed m/min", fontsize=12 if big else 9)
+            ax.tick_params(labelsize=10 if big else 8)
+            if big:
+                ax.grid(True, alpha=0.3)
         self._canvas.draw_idle()
+
+    # ------------------------------------------------------------------------------- full-size chart
+    def _set_focus(self, key: Optional[str]) -> None:
+        """One chart at full size (key) or all side by side (None): the tiles, table and bookmarks make room."""
+        self._focus = key
+        big = key is not None
+        for w in (self.table, self.bm_table):
+            w.setVisible(not big)
+        for lab in self._tile_labels:
+            lab.setVisible(not big and lab.text() != "")
+        for i in range(self._marks_row.count()):
+            it = self._marks_row.itemAt(i).widget()
+            if it is not None:
+                it.setVisible(not big)
+        self.btn_unzoom.setVisible(big)
+        for k, b in self._zoom_btns.items():
+            b.setVisible(not big)
+        s = sl.current()
+        if s is not None:
+            v = s.view(0)
+            self._zoom_btns["speed"].setVisible(not big and len(v.get("sensors") or []) > 1)
+            self._draw(v, v["rows"])
+        if not big:
+            self._poll()
+
+    def _on_chart_click(self, event) -> None:
+        if not getattr(event, "dblclick", False):
+            return
+        if self._focus is not None:
+            self._set_focus(None)
+            return
+        key = next((k for ax, k in self._ax_keys if ax is event.inaxes), None)
+        if key:
+            self._set_focus(key)
+
+    def keyPressEvent(self, ev) -> None:  # noqa: N802 - Qt
+        if ev.key() == Qt.Key_Escape and self._focus is not None:
+            self._set_focus(None)
+            return
+        super().keyPressEvent(ev)
 
     def closeEvent(self, ev) -> None:  # noqa: N802 - Qt
         s = sl.current()
