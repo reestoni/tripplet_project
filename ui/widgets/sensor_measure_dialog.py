@@ -512,6 +512,8 @@ class SensorMeasureDialog(QDialog):
         t = self.cb_trial.currentData()
         if not t:
             return
+        if self._zero is None:                     # checked elsewhere since (YarnScope Live, web) -> kept on disk
+            self._reset_zero()
         if self._zero is None and not replace:
             if QMessageBox.question(self, "Measure", "The empty value (no yarn) was not checked. Measure anyway?") \
                     != QMessageBox.Yes:
@@ -525,6 +527,8 @@ class SensorMeasureDialog(QDialog):
         self._start(sm.measure, self._last_kwargs, self._measure_done)
 
     def _on_measure_free(self) -> None:
+        if self._zero is None:
+            self._reset_zero()
         if self._zero is None and QMessageBox.question(
                 self, "Measure", "The empty value (no yarn) was not checked. Measure anyway?") != QMessageBox.Yes:
             return

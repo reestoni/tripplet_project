@@ -103,3 +103,24 @@ def test_show_experiment_step_after_save(qapp, fake, monkeypatch):
     run([99])                                       # no DTYoMat: silently nothing
     assert len(calls) == 2
     QSettings("TrippleT", "SensorMeasure").clear()
+
+
+def test_no_question_when_zeroed_elsewhere(env, qapp, fake, monkeypatch):  # noqa: F811
+    """The window was open before the sensor was zeroed somewhere else (YarnScope Live, web): the automatic measurement
+    must start without "empty value not checked?" (2026-11-24)."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QMessageBox
+    from ui.widgets import sensor_measure_dialog as smd
+    QSettings("TrippleT", "SensorMeasure").clear()
+    monkeypatch.setattr(auto_measure, "analyse_and_save", lambda *a, **k: {"saved": True, "fpm": 1.0, "error": None})
+    asked = []
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: asked.append(a) or QMessageBox.No)
+    dlg = smd.SensorMeasureDialog(466, {"username": "test", "access_level": 2})
+    assert dlg._zero is None
+    sm.zero_check("Dev2", "PXL_3_121_W", "C1")               # zeroed elsewhere, kept on disk
+    dlg.sp_length.setValue(3)
+    assert dlg.auto_measure(12)
+    _run_job(dlg, qapp)
+    _run_job(dlg, qapp)
+    assert asked == [] and list(env.dty.glob("466_2_*.tdms"))
+    dlg.close()
