@@ -187,3 +187,19 @@ def test_desktop_bookmark_and_trial_dialog(env, fake_db, monkeypatch):  # noqa: 
     w._fill_bookmarks(force=True)
     assert "466 V003" in w.bm_table.item(0, 7).text()
     w.close()
+
+
+def test_desktop_trial_without_bookmark(env, fake_db, monkeypatch):  # noqa: F811
+    """"Create trial... (without TDMS)" (2026-11-24): no bookmark, no live measurement, never a file."""
+    from PySide6.QtWidgets import QApplication
+    from ui.widgets import sensor_live_window as slw
+    QApplication.instance() or QApplication([])
+    monkeypatch.setattr(live_trial, "series_info", lambda sid: {"id": 466, "name": "Fabelserie", "eid": "2026-79-1"})
+    dlg = slw.LiveTrialDialog(None, None, {"username": "test", "access_level": 2})
+    assert dlg.ck_tdms.isHidden() and "without TDMS" in dlg.windowTitle()
+    dlg.cb_series.setEditText("466")
+    dlg._load()
+    dlg._edits["trial:AirPressure"][1].setText("3.9")
+    dlg._create()
+    assert dlg.result_info["vno"] == 3 and dlg.result_info["file"] is None
+    assert fake_db[-1] == (466, [(102, {"trial:AirPressure": "3.9"})]) and not list(env.dty.glob("*.tdms"))

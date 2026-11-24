@@ -227,10 +227,14 @@ class SensorLiveWindow(QWidget):
         self.btn_file.clicked.connect(self._on_file)
         self.btn_unmark = QPushButton("Delete")
         self.btn_unmark.clicked.connect(self._on_unmark)
+        # a trial without a bookmark - never a TDMS (Nutzerwunsch 2026-11-24); works without a live measurement too
+        self.btn_new_trial = QPushButton("Create trial… (without TDMS)")
+        self.btn_new_trial.setToolTip("A new trial with jet, pressure, OF and speed - no bookmark, no TDMS")
+        self.btn_new_trial.clicked.connect(lambda: self._on_trial(free=True))
         for w in (self.btn_mark, QLabel("last"), self.sp_mark):
             bm.addWidget(w)
         bm.addStretch(1)
-        for w in (self.btn_trial, self.btn_file, self.btn_unmark):
+        for w in (self.btn_trial, self.btn_file, self.btn_unmark, self.btn_new_trial):
             bm.addWidget(w)
         right.addLayout(bm)
         self.bm_table = QTableWidget(0, 8)
@@ -327,6 +331,7 @@ class SensorLiveWindow(QWidget):
         self.btn_trial.setEnabled(sel and ta.can_edit_trials(self.user))
         self.btn_file.setEnabled(sel and not self.read_only)
         self.btn_unmark.setEnabled(sel)
+        self.btn_new_trial.setEnabled(ta.can_edit_trials(self.user))
         if self.read_only:
             self.lbl_msg.setText("Write access required (AccessLevel > 1).")
 
@@ -476,9 +481,9 @@ class SensorLiveWindow(QWidget):
         self.lbl_msg.setText(f"Saved: {', '.join(r['files'])}")
         self._fill_bookmarks(force=True)
 
-    def _on_trial(self) -> None:
-        b, s = self._selected_bookmark(), sl.current()
-        if not (b and s):
+    def _on_trial(self, free: bool = False) -> None:
+        b, s = (None, None) if free else (self._selected_bookmark(), sl.current())
+        if not free and not (b and s):
             return
         dlg = LiveTrialDialog(s, b, self.user, self)
         if dlg.exec() == QDialog.Accepted and dlg.result_info:
@@ -686,19 +691,22 @@ class LiveTrialDialog(QDialog):
     """"Create trial...": series (recent ones or a typed number), template trial, the copy fields shown by default
     (jet, pressure, OF, speed ...) filled from the template, and - not ticked - the bookmark as the trial's TDMS."""
 
-    def __init__(self, session, bookmark: Dict[str, Any], user: Dict[str, Any], parent=None):
+    def __init__(self, session, bookmark: Optional[Dict[str, Any]], user: Dict[str, Any], parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"Create trial from bookmark {bookmark['id']}")
+        self.setWindowTitle(f"Create trial from bookmark {bookmark['id']}" if bookmark else "Create trial (without TDMS)")
         self.setMinimumWidth(520)
         self.session, self.bm, self.user = session, bookmark, user
         self.result_info: Optional[Dict[str, Any]] = None
         self._setup: Optional[Dict[str, Any]] = None
         self._edits: Dict[str, Any] = {}
         root = QVBoxLayout(self)
-        sens = (bookmark.get("sensors") or [{}])[0]
-        info = QLabel(f"Bookmark {bookmark['id']} at {bookmark['at'][11:16]}: {bookmark['length_m']:.0f} m, "
-                      f"{sens.get('fpm') or '–'} knots/m, CV {sens.get('cv') or '–'} %, measured speed "
-                      f"{bookmark.get('speed') or '–'} m/min.")
+        if bookmark:
+            sens = (bookmark.get("sensors") or [{}])[0]
+            info = QLabel(f"Bookmark {bookmark['id']} at {bookmark['at'][11:16]}: {bookmark['length_m']:.0f} m, "
+                          f"{sens.get('fpm') or '–'} knots/m, CV {sens.get('cv') or '–'} %, measured speed "
+                          f"{bookmark.get('speed') or '–'} m/min.")
+        else:
+            info = QLabel("Copy of a trial with your values - no measurement file is saved.")
         info.setWordWrap(True)
         info.setStyleSheet("color:#555;")
         root.addWidget(info)
@@ -731,8 +739,9 @@ class LiveTrialDialog(QDialog):
         root.addLayout(top)
         self.form = QFormLayout()
         root.addLayout(self.form)
-        self.ck_tdms = QCheckBox(f"Save the bookmark ({bookmark['length_m']:.0f} m) as this trial's TDMS")
+        self.ck_tdms = QCheckBox(f"Save the bookmark ({bookmark['length_m']:.0f} m) as this trial's TDMS" if bookmark else "")
         self.ck_tdms.setChecked(False)
+        self.ck_tdms.setVisible(bool(bookmark))
         root.addWidget(self.ck_tdms)
         self.lbl_err = QLabel("")
         self.lbl_err.setWordWrap(True)
@@ -772,8 +781,9 @@ class LiveTrialDialog(QDialog):
             self.cb_template.addItem(f"V{t['vno']:03d}", t["id"])
         if self._setup["default"] is not None:
             self.cb_template.setCurrentIndex(self.cb_template.findData(self._setup["default"]))
-        self.ck_tdms.setText(f"Save the bookmark ({self.bm['length_m']:.0f} m) as the TDMS of the new trial "
-                             f"V{self._setup['next_no']:03d}")
+        if self.bm:
+            self.ck_tdms.setText(f"Save the bookmark ({self.bm['length_m']:.0f} m) as the TDMS of the new trial "
+                                 f"V{self._setup['next_no']:03d}")
         self.buttons.button(QDialogButtonBox.Ok).setEnabled(bool(self._setup["trials"]))
         if not self._setup["trials"]:
             self.lbl_series.setText(self.lbl_series.text() + " – no trial to copy.")
@@ -823,8 +833,9 @@ class LiveTrialDialog(QDialog):
             return
         try:
             self.result_info = live_trial.create(self._sid, int(self.cb_template.currentData()), self._values(),
-                                                 user=self.user, session=self.session, bookmark_id=self.bm["id"],
-                                                 save_tdms=self.ck_tdms.isChecked())
+                                                 user=self.user, session=self.session if self.bm else None,
+                                                 bookmark_id=self.bm["id"] if self.bm else None,
+                                                 save_tdms=bool(self.bm) and self.ck_tdms.isChecked())
         except Exception as e:  # noqa: BLE001
             self.lbl_err.setText(error_text(e))
             return
