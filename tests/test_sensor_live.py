@@ -138,7 +138,7 @@ def test_desktop_live_window(env, monkeypatch):  # noqa: F811
         app.processEvents()
         time.sleep(0.05)
     w._poll()
-    assert w.table.rowCount() >= 2 and "knots/m" in w._tile_labels[0].text() and "CV" in w._tile_labels[1].text() and "m/min" in w._tile_labels[4].text()
+    assert w.table.rowCount() >= 2 and "knots/m" in w._tile_labels[0].text() and "CV" in w._tile_labels[1].text() and "Thickness" in w._tile_labels[2].text() and "m/min" in w._tile_labels[6].text()
     sl.stop()
     w._poll()
     assert "Finished" in w.lbl_status.text() and w.btn_start.isEnabled()
@@ -242,7 +242,7 @@ def test_desktop_window_auto_speed(env, monkeypatch):  # noqa: F811
     sl.stop()
     w._poll()
     assert sl.current().auto_speed and sl.current().rows[0]["speed"] == pytest.approx(700, rel=0.01)
-    assert "700" in w._tile_labels[4].text()
+    assert "700" in w._tile_labels[6].text()
     w.close()
 
 
@@ -279,7 +279,7 @@ def test_desktop_live_full_size_chart_and_cv_tile(env, monkeypatch):  # noqa: F8
         time.sleep(0.05)
     w._poll()
     texts = [lab.text() for lab in w._tile_labels if not lab.isHidden()]
-    assert any("Knots/m" in t for t in texts) and any("CV" in t and "%" in t for t in texts) and len(texts) == 2
+    assert any("Knots/m" in t for t in texts) and any("CV" in t and "%" in t for t in texts) and len(texts) == 3
     assert w._zoom_btns["speed"].isHidden()                      # one sensor: no speed chart
     w._set_focus("cv")
     assert [k for _a, k in w._ax_keys] == ["cv"] and not w.btn_unzoom.isHidden() and w.table.isHidden()
@@ -308,8 +308,23 @@ def test_live_empty_value(env):  # noqa: F811
                  name="99999_zero")
     assert s.zero == z
     _wait(lambda: len(s.rows) >= 1)
+    d = s.rows[0]["sensors"][0]
+    assert d["d_um"] is not None and d["d_knot"] < d["d_bulk"]          # thickness with the empty value
     sl.stop()
     from nptdms import TdmsFile
     f = next((env.dty / sm.MANUAL_DIR).glob("99999_zero_*.tdms"))
     assert TdmsFile.read(f).properties["TrippleT.EmptyX_um"] == z["axes"][0]["mean_um"]
     w.close()
+
+
+def test_thickness_bulk_and_knots():
+    """Thickness = signal - empty value, split into open (bulky) parts and knots by the YarnScope detection (2026-11-24)."""
+    y = _yarn(120_000, seed=4)                        # knots ~480 um, open parts ~700 um (raw)
+    t = sl.thickness(y, 100.0)
+    assert t["d_knot"] == pytest.approx(380, abs=15) and t["d_bulk"] == pytest.approx(600, abs=15)
+    assert t["d_knot"] < t["d_um"] < t["d_bulk"]
+    assert sl.thickness(y, None) == {"d_um": None, "d_bulk": None, "d_knot": None}
+    z = {"axes": [{"axis": "x", "mean_um": -53.3, "connector": "C1"}, {"axis": "y", "mean_um": 521.6, "connector": "C1"},
+                  {"axis": "x", "mean_um": 20.0, "connector": "C2"}]}
+    assert sl.zero_offset(z, "C1", 2) == pytest.approx(234.15) and sl.zero_offset(z, "C2", 1) == 20.0
+    assert sl.zero_offset(z, "C2", 2) is None and sl.zero_offset(None, "C1", 1) is None

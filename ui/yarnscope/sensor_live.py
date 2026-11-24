@@ -23,6 +23,12 @@ bookmark length (default 100 m, BOOKMARK_RANGE) of every sensor is copied out of
 ui/yarnscope/live_trial.py later turns a bookmark into a new trial (copy of a template trial + the user's jet / pressure /
 OF / speed) and, only if asked, writes the bookmark as that trial's TDMS. Bookmarks stay until the next live start.
 
+YARN THICKNESS (Nutzerwunsch 2026-11-24): with the empty value checked before the start (self.zero), every window also gets
+the thickness in um = signal - empty value (per sensor the mean of its axes' empty values; the raw calibration has an axis
+offset - PXL 3-121 empty X -53 / Y +522 um - which this removes: 466_12 X 183.5 / Y 174.6 um after it). Three values:
+d_um (whole window), d_bulk (open, bulky parts) and d_knot (knots), split with dty_analysis.knot_runs (the YarnScope
+detection itself). Not validated against a known diameter yet; without an empty value: None.
+
 One live session per process (the box can do one thing at a time; sensor_measure._measuring is held while it
 runs). Qt-free: the desktop window (ui/widgets/sensor_live_window.py) and tripplet_web app/sensor_live_api.py poll
 state(). Tests: tests/test_sensor_live.py with a fake streaming box.
@@ -126,6 +132,7 @@ class LiveSession:
         self.box, self.kind, self.user = box, kind, user or {}
         # empty value checked before the start (sensor_measure.remembered_zero, same as the measure window) -> TDMS props
         self.zero = sm.remembered_zero(box, head_name, connector, second)
+        self._offsets = [zero_offset(self.zero, c, h.n_axes) for h, c in self.sensors]
         self.save = bool(save)
         self.name = sm.check_name(name) if self.save else str(name or "live")
         self.started_at: Optional[float] = None
@@ -208,6 +215,19 @@ class LiveSession:
             while self._tail and self._tail_pts - self._tail[0][1] >= limit:
                 self._tail_pts -= self._tail.pop(0)[1]
 
+    def _sensor_values(self, y, j: int) -> Dict[str, Any]:
+        """knots/m + CV (YarnScope detection) and, with an empty value, the thickness of one sensor's window."""
+        from ui.yarnscope.dty_analysis import analyze_series
+        y = np.asarray(y, dtype=float)
+        out: Dict[str, Any] = {"fpm": None, "cv": None, "mean_um": _num(float(np.mean(y)), 1) if len(y) else None}
+        try:
+            r = analyze_series(y, sm.SPACING_MM, 3)
+            out.update(fpm=_num(r.get("knots_per_m"), 1), cv=_num((r.get("ol_period_mm_stats") or {}).get("cv"), 1))
+        except Exception:  # noqa: BLE001 - e.g. no yarn in the sensor
+            pass
+        out.update(thickness(y, self._offsets[j] if j < len(self._offsets) else None))
+        return out
+
     @staticmethod
     def bookmark_meta(b: Dict[str, Any]) -> Dict[str, Any]:
         return {k: v for k, v in b.items() if not k.startswith("_")}
@@ -247,16 +267,8 @@ class LiveSession:
         pts = len(axes[0][0])
         wv = [(n, v) for n, v in speeds if v]
         speed = sum(n * v for n, v in wv) / sum(n for n, _v in wv) if wv else self.speed
-        sens = []
-        for ax in axes:
-            y = sensor_pair.combined([np.asarray(a, dtype=float) for a in ax])
-            try:
-                r = analyze_series(y, sm.SPACING_MM, 3)
-                sens.append({"fpm": _num(r.get("knots_per_m"), 1),
-                             "cv": _num((r.get("ol_period_mm_stats") or {}).get("cv"), 1),
-                             "mean_um": _num(float(np.mean(y)), 1)})
-            except Exception:  # noqa: BLE001 - e.g. no yarn
-                sens.append({"fpm": None, "cv": None, "mean_um": _num(float(np.mean(y)), 1)})
+        sens = [self._sensor_values(sensor_pair.combined([np.asarray(a, dtype=float) for a in ax]), j)
+                for j, ax in enumerate(axes)]
         self._bm_seq += 1
         b = {"id": self._bm_seq, "at": _dt.datetime.now().isoformat(timespec="seconds"),
              "at_m": round(self.meters(), 1), "length_m": round(pts / ppm, 1), "speed": _num(speed, 1),
@@ -416,16 +428,10 @@ class LiveSession:
             row: Dict[str, Any] = {"i": i, "from_m": round(i * self.window_m, 1), "to_m": round((i + 1) * self.window_m, 1),
                                    "t": round(time.time() - (self.started_at or time.time()), 1), "sensors": []}
             sigs = []
-            for axes in item:
+            for j, axes in enumerate(item):
                 y = sensor_pair.combined(axes)
                 sigs.append(y)
-                try:
-                    r = analyze_series(np.asarray(y, dtype=float), sm.SPACING_MM, 3)
-                    cv = (r.get("ol_period_mm_stats") or {}).get("cv")
-                    row["sensors"].append({"fpm": _num(r.get("knots_per_m"), 1), "cv": _num(cv, 1),
-                                           "mean_um": _num(float(np.mean(y)), 1)})
-                except Exception:  # noqa: BLE001 - e.g. no yarn in the sensor
-                    row["sensors"].append({"fpm": None, "cv": None, "mean_um": _num(float(np.mean(y)), 1)})
+                row["sensors"].append(self._sensor_values(y, j))
             if len(sigs) == 2:
                 r = sensor_pair.find_delay(sigs[0], sigs[1], sm.SPACING_MM,
                                            max_lag=int(sensor_pair.DEFAULT_MAX_DELAY_S * rate))
@@ -530,15 +536,8 @@ class LiveSession:
         from ui.yarnscope.dty_analysis import analyze_series
         row: Dict[str, Any] = {"i": i, "from_m": round(i * self.window_m, 1), "to_m": round((i + 1) * self.window_m, 1),
                                "t": round(time.time() - (self.started_at or time.time()), 1), "sensors": []}
-        for axes in wins:
-            y = sensor_pair.combined(axes)
-            try:
-                r = analyze_series(np.asarray(y, dtype=float), sm.SPACING_MM, 3)
-                row["sensors"].append({"fpm": _num(r.get("knots_per_m"), 1),
-                                       "cv": _num((r.get("ol_period_mm_stats") or {}).get("cv"), 1),
-                                       "mean_um": _num(float(np.mean(y)), 1)})
-            except Exception:  # noqa: BLE001
-                row["sensors"].append({"fpm": None, "cv": None, "mean_um": _num(float(np.mean(y)), 1)})
+        for j, axes in enumerate(wins):
+            row["sensors"].append(self._sensor_values(sensor_pair.combined(axes), j))
         vs = [v for v, _c in block_v if np.isfinite(v)]
         cs = [c for _v, c in block_v if np.isfinite(c)]
         mv = float(np.mean(vs)) if vs else None
@@ -548,6 +547,32 @@ class LiveSession:
         self.rows.append(row)
         if len(self.rows) > MAX_ROWS:
             del self.rows[: len(self.rows) - MAX_ROWS]
+
+
+def zero_offset(zero: Optional[Dict[str, Any]], connector: str, n_axes: int) -> Optional[float]:
+    """Empty value of one sensor as one number (mean of its axes, like sensor_pair.combined); None if not checked."""
+    vals = [a.get("mean_um") for a in (zero or {}).get("axes") or []
+            if a.get("connector") in (None, connector) and a.get("mean_um") is not None]
+    return float(np.mean(vals[:n_axes])) if len(vals) >= n_axes else None
+
+
+def thickness(y, offset: Optional[float]) -> Dict[str, Optional[float]]:
+    """{d_um, d_bulk, d_knot}: mean thickness of the window, of its open (bulky) parts and of its knots, minus the empty
+    value; knots = dty_analysis.knot_runs (the YarnScope detection). All None without an empty value."""
+    none = {"d_um": None, "d_bulk": None, "d_knot": None}
+    y = np.asarray(y, dtype=float)
+    if offset is None or not len(y):
+        return none
+    from ui.yarnscope.dty_analysis import knot_runs
+    mask = np.zeros(len(y), dtype=bool)
+    try:
+        for a, b in knot_runs(y, 3)[0]:
+            mask[a:b] = True
+    except Exception:  # noqa: BLE001 - no structure: only the mean
+        mask[:] = False
+    return {"d_um": _num(float(np.mean(y)) - offset, 1),
+            "d_bulk": _num(float(np.mean(y[~mask])) - offset, 1) if (~mask).any() else None,
+            "d_knot": _num(float(np.mean(y[mask])) - offset, 1) if mask.any() else None}
 
 
 def _num(v: Any, digits: int) -> Optional[float]:

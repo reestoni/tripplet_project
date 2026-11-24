@@ -184,7 +184,7 @@ class SensorLiveWindow(QWidget):
         self._ax_keys: List[tuple] = []
         zrow = QHBoxLayout()
         self._zoom_btns: Dict[str, QPushButton] = {}
-        for key, title in (("fpm", "Knots/m"), ("cv", "CV"), ("speed", "Speed")):
+        for key, title in (("fpm", "Knots/m"), ("cv", "CV"), ("thick", "Thickness"), ("speed", "Speed")):
             b = QPushButton(f"⤢ {title}")
             b.setToolTip("Show this chart at full size (or double-click the chart)")
             b.clicked.connect(lambda _c=False, k=key: self._set_focus(k))
@@ -528,7 +528,7 @@ class SensorLiveWindow(QWidget):
 
     def _tiles(self, v: Dict[str, Any], last: Optional[Dict[str, Any]]) -> None:
         sens = v.get("sensors") or []
-        n = 2 * len(sens) + (1 if len(sens) > 1 else 0)
+        n = 3 * len(sens) + (1 if len(sens) > 1 else 0)
         while len(self._tile_labels) < n:
             lab = QLabel()
             lab.setFrameShape(QFrame.StyledPanel)
@@ -541,11 +541,22 @@ class SensorLiveWindow(QWidget):
             head = f"<span style='color:#666'>{_head_label(s['head'])} · {s['connector']}"
             # CV is important (Nutzerwunsch 2026-11-24): its own tile, as large as knots/m
             for k, (val, unit, what) in enumerate(((r.get("fpm"), "knots/m", "Knots/m"), (r.get("cv"), "%", "CV"))):
-                lab = self._tile_labels[2 * i + k]
+                lab = self._tile_labels[3 * i + k]
                 lab.setStyleSheet(f"QLabel{{border-left:5px solid {COLORS[i % 2]};padding:6px;}}")
                 lab.setText(f"{head} · {what}</span><br><span style='font-size:24px;font-weight:bold'>{f(val)}</span> {unit}")
+            # thickness minus the empty value (2026-11-24): whole window, bulk (open parts), knots
+            lab = self._tile_labels[3 * i + 2]
+            lab.setStyleSheet(f"QLabel{{border-left:5px solid {COLORS[i % 2]};padding:6px;}}")
+            lab.setToolTip("Signal minus empty value, mean of the window; bulk = open parts, knots = the detected knots. "
+                           "Not yet validated against a known diameter.")
+            if r.get("d_um") is not None:
+                lab.setText(f"{head} · Thickness</span><br><span style='font-size:24px;font-weight:bold'>{f(r['d_um'], 0)}</span> µm"
+                            f"<br>Bulk {f(r.get('d_bulk'), 0)} · Knots {f(r.get('d_knot'), 0)} µm")
+            else:
+                lab.setText(f"{head} · Thickness</span><br><span style='color:#777'>"
+                            f"{'Check the empty value before the start.' if last else '–'}</span>")
         if len(sens) > 1:
-            lab = self._tile_labels[2 * len(sens)]
+            lab = self._tile_labels[3 * len(sens)]
             sp = (last or {}).get("speed")
             extra = (f"delay {f((last or {}).get('delay_ms'), 3)} ms · match {f((last or {}).get('corr'), 2)}"
                      if last and last.get("delay_ms") is not None else "the two signals do not match yet")
@@ -556,12 +567,14 @@ class SensorLiveWindow(QWidget):
         for j, lab in enumerate(self._tile_labels):
             lab.setVisible(j < n and self._focus is None)
         self._zoom_btns["speed"].setVisible(len(sens) > 1 and self._focus is None)
+        self._zoom_btns["thick"].setVisible(self._focus is None and bool(last) and any(
+            x.get("d_bulk") is not None for x in (last or {}).get("sensors", [])))
 
     def _fill_table(self, v: Dict[str, Any], rows: List[Dict[str, Any]]) -> None:
         sens = v.get("sensors") or []
         heads = ["m"]
         for s in sens:
-            heads += [f"{_head_label(s['head'])} {s['connector']} knots/m", "CV %"]
+            heads += [f"{_head_label(s['head'])} {s['connector']} knots/m", "CV %", "Thickness µm", "Bulk", "Knots"]
         if len(sens) > 1:
             heads += ["Speed m/min", "Match"]
         self.table.setColumnCount(len(heads))
@@ -571,7 +584,7 @@ class SensorLiveWindow(QWidget):
         for k, r in enumerate(reversed(rows)):
             vals = [f"{r['from_m']:.0f}–{r['to_m']:.0f}"]
             for s in r["sensors"]:
-                vals += [f(s.get("fpm")), f(s.get("cv"))]
+                vals += [f(s.get("fpm")), f(s.get("cv")), f(s.get("d_um"), 0), f(s.get("d_bulk"), 0), f(s.get("d_knot"), 0)]
             if len(sens) > 1:
                 vals += [f(r.get("speed")), f(r.get("corr"), 2)]
             for c, val in enumerate(vals):
@@ -588,7 +601,8 @@ class SensorLiveWindow(QWidget):
         self._fig.clear()
         self._ax_keys = []
         x = [r["to_m"] for r in rows]
-        keys = ["fpm", "cv"] + (["speed"] if two else [])
+        has_d = any(x.get("d_bulk") is not None for r in rows for x in r["sensors"])
+        keys = ["fpm", "cv"] + (["thick"] if has_d else []) + (["speed"] if two else [])
         if self._focus not in keys:
             self._focus = None
         show = [self._focus] if self._focus else keys
@@ -612,6 +626,24 @@ class SensorLiveWindow(QWidget):
             ax.tick_params(labelsize=10 if big else 8)
             if two and (key == "fpm" or big):
                 ax.legend(fontsize=9 if big else 7)
+            if big:
+                ax.grid(True, alpha=0.3)
+        if "thick" in pos:                       # bulk solid, knots dotted, per sensor
+            ax = self._fig.add_subplot(1, n, pos["thick"])
+            self._ax_keys.append((ax, "thick"))
+            allv = []
+            for i, s in enumerate(sens):
+                for key, style, what in (("d_bulk", "-", "bulk"), ("d_knot", ":", "knots")):
+                    ys = [r["sensors"][i].get(key) if i < len(r["sensors"]) else None for r in rows]
+                    allv += ys
+                    ax.plot(x, ys, style, marker="o", ms=3, color=COLORS[i % 2],
+                            label=f"{_head_label(s['head'])} {s['connector']} {what}")
+            yr = y_range(allv, 0.05)
+            if yr:
+                ax.set_ylim(*yr)
+            ax.set_title("Thickness µm", fontsize=12 if big else 9)
+            ax.tick_params(labelsize=10 if big else 8)
+            ax.legend(fontsize=9 if big else 6)
             if big:
                 ax.grid(True, alpha=0.3)
         if two and "speed" in pos:
@@ -648,6 +680,8 @@ class SensorLiveWindow(QWidget):
         if s is not None:
             v = s.view(0)
             self._zoom_btns["speed"].setVisible(not big and len(v.get("sensors") or []) > 1)
+            self._zoom_btns["thick"].setVisible(not big and any(x.get("d_bulk") is not None
+                                                                for r in v["rows"] for x in r["sensors"]))
             self._draw(v, v["rows"])
         if not big:
             self._poll()
