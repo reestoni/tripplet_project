@@ -56,56 +56,89 @@ def _paths(session, label: str, folder, when: _dt.datetime, first) -> List:
     return paths
 
 
+MAX_TRIALS = 20
+
+
 def create(series_id: int, template_id: int, values: Dict[str, Any], *, user: Any = None, session=None,
            bookmark_id: Any = None, save_tdms: bool = False, now: Optional[_dt.datetime] = None) -> Dict[str, Any]:
-    """Copies the template trial with the typed values (db/trial_copy.validate_overrides) and, with save_tdms, writes
-    the bookmark as the new trial's TDMS. Returns {trial_id, vno, file, replaced, tdms_error}.
-    Raises sm.MeasureError: bad_trial, bad_field / invalid (vars field, value), no_bookmark, folder_missing,
-    copy_failed. A TDMS that fails AFTER the trial was made does not undo the trial: tdms_error says why."""
+    """One trial (create_many with one item): the bookmark is linked to it and, with save_tdms, written as its TDMS."""
+    return create_many(series_id, template_id, [{"values": values, "bookmark_id": bookmark_id, "save_tdms": save_tdms}],
+                       user=user, session=session, now=now)[0]
+
+
+def create_many(series_id: int, template_id: int, items: List[Dict[str, Any]], *, user: Any = None, session=None,
+                now: Optional[_dt.datetime] = None) -> List[Dict[str, Any]]:
+    """Several trials in one go (Nutzerwunsch 2026-11-24, e.g. jet plate 1 and plate 2): every item = {values: {field.key:
+    text}, bookmark_id, save_tdms} -> one copy of the template with those values (db/trial_copy.validate_overrides, same
+    fields as "Copy trials"), in item order (V012, V013 ...). An item's bookmark is linked to its trial and, with save_tdms,
+    written as that trial's TDMS (a bookmark at most once). Everything is checked BEFORE the first copy. Returns one
+    {trial_id, vno, series_id, file, replaced, tdms_error, bookmark_id} per item.
+    Raises sm.MeasureError: no_items, too_many, bad_trial, bad_field / invalid (vars field, value, n = item number),
+    no_bookmark, bookmark_twice, folder_missing, copy_failed. A TDMS that fails after the copies keeps the trials."""
     from db import trial_actions as ta, trial_copy as tc
     from db.connection import fetch_all
+    items = list(items or [])
+    if not items:
+        raise sm.MeasureError("no_items", "no trial to create")
+    if len(items) > MAX_TRIALS:
+        raise sm.MeasureError("too_many", f"at most {MAX_TRIALS} trials", n=MAX_TRIALS)
     s = ta.copy_trials_setup(int(series_id))
     fields = s["fields"]
     if int(template_id) not in {int(t["id"]) for t in s["trials"]}:
         raise sm.MeasureError("bad_trial", "the template is not a trial of this series")
-    try:
-        over = tc.validate_overrides(fields, s["source"].get(int(template_id), {}), values or {},
-                                     allowed=[f.key for f in fields if f.default])
-    except tc.OverrideError as e:
-        raise sm.MeasureError(e.code, str(e), field=e.field.label if e.field else "", value=str(e.value))
-    b = None
-    if session is not None and bookmark_id not in (None, ""):
-        b = session.find_bookmark(bookmark_id)
-    if save_tdms:
-        if b is None:
-            raise sm.MeasureError("no_bookmark", "no bookmark to save", id=str(bookmark_id))
+    allowed = [f.key for f in fields if f.default]
+    plan, marks, seen = [], [], set()
+    for n, it in enumerate(items, start=1):
+        try:
+            over = tc.validate_overrides(fields, s["source"].get(int(template_id), {}), it.get("values") or {},
+                                         allowed=allowed)
+        except tc.OverrideError as e:
+            raise sm.MeasureError(e.code, str(e), field=e.field.label if e.field else "", value=str(e.value), n=n)
+        b = None
+        bid = it.get("bookmark_id")
+        if session is not None and bid not in (None, ""):
+            b = session.find_bookmark(bid)
+        if it.get("save_tdms"):
+            if b is None:
+                raise sm.MeasureError("no_bookmark", "no bookmark to save", id=str(bid))
+            if b["id"] in seen:
+                raise sm.MeasureError("bookmark_twice", "one bookmark for two trials", id=str(b["id"]))
+            seen.add(b["id"])
+        plan.append((int(template_id), over))
+        marks.append((b, bool(it.get("save_tdms"))))
+    if any(save for _b, save in marks):
         folder = sm.tdms_folder(session.kind)
         if not folder.is_dir():
             raise sm.MeasureError("folder_missing", f"{folder} not reachable", folder=str(folder))
-    new_ids, err = ta.copy_trials(int(series_id), [(int(template_id), over)], fields, user)
-    if err is not None or not new_ids:
-        raise sm.MeasureError("copy_failed", str(err or "no trial made")[:300], detail=str(err or "")[:300])
-    tid = int(new_ids[0])
-    rows = fetch_all("SELECT Versuchsnummer FROM tblTrial WHERE ID = ?", [tid])
-    vno = int(rows[0]["Versuchsnummer"]) if rows else None
-    res: Dict[str, Any] = {"trial_id": tid, "vno": vno, "series_id": int(series_id), "file": None, "replaced": None,
-                           "tdms_error": None}
-    if b is not None:
-        b["trial"] = {"series_id": int(series_id), "vno": vno, "trial_id": tid}
-    if save_tdms and vno is not None:
-        try:
-            folder = sm.tdms_folder(session.kind)
-            moved = sm.move_replaced(sm.existing_file(int(series_id), vno, session.kind))
-            when = now or _dt.datetime.now()
-            label = f"{int(series_id)}_{vno}"
-            first = folder / sm.file_name(int(series_id), vno, when)
-            paths = _paths(session, label, folder, when, first)
-            session.bookmark_tdms(b, paths, label, TrialID=tid, SeriesID=int(series_id))
-            res.update(file=first.name, replaced=moved.name if moved else None)
-            b["file"] = first.name
-        except Exception as e:  # noqa: BLE001 - the trial stays; the user sees why the file is missing
-            res["tdms_error"] = str(e)[:300]
-    return res
+    new_ids, err = ta.copy_trials(int(series_id), plan, fields, user)
+    if err is not None or len(new_ids or []) < len(plan):
+        made = ", ".join(str(x) for x in (new_ids or []))
+        raise sm.MeasureError("copy_failed", str(err or "not all trials made")[:300],
+                              detail=(str(err or "") + (f" (made: {made})" if made else ""))[:300])
+    out: List[Dict[str, Any]] = []
+    when = now or _dt.datetime.now()
+    for tid, (b, save) in zip(new_ids, marks):
+        tid = int(tid)
+        rows = fetch_all("SELECT Versuchsnummer FROM tblTrial WHERE ID = ?", [tid])
+        vno = int(rows[0]["Versuchsnummer"]) if rows else None
+        res: Dict[str, Any] = {"trial_id": tid, "vno": vno, "series_id": int(series_id), "file": None, "replaced": None,
+                               "tdms_error": None, "bookmark_id": b["id"] if b else None}
+        if b is not None:
+            b["trial"] = {"series_id": int(series_id), "vno": vno, "trial_id": tid}
+        if save and vno is not None:
+            try:
+                folder = sm.tdms_folder(session.kind)
+                moved = sm.move_replaced(sm.existing_file(int(series_id), vno, session.kind))
+                label = f"{int(series_id)}_{vno}"
+                first = folder / sm.file_name(int(series_id), vno, when)
+                paths = _paths(session, label, folder, when, first)
+                session.bookmark_tdms(b, paths, label, TrialID=tid, SeriesID=int(series_id))
+                res.update(file=first.name, replaced=moved.name if moved else None)
+                b["file"] = first.name
+            except Exception as e:  # noqa: BLE001 - the trial stays; the user sees why the file is missing
+                res["tdms_error"] = str(e)[:300]
+        out.append(res)
+    return out
 
 
 def save_file(session, bookmark_id: Any, name: Any, now: Optional[_dt.datetime] = None) -> Dict[str, Any]:

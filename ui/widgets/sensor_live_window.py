@@ -228,8 +228,9 @@ class SensorLiveWindow(QWidget):
         self.btn_unmark = QPushButton("Delete")
         self.btn_unmark.clicked.connect(self._on_unmark)
         # a trial without a bookmark - never a TDMS (Nutzerwunsch 2026-11-24); works without a live measurement too
-        self.btn_new_trial = QPushButton("Create trial… (without TDMS)")
-        self.btn_new_trial.setToolTip("A new trial with jet, pressure, OF and speed - no bookmark, no TDMS")
+        self.btn_new_trial = QPushButton("Create trials…")
+        self.btn_new_trial.setToolTip("New trials from a template with jet, plate, pressure, OF and speed - optionally "
+                                      "each with a bookmark as TDMS")
         self.btn_new_trial.clicked.connect(lambda: self._on_trial(free=True))
         for w in (self.btn_mark, QLabel("last"), self.sp_mark):
             bm.addWidget(w)
@@ -482,18 +483,21 @@ class SensorLiveWindow(QWidget):
         self._fill_bookmarks(force=True)
 
     def _on_trial(self, free: bool = False) -> None:
-        b, s = (None, None) if free else (self._selected_bookmark(), sl.current())
+        s = sl.current()
+        b = None if free else self._selected_bookmark()
         if not free and not (b and s):
             return
         dlg = LiveTrialDialog(s, b, self.user, self)
-        if dlg.exec() == QDialog.Accepted and dlg.result_info:
-            r = dlg.result_info
-            msg = f"Trial {r['series_id']} V{r['vno']:03d} created."
-            if r.get("file"):
-                msg += f" File: {r['file']}" + (f" (old file moved to {sm.REPLACED_DIR})" if r.get("replaced") else "")
-            if r.get("tdms_error"):
-                msg += f" <span style='color:#c0392b'>The file could not be saved: {r['tdms_error']}</span>"
-            self.lbl_msg.setText(msg)
+        if dlg.exec() == QDialog.Accepted and dlg.result_infos:
+            parts = []
+            for r in dlg.result_infos:
+                t = f"{r['series_id']} V{r['vno']:03d}"
+                if r.get("file"):
+                    t += f" ({r['file']}" + (f", old file moved to {sm.REPLACED_DIR}" if r.get("replaced") else "") + ")"
+                if r.get("tdms_error"):
+                    t += f" <span style='color:#c0392b'>file not saved: {r['tdms_error']}</span>"
+                parts.append(t)
+            self.lbl_msg.setText("Created: " + ", ".join(parts))
             self._fill_bookmarks(force=True)
 
     def _on_stop(self) -> None:
@@ -722,17 +726,21 @@ class SensorLiveWindow(QWidget):
 
 
 class LiveTrialDialog(QDialog):
-    """"Create trial...": series (recent ones or a typed number), template trial, the copy fields shown by default
-    (jet, pressure, OF, speed ...) filled from the template, and - not ticked - the bookmark as the trial's TDMS."""
+    """"Create trials...": series (recent ones or a typed number), template trial and ONE COLUMN PER NEW TRIAL
+    (Nutzerwunsch 2026-11-24: e.g. jet plate 1 and plate 2 at once) with the copy fields shown by default (jet, plate,
+    pressure, OF, speed ...) filled from the template; "+ Trial" copies the last column. Per column optionally a
+    bookmark as that trial's TDMS (each bookmark once). live_trial.create_many checks everything before the first copy."""
 
     def __init__(self, session, bookmark: Optional[Dict[str, Any]], user: Dict[str, Any], parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"Create trial from bookmark {bookmark['id']}" if bookmark else "Create trial (without TDMS)")
-        self.setMinimumWidth(520)
+        self.setWindowTitle(f"Create trials (from bookmark {bookmark['id']})" if bookmark else "Create trials")
+        self.setMinimumWidth(620)
         self.session, self.bm, self.user = session, bookmark, user
         self.result_info: Optional[Dict[str, Any]] = None
+        self.result_infos: List[Dict[str, Any]] = []
         self._setup: Optional[Dict[str, Any]] = None
-        self._edits: Dict[str, Any] = {}
+        self._cols: List[Dict[str, Any]] = []          # per column: {"edits": {key: (field, widget)}, "bm": QComboBox}
+        self._orig: Dict[str, Any] = {}
         root = QVBoxLayout(self)
         if bookmark:
             sens = (bookmark.get("sensors") or [{}])[0]
@@ -740,7 +748,8 @@ class LiveTrialDialog(QDialog):
                           f"{sens.get('fpm') or '–'} knots/m, CV {sens.get('cv') or '–'} %, measured speed "
                           f"{bookmark.get('speed') or '–'} m/min.")
         else:
-            info = QLabel("Copy of a trial with your values - no measurement file is saved.")
+            info = QLabel("Copies of a trial with your values - one column per trial. Optionally one bookmark per trial "
+                          "is saved as its TDMS.")
         info.setWordWrap(True)
         info.setStyleSheet("color:#555;")
         root.addWidget(info)
@@ -771,12 +780,24 @@ class LiveTrialDialog(QDialog):
         self.cb_template.currentIndexChanged.connect(lambda _i: self._fill_values())
         top.addRow("Copy of:", self.cb_template)
         root.addLayout(top)
-        self.form = QFormLayout()
-        root.addLayout(self.form)
-        self.ck_tdms = QCheckBox(f"Save the bookmark ({bookmark['length_m']:.0f} m) as this trial's TDMS" if bookmark else "")
-        self.ck_tdms.setChecked(False)
-        self.ck_tdms.setVisible(bool(bookmark))
-        root.addWidget(self.ck_tdms)
+        from PySide6.QtWidgets import QScrollArea
+        self._grid_host = QWidget()
+        self.grid = QGridLayout(self._grid_host)
+        self.grid.setHorizontalSpacing(8)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self._grid_host)
+        scroll.setMinimumHeight(240)
+        root.addWidget(scroll, 1)
+        arow = QHBoxLayout()
+        self.btn_add = QPushButton("+ Trial")
+        self.btn_add.setToolTip("Another trial: copies the values of the last column")
+        self.btn_add.clicked.connect(self._add_col)
+        self.lbl_names = QLabel("")
+        self.lbl_names.setStyleSheet("color:#555;")
+        arow.addWidget(self.btn_add)
+        arow.addWidget(self.lbl_names, 1)
+        root.addLayout(arow)
         self.lbl_err = QLabel("")
         self.lbl_err.setWordWrap(True)
         self.lbl_err.setStyleSheet("color:#c0392b;")
@@ -790,6 +811,11 @@ class LiveTrialDialog(QDialog):
         if self.cb_series.count():
             self.cb_series.setCurrentIndex(0)
             self._load()
+
+    # first column, for code that knows only one trial
+    @property
+    def _edits(self) -> Dict[str, Any]:
+        return self._cols[0]["edits"] if self._cols else {}
 
     def _series_id(self) -> Optional[int]:
         d = self.cb_series.currentData() if self.cb_series.currentIndex() >= 0 and \
@@ -807,6 +833,7 @@ class LiveTrialDialog(QDialog):
         if not info:
             self.lbl_series.setText("No trial series with this number.")
             self.buttons.button(QDialogButtonBox.Ok).setEnabled(False)
+            self._clear_grid()
             return
         self.lbl_series.setText(f"{info['eid']} · {info['name']}")
         self._sid = info["id"]
@@ -815,62 +842,160 @@ class LiveTrialDialog(QDialog):
             self.cb_template.addItem(f"V{t['vno']:03d}", t["id"])
         if self._setup["default"] is not None:
             self.cb_template.setCurrentIndex(self.cb_template.findData(self._setup["default"]))
-        if self.bm:
-            self.ck_tdms.setText(f"Save the bookmark ({self.bm['length_m']:.0f} m) as the TDMS of the new trial "
-                                 f"V{self._setup['next_no']:03d}")
         self.buttons.button(QDialogButtonBox.Ok).setEnabled(bool(self._setup["trials"]))
         if not self._setup["trials"]:
             self.lbl_series.setText(self.lbl_series.text() + " – no trial to copy.")
 
-    def _fill_values(self) -> None:
-        from db import trial_copy as tc
-        while self.form.rowCount():
-            self.form.removeRow(0)
-        self._edits = {}
-        if not self._setup or self.cb_template.currentData() is None:
-            return
-        src = self._setup["source"].get(int(self.cb_template.currentData()), {})
-        for f in self._setup["fields"]:
-            v = src.get(f.key)
-            if v is tc.NOT_AVAILABLE:
-                continue
-            if f.choices:
-                w = QComboBox()
-                w.addItem("", None)
-                for k, name in f.choices:
-                    w.addItem(name, k)
-                try:
-                    i = w.findData(int(v)) if v is not None else 0
-                except (TypeError, ValueError):
-                    i = 0
-                w.setCurrentIndex(max(0, i))
-                w.setProperty("orig", w.currentData())
-            else:
-                w = QLineEdit(tc.display_value(f, v))
-                w.setProperty("orig", w.text())
-            self._edits[f.key] = (f, w)
-            self.form.addRow(f.label + ":", w)
+    # ------------------------------------------------------------------------------------------- columns
+    def _clear_grid(self) -> None:
+        while self.grid.count():
+            it = self.grid.takeAt(0)
+            if it.widget() is not None:
+                it.widget().deleteLater()
 
-    def _values(self) -> Dict[str, Any]:
-        """Only what the user changed (the rest is copied from the template as it is)."""
+    def _bookmarks(self) -> List[Dict[str, Any]]:
+        return [sl.LiveSession.bookmark_meta(b) for b in (self.session.bookmarks if self.session else [])]
+
+    def _new_widget(self, f, value: Any):
+        if f.choices:
+            w = QComboBox()
+            w.addItem("", None)
+            for k, name in f.choices:
+                w.addItem(name, k)
+            try:
+                i = w.findData(int(value)) if value not in (None, "") else 0
+            except (TypeError, ValueError):
+                i = 0
+            w.setCurrentIndex(max(0, i))
+        else:
+            w = QLineEdit("" if value is None else str(value))
+        return w
+
+    def _widget_value(self, w) -> Any:
+        return w.currentData() if isinstance(w, QComboBox) else w.text().strip()
+
+    def _fill_values(self) -> None:
+        """Template changed (or loaded): one column with the template's values."""
+        from db import trial_copy as tc
+        for col in self._cols:
+            self._drop_col(col)
+        self._cols = []
+        self._orig = {}
+        if self._setup and self.cb_template.currentData() is not None:
+            src = self._setup["source"].get(int(self.cb_template.currentData()), {})
+            for f in self._setup["fields"]:
+                v = src.get(f.key)
+                if v is tc.NOT_AVAILABLE:
+                    continue
+                self._orig[f.key] = (f, v if f.choices else tc.display_value(f, v))
+        self._add_col(from_orig=True)
+
+    def _add_col(self, from_orig: bool = False) -> None:
+        if not self._orig:
+            self._rebuild()
+            return
+        if len(self._cols) >= live_trial.MAX_TRIALS:
+            return
+        last = None if from_orig or not self._cols else self._cols[-1]
+        edits = {}
+        for key, (f, v) in self._orig.items():
+            val = self._widget_value(last["edits"][key][1]) if last else v
+            edits[key] = (f, self._new_widget(f, val))
+        bm = QComboBox()
+        bm.addItem("–", None)
+        for b in self._bookmarks():
+            sens = (b.get("sensors") or [{}])[0]
+            bm.addItem(f"📌{b['id']}{' ' + b['label'] if b.get('label') else ''} · {b['length_m']:.0f} m · "
+                       f"{sens.get('fpm') or '–'} knots/m", b["id"])
+        bm.setEnabled(bm.count() > 1)
+        self._cols.append({"edits": edits, "bm": bm})
+        self._rebuild()
+
+    @staticmethod
+    def _drop_col(col: Dict[str, Any]) -> None:
+        for _f, w in col["edits"].values():
+            w.setParent(None)
+            w.deleteLater()
+        col["bm"].setParent(None)
+        col["bm"].deleteLater()
+
+    def _remove_col(self, ci: int) -> None:
+        if len(self._cols) > 1:
+            self._drop_col(self._cols.pop(ci))
+            self._rebuild()
+
+    def _rebuild(self) -> None:
+        """Lays the columns out again (widgets keep their values)."""
+        while self.grid.count():                      # take the widgets out without deleting the column widgets
+            it = self.grid.takeAt(0)
+            w = it.widget()
+            if w is not None and w.property("hdr"):
+                w.deleteLater()
+        if not self._cols:
+            self.lbl_names.setText("")
+            return
+        nxt = int((self._setup or {}).get("next_no") or 1)
+        names = [f"V{nxt + i:03d}" for i in range(len(self._cols))]
+        for ci, name in enumerate(names):
+            box = QWidget()
+            box.setProperty("hdr", True)
+            hl = QHBoxLayout(box)
+            hl.setContentsMargins(0, 0, 0, 0)
+            lab = QLabel(f"<b>{name}</b>")
+            hl.addWidget(lab)
+            if len(self._cols) > 1:
+                x = QPushButton("✕")
+                x.setFixedWidth(26)
+                x.setToolTip("Remove this trial")
+                x.clicked.connect(lambda _c=False, k=ci: self._remove_col(k))
+                hl.addWidget(x)
+            hl.addStretch(1)
+            self.grid.addWidget(box, 0, ci + 1)
+        row = 1
+        for key, (f, _v) in self._orig.items():
+            lab = QLabel(f.label + ":")
+            lab.setProperty("hdr", True)
+            self.grid.addWidget(lab, row, 0)
+            for ci, col in enumerate(self._cols):
+                self.grid.addWidget(col["edits"][key][1], row, ci + 1)
+            row += 1
+        lab = QLabel("TDMS from bookmark:")
+        lab.setProperty("hdr", True)
+        self.grid.addWidget(lab, row, 0)
+        for ci, col in enumerate(self._cols):
+            self.grid.addWidget(col["bm"], row, ci + 1)
+        self.lbl_names.setText("New trials: " + ", ".join(names))
+        self.buttons.button(QDialogButtonBox.Ok).setText(
+            f"Create {len(self._cols)} trials" if len(self._cols) > 1 else "Create trial")
+
+    def _values(self, ci: int = 0) -> Dict[str, Any]:
+        """Only what the user changed in column ci (the rest is copied from the template as it is)."""
         out = {}
-        for key, (f, w) in self._edits.items():
+        for key, (f, w) in self._cols[ci]["edits"].items():
+            orig = self._orig[key][1]
             if isinstance(w, QComboBox):
-                if w.currentData() != w.property("orig"):
+                try:
+                    o = int(orig) if orig not in (None, "") else None
+                except (TypeError, ValueError):
+                    o = orig
+                if w.currentData() != o:
                     out[key] = "" if w.currentData() is None else str(w.currentData())
-            elif w.text().strip() != str(w.property("orig") or ""):
+            elif w.text().strip() != str(orig or ""):
                 out[key] = w.text().strip()
         return out
 
     def _create(self) -> None:
-        if not self._setup:
+        if not self._setup or not self._cols:
             return
+        items = []
+        for ci, col in enumerate(self._cols):
+            bid = col["bm"].currentData()
+            items.append({"values": self._values(ci), "bookmark_id": bid, "save_tdms": bid is not None})
         try:
-            self.result_info = live_trial.create(self._sid, int(self.cb_template.currentData()), self._values(),
-                                                 user=self.user, session=self.session if self.bm else None,
-                                                 bookmark_id=self.bm["id"] if self.bm else None,
-                                                 save_tdms=bool(self.bm) and self.ck_tdms.isChecked())
+            self.result_infos = live_trial.create_many(self._sid, int(self.cb_template.currentData()), items,
+                                                       user=self.user, session=self.session)
         except Exception as e:  # noqa: BLE001
             self.lbl_err.setText(error_text(e))
             return
+        self.result_info = self.result_infos[0] if self.result_infos else None
         self.accept()
