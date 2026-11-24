@@ -68,6 +68,7 @@ def test_live_two_sensors_rows_speed_and_files(env):  # noqa: F811
     assert e.value.code == "busy"
     _wait(lambda: len(s.rows) >= 3)
     sl.stop()
+    _wait(lambda: s.state in ("done", "error"))                 # under load the analysis backlog can outlast stop()'s wait
     v = s.view()
     assert v["state"] == "done" and v["error"] is None
     r = v["rows"][1]
@@ -328,3 +329,75 @@ def test_thickness_bulk_and_knots():
                   {"axis": "x", "mean_um": 20.0, "connector": "C2"}]}
     assert sl.zero_offset(z, "C1", 2) == pytest.approx(234.15) and sl.zero_offset(z, "C2", 1) == 20.0
     assert sl.zero_offset(z, "C2", 2) is None and sl.zero_offset(None, "C1", 1) is None
+
+
+def test_load_saved_run(env):  # noqa: F811
+    """A saved live run can be loaded again (2026-11-24): exactly the rows of the day from the side file; an older run
+    without it is analysed again from the TDMS (same windows) and gets the side file."""
+    import json
+    sm.forget_zeros()
+    sm.set_daq(StreamDaq())
+    s = sl.start(box="Dev2", head_name="PXL_3_121_W", connector="C1", speed_m_min=764, window_m=10, save=True,
+                 name="99999_load")
+    _wait(lambda: len(s.rows) >= 3)
+    sl.stop()
+    main = s.files[0]
+    side = env.dty / sm.MANUAL_DIR / (main + sl.SIDE_SUFFIX)
+    assert side.is_file() and len(json.loads(side.read_text(encoding="utf-8"))["rows"]) == len(s.rows)
+    runs = sl.saved_runs("dty")
+    assert runs[0]["file"] == main and runs[0]["exact"]
+    v = sl.load_saved(main, "dty")
+    assert v["state"] == "loaded" and v["exact"] and v["rows"] == s.rows and v["loaded"] == main
+    # an older run: no side file -> analysed again, the same windows and about the same knots/m
+    side.unlink()
+    assert [r for r in sl.saved_runs("dty") if r["file"] == main][0]["exact"] is False
+    seen = []
+    v2 = sl.load_saved(main, "dty", progress=lambda a, b: seen.append((a, b)))
+    assert not v2["exact"] and seen and side.is_file()
+    n = min(len(v2["rows"]), len(s.rows))
+    assert n >= 2 and [r["from_m"] for r in v2["rows"][:n]] == [r["from_m"] for r in s.rows[:n]]
+    for a, b in zip(v2["rows"][:n], s.rows[:n]):
+        assert a["sensors"][0]["fpm"] == pytest.approx(b["sensors"][0]["fpm"], rel=0.03)
+    for bad in ("../x.tdms", "a" + chr(92) + "b.tdms", "x.txt"):
+        with pytest.raises(sm.MeasureError) as e:
+            sl.load_saved(bad, "dty")
+        assert e.value.code == "bad_file"
+    with pytest.raises(sm.MeasureError) as e:
+        sl.load_saved("nope.tdms", "dty")
+    assert e.value.code == "no_file"
+
+
+def test_desktop_load_saved_run(env, monkeypatch):  # noqa: F811
+    """Desktop: "Load a measurement…" lists saved runs, loads exactly (side file) or analyses again (job), the window
+    shows the loaded rows and goes back to the live view (2026-11-24)."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+    from ui.widgets import sensor_live_window as slw
+    app = QApplication.instance() or QApplication([])
+    QSettings("TrippleT", "SensorLive").clear()
+    sm.set_daq(StreamDaq())
+    s = sl.start(box="Dev2", head_name="PXL_3_121_W", connector="C1", speed_m_min=764, window_m=10, save=True,
+                 name="99999_dload")
+    _wait(lambda: len(s.rows) >= 3)
+    sl.stop()
+    w = slw.open_window({"username": "test", "access_level": 2})
+    dlg = slw.LoadRunDialog("dty", w)
+    assert dlg.table.rowCount() >= 1 and "exact" in dlg.table.item(0, 4).text()
+    dlg._load()
+    assert dlg.view and dlg.view["exact"]
+    w._loaded, w._shown = dlg.view, 0
+    w.btn_back_live.setVisible(True)
+    w._poll()
+    assert "Loaded" in w.lbl_status.text() and w.table.rowCount() == len(s.rows)
+    w._back_to_live()
+    assert w._loaded is None and w.btn_back_live.isHidden()
+    (env.dty / sm.MANUAL_DIR / (s.files[0] + sl.SIDE_SUFFIX)).unlink()
+    dlg2 = slw.LoadRunDialog("dty", w)
+    assert "again" in dlg2.table.item(0, 4).text()
+    dlg2._load()
+    t0 = time.time()
+    while dlg2.view is None and time.time() - t0 < 60:
+        app.processEvents()
+        time.sleep(0.02)
+    assert dlg2.view and not dlg2.view["exact"] and dlg2.view["n_rows"] >= 2
+    w.close()

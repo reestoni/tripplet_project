@@ -25,7 +25,8 @@ from ui.yarnscope import sensor_measure as sm
 from ui.yarnscope.sensor_pair import DEFAULT_DISTANCE_MM as _DEFAULT_DISTANCE
 
 COLORS = ["#1d983a", "#2a78d6"]
-STATE_TEXT = {"running": "Measuring", "stopping": "Stopping…", "done": "Finished", "error": "Error", "new": "Starting…"}
+STATE_TEXT = {"running": "Measuring", "stopping": "Stopping…", "done": "Finished", "error": "Error", "new": "Starting…",
+              "loaded": "Loaded"}
 
 _window: Optional["SensorLiveWindow"] = None
 
@@ -163,6 +164,15 @@ class SensorLiveWindow(QWidget):
         brow.addWidget(self.btn_start)
         brow.addWidget(self.btn_stop)
         left.addLayout(brow)
+        # load a saved live run again and see exactly its curves (Nutzerwunsch 2026-11-24, sensor_live.load_saved)
+        self._loaded: Optional[Dict[str, Any]] = None
+        self.btn_load = QPushButton("Load a measurement…")
+        self.btn_load.clicked.connect(self._on_load)
+        left.addWidget(self.btn_load)
+        self.btn_back_live = QPushButton("Back to the live view")
+        self.btn_back_live.clicked.connect(self._back_to_live)
+        self.btn_back_live.setVisible(False)
+        left.addWidget(self.btn_back_live)
         self.lbl_msg = QLabel("")
         self.lbl_msg.setWordWrap(True)
         left.addWidget(self.lbl_msg)
@@ -314,6 +324,8 @@ class SensorLiveWindow(QWidget):
         run = self._running()
         ok = bool(self.cb_box.currentData()) and bool(self.cb_sensor.currentData())
         self.btn_start.setEnabled(ok and not run and not self.read_only)
+        if hasattr(self, "btn_load"):
+            self.btn_load.setEnabled(not run)
         self.btn_stop.setEnabled(run)
         for w in (self.cb_box, self.cb_sensor, self.cb_second, self.sp_speed, self.sp_window, self.ck_save, self.ed_name,
                   self.rb_dty, self.rb_aty):
@@ -381,7 +393,29 @@ class SensorLiveWindow(QWidget):
     def _auto_on(self) -> bool:
         return self.ck_auto.isChecked() and bool(self.cb_second.currentData()) and self.sp_distance.value() > 0
 
+    def _on_load(self) -> None:
+        dlg = LoadRunDialog("aty" if self.rb_aty.isChecked() else "dty", self)
+        if dlg.exec() == QDialog.Accepted and dlg.view:
+            self._loaded = dlg.view
+            self._shown = 0
+            self.btn_back_live.setVisible(True)
+            self._set_focus(None) if self._focus else None
+            self._poll()
+
+    def _back_to_live(self) -> None:
+        self._loaded = None
+        self._shown = 0
+        self.btn_back_live.setVisible(False)
+        self.table.setRowCount(0)
+        if self._fig is not None:
+            self._fig.clear()
+            self._canvas.draw_idle()
+        self.lbl_status.setText("No live measurement running.")
+        self._poll()
+
     def _on_start(self) -> None:
+        self._loaded = None
+        self.btn_back_live.setVisible(False)
         box, head, con, second = self._sel_zero()
         if box and head and sm.remembered_zero(box, head, con, second) is None and QMessageBox.question(
                 self, "YarnScope Live", "The empty value (no yarn) was not checked. Start anyway?") != QMessageBox.Yes:
@@ -506,12 +540,32 @@ class SensorLiveWindow(QWidget):
         QTimer.singleShot(10, lambda: (sl.stop(), self._poll()))
 
     # ---------------------------------------------------------------------------------------- dashboard
-    def _poll(self) -> None:
+    def _view(self) -> Optional[Dict[str, Any]]:
+        """What the dashboard shows: a loaded saved run, or the current live session."""
+        if self._loaded is not None:
+            return self._loaded
         s = sl.current()
+        return s.view(0) if s is not None else None
+
+    def _poll(self) -> None:
         self._sync()
-        if s is None:
+        v = self._view()
+        if v is None:
             return
-        v = s.view(0)
+        if v["state"] == "loaded":
+            txt = (f"<b>Loaded</b> · {v.get('loaded')} · measured {str(v.get('loaded_at') or '').replace('T', ' ')[:16]} · "
+                   f"{(v.get('meters') or 0):.0f} m")
+            if not v.get("exact"):
+                txt += ("<br><span style='color:#666'>analysed again from the signal; with 'measure the speed' only its "
+                        "mean is known</span>")
+            self.lbl_status.setText(txt)
+            rows = v["rows"]
+            self._tiles(v, rows[-1] if rows else None)
+            if len(rows) != self._shown or self._shown == 0:
+                self._fill_table(v, rows)
+                self._draw(v, rows)
+                self._shown = len(rows)
+            return
         txt = f"<b>{STATE_TEXT.get(v['state'], v['state'])}</b> · {v['meters']:.0f} m · {v['seconds']:.0f} s · {v['rate']:.1f} Hz"
         if v.get("save_stopped"):
             txt += " · <span style='color:#c0392b'>saving stopped at the limit</span>"
@@ -680,9 +734,8 @@ class SensorLiveWindow(QWidget):
         self.btn_unzoom.setVisible(big)
         for k, b in self._zoom_btns.items():
             b.setVisible(not big)
-        s = sl.current()
-        if s is not None:
-            v = s.view(0)
+        v = self._view()
+        if v is not None:
             self._zoom_btns["speed"].setVisible(not big and len(v.get("sensors") or []) > 1)
             self._zoom_btns["thick"].setVisible(not big and any(x.get("d_bulk") is not None
                                                                 for r in v["rows"] for x in r["sensors"]))
@@ -999,3 +1052,108 @@ class LiveTrialDialog(QDialog):
             return
         self.result_info = self.result_infos[0] if self.result_infos else None
         self.accept()
+
+
+class LoadRunDialog(QDialog):
+    """Saved live runs of the DTY / ATY _manual folder (sensor_live.saved_runs): with a side file loaded at once (exactly
+    the curves of that day), otherwise analysed again with a progress bar (sensor_live.load_saved)."""
+
+    def __init__(self, kind: str = "dty", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Load a saved live measurement")
+        self.setMinimumSize(760, 420)
+        self.view: Optional[Dict[str, Any]] = None
+        self._job = None
+        root = QVBoxLayout(self)
+        krow = QHBoxLayout()
+        self.rb_dty, self.rb_aty = QRadioButton("DTY"), QRadioButton("ATY")
+        (self.rb_aty if kind == "aty" else self.rb_dty).setChecked(True)
+        self.rb_dty.toggled.connect(lambda _c: self._fill())
+        krow.addWidget(self.rb_dty)
+        krow.addWidget(self.rb_aty)
+        krow.addStretch(1)
+        root.addLayout(krow)
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Measured", "File", "m", "Sensors", ""])
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.itemDoubleClicked.connect(lambda _it: self._load())
+        root.addWidget(self.table, 1)
+        from PySide6.QtWidgets import QProgressBar
+        self.bar = QProgressBar()
+        self.bar.setVisible(False)
+        root.addWidget(self.bar)
+        self.lbl = QLabel("")
+        self.lbl.setWordWrap(True)
+        root.addWidget(self.lbl)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.button(QDialogButtonBox.Ok).setText("Load")
+        self.buttons.accepted.connect(self._load)
+        self.buttons.rejected.connect(self.reject)
+        root.addWidget(self.buttons)
+        self._runs: List[Dict[str, Any]] = []
+        self._fill()
+
+    def _kind(self) -> str:
+        return "aty" if self.rb_aty.isChecked() else "dty"
+
+    def _fill(self) -> None:
+        try:
+            self._runs = sl.saved_runs(self._kind())
+        except Exception as e:  # noqa: BLE001
+            self._runs = []
+            self.lbl.setText(f"<span style='color:#c0392b'>{error_text(e)}</span>")
+        self.table.setRowCount(len(self._runs))
+        for k, r in enumerate(self._runs):
+            sens = ", ".join(f"{_head_label(x.get('head') or '')} {x.get('connector') or ''}" for x in (r.get("sensors") or []))
+            vals = [str(r.get("at") or "").replace("T", " ")[:16], r["file"],
+                    "–" if r.get("meters") is None else f"{r['meters']:.0f}", sens,
+                    "exact (instant)" if r.get("exact") else "analysed again (takes a while)"]
+            for c, val in enumerate(vals):
+                self.table.setItem(k, c, QTableWidgetItem(val))
+        self.table.resizeColumnsToContents()
+        if self._runs:
+            self.table.selectRow(0)
+        else:
+            self.lbl.setText("No saved live measurements in this folder.")
+
+    def _load(self) -> None:
+        rows = self.table.selectionModel().selectedRows()
+        if not rows or self._job is not None:
+            return
+        r = self._runs[rows[0].row()]
+        if r.get("exact"):
+            try:
+                self.view = sl.load_saved(r["file"], self._kind())
+            except Exception as e:  # noqa: BLE001
+                self.lbl.setText(f"<span style='color:#c0392b'>{error_text(e)}</span>")
+                return
+            self.accept()
+            return
+        from ui.widgets.sensor_measure_dialog import _Job
+        self.bar.setVisible(True)
+        self.bar.setMaximum(0)
+        self.lbl.setText("Analysing the signal again…")
+        self.buttons.button(QDialogButtonBox.Ok).setEnabled(False)
+        self._job = _Job(sl.load_saved, {"file": r["file"], "kind": self._kind()}, True)
+        self._job.progress.connect(lambda a, b: (self.bar.setMaximum(max(1, b)), self.bar.setValue(a)))
+        self._job.finished_ok.connect(self._done)
+        self._job.failed.connect(lambda e: self.lbl.setText(f"<span style='color:#c0392b'>{error_text(e)}</span>"))
+        self._job.finished.connect(self._job_end)
+        self._job.start()
+
+    def _done(self, view: Dict[str, Any]) -> None:
+        self.view = view
+        self.accept()
+
+    def _job_end(self) -> None:
+        self._job = None
+        self.bar.setVisible(False)
+        self.buttons.button(QDialogButtonBox.Ok).setEnabled(True)
+
+    def reject(self) -> None:
+        if self._job is not None:
+            self._job.cancel()
+        super().reject()
+

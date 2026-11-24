@@ -29,6 +29,12 @@ offset - PXL 3-121 empty X -53 / Y +522 um - which this removes: 466_12 X 183.5 
 d_um (whole window), d_bulk (open, bulky parts) and d_knot (knots), split with dty_analysis.knot_runs (the YarnScope
 detection itself). Not validated against a known diameter yet; without an empty value: None.
 
+LOADING A SAVED RUN (Nutzerwunsch 2026-11-24: "eine Live-Messung nochmal laden und genau die Kurven sehen"): at the end of a
+saved run a side file <main TDMS>.live.json holds every row (knots/m, CV, thickness, speed, match), the sensors and the
+bookmarks -> load_saved() shows exactly the curves of that day at once. An older run without it is analysed again from the
+TDMS (same windows, same analysis, empty value from the file's properties; the per-window speed of an auto-speed run cannot
+be rebuilt - the signal was saved already resampled - so only its mean is known) and gets the side file afterwards.
+
 One live session per process (the box can do one thing at a time; sensor_measure._measuring is held while it
 runs). Qt-free: the desktop window (ui/widgets/sensor_live_window.py) and tripplet_web app/sensor_live_api.py poll
 state(). Tests: tests/test_sensor_live.py with a fake streaming box.
@@ -52,6 +58,7 @@ WINDOW_RANGE = (5.0, 500.0)
 AUTO_RATE_MAX = 80_000.0             # per channel in auto-speed mode: >= 1 point / 0.25 mm up to ~1'200 m/min
 BLOCK_S = 1.0                         # auto speed: one speed value (and resampling step) per second
 SAVE_LIMIT_M = 5000.0                 # = the longest normal measurement (sensor_measure.LENGTH_RANGE)
+SIDE_SUFFIX = ".live.json"            # all rows of a saved run, next to its main TDMS (load_saved)
 CHUNK_S = 0.25                        # read from the box in quarter seconds
 MAX_ROWS = 2000                       # dashboard history kept in memory
 BOOKMARK_M = 100.0                    # default length of a bookmark
@@ -216,17 +223,25 @@ class LiveSession:
                 self._tail_pts -= self._tail.pop(0)[1]
 
     def _sensor_values(self, y, j: int) -> Dict[str, Any]:
-        """knots/m + CV (YarnScope detection) and, with an empty value, the thickness of one sensor's window."""
-        from ui.yarnscope.dty_analysis import analyze_series
-        y = np.asarray(y, dtype=float)
-        out: Dict[str, Any] = {"fpm": None, "cv": None, "mean_um": _num(float(np.mean(y)), 1) if len(y) else None}
+        return sensor_values(y, self._offsets[j] if j < len(self._offsets) else None)
+
+    def _write_side_file(self) -> None:
+        """All rows of the run next to its main TDMS (load_saved shows exactly these curves later)."""
+        if not self.files:
+            return
         try:
-            r = analyze_series(y, sm.SPACING_MM, 3)
-            out.update(fpm=_num(r.get("knots_per_m"), 1), cv=_num((r.get("ol_period_mm_stats") or {}).get("cv"), 1))
-        except Exception:  # noqa: BLE001 - e.g. no yarn in the sensor
+            import json
+            folder = sm.tdms_folder(self.kind) / sm.MANUAL_DIR
+            data = {"v": 1, "name": self.name, "files": list(self.files), "kind": self.kind, "window_m": self.window_m,
+                    "sensors": [{"head": h.name, "connector": c, "axes": h.n_axes} for h, c in self.sensors],
+                    "distance_mm": self.distance_mm, "auto_speed": self.auto_speed, "speed": self.speed,
+                    "rate": round(self.actual_rate or 0, 1), "meters": round(self.meters(), 1),
+                    "started_at": _dt.datetime.fromtimestamp(self.started_at).isoformat(timespec="seconds") if self.started_at else None,
+                    "user": self.user.get("username") or self.user.get("id"), "zero": self.zero,
+                    "rows": self.rows, "bookmarks": [self.bookmark_meta(b) for b in self.bookmarks]}
+            (folder / (self.files[0] + SIDE_SUFFIX)).write_text(json.dumps(data, default=str), encoding="utf-8")
+        except Exception:  # noqa: BLE001 - the TDMS is saved; loading it later just analyses it again
             pass
-        out.update(thickness(y, self._offsets[j] if j < len(self._offsets) else None))
-        return out
 
     @staticmethod
     def bookmark_meta(b: Dict[str, Any]) -> Dict[str, Any]:
@@ -411,6 +426,7 @@ class LiveSession:
                 t.join(30)
             if self._writers:
                 self._close_writers()
+            self._write_side_file()
             self.state = "error" if self.error and self.state != "stopping" else "done"
 
     def _analyse(self) -> None:
@@ -547,6 +563,144 @@ class LiveSession:
         self.rows.append(row)
         if len(self.rows) > MAX_ROWS:
             del self.rows[: len(self.rows) - MAX_ROWS]
+
+
+def sensor_values(y, offset: Optional[float]) -> Dict[str, Any]:
+    """One sensor's window: knots/m + CV (YarnScope detection) and, with an empty value, the thickness."""
+    from ui.yarnscope.dty_analysis import analyze_series
+    y = np.asarray(y, dtype=float)
+    out: Dict[str, Any] = {"fpm": None, "cv": None, "mean_um": _num(float(np.mean(y)), 1) if len(y) else None}
+    try:
+        r = analyze_series(y, sm.SPACING_MM, 3)
+        out.update(fpm=_num(r.get("knots_per_m"), 1), cv=_num((r.get("ol_period_mm_stats") or {}).get("cv"), 1))
+    except Exception:  # noqa: BLE001 - e.g. no yarn in the sensor
+        pass
+    out.update(thickness(y, offset))
+    return out
+
+
+# ------------------------------------------------------------------------------------------- saved runs
+def _manual_dir(kind: str) -> Path:
+    return sm.tdms_folder(kind) / sm.MANUAL_DIR
+
+
+def _check_file(name: Any) -> str:
+    n = str(name or "")
+    if not n.lower().endswith(".tdms") or "/" in n or "\\" in n or ".." in n or n != Path(n).name:
+        raise sm.MeasureError("bad_file", f"file {n!r}", file=n)
+    return n
+
+
+def saved_runs(kind: str = "dty", limit: int = 60) -> List[Dict[str, Any]]:
+    """Saved live runs in <kind>/_manual, newest first: {file, at, meters, sensors, window_m, exact} - exact = side file
+    with all rows (instant, the same curves); otherwise the TDMS is analysed again when loaded."""
+    import json
+    folder = _manual_dir(kind)
+    if not folder.is_dir():
+        return []
+    out, seen = [], set()
+    for side in sorted(folder.glob("*" + SIDE_SUFFIX), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            d = json.loads(side.read_text(encoding="utf-8"))
+            f = d["files"][0]
+        except Exception:  # noqa: BLE001
+            continue
+        seen.update(d.get("files") or [])
+        out.append({"file": f, "at": d.get("started_at"), "meters": d.get("meters"), "sensors": d.get("sensors"),
+                    "window_m": d.get("window_m"), "exact": True, "n_rows": len(d.get("rows") or [])})
+    from nptdms import TdmsFile
+    tdms = sorted((p for p in folder.glob("*.tdms") if p.name not in seen), key=lambda p: p.stat().st_mtime, reverse=True)
+    for p in tdms[: limit * 2]:
+        try:
+            props = TdmsFile.read_metadata(str(p)).properties
+        except Exception:  # noqa: BLE001
+            continue
+        if not props.get("TrippleT.Live") or props.get("TrippleT.PairRole") == "second" or props.get("TrippleT.Bookmark"):
+            continue
+        out.append({"file": p.name, "at": props.get("TrippleT.MeasuredAt"), "meters": None,
+                    "sensors": [{"head": props.get("TrippleT.Head"), "connector": props.get("TrippleT.Connector")}],
+                    "window_m": props.get("TrippleT.LiveWindowM"), "exact": False, "n_rows": None})
+    out.sort(key=lambda e: str(e.get("at") or ""), reverse=True)
+    return out[:limit]
+
+
+def _loaded_view(d: Dict[str, Any], file: str, exact: bool) -> Dict[str, Any]:
+    rows = d.get("rows") or []
+    return {"state": "loaded", "error": None, "rows": rows, "n_rows": len(rows), "meters": d.get("meters"),
+            "seconds": 0, "speed": d.get("speed"), "auto_speed": d.get("auto_speed"), "window_m": d.get("window_m"),
+            "rate": d.get("rate"), "sensors": d.get("sensors") or [], "distance_mm": d.get("distance_mm"), "save": True,
+            "save_stopped": False, "files": d.get("files") or [file], "name": d.get("name"), "kind": d.get("kind"),
+            "user": d.get("user"), "bookmarks": d.get("bookmarks") or [], "bookmark_range": list(BOOKMARK_RANGE),
+            "bookmark_m": BOOKMARK_M, "loaded": file, "loaded_at": d.get("started_at"), "exact": exact}
+
+
+def load_saved(file: Any, kind: str = "dty", progress=None, cancel=None) -> Dict[str, Any]:
+    """A saved live run as a dashboard view (state "loaded"): from its side file at once, else analysed again from the
+    TDMS - the same windows and analysis; the side file is written afterwards."""
+    import json
+    from nptdms import TdmsFile
+    from ui.yarnscope import sensor_pair
+    name = _check_file(file)
+    folder = _manual_dir(kind)
+    path = folder / name
+    side = folder / (name + SIDE_SUFFIX)
+    if side.is_file():
+        return _loaded_view(json.loads(side.read_text(encoding="utf-8")), name, True)
+    if not path.is_file():
+        raise sm.MeasureError("no_file", f"{name} not found", file=name)
+    main = TdmsFile.read(str(path))
+    props = main.properties
+    files = [path]
+    pair = props.get("TrippleT.PairFile")
+    if pair and (folder / str(pair)).is_file():
+        files.append(folder / str(pair))
+    sigs, sensors, offsets = [], [], []
+    for k, f in enumerate(files):
+        t = main if k == 0 else TdmsFile.read(str(f))
+        pr = t.properties
+        axes = [c[:] for g in t.groups() for c in g.channels() if "Achse" in c.name]
+        sigs.append(sensor_pair.combined(axes))
+        sensors.append({"head": pr.get("TrippleT.Head"), "connector": pr.get("TrippleT.Connector"), "axes": len(axes)})
+        empties = [pr.get(f"TrippleT.Empty{a}_um") for a in ("X", "Y")[:len(axes)]]
+        offsets.append(float(np.mean(empties)) if all(e is not None for e in empties) else None)
+    window = float(props.get("TrippleT.LiveWindowM") or WINDOW_M)
+    win = int(round(window * 1000.0 / sm.SPACING_MM))
+    n = min(len(x) for x in sigs)
+    auto = bool(props.get("TrippleT.AutoSpeed"))
+    rate = float(props.get("TrippleT.ActualRateHz") or 0) or None
+    dist = props.get("TrippleT.PairDistanceMm")
+    rows: List[Dict[str, Any]] = []
+    total = max(1, n // win)
+    for i in range(total):
+        if cancel and cancel():
+            raise sm.MeasureError("cancelled", "cancelled")
+        a, b = i * win, (i + 1) * win
+        if b > n:
+            break
+        row: Dict[str, Any] = {"i": i, "from_m": round(i * window, 1), "to_m": round((i + 1) * window, 1), "t": None,
+                               "sensors": [sensor_values(x[a:b], offsets[k]) for k, x in enumerate(sigs)]}
+        if len(sigs) == 2:
+            r = sensor_pair.find_delay(sigs[0][a:b], sigs[1][a:b], sm.SPACING_MM, max_lag=int(sensor_pair.DEFAULT_MAX_DELAY_S * (rate or 50000)))
+            row["corr"] = _num(r["corr"], 3)
+            if r["ok"] and r["lag"] and not auto and rate:
+                d = abs(r["lag"]) / rate
+                row["delay_ms"] = _num(d * 1000.0, 3)
+                row["speed"] = _num(sensor_pair.speed_m_min(dist, d), 1) if dist else None
+            else:
+                row["speed"] = None
+        rows.append(row)
+        if progress:
+            progress(i + 1, total)
+    mean_speed = props.get("TrippleT.MeasuredSpeedMean")
+    d = {"name": path.stem, "files": [f.name for f in files], "kind": kind, "window_m": window, "sensors": sensors,
+         "distance_mm": dist, "auto_speed": auto, "speed": mean_speed if auto else None, "rate": rate,
+         "meters": round(n * sm.SPACING_MM / 1000.0, 1), "started_at": props.get("TrippleT.MeasuredAt"),
+         "user": props.get("TrippleT.User"), "rows": rows, "bookmarks": [], "rebuilt": True}
+    try:
+        side.write_text(json.dumps(d, default=str), encoding="utf-8")
+    except Exception:  # noqa: BLE001 - next time it is analysed again
+        pass
+    return _loaded_view(d, name, False)
 
 
 def zero_offset(zero: Optional[Dict[str, Any]], connector: str, n_axes: int) -> Optional[float]:
