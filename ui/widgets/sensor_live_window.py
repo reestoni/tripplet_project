@@ -3,6 +3,9 @@
 Continuous measurement with a small dashboard: start / stop by hand, every window (default 30 m) knots/m + CV per
 sensor and, with a second sensor + the distance, the measured speed; optionally saved to the _manual folder.
 Logic: ui/yarnscope/sensor_live.py (shared with the web). Opened from the sidebar (Tools) - one window, not modal.
+Bookmarks (Nutzerwunsch 2026-11-24): "Bookmark" keeps the last N m (default 100) in memory, no input; on a bookmark
+"Create trial..." copies a template trial with jet / pressure / OF / speed (ui/yarnscope/live_trial.py) and, only if
+ticked, saves the bookmark as that trial's TDMS; "Save as file..." writes it to _manual.
 """
 from __future__ import annotations
 
@@ -10,11 +13,13 @@ from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QPushButton, QRadioButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout,
+    QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton, QRadioButton, QTableWidget, QTableWidgetItem,
+    QVBoxLayout, QWidget,
 )
 
 from ui.widgets.sensor_measure_dialog import error_text
+from ui.yarnscope import live_trial
 from ui.yarnscope import sensor_live as sl
 from ui.yarnscope import sensor_measure as sm
 from ui.yarnscope.sensor_pair import DEFAULT_DISTANCE_MM as _DEFAULT_DISTANCE
@@ -174,6 +179,39 @@ class SensorLiveWindow(QWidget):
         self.table = QTableWidget(0, 0)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         right.addWidget(self.table, 1)
+        # ---- bookmarks: one click while tuning, a trial from it afterwards
+        bm = QHBoxLayout()
+        self.btn_mark = QPushButton("📌 Bookmark")
+        self.btn_mark.setMinimumHeight(30)
+        self.btn_mark.setToolTip("Keeps the last metres of the signal in memory (nothing is saved yet)")
+        self.btn_mark.clicked.connect(self._on_bookmark)
+        self.sp_mark = QDoubleSpinBox()
+        self.sp_mark.setRange(*sl.BOOKMARK_RANGE)
+        self.sp_mark.setDecimals(0)
+        self.sp_mark.setSuffix(" m")
+        self.sp_mark.setValue(float(self._settings.value("bookmark_m", sl.BOOKMARK_M) or sl.BOOKMARK_M))
+        self.sp_mark.setToolTip("Length of a bookmark: the last … metres")
+        self.btn_trial = QPushButton("Create trial…")
+        self.btn_trial.clicked.connect(self._on_trial)
+        self.btn_file = QPushButton("Save as file…")
+        self.btn_file.clicked.connect(self._on_file)
+        self.btn_unmark = QPushButton("Delete")
+        self.btn_unmark.clicked.connect(self._on_unmark)
+        for w in (self.btn_mark, QLabel("last"), self.sp_mark):
+            bm.addWidget(w)
+        bm.addStretch(1)
+        for w in (self.btn_trial, self.btn_file, self.btn_unmark):
+            bm.addWidget(w)
+        right.addLayout(bm)
+        self.bm_table = QTableWidget(0, 8)
+        self.bm_table.setHorizontalHeaderLabels(["#", "Time", "At m", "Length", "Knots/m", "CV %", "Speed", "Trial / file"])
+        self.bm_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.bm_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.bm_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.bm_table.setMaximumHeight(170)
+        self.bm_table.itemSelectionChanged.connect(self._sync)
+        right.addWidget(self.bm_table)
+        self._bm_sig = None
         rw = QWidget()
         rw.setLayout(right)
         root.addWidget(rw, 1)
@@ -247,6 +285,14 @@ class SensorLiveWindow(QWidget):
         self.ck_auto.setVisible(bool(self.cb_second.currentData()))
         self.ck_auto.setEnabled(not run and self.sp_distance.value() > 0)
         self.sp_speed.setEnabled(not run and not self._auto_on())
+        s = sl.current()
+        has_data = bool(s and s.state in ("running", "stopping", "done") and s._tail_pts)
+        self.btn_mark.setEnabled(has_data and not self.read_only)
+        sel = self._selected_bookmark() is not None
+        from db import trial_actions as ta
+        self.btn_trial.setEnabled(sel and ta.can_edit_trials(self.user))
+        self.btn_file.setEnabled(sel and not self.read_only)
+        self.btn_unmark.setEnabled(sel)
         if self.read_only:
             self.lbl_msg.setText("Write access required (AccessLevel > 1).")
 
@@ -278,6 +324,94 @@ class SensorLiveWindow(QWidget):
         self.table.setRowCount(0)
         self._poll()
 
+    # ---------------------------------------------------------------------------------------- bookmarks
+    def _selected_bookmark(self) -> Optional[Dict[str, Any]]:
+        s = sl.current()
+        rows = self.bm_table.selectionModel().selectedRows() if self.bm_table.selectionModel() else []
+        if not s or not rows:
+            return None
+        it = self.bm_table.item(rows[0].row(), 0)
+        bid = it.data(Qt.UserRole) if it else None
+        return next((b for b in s.bookmarks if b["id"] == bid), None)
+
+    def _on_bookmark(self) -> None:
+        s = sl.current()
+        if s is None:
+            return
+        self._settings.setValue("bookmark_m", self.sp_mark.value())
+        try:
+            b = s.bookmark(self.sp_mark.value())
+        except Exception as e:  # noqa: BLE001
+            self.lbl_msg.setText(f"<span style='color:#c0392b'>{error_text(e)}</span>")
+            return
+        self.lbl_msg.setText(f"Bookmark {b['id']}: last {b['length_m']:.0f} m kept.")
+        self._fill_bookmarks(force=True)
+
+    def _fill_bookmarks(self, force: bool = False) -> None:
+        s = sl.current()
+        bms = [sl.LiveSession.bookmark_meta(b) for b in (s.bookmarks if s else [])]
+        sig = repr(bms)
+        if sig == self._bm_sig and not force:
+            return
+        self._bm_sig = sig
+        keep = (self._selected_bookmark() or {}).get("id")
+        f = lambda x, d=1: "–" if x is None else f"{x:.{d}f}"  # noqa: E731
+        self.bm_table.setRowCount(len(bms))
+        for k, b in enumerate(bms):
+            sens = (b.get("sensors") or [{}])[0]
+            tr = b.get("trial")
+            where = (f"{tr['series_id']} V{tr['vno']:03d}" if tr else "") + (f" · {b['file']}" if b.get("file") else "")
+            vals = [str(b["id"]) + (f" {b['label']}" if b.get("label") else ""), b["at"][11:16], f"{b['at_m']:.0f}",
+                    f"{b['length_m']:.0f} m", f(sens.get("fpm")), f(sens.get("cv")), f(b.get("speed")), where]
+            for c, val in enumerate(vals):
+                it = QTableWidgetItem(val)
+                if c == 0:
+                    it.setData(Qt.UserRole, b["id"])
+                self.bm_table.setItem(k, c, it)
+            if b["id"] == keep:
+                self.bm_table.selectRow(k)
+        self.bm_table.resizeColumnsToContents()
+        self._sync()
+
+    def _on_unmark(self) -> None:
+        b, s = self._selected_bookmark(), sl.current()
+        if b and s:
+            s.delete_bookmark(b["id"])
+            self._fill_bookmarks(force=True)
+
+    def _on_file(self) -> None:
+        b, s = self._selected_bookmark(), sl.current()
+        if not (b and s):
+            return
+        name, ok = QInputDialog.getText(self, "Save bookmark as file",
+                                        f"Name (file goes to the sub-folder '{sm.MANUAL_DIR}', no trial):",
+                                        text=str(self._settings.value("bm_name", "99999_1")))
+        if not ok:
+            return
+        try:
+            r = live_trial.save_file(s, b["id"], name)
+        except Exception as e:  # noqa: BLE001
+            QMessageBox.warning(self, "Save bookmark", error_text(e))
+            return
+        self._settings.setValue("bm_name", sm.next_name(name.strip()))
+        self.lbl_msg.setText(f"Saved: {', '.join(r['files'])}")
+        self._fill_bookmarks(force=True)
+
+    def _on_trial(self) -> None:
+        b, s = self._selected_bookmark(), sl.current()
+        if not (b and s):
+            return
+        dlg = LiveTrialDialog(s, b, self.user, self)
+        if dlg.exec() == QDialog.Accepted and dlg.result_info:
+            r = dlg.result_info
+            msg = f"Trial {r['series_id']} V{r['vno']:03d} created."
+            if r.get("file"):
+                msg += f" File: {r['file']}" + (f" (old file moved to {sm.REPLACED_DIR})" if r.get("replaced") else "")
+            if r.get("tdms_error"):
+                msg += f" <span style='color:#c0392b'>The file could not be saved: {r['tdms_error']}</span>"
+            self.lbl_msg.setText(msg)
+            self._fill_bookmarks(force=True)
+
     def _on_stop(self) -> None:
         self.btn_stop.setEnabled(False)
         self.lbl_status.setText("Stopping…")
@@ -300,6 +434,7 @@ class SensorLiveWindow(QWidget):
             err.vars = dict(v["error"].get("vars") or {})
             txt += f"<br><span style='color:#c0392b'>{error_text(err)}</span>"
         self.lbl_status.setText(txt)
+        self._fill_bookmarks()
         rows = v["rows"]
         self._tiles(v, rows[-1] if rows else None)
         if len(rows) != self._shown:
@@ -392,6 +527,13 @@ class SensorLiveWindow(QWidget):
         self._canvas.draw_idle()
 
     def closeEvent(self, ev) -> None:  # noqa: N802 - Qt
+        s = sl.current()
+        open_bm = [b for b in (s.bookmarks if s else []) if not b.get("trial") and not b.get("file")]
+        if open_bm and not self._running() and QMessageBox.question(
+                self, "YarnScope Live", f"{len(open_bm)} bookmark(s) without a trial or file. They stay in memory until "
+                "the next live start or until TrippleT is closed. Close the window?") != QMessageBox.Yes:
+            ev.ignore()
+            return
         if self._running():
             if QMessageBox.question(self, "YarnScope Live", "A live measurement is running. Stop it?") != QMessageBox.Yes:
                 ev.ignore()
@@ -401,3 +543,152 @@ class SensorLiveWindow(QWidget):
         global _window
         _window = None
         super().closeEvent(ev)
+
+
+class LiveTrialDialog(QDialog):
+    """"Create trial...": series (recent ones or a typed number), template trial, the copy fields shown by default
+    (jet, pressure, OF, speed ...) filled from the template, and - not ticked - the bookmark as the trial's TDMS."""
+
+    def __init__(self, session, bookmark: Dict[str, Any], user: Dict[str, Any], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Create trial from bookmark {bookmark['id']}")
+        self.setMinimumWidth(520)
+        self.session, self.bm, self.user = session, bookmark, user
+        self.result_info: Optional[Dict[str, Any]] = None
+        self._setup: Optional[Dict[str, Any]] = None
+        self._edits: Dict[str, Any] = {}
+        root = QVBoxLayout(self)
+        sens = (bookmark.get("sensors") or [{}])[0]
+        info = QLabel(f"Bookmark {bookmark['id']} at {bookmark['at'][11:16]}: {bookmark['length_m']:.0f} m, "
+                      f"{sens.get('fpm') or '–'} knots/m, CV {sens.get('cv') or '–'} %, measured speed "
+                      f"{bookmark.get('speed') or '–'} m/min.")
+        info.setWordWrap(True)
+        info.setStyleSheet("color:#555;")
+        root.addWidget(info)
+        top = QFormLayout()
+        srow = QHBoxLayout()
+        self.cb_series = QComboBox()
+        self.cb_series.setEditable(True)
+        self.cb_series.setInsertPolicy(QComboBox.NoInsert)
+        self.cb_series.lineEdit().setPlaceholderText("TrialSeriesID, e.g. 466")
+        try:
+            from ui import recent_series
+            for e in recent_series.entries():
+                self.cb_series.addItem(f"{e['series']} · {e.get('eid') or ''} {e.get('name') or ''}".strip(), e["series"])
+        except Exception:  # noqa: BLE001
+            pass
+        self.cb_series.setCurrentIndex(-1)
+        btn = QPushButton("Load")
+        btn.clicked.connect(self._load)
+        self.cb_series.activated.connect(lambda _i: self._load())
+        self.cb_series.lineEdit().returnPressed.connect(self._load)
+        srow.addWidget(self.cb_series, 1)
+        srow.addWidget(btn)
+        top.addRow("Trial series:", srow)
+        self.lbl_series = QLabel("")
+        self.lbl_series.setStyleSheet("color:#555;")
+        top.addRow("", self.lbl_series)
+        self.cb_template = QComboBox()
+        self.cb_template.currentIndexChanged.connect(lambda _i: self._fill_values())
+        top.addRow("Copy of:", self.cb_template)
+        root.addLayout(top)
+        self.form = QFormLayout()
+        root.addLayout(self.form)
+        self.ck_tdms = QCheckBox(f"Save the bookmark ({bookmark['length_m']:.0f} m) as this trial's TDMS")
+        self.ck_tdms.setChecked(False)
+        root.addWidget(self.ck_tdms)
+        self.lbl_err = QLabel("")
+        self.lbl_err.setWordWrap(True)
+        self.lbl_err.setStyleSheet("color:#c0392b;")
+        root.addWidget(self.lbl_err)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.button(QDialogButtonBox.Ok).setText("Create trial")
+        self.buttons.button(QDialogButtonBox.Ok).setEnabled(False)
+        self.buttons.accepted.connect(self._create)
+        self.buttons.rejected.connect(self.reject)
+        root.addWidget(self.buttons)
+        if self.cb_series.count():
+            self.cb_series.setCurrentIndex(0)
+            self._load()
+
+    def _series_id(self) -> Optional[int]:
+        d = self.cb_series.currentData() if self.cb_series.currentIndex() >= 0 and \
+            self.cb_series.currentText() == self.cb_series.itemText(self.cb_series.currentIndex()) else None
+        if d is not None:
+            return int(d)
+        txt = self.cb_series.currentText().strip().split(" ")[0]
+        return int(txt) if txt.isdigit() else None
+
+    def _load(self) -> None:
+        sid = self._series_id()
+        self._setup = None
+        self.cb_template.clear()
+        info = live_trial.series_info(sid) if sid else None
+        if not info:
+            self.lbl_series.setText("No trial series with this number.")
+            self.buttons.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self.lbl_series.setText(f"{info['eid']} · {info['name']}")
+        self._sid = info["id"]
+        self._setup = live_trial.setup(info["id"])
+        for t in sorted(self._setup["trials"], key=lambda t: t["vno"]):
+            self.cb_template.addItem(f"V{t['vno']:03d}", t["id"])
+        if self._setup["default"] is not None:
+            self.cb_template.setCurrentIndex(self.cb_template.findData(self._setup["default"]))
+        self.ck_tdms.setText(f"Save the bookmark ({self.bm['length_m']:.0f} m) as the TDMS of the new trial "
+                             f"V{self._setup['next_no']:03d}")
+        self.buttons.button(QDialogButtonBox.Ok).setEnabled(bool(self._setup["trials"]))
+        if not self._setup["trials"]:
+            self.lbl_series.setText(self.lbl_series.text() + " – no trial to copy.")
+
+    def _fill_values(self) -> None:
+        from db import trial_copy as tc
+        while self.form.rowCount():
+            self.form.removeRow(0)
+        self._edits = {}
+        if not self._setup or self.cb_template.currentData() is None:
+            return
+        src = self._setup["source"].get(int(self.cb_template.currentData()), {})
+        for f in self._setup["fields"]:
+            v = src.get(f.key)
+            if v is tc.NOT_AVAILABLE:
+                continue
+            if f.choices:
+                w = QComboBox()
+                w.addItem("", None)
+                for k, name in f.choices:
+                    w.addItem(name, k)
+                try:
+                    i = w.findData(int(v)) if v is not None else 0
+                except (TypeError, ValueError):
+                    i = 0
+                w.setCurrentIndex(max(0, i))
+                w.setProperty("orig", w.currentData())
+            else:
+                w = QLineEdit(tc.display_value(f, v))
+                w.setProperty("orig", w.text())
+            self._edits[f.key] = (f, w)
+            self.form.addRow(f.label + ":", w)
+
+    def _values(self) -> Dict[str, Any]:
+        """Only what the user changed (the rest is copied from the template as it is)."""
+        out = {}
+        for key, (f, w) in self._edits.items():
+            if isinstance(w, QComboBox):
+                if w.currentData() != w.property("orig"):
+                    out[key] = "" if w.currentData() is None else str(w.currentData())
+            elif w.text().strip() != str(w.property("orig") or ""):
+                out[key] = w.text().strip()
+        return out
+
+    def _create(self) -> None:
+        if not self._setup:
+            return
+        try:
+            self.result_info = live_trial.create(self._sid, int(self.cb_template.currentData()), self._values(),
+                                                 user=self.user, session=self.session, bookmark_id=self.bm["id"],
+                                                 save_tdms=self.ck_tdms.isChecked())
+        except Exception as e:  # noqa: BLE001
+            self.lbl_err.setText(error_text(e))
+            return
+        self.accept()

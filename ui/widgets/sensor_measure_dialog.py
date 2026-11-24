@@ -37,6 +37,14 @@ ERRORS = {
     "same_connector": "Both sensors are on connector {connector} - choose a sensor on the other connector.",
     "auto_needs_two": "Measuring the speed needs a second sensor and the distance between the sensors.",
     "same_head": "{head} cannot be the main and the second sensor at the same time.",
+    # bookmarks / trial from a bookmark (YarnScope Live, 2026-11-24)
+    "too_short": "Not enough measured yet - at least {m:g} m.",
+    "too_many_bookmarks": "At most {n} bookmarks - delete one first.",
+    "no_bookmark": "This bookmark no longer exists.",
+    "bad_trial": "The trial to copy is not part of this series.",
+    "bad_field": "Unknown field.",
+    "invalid": "'{value}' is not a valid value for {field}.",
+    "copy_failed": "The trial could not be created: {detail}",
 }
 
 

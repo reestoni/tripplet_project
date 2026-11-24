@@ -235,3 +235,40 @@ def _same(field: CopyField, a: Any, b: Any) -> bool:
         return abs(float(a) - float(b)) < 1e-9
     except (TypeError, ValueError):
         return str(a).strip() == str(b).strip()
+
+
+# -- overrides typed by the user (web copy dialog, live trial from a bookmark) --
+
+class OverrideError(ValueError):
+    """code: "bad_field" (unknown / not allowed key) or "invalid" (value does not fit the field)."""
+
+    def __init__(self, code: str, field: Optional[CopyField], value: Any):
+        self.code, self.field, self.value = code, field, value
+        label = field.label if field else "?"
+        super().__init__("Unknown field." if code == "bad_field" else f"'{value}' is not a valid value for {label}.")
+
+
+def validate_overrides(fields: Sequence[CopyField], source_vals: Dict[str, Any], values: Dict[str, Any],
+                       allowed: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+    """{field.key: text} as typed -> {field.key: value for copy_trials}. Dropdown values must be one of the
+    choices (ids); others go through normalize_value(rule); "" = empty (NULL). A field the source trial does not have
+    (NOT_AVAILABLE) is skipped. Raises OverrideError."""
+    by_key = {f.key: f for f in fields}
+    over: Dict[str, Any] = {}
+    for k, v in (values or {}).items():
+        f = by_key.get(k)
+        if f is None or (allowed is not None and k not in allowed):
+            raise OverrideError("bad_field", f, v)
+        if source_vals.get(k) is NOT_AVAILABLE:
+            continue
+        if f.choices:
+            ids = {str(c[0]) for c in f.choices}
+            if v not in (None, "") and str(v) not in ids:
+                raise OverrideError("invalid", f, v)
+            over[k] = None if v in (None, "") else next(c[0] for c in f.choices if str(c[0]) == str(v))
+        else:
+            norm = normalize_value(f.rule, v)
+            if norm is None:
+                raise OverrideError("invalid", f, v)
+            over[k] = norm if norm != "" else None
+    return over

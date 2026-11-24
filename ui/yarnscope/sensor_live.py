@@ -17,6 +17,12 @@ second the delay between the sensors gives the real speed, and with it each sens
 YarnScope file, even if the machine speed drifts. A block without a reliable match takes the last speed (none yet:
 skipped). The saved file states the mean measured speed; "TrippleT.AutoSpeed" = 1, "SampleRateHz" = the fixed rate.
 
+BOOKMARKS ("Merken", Nutzerwunsch 2026-11-24): while tuning a jet the user clicks "Merken" - no input - and the last
+bookmark length (default 100 m, BOOKMARK_RANGE) of every sensor is copied out of a rolling buffer (BUFFER_M, already at
+0.25 mm in auto-speed mode, at the box rate otherwise) into memory with knots/m + CV of that stretch. Nothing is written.
+ui/yarnscope/live_trial.py later turns a bookmark into a new trial (copy of a template trial + the user's jet / pressure /
+OF / speed) and, only if asked, writes the bookmark as that trial's TDMS. Bookmarks stay until the next live start.
+
 One live session per process (the box can do one thing at a time; sensor_measure._measuring is held while it
 runs). Qt-free: the desktop window (ui/widgets/sensor_live_window.py) and tripplet_web app/sensor_live_api.py poll
 state(). Tests: tests/test_sensor_live.py with a fake streaming box.
@@ -42,6 +48,10 @@ BLOCK_S = 1.0                         # auto speed: one speed value (and resampl
 SAVE_LIMIT_M = 5000.0                 # = the longest normal measurement (sensor_measure.LENGTH_RANGE)
 CHUNK_S = 0.25                        # read from the box in quarter seconds
 MAX_ROWS = 2000                       # dashboard history kept in memory
+BOOKMARK_M = 100.0                    # default length of a bookmark
+BOOKMARK_RANGE = (5.0, 300.0)
+BUFFER_M = BOOKMARK_RANGE[1]          # rolling buffer per sensor (float32, ~5 MB per axis at 300 m)
+MAX_BOOKMARKS = 20
 
 _lock = threading.Lock()
 _current: Optional["LiveSession"] = None
@@ -128,6 +138,12 @@ class LiveSession:
         self._q: "queue.Queue" = queue.Queue()
         self._threads: List[threading.Thread] = []
         self._writers: List[_Writer] = []
+        # rolling buffer for bookmarks: [(axes per sensor (float32), points, speed m/min)], newest last
+        self._tail: List[tuple] = []
+        self._tail_pts = 0
+        self._tail_lock = threading.Lock()
+        self.bookmarks: List[Dict[str, Any]] = []      # meta + "_axes" (not in view())
+        self._bm_seq = 0
 
     # ------------------------------------------------------------------------------------------- public
     def start(self) -> None:
@@ -165,7 +181,120 @@ class LiveSession:
                 "sensors": [{"head": h.name, "connector": c, "axes": h.n_axes} for h, c in self.sensors],
                 "distance_mm": self.distance_mm, "save": self.save, "save_stopped": self.save_stopped,
                 "files": list(self.files), "name": self.name, "kind": self.kind,
-                "user": self.user.get("username") or self.user.get("id")}
+                "user": self.user.get("username") or self.user.get("id"),
+                "bookmarks": [self.bookmark_meta(b) for b in self.bookmarks],
+                "bookmark_range": list(BOOKMARK_RANGE), "bookmark_m": BOOKMARK_M}
+
+    # ------------------------------------------------------------------------------------------ bookmarks
+    def _pts_per_m(self) -> float:
+        """Points per metre of the buffered signal: 4000 in auto-speed mode (resampled to 0.25 mm), else rate / speed."""
+        if self.auto_speed:
+            return 1000.0 / sm.SPACING_MM
+        r = self.actual_rate or self.rate
+        return r / (self.speed / 60.0) if self.speed else 1000.0 / sm.SPACING_MM
+
+    def _buffer(self, axes_per_sensor: List[List[np.ndarray]], speed: float) -> None:
+        """Appends one piece (already in um) to the rolling buffer and drops the oldest beyond BUFFER_M."""
+        n = len(axes_per_sensor[0][0])
+        if not n:
+            return
+        piece = [[np.asarray(a, dtype=np.float32) for a in axes] for axes in axes_per_sensor]
+        limit = int(BUFFER_M * self._pts_per_m()) + 1
+        with self._tail_lock:
+            self._tail.append((piece, n, float(speed or 0.0)))
+            self._tail_pts += n
+            while self._tail and self._tail_pts - self._tail[0][1] >= limit:
+                self._tail_pts -= self._tail.pop(0)[1]
+
+    @staticmethod
+    def bookmark_meta(b: Dict[str, Any]) -> Dict[str, Any]:
+        return {k: v for k, v in b.items() if not k.startswith("_")}
+
+    def bookmark(self, length_m: Any = None, label: Any = None) -> Dict[str, Any]:
+        """Merken: copies the last length_m metres of every sensor (default BOOKMARK_M) with knots/m + CV of that
+        stretch. Takes what is there if less was measured (at least BOOKMARK_RANGE[0])."""
+        from ui.yarnscope import sensor_pair
+        from ui.yarnscope.dty_analysis import analyze_series
+        try:
+            want = float(length_m) if length_m not in (None, "") else BOOKMARK_M
+        except (TypeError, ValueError):
+            raise sm.MeasureError("bad_length", f"length {length_m!r}", lo=BOOKMARK_RANGE[0], hi=BOOKMARK_RANGE[1])
+        if not (BOOKMARK_RANGE[0] <= want <= BOOKMARK_RANGE[1]):
+            raise sm.MeasureError("bad_length", f"length {want}", lo=BOOKMARK_RANGE[0], hi=BOOKMARK_RANGE[1])
+        if len(self.bookmarks) >= MAX_BOOKMARKS:
+            raise sm.MeasureError("too_many_bookmarks", "too many bookmarks", n=MAX_BOOKMARKS)
+        ppm = self._pts_per_m()
+        need = int(round(want * ppm))
+        with self._tail_lock:
+            pieces = list(self._tail)
+        have = sum(n for _p, n, _v in pieces)
+        if have < BOOKMARK_RANGE[0] * ppm:
+            raise sm.MeasureError("too_short", "not enough measured yet", m=BOOKMARK_RANGE[0])
+        take, got, speeds = [], 0, []
+        for piece, n, v in reversed(pieces):
+            take.append(piece)
+            speeds.append((n, v))
+            got += n
+            if got >= need:
+                break
+        take.reverse()
+        axes = []
+        for j in range(len(self.sensors)):
+            cat = [np.concatenate([p[j][a] for p in take]) for a in range(len(take[0][j]))]
+            axes.append([x[-need:] if len(x) > need else x for x in cat])
+        pts = len(axes[0][0])
+        wv = [(n, v) for n, v in speeds if v]
+        speed = sum(n * v for n, v in wv) / sum(n for n, _v in wv) if wv else self.speed
+        sens = []
+        for ax in axes:
+            y = sensor_pair.combined([np.asarray(a, dtype=float) for a in ax])
+            try:
+                r = analyze_series(y, sm.SPACING_MM, 3)
+                sens.append({"fpm": _num(r.get("knots_per_m"), 1),
+                             "cv": _num((r.get("ol_period_mm_stats") or {}).get("cv"), 1),
+                             "mean_um": _num(float(np.mean(y)), 1)})
+            except Exception:  # noqa: BLE001 - e.g. no yarn
+                sens.append({"fpm": None, "cv": None, "mean_um": _num(float(np.mean(y)), 1)})
+        self._bm_seq += 1
+        b = {"id": self._bm_seq, "at": _dt.datetime.now().isoformat(timespec="seconds"),
+             "at_m": round(self.meters(), 1), "length_m": round(pts / ppm, 1), "speed": _num(speed, 1),
+             "sensors": sens, "label": str(label or "")[:60], "trial": None, "file": None,
+             "_axes": axes, "_ppm": ppm}
+        self.bookmarks.append(b)
+        return self.bookmark_meta(b)
+
+    def find_bookmark(self, bid: Any) -> Dict[str, Any]:
+        b = next((x for x in self.bookmarks if str(x["id"]) == str(bid)), None)
+        if b is None:
+            raise sm.MeasureError("no_bookmark", f"bookmark {bid!r}", id=str(bid))
+        return b
+
+    def label_bookmark(self, bid: Any, label: Any) -> Dict[str, Any]:
+        b = self.find_bookmark(bid)
+        b["label"] = str(label or "")[:60]
+        return self.bookmark_meta(b)
+
+    def delete_bookmark(self, bid: Any) -> None:
+        self.bookmarks.remove(self.find_bookmark(bid))
+
+    def bookmark_tdms(self, b: Dict[str, Any], paths: List[Path], label: Any, **more: Any) -> None:
+        """Writes the bookmark's signals as TDMS (one file per sensor; sensor_measure.write_tdms layout). label = one
+        name for all files (a trial: same name in the sub-folder) or a list, one per file."""
+        labels = list(label) if isinstance(label, (list, tuple)) else [label] * len(paths)
+        axes, ppm = b["_axes"], b["_ppm"]
+        speed = float(b["speed"] or self.speed or 0.0)
+        length = len(axes[0][0]) / ppm
+        rate = speed / 60.0 * ppm if speed else (self.actual_rate or self.rate)
+        for i, ((h, c), p) in enumerate(zip(self.sensors, paths)):
+            pair = {}
+            if len(paths) > 1:
+                pair = dict(PairFile=paths[1 - i].name, PairConnector=self.sensors[1 - i][1],
+                            PairRole="main" if i == 0 else "second", PairDistanceMm=self.distance_mm)
+            extra = sm._extra(self.box_info, self.actual_rate or self.rate, h, c, self.box, self.kind, self.user, None,
+                              Live=1, Bookmark=b["id"], BookmarkAt=b["at"], AutoSpeed=1 if self.auto_speed else None,
+                              **pair, **more)
+            sm.write_tdms(p, labels[i], [np.asarray(a, dtype=np.float64) for a in axes[i]], round(speed, 1),
+                          round(length, 1), rate, extra)
 
     # ------------------------------------------------------------------------------------------ threads
     def _open_writers(self, actual: float) -> None:
@@ -235,6 +364,7 @@ class LiveSession:
                             self._open_writers(actual)
                     axes = [[h.to_um(volts[s + i], i) for i in range(k)] for (h, _c), (s, k) in zip(self.sensors, split)]
                     self.samples += volts.shape[1]
+                    self._buffer(axes, self.speed)
                     if self._writers:
                         if self.meters() > SAVE_LIMIT_M:
                             self.save_stopped = True
@@ -367,6 +497,7 @@ class LiveSession:
                         nxt[j] = g[-1] + sm.SPACING_MM
                 k = min(len(res[j][0]) for j in range(ns))
                 res = [[x[:k] for x in res[j]] for j in range(ns)]
+                self._buffer(res, use_v)
                 if self.save and not self._writers and not self.save_stopped:
                     self._open_writers(rate)
                 if self._writers:

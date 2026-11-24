@@ -444,6 +444,19 @@ def existing_file(series_id: int, vno: int, kind: str) -> Optional[Path]:
     return svc.find_tdms(int(series_id), int(vno), tdms_folder(kind))
 
 
+def move_replaced(old: Optional[Path]) -> Optional[Path]:
+    """An existing file of a trial goes to the sub-folder _replaced (never deleted). Returns where it went."""
+    if old is None:
+        return None
+    dest = old.parent / REPLACED_DIR
+    dest.mkdir(exist_ok=True)
+    moved = dest / old.name
+    if moved.exists():
+        moved = dest / f"{old.stem}_{_dt.datetime.now():%H%M%S}{old.suffix}"
+    shutil.move(str(old), str(moved))
+    return moved
+
+
 # --------------------------------------------------------------------------------------------------------- TDMS
 def write_tdms(path: Path, label: str, axes_um: Sequence[np.ndarray], speed_m_min: float, length_m: float,
                rate_hz: float, extra: Optional[Dict[str, Any]] = None) -> Path:
@@ -647,14 +660,7 @@ def measure(*, series_id: int, trial_id: int, vno: int, box: str, head_name: str
     if old is not None and not replace:
         raise MeasureError("exists", f"{old.name} exists", file=old.name)
     b, actual, n, axes = _record(box, sensors, v, length, rate, progress, cancel)
-    moved = None
-    if old is not None:
-        dest = old.parent / REPLACED_DIR
-        dest.mkdir(exist_ok=True)
-        moved = dest / old.name
-        if moved.exists():
-            moved = dest / f"{old.stem}_{_dt.datetime.now():%H%M%S}{old.suffix}"
-        shutil.move(str(old), str(moved))
+    moved = move_replaced(old)
     when = now or _dt.datetime.now()
     label = f"{int(series_id)}_{int(vno)}"
     path = folder / file_name(series_id, vno, when)
