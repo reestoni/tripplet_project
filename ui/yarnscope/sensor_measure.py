@@ -359,7 +359,12 @@ def set_daq(daq: Optional[Daq]) -> None:
 
 
 def list_boxes() -> List[Dict[str, Any]]:
-    return _daq.boxes()
+    boxes = _daq.boxes()
+    try:
+        note_boxes(boxes)                  # a disconnected box: its empty values no longer count
+    except Exception:  # noqa: BLE001
+        pass
+    return boxes
 
 
 def _check_box(box: str) -> Dict[str, Any]:
@@ -487,11 +492,11 @@ def write_tdms(path: Path, label: str, axes_um: Sequence[np.ndarray], speed_m_mi
 
 # ------------------------------------------------------------------------------------------------------ measuring
 def zero_check(box: str, head_name: str, connector: str, seconds: float = 1.0) -> Dict[str, Any]:
-    """Empty value of the sensor (no yarn): mean / std per axis in µm and V. Saves nothing (Sensoft's zeroing
-    does not change the data either)."""
+    """Empty value of the sensor (no yarn): mean / std per axis in um and V. It is remembered (see remembered_zero) but
+    does not change the data (Sensoft's zeroing does not either)."""
     head = load_head(head_name)
     chans = channels_for(head, connector)
-    _check_box(box)
+    b = _check_box(box)
     rate = 10_000.0
     with _measuring():
         actual, volts = _daq.read(box, chans, rate, int(rate * max(0.2, min(float(seconds), 10.0))))
@@ -501,37 +506,92 @@ def zero_check(box: str, head_name: str, connector: str, seconds: float = 1.0) -
         axes.append({"axis": "xy"[i], "mean_um": round(float(um.mean()), 2), "std_um": round(float(um.std()), 2),
                      "mean_v": round(float(np.mean(v)), 4), "connector": connector})
     z = {"axes": axes, "rate": actual, "head": head.name, "connector": connector, "box": box,
-         "at": _dt.datetime.now().isoformat(timespec="seconds")}
+         "serial": b.get("serial"), "at": _dt.datetime.now().isoformat(timespec="microseconds")}
     with _zeros_lock:
-        _zeros[(box, head.name, connector)] = z
+        zeros, lost = _load_zeros()
+        zeros[_zkey(box, head.name, connector)] = z
+        _save_zeros(zeros, lost)
     return z
 
 
-# The last empty value per (box, head, connector) stays valid until it is checked again (Nutzerwunsch 2026-11-23: the
-# dialog is closed in between to type into the table - zeroing again before every trial is not workable). Kept in the
-# process (desktop app / web server) for ZERO_MAX_AGE_H, then it counts as missing again.
-ZERO_MAX_AGE_H = 12.0
-_zeros: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+# The LAST empty value per (box, head, connector) is kept on disk (Nutzerwunsch 2026-11-24: "egal von wo sie gemacht
+# wurde" - measure window, YarnScope Live, desktop or web server on this PC share it) and stays valid as long as the box
+# stayed connected: no age limit. Whenever TrippleT looks for boxes (list_boxes) and a box with an empty value is gone or
+# has another serial number, that empty value no longer counts ("lost"). A sensor head unplugged from a connected box
+# cannot be seen - check the empty value again after changing heads.
+ENV_ZERO_PATH = "TRIPPLET_SENSOR_ZERO_PATH"
 _zeros_lock = threading.Lock()
+
+
+def _zero_path() -> Path:
+    env = os.environ.get(ENV_ZERO_PATH)
+    if env:
+        return Path(env)
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home())
+    return Path(base) / "TrippleT" / "sensor_zero.json"
+
+
+def _zkey(box: Any, head: Any, connector: Any) -> str:
+    return f"{box}|{head}|{connector}"
+
+
+def _load_zeros() -> Tuple[Dict[str, Any], Dict[str, str]]:
+    import json
+    try:
+        d = json.loads(_zero_path().read_text(encoding="utf-8"))
+        return dict(d.get("zeros") or {}), dict(d.get("lost") or {})
+    except Exception:  # noqa: BLE001 - none yet / unreadable: no empty value
+        return {}, {}
+
+
+def _save_zeros(zeros: Dict[str, Any], lost: Dict[str, str]) -> None:
+    import json
+    path = _zero_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps({"zeros": zeros, "lost": lost}), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def note_boxes(boxes: List[Dict[str, Any]]) -> None:
+    """Called with every box list: a box that has empty values but is gone (or has another serial) -> they are lost."""
+    with _zeros_lock:
+        zeros, lost = _load_zeros()
+        if not zeros:
+            return
+        present = {b.get("name"): b.get("serial") for b in boxes}
+        now = _dt.datetime.now().isoformat(timespec="microseconds")
+        changed = False
+        for z in zeros.values():
+            box = z.get("box")
+            gone = box not in present or (z.get("serial") and present.get(box) and present[box] != z["serial"])
+            if gone and str(lost.get(box) or "") < str(z.get("at") or ""):
+                lost[box] = now
+                changed = True
+        if changed:
+            _save_zeros(zeros, lost)
+
+
+def _valid(z: Optional[Dict[str, Any]], lost: Dict[str, str]) -> bool:
+    return bool(z) and not (lost.get(z.get("box")) and str(lost[z["box"]]) >= str(z.get("at") or ""))
 
 
 def remembered_zero(box: Any, head_name: Any, connector: Any, second: Any = None,
                     now: Optional[_dt.datetime] = None) -> Optional[Dict[str, Any]]:
     """The remembered empty value for this sensor (and the second one, if given) in the form of zero_check(), or None if
-    one of them was not checked (or is older than ZERO_MAX_AGE_H). With two sensors "at" = the older check."""
-    keys = [(box, head_name, connector)]
+    one of them was never checked or its box was disconnected since. With two sensors "at" = the older check."""
+    keys = [_zkey(box, head_name, connector)]
     if second:
-        h2, c2 = (second.get("head_name") or second.get("head"), second.get("connector")) if isinstance(second, dict)             else (second[0], second[1])
-        keys.append((box, h2, c2))
-    now = now or _dt.datetime.now()
+        h2, c2 = (second.get("head_name") or second.get("head"), second.get("connector")) if isinstance(second, dict) \
+            else (second[0], second[1])
+        keys.append(_zkey(box, h2, c2))
     with _zeros_lock:
-        found = [_zeros.get(k) for k in keys]
-    if any(z is None for z in found):
-        return None
-    try:
-        if any((now - _dt.datetime.fromisoformat(z["at"])).total_seconds() > ZERO_MAX_AGE_H * 3600 for z in found):
-            return None
-    except (KeyError, TypeError, ValueError):
+        zeros, lost = _load_zeros()
+    found = [zeros.get(k) for k in keys]
+    if not all(_valid(z, lost) for z in found):
         return None
     out = dict(found[0])
     out["axes"] = [a for z in found for a in z["axes"]]
@@ -540,15 +600,18 @@ def remembered_zero(box: Any, head_name: Any, connector: Any, second: Any = None
 
 
 def remembered_zeros() -> List[Dict[str, Any]]:
-    """All remembered empty values (not expired) - for the web setup."""
+    """All remembered empty values still valid - for the web setup."""
     with _zeros_lock:
-        items = list(_zeros.values())
-    return [z for z in items if remembered_zero(z["box"], z["head"], z["connector"]) is not None]
+        zeros, lost = _load_zeros()
+    return [z for z in zeros.values() if _valid(z, lost)]
 
 
 def forget_zeros() -> None:
     with _zeros_lock:
-        _zeros.clear()
+        try:
+            _zero_path().unlink()
+        except OSError:
+            pass
 
 
 class _measuring:

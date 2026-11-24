@@ -135,11 +135,15 @@ def auto_kind() -> str:
 
 class SensorMeasureDialog(QDialog):
     def __init__(self, series_id: Optional[int], user: Optional[Dict[str, Any]] = None, parent: Optional[QWidget] = None,
-                 free: bool = False, on_measured=None, on_auto=None):
+                 free: bool = False, on_measured=None, on_auto=None, on_auto_done=None):
         """free = TDMS Inspector (Nutzerwunsch 2026-11-23): own name + speed instead of a trial, file to _manual,
         on_measured(path) after each measurement (the inspector opens it; Show Experiment updates its YarnScope tabs)."""
         super().__init__(parent)
         self.free, self.on_measured, self.on_auto = bool(free), on_measured, on_auto
+        # automatic measurement (jet tension saved): afterwards analyse + save, report, close (Nutzerwunsch 2026-11-24)
+        self.on_auto_done = on_auto_done
+        self._auto_run = False
+        self._pending_analysis: Optional[Dict[str, Any]] = None
         self.setWindowTitle("Measure (free name)" if self.free else "Measure (YarnScope)")
         self.setMinimumWidth(560)
         self.series_id, self.user = (int(series_id) if series_id is not None else None), user or {}
@@ -429,6 +433,13 @@ class SensorMeasureDialog(QDialog):
         self._job = None
         self.bar.setVisible(False)
         self._sync()
+        pend, self._pending_analysis = self._pending_analysis, None
+        if pend is not None:                       # automatic measurement done: analyse + save it now
+            from ui.yarnscope import auto_measure
+            self.lbl_result.setText(self.lbl_result.text() + "<br>Analysing and saving …")
+            self._start(auto_measure.analyse_and_save, pend["kwargs"],
+                        lambda info, p=pend: self._auto_finished(p, info), with_progress=False)
+            return
         ask, self._ask_replace = getattr(self, "_ask_replace", None), None
         if ask is not None:            # "exists": ask only now - the old job is completely finished
             ans = QMessageBox.question(
@@ -440,7 +451,17 @@ class SensorMeasureDialog(QDialog):
             else:
                 self.lbl_result.setText(error_text(ask))
 
+    def _auto_finished(self, pend: Dict[str, Any], info: Dict[str, Any]) -> None:
+        """Analysis of the automatic measurement saved (or not): tell Show Experiment, close the window so the next
+        tension can be typed (Nutzerwunsch 2026-11-24)."""
+        out = dict(info, vno=pend["vno"], file=pend["file"], trial_id=pend["kwargs"]["trial_id"])
+        if callable(self.on_auto_done):
+            self.on_auto_done(out)
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self.close)
+
     def _on_failed(self, e: Exception) -> None:
+        self._auto_run = False
         if isinstance(e, sm.MeasureError) and e.code == "exists":
             self._ask_replace = e
             return
@@ -478,7 +499,10 @@ class SensorMeasureDialog(QDialog):
             return False
         self.cb_trial.setCurrentIndex(idx)
         self._on_trial(idx)
+        self._auto_run = True
         self._on_measure(replace)
+        if self._job is None:                      # did not start (e.g. "measure without empty value?" -> No)
+            self._auto_run = False
         return True
 
     def _on_measure(self, replace: bool) -> None:
@@ -539,6 +563,11 @@ class SensorMeasureDialog(QDialog):
         self._load_trials(select_vno=nxt)
         if callable(self.on_measured):             # Show Experiment: update its YarnScope tabs (no full refresh)
             self.on_measured(res["path"])
+        if self._auto_run:                         # analysed + saved right after (in _on_job_end, the thread is done)
+            self._auto_run = False
+            self._pending_analysis = {"vno": done_vno, "file": res["file"],
+                                      "kwargs": {"path": res["path"], "trial_id": self._last_kwargs["trial_id"],
+                                                 "kind": self._kind(), "user": self.user}}
 
     def closeEvent(self, ev) -> None:  # noqa: N802 - Qt
         if self._job is not None:

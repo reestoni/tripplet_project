@@ -4469,8 +4469,22 @@ class ShowExperimentScreen(QWidget):
             except RuntimeError:
                 pass
 
+        def _auto_done(info):
+            """Automatic measurement analysed + saved: refresh the DTYoMat tab (unless it has unsaved edits)."""
+            try:
+                if info.get("error"):
+                    QMessageBox.warning(self, "Automatic measurement",
+                                        f"V{(info.get('vno') or 0):03d} was measured ({info.get('file')}), but the analysis "
+                                        f"could not be saved: {info['error']}\n\nOpen the YarnScope tab to save it.")
+                    return
+                mdl = getattr(self, "model_dtyomat", None)
+                if not (mdl is not None and getattr(mdl, "_dirty", None)):
+                    self._build_dtyomat_tab()
+            except RuntimeError:                   # the screen is gone already
+                pass
+
         dlg = SensorMeasureDialog(int(self._series_pk), getattr(app_meta, "current_user", {}) or {}, self,
-                                  on_measured=_measured, on_auto=_auto)
+                                  on_measured=_measured, on_auto=_auto, on_auto_done=_auto_done)
         dlg.setModal(False)
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         self._sensor_dlg = dlg

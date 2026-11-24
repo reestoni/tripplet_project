@@ -47,20 +47,28 @@ def test_decide(fake):
     assert auto_measure.decide(466, [11], "aty")["action"] == "measure"
 
 
-def test_window_switch_and_auto_measure(env, qapp, fake):  # noqa: F811
+def test_window_switch_and_auto_measure(env, qapp, fake, monkeypatch):  # noqa: F811
     from PySide6.QtCore import QSettings
     from ui.widgets import sensor_measure_dialog as smd
     QSettings("TrippleT", "SensorMeasure").clear()
-    seen = []
-    dlg = smd.SensorMeasureDialog(466, {"username": "test", "access_level": 2}, on_auto=seen.append)
+    seen, done, analysed = [], [], []
+    monkeypatch.setattr(auto_measure, "analyse_and_save", lambda path, trial_id, kind="dty", user=None:
+                        analysed.append((trial_id, kind)) or {"saved": True, "fpm": 151.0, "error": None})
+    dlg = smd.SensorMeasureDialog(466, {"username": "test", "access_level": 2}, on_auto=seen.append, on_auto_done=done.append)
+    dlg.show()
     assert not smd.auto_enabled() and not dlg.ck_auto.isChecked()
     dlg.ck_auto.setChecked(True)
     assert smd.auto_enabled() and seen == [True]
     dlg.sp_length.setValue(3)
     dlg._zero = {"axes": []}                       # empty value checked
     assert dlg.auto_measure(12)
-    _run_job(dlg, qapp)
-    assert "Saved" in dlg.lbl_result.text() and [p.name.split("_")[1] for p in env.dty.glob("466_*.tdms")] == ["2"]
+    _run_job(dlg, qapp)                            # the measurement
+    _run_job(dlg, qapp)                            # then analysed + saved (2026-11-24)
+    qapp.processEvents()
+    assert [p.name.split("_")[1] for p in env.dty.glob("466_*.tdms")] == ["2"]
+    assert analysed == [(12, "dty")] and done[0]["saved"] and done[0]["vno"] == 2 and done[0]["file"].startswith("466_2_")
+    assert not dlg.isVisible()                     # the window closed itself for the next tension
+    dlg.show()
     assert not dlg.auto_measure(555)               # not a trial of the list
     dlg.ck_auto.setChecked(False)
     assert not smd.auto_enabled() and seen == [True, False]

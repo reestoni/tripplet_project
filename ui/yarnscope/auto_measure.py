@@ -54,3 +54,25 @@ def decide(series_id: int, trial_ids: Iterable[Any], kind: str = "dty") -> Dict[
     k = kind if kind in sm.KINDS else "dty"
     return {"action": "ask" if t.get(k) else "measure", "trial_id": tid, "vno": t["vno"], "speed": t.get("speed"),
             "file": t.get(k), "kind": k}
+
+
+def analyse_and_save(path, trial_id: int, kind: str = "dty", user: Any = None) -> Dict[str, Any]:
+    """After the automatic measurement (Nutzerwunsch 2026-11-24): the same analysis + save as "Save to DB" in the YarnScope
+    tab (dty: analyse_trial + save_analysis, aty: analyse_core_file + save_db_row). {"saved", "fpm" (DTY), "error"}."""
+    from pathlib import Path
+    out: Dict[str, Any] = {"saved": False, "fpm": None, "error": None}
+    try:
+        if kind == "aty":
+            from ui.yarnscope import aty_service
+            vals = aty_service.analyse_core_file(Path(path))
+            out["saved"] = bool(aty_service.save_db_row(int(trial_id), vals, user))
+        else:
+            from ui.yarnscope import dty_service
+            _res, vals = dty_service.analyse_trial(Path(path), int(trial_id))
+            out["fpm"] = vals.get("FPm") if isinstance(vals, dict) else None
+            out["saved"] = bool(dty_service.save_analysis(int(trial_id), vals, user))
+        if not out["saved"]:
+            out["error"] = "not saved"
+    except Exception as e:  # noqa: BLE001 - the TDMS is there; the user can still save it in the YarnScope tab
+        out["error"] = str(e)[:300]
+    return out
