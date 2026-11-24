@@ -3110,6 +3110,7 @@ class ShowExperimentScreen(QWidget):
                                            "saved and analysed automatically")
         self.btn_sensor_measure.clicked.connect(self._open_sensor_measure)
         tl.addWidget(self.btn_sensor_measure)
+        self._update_measure_button()
 
         # Itemat Lab PDF import
         # kept for the code that enables/disables it, but no longer shown (one "PDF import" button)
@@ -4134,6 +4135,13 @@ class ShowExperimentScreen(QWidget):
                      for (rr, cc, _newtext) in list(getattr(_mm, "_dirty", []))])
         except Exception:
             trial_ids_to_stamp = set()
+        # jet tension saved -> maybe the automatic TDMS measurement afterwards (ui/yarnscope/auto_measure.py)
+        try:
+            _mm = getattr(self, "model_machine", None)
+            tension_ids = _series_save.jet_tension_trial_ids(
+                [(_mm.get_binding(rr, cc), _t) for (rr, cc, _t) in list(getattr(_mm, "_dirty", []))]) if _mm else []
+        except Exception:
+            tension_ids = []
 
         # --- Generic save handling for all registered models ---
         for name, model in self._iter_save_models():
@@ -4185,6 +4193,9 @@ class ShowExperimentScreen(QWidget):
                 from ui.widgets.save_tick import show_save_tick
                 show_save_tick(self)
         self._update_unsaved_indicator()
+        mm = getattr(self, "model_machine", None)
+        if tension_ids and not (mm is not None and getattr(mm, "_dirty", None)):   # machine data really saved
+            QTimer.singleShot(0, lambda ids=list(tension_ids): self._auto_measure_after_save(ids))
         """Gibt Debug-Info über den Save-Zustand zurück (für Diagnose)."""
         lines = []
         models = list(self._iter_save_models())
@@ -4390,18 +4401,56 @@ class ShowExperimentScreen(QWidget):
 
     # ---------- TrialSeries PDFs ----------
 
-    def _open_sensor_measure(self) -> None:
-        """Measure trials with the YarnScope sensor (ui/widgets/sensor_measure_dialog.py); afterwards F5 so the
-        YarnScope tab shows the new files."""
-        if self._series_pk is None:
+    def _update_measure_button(self) -> None:
+        """"📏 Measure · Auto ●" while the automatic measurement on saving the jet tension is on (2026-11-24)."""
+        btn = getattr(self, "btn_sensor_measure", None)
+        if btn is None:
             return
+        from ui.widgets.sensor_measure_dialog import auto_enabled
+        on = auto_enabled()
+        btn.setText("📏 Measure · Auto ●" if on else "📏 Measure")
+        btn.setStyleSheet("QPushButton{color:#1d983a;font-weight:bold;}" if on else "")
+
+    def _auto_measure_after_save(self, tension_ids) -> None:
+        """Jet tension of exactly one DTYoMat trial saved and the switch on: measure it (ui/yarnscope/auto_measure.py).
+        No TDMS yet -> at once; a TDMS exists -> ask first. Never blocks the save that came before."""
+        from ui.widgets.sensor_measure_dialog import auto_enabled, auto_kind
+        if not tension_ids or not auto_enabled() or self._series_pk is None:
+            return
+        from ui.yarnscope import auto_measure
+        try:
+            d = auto_measure.decide(int(self._series_pk), tension_ids, auto_kind())
+        except Exception as e:  # noqa: BLE001
+            QMessageBox.warning(self, "Automatic measurement", f"Not started: {e}")
+            return
+        if d["action"] in ("none",) or d.get("reason") in ("no_dtyomat", "no_trial"):
+            return
+        if d["action"] == "skip":
+            QMessageBox.information(self, "Automatic measurement", f"The tension of {d.get('n')} trials was saved at "
+                                    "once - nothing measured automatically (one spool at a time).")
+            return
+        replace = False
+        if d["action"] == "ask":
+            if QMessageBox.question(self, "Automatic measurement",
+                                    f"V{d['vno']:03d} already has a measurement ({d['file']}).\n\nMeasure again? The old "
+                                    "file is moved to the sub-folder '_replaced' (not deleted).") != QMessageBox.Yes:
+                return
+            replace = True
+        dlg = self._open_sensor_measure()
+        if dlg is not None:
+            dlg.auto_measure(d["trial_id"], replace)
+
+    def _open_sensor_measure(self):
+        """Measure trials with the YarnScope sensor (ui/widgets/sensor_measure_dialog.py). Returns the window."""
+        if self._series_pk is None:
+            return None
         from ui.widgets.sensor_measure_dialog import SensorMeasureDialog
         old = getattr(self, "_sensor_dlg", None)
         try:
             if old is not None and old.isVisible() and old.series_id == int(self._series_pk):
                 old.raise_()
                 old.activateWindow()
-                return
+                return old
         except RuntimeError:                       # already deleted
             pass
         # not modal (Nutzerwunsch 2026-11-23): the table stays editable between the measurements, the dialog stays
@@ -4414,12 +4463,19 @@ class ShowExperimentScreen(QWidget):
             except RuntimeError:                   # the screen is gone already
                 pass
 
+        def _auto(_on):
+            try:
+                self._update_measure_button()
+            except RuntimeError:
+                pass
+
         dlg = SensorMeasureDialog(int(self._series_pk), getattr(app_meta, "current_user", {}) or {}, self,
-                                  on_measured=_measured)
+                                  on_measured=_measured, on_auto=_auto)
         dlg.setModal(False)
         dlg.setAttribute(Qt.WA_DeleteOnClose, True)
         self._sensor_dlg = dlg
         dlg.show()
+        return dlg
 
     def _pdf_import(self) -> None:
         """One import for Statimat and Itemat PDFs (ui/screen_show_experiment_pdf_import.pdf_import_impl)."""

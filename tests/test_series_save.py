@@ -252,11 +252,15 @@ def test_save_series_edits_order(monkeypatch):
     assert seq == [("save", ["5"], 1.0), ("save", ["90"], 1.0), ("recompute", 1, [0.6], 0),
                    ("save", ["60"], 16.0), ("stamp", 8)]
     assert res == {"saved": 1 + 3 + 1 + 1, "stamped": 1, "failed": {},
-                   "per_model": {"model_machine": 1, "itemat": 3, "jet_air": 1}}
+                   "per_model": {"model_machine": 1, "itemat": 3, "jet_air": 1},
+                   "tension_trials": [8]}       # jet tension saved -> automatic TDMS measurement possible
 
     monkeypatch.setattr(ss, "save_cells", failing)
     res = ss.save_series_edits(None, 1, {"titer": [(None, "1")]})
     assert res["failed"] == {"titer": "x"} and res["saved"] == 0
+    # Machine Data not saved -> no automatic measurement
+    res = ss.save_series_edits(None, 1, {"model_machine": [(CellBinding("tblTrial", "ID", 8, "YarnTensionAfterJet"), "5")]})
+    assert res["failed"] == {"model_machine": "x"} and res["tension_trials"] == []
 
 
 def test_multi_ply_differs():

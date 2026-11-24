@@ -427,6 +427,28 @@ def stamp_trial_ids(machine_edits: Iterable[Edit]) -> set:
     return out
 
 
+# Tension before / after the jet: saving it can start the TDMS measurement of that trial (ui/yarnscope/auto_measure.py)
+JET_TENSION_FIELDS = {"yarntensionbeforejet", "yarntensionafterjet"}
+
+
+def jet_tension_trial_ids(machine_edits: Iterable[Edit]) -> List[int]:
+    """Trial ids whose tension before / after the jet is among the Machine Data edits (in edit order, once each)."""
+    out: List[int] = []
+    for bind, _text in machine_edits or ():
+        if not bind or str(getattr(bind, "table", "")).lower() != "tbltrial":
+            continue
+        if str(getattr(bind, "field", "")).replace(" ", "").replace("_", "").lower() not in JET_TENSION_FIELDS:
+            continue
+        ids = getattr(bind, "id_values", None) or [getattr(bind, "id_value", None)]
+        for i in ids:
+            try:
+                if i is not None and int(i) not in out:
+                    out.append(int(i))
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
 def stamp_trial_timestamp(trial_id: Any, user: Any = None) -> int:
     """Setzt NOW() in tblTrial.[Timestamp] **und** den User in tblTrial.[User]
     (user = dict or ID). 0 on error."""
@@ -788,13 +810,17 @@ def save_series_edits(user: Any, series_id: Any, edits_by_model: Dict[str, List[
     from db import series_tables as _st
     unit_scales = unit_scales or {}
     uid = user_id_of(user)
-    result: Dict[str, Any] = {"saved": 0, "stamped": 0, "per_model": {}, "failed": {}}
+    result: Dict[str, Any] = {"saved": 0, "stamped": 0, "per_model": {}, "failed": {}, "tension_trials": []}
     total = 0
 
     machine_edits = []
     for name, edits in edits_by_model.items():
         if model_key(name) == "machine":
             machine_edits.extend(edits or [])
+    try:
+        tension_ids = jet_tension_trial_ids(machine_edits)
+    except Exception:
+        tension_ids = []
     try:
         trial_ids_to_stamp = stamp_trial_ids(machine_edits)
     except Exception:
@@ -861,6 +887,8 @@ def save_series_edits(user: Any, series_id: Any, edits_by_model: Dict[str, List[
 
     result["saved"] = total
     result["stamped"] = stamped
+    if not any(model_key(n) == "machine" for n in result["failed"]):   # Machine Data really saved
+        result["tension_trials"] = tension_ids
     return result
 
 

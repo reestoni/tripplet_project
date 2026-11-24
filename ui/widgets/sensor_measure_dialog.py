@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QSettings, Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QButtonGroup, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+    QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
     QProgressBar, QPushButton, QRadioButton, QVBoxLayout, QWidget,
 )
 
@@ -124,13 +124,22 @@ class _Job(QThread):
             self.failed.emit(e)
 
 
+def auto_enabled() -> bool:
+    """Switch "measure automatically when the jet tension is saved" (ui/yarnscope/auto_measure.py), per PC."""
+    return str(QSettings("TrippleT", "SensorMeasure").value("auto_tension", "false")).lower() == "true"
+
+
+def auto_kind() -> str:
+    return "aty" if QSettings("TrippleT", "SensorMeasure").value("kind") == "aty" else "dty"
+
+
 class SensorMeasureDialog(QDialog):
     def __init__(self, series_id: Optional[int], user: Optional[Dict[str, Any]] = None, parent: Optional[QWidget] = None,
-                 free: bool = False, on_measured=None):
+                 free: bool = False, on_measured=None, on_auto=None):
         """free = TDMS Inspector (Nutzerwunsch 2026-11-23): own name + speed instead of a trial, file to _manual,
         on_measured(path) after each measurement (the inspector opens it; Show Experiment updates its YarnScope tabs)."""
         super().__init__(parent)
-        self.free, self.on_measured = bool(free), on_measured
+        self.free, self.on_measured, self.on_auto = bool(free), on_measured, on_auto
         self.setWindowTitle("Measure (free name)" if self.free else "Measure (YarnScope)")
         self.setMinimumWidth(560)
         self.series_id, self.user = (int(series_id) if series_id is not None else None), user or {}
@@ -212,6 +221,12 @@ class SensorMeasureDialog(QDialog):
             form2.addRow("Name:", self.ed_name)
         else:
             form2.addRow("Trial:", self.cb_trial)
+        # Nutzerwunsch 2026-11-24: saving the jet tension of a DTYoMat trial starts its measurement (auto_measure.py)
+        self.ck_auto = QCheckBox("Measure automatically when the jet tension of a trial is saved (trials with DTYoMat)")
+        self.ck_auto.setChecked(auto_enabled())
+        self.ck_auto.setToolTip("No TDMS yet: measured straight away. A TDMS exists: you are asked first.")
+        self.ck_auto.toggled.connect(self._on_auto_toggled)
+        self.ck_auto.setVisible(not self.free)
         self.sp_speed = QDoubleSpinBox()
         self.sp_speed.setRange(*sm.SPEED_RANGE)
         self.sp_speed.setDecimals(1)
@@ -225,6 +240,8 @@ class SensorMeasureDialog(QDialog):
         self.sp_length.setValue(float(self._settings.value("length", sm.DEFAULT_LENGTH_M)))
         form2.addRow("Length:", self.sp_length)
         root.addLayout(form2)
+        if not self.free:
+            root.addWidget(self.ck_auto)
 
         self.bar = QProgressBar()
         self.bar.setVisible(False)
@@ -441,6 +458,28 @@ class SensorMeasureDialog(QDialog):
 
     def _zero_done(self, z: Dict[str, Any]) -> None:
         self._show_zero(z)
+
+    def _on_auto_toggled(self, on: bool) -> None:
+        self._settings.setValue("auto_tension", bool(on))
+        if callable(self.on_auto):
+            self.on_auto(bool(on))
+
+    def auto_measure(self, trial_id: int, replace: bool = False) -> bool:
+        """Started by Show Experiment after the jet tension of trial_id was saved: select it and measure. False if a
+        measurement is already running."""
+        if self._job is not None:
+            self.lbl_result.setText("<span style='color:#c0392b'>A measurement is already running - the automatic "
+                                    "measurement was skipped.</span>")
+            return False
+        self._load_trials()
+        idx = next((i for i in range(self.cb_trial.count()) if (self.cb_trial.itemData(i) or {}).get("trial_id")
+                    == int(trial_id)), None)
+        if idx is None:
+            return False
+        self.cb_trial.setCurrentIndex(idx)
+        self._on_trial(idx)
+        self._on_measure(replace)
+        return True
 
     def _on_measure(self, replace: bool) -> None:
         if self.free:
