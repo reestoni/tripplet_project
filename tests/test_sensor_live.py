@@ -243,7 +243,8 @@ def test_desktop_window_auto_speed(env, monkeypatch):  # noqa: F811
     sl.stop()
     w._poll()
     assert sl.current().auto_speed and sl.current().rows[0]["speed"] == pytest.approx(700, rel=0.01)
-    assert "700" in w._tile_labels[6].text()
+    last = sl.current().rows[-1].get("speed")                  # the simulated machine speeds up to 760; a window
+    assert (f"{last:.1f}" if last is not None else "–") in w._tile_labels[6].text()   # without a 1-s block has none
     w.close()
 
 
@@ -400,4 +401,126 @@ def test_desktop_load_saved_run(env, monkeypatch):  # noqa: F811
         app.processEvents()
         time.sleep(0.02)
     assert dlg2.view and not dlg2.view["exact"] and dlg2.view["n_rows"] >= 2
+    w.close()
+
+
+CATALOG = [{"key": "jet", "label": "Jet", "rd": False, "rule": None, "choices": [[5, "LB-04"], [9, "P212"]]},
+           {"key": "air", "label": "Air Pressure (bar)", "rd": False, "rule": "air", "choices": None},
+           {"key": "mf:Shaft2x_OF", "label": "OF Shaft 2 (%)", "rd": False, "rule": "onlyDoubles", "choices": None}]
+
+
+@pytest.fixture
+def fake_machines(monkeypatch):
+    from ui.yarnscope import live_log
+    monkeypatch.setattr(live_log, "machines", lambda: [{"id": 7, "name": "RPR 3SDS"}, {"id": 8, "name": "Joker"}])
+    monkeypatch.setattr(live_log, "field_catalog", lambda mid: list(CATALOG))
+
+
+def test_pause_resume_and_change_log(env, fake_machines):  # noqa: F811
+    """Pause stops recording in the same run, resume goes on; the change log (machine fields + free + note) has old ->
+    new values; both are saved with the run and come back when it is loaded (2026-11-25)."""
+    class SlowDaq(StreamDaq):                                   # ~60 m/s, so the 300 m of yarn last through the pause
+        def stream(self, box, channels, rate, on_chunk, should_stop, chunk_s=0.25):
+            def slow(volts, actual):
+                on_chunk(volts, actual)
+                time.sleep(0.05)
+            return StreamDaq.stream(self, box, channels, rate, slow, should_stop, chunk_s)
+    sm.set_daq(SlowDaq())
+    s = sl.start(box="Dev2", head_name="PXL_3_121_W", connector="C1", speed_m_min=764, window_m=10, save=True,
+                 name="99999_doc", machine_id=7)
+    assert s.view()["machine"] == {"id": 7, "name": "RPR 3SDS"}
+    e1 = s.add_change([{"key": "air", "value": "3,0"}, {"key": "jet", "value": "5"}], note="start")
+    assert [(i["label"], i["old"], i["new"]) for i in e1["items"]] == [("Air Pressure (bar)", None, "3"), ("Jet", None, "LB-04")]
+    _wait(lambda: len(s.rows) >= 2)
+    s.pause()
+    m0, n0 = s.meters(), len(s.rows)
+    time.sleep(1.5)
+    assert s.paused and s.meters() == m0                                # nothing recorded while paused
+    assert len(s.rows) <= int(m0 // 10)                                 # only windows measured before the pause
+    e2 = s.add_change([{"key": "air", "value": "3.4"}], free=[{"name": "Fadenführer", "value": "gereinigt"}])
+    assert [(i["key"], i["old"], i["new"]) for i in e2["items"]] == [("air", "3", "3.4"), ("free:Fadenführer", None, "gereinigt")]
+    s.resume()
+    _wait(lambda: s.meters() > m0 + 15)
+    sl.stop()
+    _wait(lambda: s.state in ("done", "error"))
+    p = s.view()["pauses"]
+    assert len(p) == 1 and p[0]["at_m"] == pytest.approx(m0, abs=0.2) and p[0]["until"]
+    assert e2["at_m"] == pytest.approx(m0, abs=0.2)
+    for bad, code in (([{"key": "nope", "value": "1"}], "bad_field"), ([{"key": "jet", "value": "77"}], "invalid"),
+                      ([{"key": "air", "value": "abc"}], "invalid")):
+        with pytest.raises(sm.MeasureError) as e:
+            s.add_change(bad)
+        assert e.value.code == code
+    with pytest.raises(sm.MeasureError) as e:
+        s.add_change([], note="")
+    assert e.value.code == "empty_change"
+    # deleting an entry recomputes the old values; a finished run rewrites its side file
+    e3 = s.add_change([{"key": "air", "value": "3.6"}])
+    s.delete_change(e2["id"])
+    assert e3["items"][0]["old"] == "3"
+    v = sl.load_saved(s.files[0], "dty")
+    assert [c["id"] for c in v["changes"]] == [e1["id"], e3["id"]] and v["pauses"] == p and v["machine"]["id"] == 7
+    from ui.yarnscope.live_log import summary
+    assert summary(v["changes"][1]) == "Air Pressure (bar) 3 → 3.6"
+    with pytest.raises(sm.MeasureError) as e:
+        s.pause()                                               # finished: nothing to pause
+    assert e.value.code == "not_running"
+
+
+def test_desktop_pause_and_change_dialog(env, fake_machines, monkeypatch):  # noqa: F811
+    """Desktop: machine combo, Pause / Go on, the Change dialog writes the log, the list and the chart markers show it."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication, QMessageBox
+    from ui.widgets import sensor_live_window as slw
+    app = QApplication.instance() or QApplication([])
+    QSettings("TrippleT", "SensorLive").clear()
+
+    class SlowDaq(StreamDaq):
+        def stream(self, box, channels, rate, on_chunk, should_stop, chunk_s=0.25):
+            def slow(volts, actual):
+                on_chunk(volts, actual)
+                time.sleep(0.05)
+            return StreamDaq.stream(self, box, channels, rate, slow, should_stop, chunk_s)
+    sm.set_daq(SlowDaq())
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+    w = slw.open_window({"username": "test", "access_level": 2})
+    w.cb_machine.setCurrentIndex(w.cb_machine.findData(7))
+    w.sp_speed.setValue(764)
+    w.sp_window.setValue(10)
+    w.ck_save.setChecked(False)
+    w._on_start()
+    s = sl.current()
+    assert s.log.machine["id"] == 7 and not w.cb_machine.isEnabled() and w.btn_pause.isEnabled()
+    dlg = slw.ChangeDialog(s, w)
+    dlg.rows[0]["cb"].setCurrentIndex(dlg.rows[0]["cb"].findData("air"))
+    dlg.rows[0]["val"].setText("3.2")
+    dlg._add_row()
+    dlg.rows[1]["cb"].setCurrentIndex(dlg.rows[1]["cb"].findData("jet"))
+    dlg.rows[1]["val"].setCurrentIndex(dlg.rows[1]["val"].findData(9))
+    dlg._add_free()
+    dlg.free[0]["name"].setText("Heater")
+    dlg.free[0]["val"].setText("on")
+    dlg.ed_note.setPlainText("start")
+    dlg._save()
+    assert dlg.result() == 1 and [i["new"] for i in s.log.changes[0]["items"]] == ["3.2", "P212", "on"]
+    bad = slw.ChangeDialog(s, w)
+    bad._save()                                                 # nothing entered
+    assert "at least one value" in bad.lbl_err.text()
+    w._on_pause()
+    assert s.paused and "Go on" in w.btn_pause.text() and "paused" in w.lbl_status.text()
+    w._on_pause()
+    assert not s.paused and "Pause" in w.btn_pause.text()
+    t0 = time.time()
+    while time.time() - t0 < 60 and len(s.rows) < 2:
+        app.processEvents()
+        time.sleep(0.05)
+    w._shown = -1
+    w._poll()
+    assert w.log_table.rowCount() == 2 and "Air Pressure (bar) 3.2" in w.log_table.item(0, 2).text() + w.log_table.item(1, 2).text()
+    if w._fig is not None:
+        assert any(t.get_text().strip().startswith("Air Pressure") for ax, _k in w._ax_keys for t in ax.texts)
+    w.log_table.selectRow([w.log_table.item(r, 0).data(slw.Qt.UserRole) for r in range(2)].index(s.log.changes[0]["id"]))
+    w._on_change_delete()
+    assert not s.log.changes and w.log_table.rowCount() == 1
+    sl.stop()
     w.close()

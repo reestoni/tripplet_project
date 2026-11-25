@@ -45,6 +45,12 @@ ERRORS = {
     "bad_field": "Unknown field.",
     "invalid": "'{value}' is not a valid value for {field}.",
     "copy_failed": "The trial could not be created: {detail}",
+    "empty_change": "Enter at least one value or a note.",
+    "bad_free": "A free field needs a name (40 characters at most, value at most 60).",
+    "bad_machine": "Unknown machine.",
+    "not_running": "No live measurement running.",
+    "no_change": "This entry no longer exists.",
+    "too_many_changes": "At most {n} entries.",
 }
 
 

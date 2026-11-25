@@ -35,6 +35,12 @@ bookmarks -> load_saved() shows exactly the curves of that day at once. An older
 TDMS (same windows, same analysis, empty value from the file's properties; the per-window speed of an auto-speed run cannot
 be rebuilt - the signal was saved already resampled - so only its mean is known) and gets the side file afterwards.
 
+PAUSE AND CHANGE LOG (Nutzerwunsch 2026-11-25, "wie eine kleine Doku"): pause() stops recording - no metres, no windows,
+nothing into the file or the bookmark buffer, the window begun before is dropped - and resume() goes on in the same run and
+file. A pause sits at one metre position (the metres stand still) and is drawn as a marker. The change log
+(ui/yarnscope/live_log.py: machine, its Machine Data fields + free ones, note) is entered at any time, does not pause, and
+goes with pauses and rows into the side file, so "load" shows the same documentation again.
+
 One live session per process (the box can do one thing at a time; sensor_measure._measuring is held while it
 runs). Qt-free: the desktop window (ui/widgets/sensor_live_window.py) and tripplet_web app/sensor_live_api.py poll
 state(). Tests: tests/test_sensor_live.py with a fake streaming box.
@@ -68,6 +74,7 @@ MAX_BOOKMARKS = 20
 
 _lock = threading.Lock()
 _current: Optional["LiveSession"] = None
+_RESET = object()                     # queue marker: a pause began - the analysis drops its unfinished window
 
 
 class _Writer:
@@ -117,7 +124,8 @@ class _Writer:
 class LiveSession:
     def __init__(self, *, box: str, head_name: str, connector: str, speed_m_min: Any, second: Any = None,
                  distance_mm: Any = None, window_m: Any = WINDOW_M, save: bool = True, name: Any = "live",
-                 kind: str = "dty", user: Optional[Dict[str, Any]] = None, auto_speed: bool = False):
+                 kind: str = "dty", user: Optional[Dict[str, Any]] = None, auto_speed: bool = False,
+                 machine_id: Any = None):
         self.sensors = sm._sensors(head_name, connector, second)
         n_ch = sum(h.n_axes for h, _c in self.sensors)
         try:
@@ -160,6 +168,13 @@ class LiveSession:
         self._tail_lock = threading.Lock()
         self.bookmarks: List[Dict[str, Any]] = []      # meta + "_axes" (not in view())
         self._bm_seq = 0
+        # pause / change log (2026-11-25)
+        from ui.yarnscope.live_log import LiveLog
+        self.paused = False
+        self.pauses: List[Dict[str, Any]] = []
+        self.log = LiveLog()
+        if machine_id not in (None, "", 0):
+            self.log.set_machine(machine_id)
 
     # ------------------------------------------------------------------------------------------- public
     def start(self) -> None:
@@ -199,7 +214,50 @@ class LiveSession:
                 "files": list(self.files), "name": self.name, "kind": self.kind,
                 "user": self.user.get("username") or self.user.get("id"),
                 "bookmarks": [self.bookmark_meta(b) for b in self.bookmarks],
-                "bookmark_range": list(BOOKMARK_RANGE), "bookmark_m": BOOKMARK_M}
+                "bookmark_range": list(BOOKMARK_RANGE), "bookmark_m": BOOKMARK_M,
+                "paused": self.paused, "pauses": list(self.pauses), "machine": self.log.machine,
+                "changes": list(self.log.changes)}
+
+    # ---------------------------------------------------------------------------------- pause / change log
+    def pause(self) -> Dict[str, Any]:
+        """Stops recording (no metres, no windows, nothing saved) until resume(); the window begun is dropped."""
+        if self.state != "running":
+            raise sm.MeasureError("not_running", "no live measurement running")
+        if not self.paused:
+            self.paused = True
+            self.pauses.append({"at": _dt.datetime.now().isoformat(timespec="seconds"), "at_m": round(self.meters(), 1),
+                                "until": None})
+            with self._tail_lock:                       # bookmarks never span a pause
+                self._tail, self._tail_pts = [], 0
+            self._q.put(_RESET)
+        return self.view(len(self.rows))
+
+    def resume(self) -> Dict[str, Any]:
+        if self.paused:
+            self.paused = False
+            if self.pauses:
+                self.pauses[-1]["until"] = _dt.datetime.now().isoformat(timespec="seconds")
+        return self.view(len(self.rows))
+
+    def set_machine(self, machine_id: Any) -> Dict[str, Any]:
+        out = self.log.set_machine(machine_id)
+        self._resave()
+        return out
+
+    def add_change(self, items=None, free=None, note: Any = "") -> Dict[str, Any]:
+        """One entry of the change log at the current metre position (does not pause)."""
+        e = self.log.add(items, free, note, at_m=self.meters())
+        self._resave()
+        return e
+
+    def delete_change(self, cid: Any) -> None:
+        self.log.delete(cid)
+        self._resave()
+
+    def _resave(self) -> None:
+        """A finished, saved run: its side file gets the corrected log too."""
+        if self.state in ("done", "error") and self.files:
+            self._write_side_file()
 
     # ------------------------------------------------------------------------------------------ bookmarks
     def _pts_per_m(self) -> float:
@@ -238,7 +296,8 @@ class LiveSession:
                     "rate": round(self.actual_rate or 0, 1), "meters": round(self.meters(), 1),
                     "started_at": _dt.datetime.fromtimestamp(self.started_at).isoformat(timespec="seconds") if self.started_at else None,
                     "user": self.user.get("username") or self.user.get("id"), "zero": self.zero,
-                    "rows": self.rows, "bookmarks": [self.bookmark_meta(b) for b in self.bookmarks]}
+                    "rows": self.rows, "bookmarks": [self.bookmark_meta(b) for b in self.bookmarks],
+                    "pauses": self.pauses, "machine": self.log.machine, "changes": self.log.changes}
             (folder / (self.files[0] + SIDE_SUFFIX)).write_text(json.dumps(data, default=str), encoding="utf-8")
         except Exception:  # noqa: BLE001 - the TDMS is saved; loading it later just analyses it again
             pass
@@ -380,11 +439,19 @@ class LiveSession:
                 def on_chunk(volts: np.ndarray, actual: float) -> None:
                     nonlocal have, win
                     if self.auto_speed:              # resampling + windows + files: in the analysis thread
+                        if self.paused:
+                            return
                         if self.actual_rate is None:
                             self.actual_rate = actual
                         self.samples += volts.shape[1]
                         self._q.put([[h.to_um(volts[s + i], i) for i in range(k)]
                                      for (h, _c), (s, k) in zip(self.sensors, split)])
+                        return
+                    if self.paused:                       # nothing recorded; the window begun is dropped
+                        if have:
+                            for j in range(len(buf)):
+                                buf[j] = []
+                            have = 0
                         return
                     if self.actual_rate is None:
                         self.actual_rate = actual
@@ -440,6 +507,8 @@ class LiveSession:
             item = self._q.get()
             if item is None:
                 return
+            if item is _RESET:
+                continue
             rate = self.actual_rate or self.rate
             row: Dict[str, Any] = {"i": i, "from_m": round(i * self.window_m, 1), "to_m": round((i + 1) * self.window_m, 1),
                                    "t": round(time.time() - (self.started_at or time.time()), 1), "sensors": []}
@@ -479,6 +548,13 @@ class LiveSession:
         last_v: Optional[float] = None
         while True:
             item = self._q.get()
+            if item is _RESET:                          # pause: drop what is not a whole window yet
+                raw = [[] for _ in range(ns)]
+                out = [[] for _ in range(ns)]
+                have = out_n = 0
+                block_v = []
+                pos, nxt = [0.0] * ns, [0.0] * ns
+                continue
             done = item is None
             if not done:
                 for j in range(ns):
@@ -631,7 +707,9 @@ def _loaded_view(d: Dict[str, Any], file: str, exact: bool) -> Dict[str, Any]:
             "rate": d.get("rate"), "sensors": d.get("sensors") or [], "distance_mm": d.get("distance_mm"), "save": True,
             "save_stopped": False, "files": d.get("files") or [file], "name": d.get("name"), "kind": d.get("kind"),
             "user": d.get("user"), "bookmarks": d.get("bookmarks") or [], "bookmark_range": list(BOOKMARK_RANGE),
-            "bookmark_m": BOOKMARK_M, "loaded": file, "loaded_at": d.get("started_at"), "exact": exact}
+            "bookmark_m": BOOKMARK_M, "loaded": file, "loaded_at": d.get("started_at"), "exact": exact,
+            "paused": False, "pauses": d.get("pauses") or [], "machine": d.get("machine"),
+            "changes": d.get("changes") or []}
 
 
 def load_saved(file: Any, kind: str = "dty", progress=None, cancel=None) -> Dict[str, Any]:

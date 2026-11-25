@@ -284,6 +284,52 @@ _MF_QUERY = """SELECT FieldNumber, \
                ORDER BY FieldNumber, FieldName"""
 
 
+def machine_fields(machine_id: Any) -> List[Dict[str, Any]]:
+    """tblMachineFields rows of one machine (FieldNumber, FieldName, FieldFunction, OriginalName, StorageTable,
+    RDSetting), in field order - [] without a machine / the table."""
+    if not machine_id or not table_exists("tblMachineFields"):
+        return []
+    try:
+        return fetch_all(_MF_QUERY, [machine_id])
+    except Exception:
+        return []
+
+
+def lookup_map(lt: str) -> Dict[Any, str]:
+    """{id (as stored, int and str): name} of a lookup table of a "dropdown:<table>" machine field; {} if unknown.
+    Shared by Machine Data (load_machine_cache) and the YarnScope Live change log (ui/yarnscope/live_log.py)."""
+    lk_map: Dict[Any, str] = {}
+    try:
+        if table_exists(lt):
+            lk_cmap = get_columns_map(lt)
+            lk_id = resolve_field(["ID"], lk_cmap) or "ID"
+            lk_name = resolve_field(
+                ["DiscName", "Name", "Bezeichnung", "Caption",
+                 "HousingName", "Jet", "JetName", "MaterialName",
+                 "YarnName", "Description", "Label"],
+                lk_cmap)
+            # DTY process (db/dty_process.py): own order, not alphabetical
+            lk_order = (resolve_field(["SortOrder"], lk_cmap) or lk_name) \
+                if lt.lower() == "tbldtyprocess" else lk_name
+            if lk_name:
+                for lk in fetch_all(
+                        f"SELECT `{lk_id}` AS LID, `{lk_name}` AS LName "
+                        f"FROM `{lt}` ORDER BY `{lk_order}` ASC"
+                ):
+                    lid = lk.get("LID")
+                    lname = str(lk.get("LName") or "")
+                    if lid is not None:
+                        lk_map[lid] = lname
+                        lk_map[str(lid)] = lname
+                        try:
+                            lk_map[int(lid)] = lname
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+    return lk_map
+
+
 def has_groups(trial_ids: List[Any]) -> bool:
     """YarnUseIDs vorhanden? (offers the "Groups" view)"""
     try:
@@ -374,36 +420,7 @@ def load_machine_cache(series_pk: Any, trial_ids: List[Any]) -> Dict[str, Any]:
             lt = ff[len("dropdown:"):].strip() or None
         if not lt or lt in cache["lookup_maps"]:
             continue
-        lk_map: Dict[Any, str] = {}
-        try:
-            if table_exists(lt):
-                lk_cmap = get_columns_map(lt)
-                lk_id = resolve_field(["ID"], lk_cmap) or "ID"
-                lk_name = resolve_field(
-                    ["DiscName", "Name", "Bezeichnung", "Caption",
-                     "HousingName", "Jet", "JetName", "MaterialName",
-                     "YarnName", "Description", "Label"],
-                    lk_cmap)
-                # DTY process (db/dty_process.py): own order, not alphabetical
-                lk_order = (resolve_field(["SortOrder"], lk_cmap) or lk_name) \
-                    if lt.lower() == "tbldtyprocess" else lk_name
-                if lk_name:
-                    for lk in fetch_all(
-                            f"SELECT `{lk_id}` AS LID, `{lk_name}` AS LName "
-                            f"FROM `{lt}` ORDER BY `{lk_order}` ASC"
-                    ):
-                        lid = lk.get("LID")
-                        lname = str(lk.get("LName") or "")
-                        if lid is not None:
-                            lk_map[lid] = lname
-                            lk_map[str(lid)] = lname
-                            try:
-                                lk_map[int(lid)] = lname
-                            except Exception:
-                                pass
-        except Exception:
-            pass
-        cache["lookup_maps"][lt] = lk_map
+        cache["lookup_maps"][lt] = lookup_map(lt)
 
     # has_groups: YarnUseIDs vorhanden?
     cache["has_groups"] = has_groups(trial_ids)

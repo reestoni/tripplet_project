@@ -6,6 +6,9 @@ Logic: ui/yarnscope/sensor_live.py (shared with the web). Opened from the sideba
 Bookmarks (Nutzerwunsch 2026-11-24): "Bookmark" keeps the last N m (default 100) in memory, no input; on a bookmark
 "Create trial..." copies a template trial with jet / pressure / OF / speed (ui/yarnscope/live_trial.py) and, only if
 ticked, saves the bookmark as that trial's TDMS; "Save as file..." writes it to _manual.
+Pause / change log (Nutzerwunsch 2026-11-25): "Pause" / "Go on" in the same run; "Change..." logs what was changed
+(machine's Machine Data fields + free ones + note, ui/yarnscope/live_log.py) without pausing; markers on the charts and a
+list, kept in the side file of a saved run and shown again when it is loaded.
 """
 from __future__ import annotations
 
@@ -14,8 +17,8 @@ from typing import Any, Dict, List, Optional
 from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout,
-    QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton, QRadioButton, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QTableWidget,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ui.widgets.sensor_measure_dialog import error_text
@@ -132,6 +135,25 @@ class SensorLiveWindow(QWidget):
         for w in (self.ck_save, self.ed_name, self.rb_dty, self.rb_aty):
             srow.addWidget(w)
         form.addRow("", srow)
+        # machine for the change log: its Machine Data fields (2026-11-25)
+        self.cb_machine = QComboBox()
+        self.cb_machine.addItem("– no machine –", None)
+        try:
+            from ui.yarnscope import live_log
+            for m in live_log.machines():
+                self.cb_machine.addItem(m["name"], m["id"])
+        except Exception:  # noqa: BLE001 - no DB: free fields and notes still work
+            pass
+        i = self.cb_machine.findData(self._settings.value("machine"))
+        if i < 0:
+            try:
+                i = self.cb_machine.findData(int(self._settings.value("machine") or 0))
+            except (TypeError, ValueError):
+                i = -1
+        if i >= 0:
+            self.cb_machine.setCurrentIndex(i)
+        self.cb_machine.setToolTip("For the change log: its Machine Data fields")
+        form.addRow("Machine:", self.cb_machine)
         left.addLayout(form)
         # empty value (no yarn) before the start - the same remembered value as the measure window (2026-11-24)
         zrow = QHBoxLayout()
@@ -161,7 +183,12 @@ class SensorLiveWindow(QWidget):
         self.btn_stop.setStyleSheet("QPushButton{background:#c0392b;color:white;font-weight:bold;padding:0 18px;}"
                                     "QPushButton:disabled{background:#e6b0aa;}")
         self.btn_stop.clicked.connect(self._on_stop)
+        self.btn_pause = QPushButton("⏸ Pause")
+        self.btn_pause.setMinimumHeight(34)
+        self.btn_pause.setToolTip("Nothing is recorded until 'Go on' - the same run and file go on")
+        self.btn_pause.clicked.connect(self._on_pause)
         brow.addWidget(self.btn_start)
+        brow.addWidget(self.btn_pause)
         brow.addWidget(self.btn_stop)
         left.addLayout(brow)
         # load a saved live run again and see exactly its curves (Nutzerwunsch 2026-11-24, sensor_live.load_saved)
@@ -176,7 +203,29 @@ class SensorLiveWindow(QWidget):
         self.lbl_msg = QLabel("")
         self.lbl_msg.setWordWrap(True)
         left.addWidget(self.lbl_msg)
-        left.addStretch(1)
+        # ---- change log: what was changed, at which metre (kept with the saved run)
+        lrow = QHBoxLayout()
+        lab = QLabel("<b>Change log</b>")
+        self.btn_change = QPushButton("✎ Change…")
+        self.btn_change.setToolTip("Enter what you changed (the recording goes on)")
+        self.btn_change.clicked.connect(self._on_change)
+        self.btn_change_del = QPushButton("Remove")
+        self.btn_change_del.clicked.connect(self._on_change_delete)
+        lrow.addWidget(lab)
+        lrow.addStretch(1)
+        lrow.addWidget(self.btn_change)
+        lrow.addWidget(self.btn_change_del)
+        left.addLayout(lrow)
+        self.log_table = QTableWidget(0, 3)
+        self.log_table.setHorizontalHeaderLabels(["Time", "At m", "What"])
+        self.log_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.log_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.log_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.log_table.horizontalHeader().setStretchLastSection(True)
+        self.log_table.setWordWrap(True)
+        self.log_table.itemSelectionChanged.connect(self._sync)
+        left.addWidget(self.log_table, 1)
+        self._log_sig = None
         lw = QWidget()
         lw.setLayout(left)
         lw.setFixedWidth(380)
@@ -265,6 +314,7 @@ class SensorLiveWindow(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
         self._timer.start(1000)
+        self._sync_ready = True
         self._load_sensors()
         self._load_boxes()
         self._show_zero()
@@ -345,6 +395,15 @@ class SensorLiveWindow(QWidget):
         self.btn_file.setEnabled(sel and not self.read_only)
         self.btn_unmark.setEnabled(sel)
         self.btn_new_trial.setEnabled(ta.can_edit_trials(self.user))
+        if getattr(self, "_sync_ready", False):
+            live = bool(s and s.state == "running") and self._loaded is None
+            self.btn_pause.setEnabled(live and not self.read_only)
+            self.btn_pause.setText("▶ Go on" if (s and s.paused and live) else "⏸ Pause")
+            self.cb_machine.setEnabled(not run)
+            can_log = (self._loaded is None and bool(s and s.state in ("running", "stopping", "done"))
+                       and ta.can_edit_trials(self.user))
+            self.btn_change.setEnabled(can_log)
+            self.btn_change_del.setEnabled(can_log and self._selected_change() is not None)
         if self.read_only:
             self.lbl_msg.setText("Write access required (AccessLevel > 1).")
 
@@ -426,7 +485,8 @@ class SensorLiveWindow(QWidget):
         for k, v in (("box", self.cb_box.currentData()), ("sensor", p.get("key")), ("second", p2.get("key") or ""),
                      ("distance", self.sp_distance.value()), ("speed", self.sp_speed.value()),
                      ("window", self.sp_window.value()), ("save", self.ck_save.isChecked()),
-                     ("name", self.ed_name.text().strip()), ("kind", kind), ("auto", self.ck_auto.isChecked())):
+                     ("name", self.ed_name.text().strip()), ("kind", kind), ("auto", self.ck_auto.isChecked()),
+                     ("machine", self.cb_machine.currentData() or "")):
             self._settings.setValue(k, v)
         try:
             sl.start(box=self.cb_box.currentData(), head_name=p.get("head"), connector=p.get("connector"),
@@ -434,10 +494,11 @@ class SensorLiveWindow(QWidget):
                      speed_m_min=None if self._auto_on() else self.sp_speed.value(), auto_speed=self._auto_on(),
                      distance_mm=self.sp_distance.value() or None,
                      window_m=self.sp_window.value(), save=self.ck_save.isChecked(), name=self.ed_name.text().strip(),
-                     kind=kind, user=self.user)
+                     kind=kind, user=self.user, machine_id=self.cb_machine.currentData())
         except Exception as e:  # noqa: BLE001
             self.lbl_msg.setText(f"<span style='color:#c0392b'>{error_text(e)}</span>")
             return
+        self._log_sig = None
         self._shown = 0
         self.lbl_msg.setText("")
         self.table.setRowCount(0)
@@ -534,6 +595,70 @@ class SensorLiveWindow(QWidget):
             self.lbl_msg.setText("Created: " + ", ".join(parts))
             self._fill_bookmarks(force=True)
 
+    # ---------------------------------------------------------------------------------------- pause / change log
+    def _on_pause(self) -> None:
+        s = sl.current()
+        if s is None:
+            return
+        try:
+            s.resume() if s.paused else s.pause()
+        except Exception as e:  # noqa: BLE001
+            self.lbl_msg.setText(f"<span style='color:#c0392b'>{error_text(e)}</span>")
+        self._shown = -1                        # redraw: the pause marker
+        self._poll()
+
+    def _selected_change(self) -> Optional[int]:
+        rows = self.log_table.selectionModel().selectedRows() if self.log_table.selectionModel() else []
+        it = self.log_table.item(rows[0].row(), 0) if rows else None
+        return it.data(Qt.UserRole) if it else None
+
+    def _on_change(self) -> None:
+        s = sl.current()
+        if s is None:
+            return
+        dlg = ChangeDialog(s, self)
+        if dlg.exec() == QDialog.Accepted:
+            self._log_sig = None
+            self._shown = -1
+            self._poll()
+
+    def _on_change_delete(self) -> None:
+        s, cid = sl.current(), self._selected_change()
+        if s is None or cid is None:
+            return
+        try:
+            s.delete_change(cid)
+        except Exception as e:  # noqa: BLE001
+            self.lbl_msg.setText(f"<span style='color:#c0392b'>{error_text(e)}</span>")
+        self._log_sig = None
+        self._shown = -1
+        self._poll()
+
+    def _fill_log(self, v: Dict[str, Any]) -> None:
+        from ui.yarnscope import live_log
+        entries = [(c["at"], c["at_m"], live_log.summary(c), c["id"]) for c in v.get("changes") or []]
+        entries += [(pz["at"], pz["at_m"], f"⏸ Pause {pz['at'][11:16]}–{(pz.get('until') or '…')[11:16] or '…'}", None)
+                    for pz in v.get("pauses") or []]
+        entries.sort(key=lambda e: e[0])
+        sig = repr(entries)
+        if sig == self._log_sig:
+            return
+        self._log_sig = sig
+        self.log_table.setRowCount(len(entries))
+        for k, (at, at_m, what, cid) in enumerate(entries):
+            for c, val in enumerate((at[11:16], f"{at_m:.0f}", what)):
+                it = QTableWidgetItem(val)
+                if c == 0:
+                    it.setData(Qt.UserRole, cid)
+                if cid is None:
+                    it.setForeground(Qt.gray)
+                elif c == 2:
+                    it.setForeground(Qt.blue)
+                it.setToolTip(what)
+                self.log_table.setItem(k, c, it)
+        self.log_table.resizeColumnsToContents()
+        self.log_table.horizontalHeader().setStretchLastSection(True)
+
     def _on_stop(self) -> None:
         self.btn_stop.setEnabled(False)
         self.lbl_status.setText("Stopping…")
@@ -558,7 +683,10 @@ class SensorLiveWindow(QWidget):
             if not v.get("exact"):
                 txt += ("<br><span style='color:#666'>analysed again from the signal; with 'measure the speed' only its "
                         "mean is known</span>")
+            if v.get("machine"):
+                txt += f" · {v['machine'].get('name')}"
             self.lbl_status.setText(txt)
+            self._fill_log(v)
             rows = v["rows"]
             self._tiles(v, rows[-1] if rows else None)
             if len(rows) != self._shown or self._shown == 0:
@@ -566,7 +694,12 @@ class SensorLiveWindow(QWidget):
                 self._draw(v, rows)
                 self._shown = len(rows)
             return
-        txt = f"<b>{STATE_TEXT.get(v['state'], v['state'])}</b> · {v['meters']:.0f} m · {v['seconds']:.0f} s · {v['rate']:.1f} Hz"
+        txt = f"<b>{STATE_TEXT.get(v['state'], v['state'])}</b>"
+        if v.get("paused"):
+            txt += " · <b style='color:#b06a00'>⏸ paused - nothing is recorded</b>"
+        txt += f" · {v['meters']:.0f} m · {v['seconds']:.0f} s · {v['rate']:.1f} Hz"
+        if v.get("machine"):
+            txt += f" · {v['machine'].get('name')}"
         if v.get("save_stopped"):
             txt += " · <span style='color:#c0392b'>saving stopped at the limit</span>"
         if v.get("files"):
@@ -577,6 +710,7 @@ class SensorLiveWindow(QWidget):
             txt += f"<br><span style='color:#c0392b'>{error_text(err)}</span>"
         self.lbl_status.setText(txt)
         self._fill_bookmarks()
+        self._fill_log(v)
         rows = v["rows"]
         self._tiles(v, rows[-1] if rows else None)
         if len(rows) != self._shown:
@@ -716,7 +850,24 @@ class SensorLiveWindow(QWidget):
             ax.tick_params(labelsize=10 if big else 8)
             if big:
                 ax.grid(True, alpha=0.3)
+        self._markers(v, big)
         self._canvas.draw_idle()
+
+    def _markers(self, v: Dict[str, Any], big: bool) -> None:
+        """Changes (blue line + short text on the first chart, all on a big one) and pauses (grey dashed) - 2026-11-25."""
+        from ui.yarnscope import live_log
+        changes, pauses = v.get("changes") or [], v.get("pauses") or []
+        for j, (ax, _key) in enumerate(self._ax_keys):
+            for pz in pauses:
+                ax.axvline(pz["at_m"], color="#999999", ls="--", lw=1.2)
+            for k, c in enumerate(changes):
+                ax.axvline(c["at_m"], color="#2a78d6", lw=1.2)
+                if j == 0 or big:
+                    txt = live_log.summary(c)
+                    txt = txt if len(txt) <= 28 else txt[:27] + "…"
+                    ax.text(c["at_m"], 0.97 - (k % 3) * 0.09, " " + txt, transform=ax.get_xaxis_transform(),
+                            fontsize=9 if big else 7, color="#2a78d6", va="top",
+                            bbox={"facecolor": "white", "alpha": 0.7, "edgecolor": "none", "pad": 1})
 
     # ------------------------------------------------------------------------------- full-size chart
     def _set_focus(self, key: Optional[str]) -> None:
@@ -1051,6 +1202,149 @@ class LiveTrialDialog(QDialog):
             self.lbl_err.setText(error_text(e))
             return
         self.result_info = self.result_infos[0] if self.result_infos else None
+        self.accept()
+
+
+class ChangeDialog(QDialog):
+    """"Change...": what was changed at the current metre - the machine's Machine Data fields (+ free ones) and a note.
+    Does not pause (user's choice 2026-11-25). Logic: session.add_change -> ui/yarnscope/live_log.LiveLog."""
+
+    def __init__(self, session, parent=None):
+        super().__init__(parent)
+        self.s = session
+        self.setWindowTitle("Enter a change")
+        self.setMinimumWidth(620)
+        root = QVBoxLayout(self)
+        info = QLabel(f"Entered at {session.meters():.0f} m; the recording goes on (pause it yourself if you like).")
+        info.setStyleSheet("color:#666;")
+        root.addWidget(info)
+        form = QFormLayout()
+        self.cb_machine = QComboBox()
+        self.cb_machine.addItem("– no machine –", None)
+        from ui.yarnscope import live_log
+        try:
+            for m in live_log.machines():
+                self.cb_machine.addItem(m["name"], m["id"])
+        except Exception:  # noqa: BLE001
+            pass
+        if session.log.machine:
+            i = self.cb_machine.findData(session.log.machine["id"])
+            if i >= 0:
+                self.cb_machine.setCurrentIndex(i)
+        self.cb_machine.currentIndexChanged.connect(self._machine_changed)
+        form.addRow("Machine:", self.cb_machine)
+        root.addLayout(form)
+        self.grid = QGridLayout()
+        root.addLayout(self.grid)
+        brow = QHBoxLayout()
+        self.btn_add = QPushButton("+ Field")
+        self.btn_add.clicked.connect(lambda: self._add_row())
+        btn_free = QPushButton("+ Free field")
+        btn_free.clicked.connect(lambda: self._add_free())
+        brow.addWidget(self.btn_add)
+        brow.addWidget(btn_free)
+        brow.addStretch(1)
+        root.addLayout(brow)
+        root.addWidget(QLabel("Note:"))
+        self.ed_note = QPlainTextEdit()
+        self.ed_note.setMaximumHeight(60)
+        root.addWidget(self.ed_note)
+        self.lbl_err = QLabel("")
+        self.lbl_err.setStyleSheet("color:#c0392b;")
+        self.lbl_err.setWordWrap(True)
+        root.addWidget(self.lbl_err)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Enter")
+        bb.accepted.connect(self._save)
+        bb.rejected.connect(self.reject)
+        root.addWidget(bb)
+        self.rows: List[Dict[str, Any]] = []
+        self.free: List[Dict[str, Any]] = []
+        self._cur = {k: v["text"] for k, v in session.log.settings().items()}
+        self._rebuild_rows()
+
+    def _machine_changed(self) -> None:
+        try:
+            self.s.set_machine(self.cb_machine.currentData())
+        except Exception as e:  # noqa: BLE001
+            self.lbl_err.setText(error_text(e))
+        self._clear()
+        self.rows, self.free = [], []
+        self._rebuild_rows()
+
+    def _clear(self) -> None:
+        while self.grid.count():
+            w = self.grid.takeAt(0).widget()
+            if w is not None:
+                w.deleteLater()
+
+    def _rebuild_rows(self) -> None:
+        has = bool(self.s.log.machine)
+        self.btn_add.setEnabled(has)
+        if has and not self.rows:
+            self._add_row()
+
+    def _value_widget(self, row: Dict[str, Any]) -> None:
+        f = next((x for x in self.s.log.fields() if x["key"] == row["cb"].currentData()), None)
+        if row.get("val") is not None:
+            self.grid.removeWidget(row["val"])
+            row["val"].deleteLater()
+        if f and f.get("choices"):
+            w = QComboBox()
+            w.addItem("", None)
+            for k, n in f["choices"]:
+                w.addItem(n, k)
+        else:
+            w = QLineEdit()
+            w.setPlaceholderText("New value")
+            w.setEnabled(f is not None)
+        row["val"] = w
+        self.grid.addWidget(w, row["r"], 1)
+        row["now"].setText(f"so far: {self._cur[f['key']]}" if f and f["key"] in self._cur else "")
+
+    def _add_row(self) -> None:
+        r = self.grid.rowCount()
+        cb = QComboBox()
+        cb.addItem("Field…", None)
+        for f in self.s.log.fields():
+            cb.addItem(f["label"] + (" (R&D)" if f.get("rd") else ""), f["key"])
+        now = QLabel("")
+        now.setStyleSheet("color:#777;")
+        row = {"r": r, "cb": cb, "val": None, "now": now}
+        self.grid.addWidget(cb, r, 0)
+        self.grid.addWidget(now, r, 2)
+        cb.currentIndexChanged.connect(lambda _i, rw=row: self._value_widget(rw))
+        self._value_widget(row)
+        self.rows.append(row)
+
+    def _add_free(self) -> None:
+        r = self.grid.rowCount()
+        name, val = QLineEdit(), QLineEdit()
+        name.setMaxLength(40)
+        name.setPlaceholderText("Name")
+        val.setMaxLength(60)
+        val.setPlaceholderText("Value")
+        self.grid.addWidget(name, r, 0)
+        self.grid.addWidget(val, r, 1)
+        self.free.append({"name": name, "val": val})
+
+    def items(self) -> List[Dict[str, Any]]:
+        out = []
+        for row in self.rows:
+            key = row["cb"].currentData()
+            if not key:
+                continue
+            w = row["val"]
+            out.append({"key": key, "value": w.currentData() if isinstance(w, QComboBox) else w.text()})
+        return out
+
+    def _save(self) -> None:
+        free = [{"name": f["name"].text(), "value": f["val"].text()} for f in self.free]
+        try:
+            self.s.add_change(self.items(), free, self.ed_note.toPlainText())
+        except Exception as e:  # noqa: BLE001
+            self.lbl_err.setText(error_text(e))
+            return
         self.accept()
 
 
